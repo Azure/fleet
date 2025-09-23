@@ -276,6 +276,7 @@ const (
 	ApplyOrReportDiffResTypeNotTakenOver                   ManifestProcessingApplyOrReportDiffResultType = "NotTakenOver"
 	ApplyOrReportDiffResTypeFailedToRunDriftDetection      ManifestProcessingApplyOrReportDiffResultType = "FailedToRunDriftDetection"
 	ApplyOrReportDiffResTypeFoundDrifts                    ManifestProcessingApplyOrReportDiffResultType = "FoundDrifts"
+	ApplyOrReportDiffResTypeFoundDriftsInDegradedMode      ManifestProcessingApplyOrReportDiffResultType = "FoundDriftsInDegradedMode"
 	// Note that the reason string below uses the same value as kept in the old work applier.
 	ApplyOrReportDiffResTypeFailedToApply ManifestProcessingApplyOrReportDiffResultType = "ManifestApplyFailed"
 
@@ -297,15 +298,17 @@ const (
 	ApplyOrReportDiffResTypeFailedToReportDiff ManifestProcessingApplyOrReportDiffResultType = "FailedToReportDiff"
 
 	// The result type for successful diff reportings.
-	ApplyOrReportDiffResTypeFoundDiff   ManifestProcessingApplyOrReportDiffResultType = "FoundDiff"
-	ApplyOrReportDiffResTypeNoDiffFound ManifestProcessingApplyOrReportDiffResultType = "NoDiffFound"
+	ApplyOrReportDiffResTypeFoundDiff               ManifestProcessingApplyOrReportDiffResultType = "FoundDiff"
+	ApplyOrReportDiffResTypeFoundDiffInDegradedMode ManifestProcessingApplyOrReportDiffResultType = "FoundDiffInDegradedMode"
+	ApplyOrReportDiffResTypeNoDiffFound             ManifestProcessingApplyOrReportDiffResultType = "NoDiffFound"
 )
 
 const (
 	// The descriptions for different diff reporting result types.
-	ApplyOrReportDiffResTypeFailedToReportDiffDescription = "Failed to report the diff between the hub cluster and the member cluster (error = %s)"
-	ApplyOrReportDiffResTypeNoDiffFoundDescription        = "No diff has been found between the hub cluster and the member cluster"
-	ApplyOrReportDiffResTypeFoundDiffDescription          = "Diff has been found between the hub cluster and the member cluster"
+	ApplyOrReportDiffResTypeFailedToReportDiffDescription      = "Failed to report the diff between the hub cluster and the member cluster (error = %s)"
+	ApplyOrReportDiffResTypeNoDiffFoundDescription             = "No diff has been found between the hub cluster and the member cluster"
+	ApplyOrReportDiffResTypeFoundDiffDescription               = "Diff has been found between the hub cluster and the member cluster"
+	ApplyOrReportDiffResTypeFoundDiffInDegradedModeDescription = "Diff has been found in degraded mode: cannot perform partial comparison as the member cluster API server rejected the manifest object (object is invalid)"
 )
 
 var (
@@ -319,6 +322,7 @@ var (
 		ApplyOrReportDiffResTypeNotTakenOver,
 		ApplyOrReportDiffResTypeFailedToRunDriftDetection,
 		ApplyOrReportDiffResTypeFoundDrifts,
+		ApplyOrReportDiffResTypeFoundDriftsInDegradedMode,
 		ApplyOrReportDiffResTypeFailedToApply,
 		ApplyOrReportDiffResTypeAppliedWithFailedDriftDetection,
 		ApplyOrReportDiffResTypeApplied,

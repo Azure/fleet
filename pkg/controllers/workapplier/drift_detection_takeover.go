@@ -46,7 +46,7 @@ func (r *Reconciler) takeOverPreExistingObject(
 	manifestObj, inMemberClusterObj *unstructured.Unstructured,
 	applyStrategy *fleetv1beta1.ApplyStrategy,
 	expectedAppliedWorkOwnerRef *metav1.OwnerReference,
-) (*unstructured.Unstructured, []fleetv1beta1.PatchDetail, error) {
+) (*unstructured.Unstructured, []fleetv1beta1.PatchDetail, bool, error) {
 	inMemberClusterObjCopy := inMemberClusterObj.DeepCopy()
 	existingOwnerRefs := inMemberClusterObjCopy.GetOwnerReferences()
 
@@ -59,7 +59,7 @@ func (r *Reconciler) takeOverPreExistingObject(
 	// removing any owner reference that points to an orphaned AppliedWork object.
 	existingOwnerRefs, err := r.removeLeftBehindAppliedWorkOwnerRefs(ctx, existingOwnerRefs)
 	if err != nil {
-		return nil, nil, fmt.Errorf("failed to remove left-behind AppliedWork owner references: %w", err)
+		return nil, nil, false, fmt.Errorf("failed to remove left-behind AppliedWork owner references: %w", err)
 	}
 
 	// Check this object is already owned by another object (or controller); if so, Fleet will only
@@ -69,7 +69,7 @@ func (r *Reconciler) takeOverPreExistingObject(
 		// No takeover will be performed.
 		//
 		// Note that This will be registered as an (apply) error.
-		return nil, nil, fmt.Errorf("the object is already owned by some other sources(s) and co-ownership is disallowed")
+		return nil, nil, false, fmt.Errorf("the object is already owned by some other sources(s) and co-ownership is disallowed")
 	}
 
 	// Check if the object is already owned by Fleet, but the owner is a different AppliedWork
@@ -83,19 +83,19 @@ func (r *Reconciler) takeOverPreExistingObject(
 	// user confusion. To address this corner case, Fleet would now deny placing the same object
 	// twice.
 	if isPlacedByFleetInDuplicate(existingOwnerRefs, expectedAppliedWorkOwnerRef) {
-		return nil, nil, fmt.Errorf("the object is already owned by another Fleet AppliedWork object")
+		return nil, nil, false, fmt.Errorf("the object is already owned by another Fleet AppliedWork object")
 	}
 
 	// Check if the takeover action requires additional steps (configuration difference inspection).
 	//
 	// Note that the default takeover action is AlwaysApply.
 	if applyStrategy.WhenToTakeOver == fleetv1beta1.WhenToTakeOverTypeIfNoDiff {
-		configDiffs, err := r.diffBetweenManifestAndInMemberClusterObjects(ctx, gvr, manifestObj, inMemberClusterObjCopy, applyStrategy.ComparisonOption)
+		configDiffs, diffCalculatedInDegradedMode, err := r.diffBetweenManifestAndInMemberClusterObjects(ctx, gvr, manifestObj, inMemberClusterObjCopy, applyStrategy.ComparisonOption)
 		switch {
 		case err != nil:
-			return nil, nil, fmt.Errorf("failed to calculate configuration diffs between the manifest object and the object from the member cluster: %w", err)
+			return nil, nil, false, fmt.Errorf("failed to calculate configuration diffs between the manifest object and the object from the member cluster: %w", err)
 		case len(configDiffs) > 0:
-			return nil, configDiffs, nil
+			return nil, configDiffs, diffCalculatedInDegradedMode, nil
 		}
 	}
 
@@ -107,10 +107,10 @@ func (r *Reconciler) takeOverPreExistingObject(
 		Update(ctx, inMemberClusterObjCopy, metav1.UpdateOptions{})
 	if err != nil {
 		wrappedErr := controller.NewAPIServerError(false, err)
-		return nil, nil, fmt.Errorf("failed to take over the object: %w", wrappedErr)
+		return nil, nil, false, fmt.Errorf("failed to take over the object: %w", wrappedErr)
 	}
 
-	return takenOverInMemberClusterObj, nil, nil
+	return takenOverInMemberClusterObj, nil, false, nil
 }
 
 // diffBetweenManifestAndInMemberClusterObjects calculates the differences between the manifest object
@@ -120,16 +120,17 @@ func (r *Reconciler) diffBetweenManifestAndInMemberClusterObjects(
 	gvr *schema.GroupVersionResource,
 	manifestObj, inMemberClusterObj *unstructured.Unstructured,
 	cmpOption fleetv1beta1.ComparisonOptionType,
-) ([]fleetv1beta1.PatchDetail, error) {
+) ([]fleetv1beta1.PatchDetail, bool, error) {
 	switch cmpOption {
 	case fleetv1beta1.ComparisonOptionTypePartialComparison:
 		return r.partialDiffBetweenManifestAndInMemberClusterObjects(ctx, gvr, manifestObj, inMemberClusterObj)
 	case fleetv1beta1.ComparisonOptionTypeFullComparison:
 		// For the full comparison, Fleet compares directly the JSON representations of the
 		// manifest object and the object in the member cluster.
-		return preparePatchDetails(manifestObj, inMemberClusterObj)
+		patchDetails, err := preparePatchDetails(manifestObj, inMemberClusterObj)
+		return patchDetails, false, err
 	default:
-		return nil, fmt.Errorf("an invalid comparison option is specified")
+		return nil, false, fmt.Errorf("an invalid comparison option is specified")
 	}
 }
 
@@ -141,13 +142,10 @@ func (r *Reconciler) partialDiffBetweenManifestAndInMemberClusterObjects(
 	ctx context.Context,
 	gvr *schema.GroupVersionResource,
 	manifestObj, inMemberClusterObj *unstructured.Unstructured,
-) ([]fleetv1beta1.PatchDetail, error) {
+) ([]fleetv1beta1.PatchDetail, bool, error) {
 	// Fleet calculates the partial diff between two objects by running apply ops in the dry-run
 	// mode.
 	appliedObj, err := r.applyInDryRunMode(ctx, gvr, manifestObj, inMemberClusterObj)
-	if err != nil {
-		return nil, fmt.Errorf("failed to apply the manifest in dry-run mode: %w", err)
-	}
 
 	// After the dry-run apply op, all the managed fields should have been overwritten using the
 	// values from the manifest object, while leaving all the unmanaged fields untouched. This
@@ -157,8 +155,35 @@ func (r *Reconciler) partialDiffBetweenManifestAndInMemberClusterObjects(
 	// imply that running an actual apply op would lead to unexpected changes, which signifies
 	// the presence of partial drifts (drifts in managed fields).
 
-	// Prepare the patch details.
-	return preparePatchDetails(appliedObj, inMemberClusterObj)
+	switch {
+	case err == nil:
+		// The dry-run apply op has succeeded. All managed fields should have been overwritten using the
+		// values from the manifest object, while leaving all the unmanaged fields untouched. This
+		// would allow Fleet to compare the object returned by the dry-run apply op with the object
+		// that is currently in the member cluster; if all the fields are consistent, it is safe
+		// for us to assume that there are no drifts, otherwise, any fields that are different
+		// imply that running an actual apply op would lead to unexpected changes, which signifies
+		// the presence of partial drifts (drifts in managed fields).
+		patchDetails, err := preparePatchDetails(appliedObj, inMemberClusterObj)
+		return patchDetails, false, err
+	case errors.IsInvalid(err):
+		// The dry-run apply op has failed as the manifest object provided is not valid. This could
+		// happen when the apply op involves fields that are immutable or the apply op attempts to
+		// set invalid values. This error implies that the in-cluster object has already been modified,
+		// and any change that the user supplies right now cannot be accepted.
+		//
+		// In this case, fall back to full comparison. Report that the diff is being calculated in a
+		// degraded manner.
+		//
+		// This is not considered as a diff calculation error.
+		klog.V(2).InfoS("Calculate diffs in degraded mode as the manifest object cannot be server-side applied in dry-run mode",
+			"gvr", gvr, "manifestObj", klog.KObj(manifestObj), "serverErr", err)
+		patchDetails, err := preparePatchDetails(manifestObj, inMemberClusterObj)
+		return patchDetails, true, err
+	default:
+		// An unexpected error has occurred.
+		return nil, false, fmt.Errorf("failed to apply the manifest in dry-run mode: %w", err)
+	}
 }
 
 // organizeJSONPatchIntoFleetPatchDetails organizes the JSON patch operations into Fleet patch details.

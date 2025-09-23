@@ -320,8 +320,12 @@ func (r *Reconciler) serverSideApply(
 		Resource(*gvr).Namespace(manifestObj.GetNamespace()).
 		Apply(ctx, manifestObj.GetName(), manifestObj, applyOpts)
 	if err != nil {
-		wrappedErr := controller.NewAPIServerError(false, err)
-		return nil, fmt.Errorf("failed to apply the manifest object: %w", wrappedErr)
+		// Note (chenyu1): the current implementation of NewAPIServerError flattens the passed-in error,
+		// effectively dropping the error hierarchy. This can be an issue if the caller of the function
+		// needs to identify a specific error in the hierarchy; to avoid this, this method will not return
+		// any error wrapped by NewAPIServerError.
+		_ = controller.NewAPIServerError(false, err)
+		return nil, fmt.Errorf("failed to apply the manifest object: an error is returned by the API server: %w", err)
 	}
 	return appliedObj, nil
 }

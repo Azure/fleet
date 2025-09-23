@@ -98,16 +98,17 @@ func TestTakeOverPreExistingObject(t *testing.T) {
 	})
 
 	testCases := []struct {
-		name                        string
-		gvr                         *schema.GroupVersionResource
-		manifestObj                 *unstructured.Unstructured
-		inMemberClusterObj          *unstructured.Unstructured
-		workObj                     *fleetv1beta1.Work
-		applyStrategy               *fleetv1beta1.ApplyStrategy
-		expectedAppliedWorkOwnerRef *metav1.OwnerReference
-		wantErred                   bool
-		wantTakeOverObj             *unstructured.Unstructured
-		wantPatchDetails            []fleetv1beta1.PatchDetail
+		name                             string
+		gvr                              *schema.GroupVersionResource
+		manifestObj                      *unstructured.Unstructured
+		inMemberClusterObj               *unstructured.Unstructured
+		workObj                          *fleetv1beta1.Work
+		applyStrategy                    *fleetv1beta1.ApplyStrategy
+		expectedAppliedWorkOwnerRef      *metav1.OwnerReference
+		wantErred                        bool
+		wantTakeOverObj                  *unstructured.Unstructured
+		wantPatchDetails                 []fleetv1beta1.PatchDetail
+		wantDiffCalculatedInDegradedMode bool
 	}{
 		{
 			name:               "existing non-Fleet owner, co-ownership not allowed",
@@ -209,7 +210,7 @@ func TestTakeOverPreExistingObject(t *testing.T) {
 				workNameSpace:      memberReservedNSName1,
 			}
 
-			takenOverObj, patchDetails, err := r.takeOverPreExistingObject(
+			takenOverObj, patchDetails, diffCalculatedInDegradedMode, err := r.takeOverPreExistingObject(
 				ctx,
 				tc.gvr,
 				tc.manifestObj, tc.inMemberClusterObj,
@@ -230,6 +231,9 @@ func TestTakeOverPreExistingObject(t *testing.T) {
 			}
 			if diff := cmp.Diff(patchDetails, tc.wantPatchDetails); diff != "" {
 				t.Errorf("patchDetails mismatches (-got, +want):\n%s", diff)
+			}
+			if diffCalculatedInDegradedMode != tc.wantDiffCalculatedInDegradedMode {
+				t.Errorf("diffCalculatedInDegradedMode = %v, want %v", diffCalculatedInDegradedMode, tc.wantDiffCalculatedInDegradedMode)
 			}
 		})
 	}

@@ -27,6 +27,7 @@ import (
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
 	appsv1 "k8s.io/api/apps/v1"
+	batchv1 "k8s.io/api/batch/v1"
 	corev1 "k8s.io/api/core/v1"
 	rbacv1 "k8s.io/api/rbac/v1"
 	"k8s.io/apimachinery/pkg/api/errors"
@@ -276,6 +277,60 @@ func regularDeploymentObjectAppliedActual(nsName, deployName string, appliedWork
 		}
 		if diff := cmp.Diff(rebuiltGotDeploy, wantDeploy); diff != "" {
 			return fmt.Errorf("deployment diff (-got +want):\n%s", diff)
+		}
+		return nil
+	}
+}
+
+func regularJobObjectAppliedActual(nsName, jobName string, appliedWorkOwnerRef *metav1.OwnerReference) func() error {
+	return func() error {
+		// Retrieve the Job object.
+		gotJob := &batchv1.Job{}
+		if err := memberClient.Get(ctx, client.ObjectKey{Namespace: nsName, Name: jobName}, gotJob); err != nil {
+			return fmt.Errorf("failed to retrieve the Job object: %w", err)
+		}
+
+		// Check that the Job object has been created as expected.
+
+		// To ignore default values automatically, here the test suite rebuilds the objects.
+		wantJob := job.DeepCopy()
+		wantJob.TypeMeta = metav1.TypeMeta{}
+		wantJob.Namespace = nsName
+		wantJob.Name = jobName
+		wantJob.OwnerReferences = []metav1.OwnerReference{
+			*appliedWorkOwnerRef,
+		}
+
+		rebuiltGotJob := &batchv1.Job{
+			ObjectMeta: metav1.ObjectMeta{
+				Namespace:       gotJob.Namespace,
+				Name:            gotJob.Name,
+				OwnerReferences: gotJob.OwnerReferences,
+			},
+			Spec: batchv1.JobSpec{
+				Template: corev1.PodTemplateSpec{
+					ObjectMeta: metav1.ObjectMeta{
+						Labels: map[string]string{
+							"app": gotJob.Spec.Template.ObjectMeta.Labels["app"],
+						},
+					},
+					Spec: corev1.PodSpec{
+						Containers: []corev1.Container{
+							{
+								Name:    gotJob.Spec.Template.Spec.Containers[0].Name,
+								Image:   gotJob.Spec.Template.Spec.Containers[0].Image,
+								Command: gotJob.Spec.Template.Spec.Containers[0].Command,
+							},
+						},
+						RestartPolicy: gotJob.Spec.Template.Spec.RestartPolicy,
+					},
+				},
+				Parallelism: gotJob.Spec.Parallelism,
+				Completions: gotJob.Spec.Completions,
+			},
+		}
+		if diff := cmp.Diff(rebuiltGotJob, wantJob); diff != "" {
+			return fmt.Errorf("job diff (-got +want):\n%s", diff)
 		}
 		return nil
 	}
@@ -624,6 +679,22 @@ func regularDeployNotRemovedActual(nsName, deployName string) func() error {
 		}
 		if err := memberClient1.Get(ctx, client.ObjectKey{Namespace: nsName, Name: deployName}, deploy); err != nil {
 			return fmt.Errorf("failed to retrieve the Deployment object: %w", err)
+		}
+		return nil
+	}
+}
+
+func regularJobNotRemovedActual(nsName, jobName string) func() error {
+	return func() error {
+		// Retrieve the Job object.
+		job := &batchv1.Job{
+			ObjectMeta: metav1.ObjectMeta{
+				Namespace: nsName,
+				Name:      jobName,
+			},
+		}
+		if err := memberClient.Get(ctx, client.ObjectKey{Namespace: nsName, Name: jobName}, job); err != nil {
+			return fmt.Errorf("failed to retrieve the Job object: %w", err)
 		}
 		return nil
 	}
@@ -3676,6 +3747,403 @@ var _ = Describe("drift detection and takeover", func() {
 		})
 	})
 
+	// Note (chenyu1): this test case is built upon the mutable scheduling directives
+	// feature that is enabled in Kubernetes since version 1.27. This feature is designed
+	// specifically for cloud-native queue implementations, which allow them to
+	// fine-tune how Job pods are scheduled by modifying certain scheduling-related
+	// fields when the Job is just created in the suspended state. Without this feature
+	// we wouldn't be able to introduce drifts to Job objects once they are created.
+	Context("detect drifts (apply if no drift, drift occurred, partial comparison, degraded mode)", Ordered, func() {
+		workName := fmt.Sprintf(workNameTemplate, utils.RandStr())
+		// The environment prepared by the envtest package does not support namespace
+		// deletion; each test case would use a new namespace.
+		nsName := fmt.Sprintf(nsNameTemplate, utils.RandStr())
+
+		var appliedWorkOwnerRef *metav1.OwnerReference
+		var regularNS *corev1.Namespace
+		var regularJob *batchv1.Job
+
+		BeforeAll(func() {
+			// Prepare a NS object.
+			regularNS = ns.DeepCopy()
+			regularNS.Name = nsName
+			regularNSJSON := marshalK8sObjJSON(regularNS)
+
+			// Prepare a Job object.
+			regularJob = job.DeepCopy()
+			regularJob.Namespace = nsName
+			regularJob.Name = jobName
+			regularJob.Spec.Suspend = ptr.To(true)
+			regularJob.Spec.Template.Labels[dummyLabelKey] = dummyLabelValue1
+			regularJobJSON := marshalK8sObjJSON(regularJob)
+
+			// Create a new Work object with all the manifest JSONs and proper apply strategy.
+			applyStrategy := &fleetv1beta1.ApplyStrategy{
+				ComparisonOption: fleetv1beta1.ComparisonOptionTypePartialComparison,
+				WhenToApply:      fleetv1beta1.WhenToApplyTypeIfNotDrifted,
+				WhenToTakeOver:   fleetv1beta1.WhenToTakeOverTypeAlways,
+			}
+			createWorkObject(workName, applyStrategy, regularNSJSON, regularJobJSON)
+		})
+
+		It("should add cleanup finalizer to the Work object", func() {
+			finalizerAddedActual := workFinalizerAddedActual(workName)
+			Eventually(finalizerAddedActual, eventuallyDuration, eventuallyInterval).Should(Succeed(), "Failed to add cleanup finalizer to the Work object")
+		})
+
+		It("should prepare an AppliedWork object", func() {
+			appliedWorkCreatedActual := appliedWorkCreatedActual(workName)
+			Eventually(appliedWorkCreatedActual, eventuallyDuration, eventuallyInterval).Should(Succeed(), "Failed to prepare an AppliedWork object")
+
+			appliedWorkOwnerRef = prepareAppliedWorkOwnerRef(workName)
+		})
+
+		It("should update the Work object status", func() {
+			// Prepare the status information.
+			workConds := []metav1.Condition{
+				{
+					Type:   fleetv1beta1.WorkConditionTypeApplied,
+					Status: metav1.ConditionTrue,
+					Reason: condition.WorkAllManifestsAppliedReason,
+				},
+				{
+					Type:   fleetv1beta1.WorkConditionTypeAvailable,
+					Status: metav1.ConditionTrue,
+					Reason: condition.WorkNotTrackableReason,
+				},
+			}
+			manifestConds := []fleetv1beta1.ManifestCondition{
+				{
+					Identifier: fleetv1beta1.WorkResourceIdentifier{
+						Ordinal:  0,
+						Group:    "",
+						Version:  "v1",
+						Kind:     "Namespace",
+						Resource: "namespaces",
+						Name:     nsName,
+					},
+					Conditions: []metav1.Condition{
+						{
+							Type:               fleetv1beta1.WorkConditionTypeApplied,
+							Status:             metav1.ConditionTrue,
+							Reason:             string(ApplyOrReportDiffResTypeApplied),
+							ObservedGeneration: 0,
+						},
+						{
+							Type:               fleetv1beta1.WorkConditionTypeAvailable,
+							Status:             metav1.ConditionTrue,
+							Reason:             string(AvailabilityResultTypeAvailable),
+							ObservedGeneration: 0,
+						},
+					},
+				},
+				{
+					Identifier: fleetv1beta1.WorkResourceIdentifier{
+						Ordinal:   1,
+						Group:     "batch",
+						Version:   "v1",
+						Kind:      "Job",
+						Resource:  "jobs",
+						Name:      jobName,
+						Namespace: nsName,
+					},
+					Conditions: []metav1.Condition{
+						{
+							Type:               fleetv1beta1.WorkConditionTypeApplied,
+							Status:             metav1.ConditionTrue,
+							Reason:             string(ApplyOrReportDiffResTypeApplied),
+							ObservedGeneration: 1,
+						},
+						{
+							Type:               fleetv1beta1.WorkConditionTypeAvailable,
+							Status:             metav1.ConditionTrue,
+							Reason:             string(AvailabilityResultTypeNotTrackable),
+							ObservedGeneration: 1,
+						},
+					},
+				},
+			}
+
+			workStatusUpdatedActual := workStatusUpdated(workName, workConds, manifestConds, nil, nil)
+			Eventually(workStatusUpdatedActual, eventuallyDuration, eventuallyInterval).Should(Succeed(), "Failed to update work status")
+		})
+
+		It("should apply all manifests", func() {
+			// Ensure that the NS object has been applied as expected.
+			regularNSObjectAppliedActual := regularNSObjectAppliedActual(nsName, appliedWorkOwnerRef)
+			Eventually(regularNSObjectAppliedActual, eventuallyDuration, eventuallyInterval).Should(Succeed(), "Failed to apply the namespace object")
+
+			Expect(memberClient.Get(ctx, client.ObjectKey{Name: nsName}, regularNS)).To(Succeed(), "Failed to retrieve the NS object")
+
+			// Ensure that the Job object has been applied as expected.
+			regularJobObjectAppliedActual := regularJobObjectAppliedActual(nsName, jobName, appliedWorkOwnerRef)
+			Eventually(regularJobObjectAppliedActual, eventuallyDuration, eventuallyInterval).Should(Succeed(), "Failed to apply the job object")
+
+			Expect(memberClient.Get(ctx, client.ObjectKey{Name: jobName, Namespace: nsName}, regularJob)).To(Succeed(), "Failed to retrieve the Job object")
+		})
+
+		It("should update the AppliedWork object status", func() {
+			// Prepare the status information.
+			appliedResourceMeta := []fleetv1beta1.AppliedResourceMeta{
+				{
+					WorkResourceIdentifier: fleetv1beta1.WorkResourceIdentifier{
+						Ordinal:  0,
+						Group:    "",
+						Version:  "v1",
+						Kind:     "Namespace",
+						Resource: "namespaces",
+						Name:     nsName,
+					},
+					UID: regularNS.UID,
+				},
+				{
+					WorkResourceIdentifier: fleetv1beta1.WorkResourceIdentifier{
+						Ordinal:   1,
+						Group:     "batch",
+						Version:   "v1",
+						Kind:      "Job",
+						Resource:  "jobs",
+						Name:      jobName,
+						Namespace: nsName,
+					},
+					UID: regularJob.UID,
+				},
+			}
+
+			appliedWorkStatusUpdatedActual := appliedWorkStatusUpdated(workName, appliedResourceMeta)
+			Eventually(appliedWorkStatusUpdatedActual, eventuallyDuration, eventuallyInterval).Should(Succeed(), "Failed to update appliedWork status")
+		})
+
+		It("can update the job object directly on the member cluster side", func() {
+			// Update the labels in the pod template.
+			//
+			// This is only possible when the Job is just created in the suspended state.
+			Expect(memberClient.Get(ctx, client.ObjectKey{Namespace: nsName, Name: jobName}, regularJob)).To(Succeed(), "Failed to retrieve the Job object")
+
+			// Use an Eventually block to guard transient errors.
+			Eventually(func() error {
+				regularJob.Spec.Template.Labels[dummyLabelKey] = dummyLabelValue2
+				return memberClient.Update(ctx, regularJob)
+			}, eventuallyDuration, eventuallyInterval).Should(Succeed(), "Failed to update the Job object")
+
+			// Unsuspend the Job object. This would make the pod template immutable.
+			Eventually(func() error {
+				regularJob.Spec.Suspend = ptr.To(false)
+				return memberClient.Update(ctx, regularJob)
+			}, eventuallyDuration, eventuallyInterval).Should(Succeed(), "Failed to unsuspend the Job object")
+		})
+
+		It("should update the Work object status", func() {
+			// Prepare the status information.
+			workConds := []metav1.Condition{
+				{
+					Type:   fleetv1beta1.WorkConditionTypeApplied,
+					Status: metav1.ConditionFalse,
+					Reason: condition.WorkNotAllManifestsAppliedReason,
+				},
+			}
+			manifestConds := []fleetv1beta1.ManifestCondition{
+				{
+					Identifier: fleetv1beta1.WorkResourceIdentifier{
+						Ordinal:  0,
+						Group:    "",
+						Version:  "v1",
+						Kind:     "Namespace",
+						Resource: "namespaces",
+						Name:     nsName,
+					},
+					Conditions: []metav1.Condition{
+						{
+							Type:               fleetv1beta1.WorkConditionTypeApplied,
+							Status:             metav1.ConditionTrue,
+							Reason:             string(ApplyOrReportDiffResTypeApplied),
+							ObservedGeneration: 0,
+						},
+						{
+							Type:               fleetv1beta1.WorkConditionTypeAvailable,
+							Status:             metav1.ConditionTrue,
+							Reason:             string(AvailabilityResultTypeAvailable),
+							ObservedGeneration: 0,
+						},
+					},
+				},
+				{
+					Identifier: fleetv1beta1.WorkResourceIdentifier{
+						Ordinal:   1,
+						Group:     "batch",
+						Version:   "v1",
+						Kind:      "Job",
+						Resource:  "jobs",
+						Name:      jobName,
+						Namespace: nsName,
+					},
+					Conditions: []metav1.Condition{
+						{
+							Type:               fleetv1beta1.WorkConditionTypeApplied,
+							Status:             metav1.ConditionFalse,
+							Reason:             string(ApplyOrReportDiffResTypeFoundDriftsInDegradedMode),
+							ObservedGeneration: regularJob.Generation,
+						},
+					},
+					DriftDetails: &fleetv1beta1.DriftDetails{
+						ObservedInMemberClusterGeneration: regularJob.Generation,
+						ObservedDrifts: []fleetv1beta1.PatchDetail{
+							{
+								Path:          "/spec/template/metadata/labels/foo",
+								ValueInMember: dummyLabelValue2,
+								ValueInHub:    dummyLabelValue1,
+							},
+						},
+					},
+				},
+			}
+
+			// Use custom status comparison logic as in this test case drift calculation is expected
+			// to run in degraded mode, which includes additional dynamic output that need to be
+			// filtered out.
+			Eventually(func() error {
+				// Retrieve the Work object.
+				work := &fleetv1beta1.Work{}
+				if err := hubClient.Get(ctx, client.ObjectKey{Name: workName, Namespace: memberReservedNSName}, work); err != nil {
+					return fmt.Errorf("failed to retrieve the Work object: %w", err)
+				}
+
+				// Prepare the expected Work object status.
+
+				// Update the conditions with the observed generation.
+				//
+				// Note that the observed generation of a manifest condition is that of an applied
+				// resource, not that of the Work object.
+				for idx := range workConds {
+					workConds[idx].ObservedGeneration = work.Generation
+				}
+				wantWorkStatus := fleetv1beta1.WorkStatus{
+					Conditions:         workConds,
+					ManifestConditions: manifestConds,
+				}
+
+				if len(work.Status.ManifestConditions) == 2 && work.Status.ManifestConditions[1].DriftDetails != nil {
+					println(fmt.Sprintf("see me:\n%+v", work.Status.ManifestConditions[1].DriftDetails.ObservedDrifts))
+				}
+				// Check that the Work object status has been updated as expected.
+				if diff := cmp.Diff(
+					work.Status, wantWorkStatus,
+					ignoreFieldConditionLTTMsg,
+					ignoreDiffDetailsObsTime, ignoreDriftDetailsObsTime,
+					cmpopts.SortSlices(lessFuncPatchDetail),
+					cmpopts.IgnoreSliceElements(func(d fleetv1beta1.PatchDetail) bool {
+						return d.Path != "/spec/template/metadata/labels/foo"
+					}),
+				); diff != "" {
+					return fmt.Errorf("work status diff (-got, +want):\n%s", diff)
+				}
+
+				// For simplicity reasons, the diff timestamps are not checked.
+				return nil
+			}, eventuallyDuration, eventuallyInterval).Should(Succeed(), "Failed to update work status")
+		})
+
+		It("should not apply the job manifest", func() {
+			// Ensure that the changes made before have not been overwritten.
+			Consistently(func() error {
+				// Retrieve the Job object.
+				gotJob := &batchv1.Job{}
+				if err := memberClient.Get(ctx, client.ObjectKey{Namespace: nsName, Name: jobName}, gotJob); err != nil {
+					return fmt.Errorf("failed to retrieve the Job object: %w", err)
+				}
+
+				// Check that the Job object has been created as expected.
+
+				// To ignore default values automatically, here the test suite rebuilds the objects.
+				wantJob := job.DeepCopy()
+				wantJob.TypeMeta = metav1.TypeMeta{}
+				wantJob.Namespace = nsName
+				wantJob.Name = jobName
+				wantJob.OwnerReferences = []metav1.OwnerReference{
+					*appliedWorkOwnerRef,
+				}
+				wantJob.Spec.Template.Labels[dummyLabelKey] = dummyLabelValue2
+				wantJob.Spec.Suspend = ptr.To(false)
+
+				rebuiltGotJob := &batchv1.Job{
+					ObjectMeta: metav1.ObjectMeta{
+						Namespace:       gotJob.Namespace,
+						Name:            gotJob.Name,
+						OwnerReferences: gotJob.OwnerReferences,
+					},
+					Spec: batchv1.JobSpec{
+						Template: corev1.PodTemplateSpec{
+							ObjectMeta: metav1.ObjectMeta{
+								Labels: map[string]string{
+									"app":         gotJob.Spec.Template.ObjectMeta.Labels["app"],
+									dummyLabelKey: gotJob.Spec.Template.ObjectMeta.Labels[dummyLabelKey],
+								},
+							},
+							Spec: corev1.PodSpec{
+								Containers: []corev1.Container{
+									{
+										Name:    gotJob.Spec.Template.Spec.Containers[0].Name,
+										Image:   gotJob.Spec.Template.Spec.Containers[0].Image,
+										Command: gotJob.Spec.Template.Spec.Containers[0].Command,
+									},
+								},
+								RestartPolicy: gotJob.Spec.Template.Spec.RestartPolicy,
+							},
+						},
+						Suspend:     gotJob.Spec.Suspend,
+						Parallelism: gotJob.Spec.Parallelism,
+						Completions: gotJob.Spec.Completions,
+					},
+				}
+				if diff := cmp.Diff(rebuiltGotJob, wantJob); diff != "" {
+					return fmt.Errorf("job diff (-got +want):\n%s", diff)
+				}
+				return nil
+			}, consistentlyDuration, consistentlyInterval).Should(Succeed(), "Failed to leave the Job object alone")
+
+			Expect(memberClient.Get(ctx, client.ObjectKey{Name: jobName, Namespace: nsName}, regularJob)).To(Succeed(), "Failed to retrieve the Job object")
+		})
+
+		It("should update the AppliedWork object status", func() {
+			// Prepare the status information.
+			appliedResourceMeta := []fleetv1beta1.AppliedResourceMeta{
+				{
+					WorkResourceIdentifier: fleetv1beta1.WorkResourceIdentifier{
+						Ordinal:  0,
+						Group:    "",
+						Version:  "v1",
+						Kind:     "Namespace",
+						Resource: "namespaces",
+						Name:     nsName,
+					},
+					UID: regularNS.UID,
+				},
+			}
+
+			appliedWorkStatusUpdatedActual := appliedWorkStatusUpdated(workName, appliedResourceMeta)
+			Eventually(appliedWorkStatusUpdatedActual, eventuallyDuration, eventuallyInterval).Should(Succeed(), "Failed to update appliedWork status")
+		})
+
+		AfterAll(func() {
+			// Delete the Work object and related resources.
+			deleteWorkObject(workName)
+
+			// Ensure that the Job object has been left alone.
+			jobNotRemovedActual := regularJobNotRemovedActual(nsName, jobName)
+			Consistently(jobNotRemovedActual, consistentlyDuration, consistentlyInterval).Should(Succeed(), "Failed to remove the job object")
+
+			// Ensure that the AppliedWork object has been removed.
+			appliedWorkRemovedActual := appliedWorkRemovedActual(workName, nsName)
+			Eventually(appliedWorkRemovedActual, eventuallyDuration, eventuallyInterval).Should(Succeed(), "Failed to remove the AppliedWork object")
+
+			workRemovedActual := workRemovedActual(workName)
+			Eventually(workRemovedActual, eventuallyDuration, eventuallyInterval).Should(Succeed(), "Failed to remove the Work object")
+
+			// The environment prepared by the envtest package does not support namespace
+			// deletion; consequently this test suite would not attempt so verify its deletion.
+		})
+	})
+
 	// For simplicity reasons, this test case will only involve a NS object.
 	Context("detect drifts (apply if no drift, drift occurred, full comparison)", Ordered, func() {
 		workName := fmt.Sprintf(workNameTemplate, utils.RandStr())
@@ -5769,6 +6237,272 @@ var _ = Describe("report diff", func() {
 		AfterAll(func() {
 			// Delete the Work object and related resources.
 			deleteWorkObject(workName, memberReservedNSName1)
+
+			// Ensure that the AppliedWork object has been removed.
+			appliedWorkRemovedActual := appliedWorkRemovedActual(workName, nsName)
+			Eventually(appliedWorkRemovedActual, eventuallyDuration, eventuallyInterval).Should(Succeed(), "Failed to remove the AppliedWork object")
+
+			workRemovedActual := workRemovedActual(workName)
+			Eventually(workRemovedActual, eventuallyDuration, eventuallyInterval).Should(Succeed(), "Failed to remove the Work object")
+
+			// The environment prepared by the envtest package does not support namespace
+			// deletion; consequently this test suite would not attempt so verify its deletion.
+		})
+	})
+
+	Context("report diff only (partial comparison, degraded)", Ordered, func() {
+		workName := fmt.Sprintf(workNameTemplate, utils.RandStr())
+		// The environment prepared by the envtest package does not support namespace
+		// deletion; each test case would use a new namespace.
+		nsName := fmt.Sprintf(nsNameTemplate, utils.RandStr())
+
+		//var appliedWorkOwnerRef *metav1.OwnerReference
+		var regularNS *corev1.Namespace
+		var regularJob *batchv1.Job
+
+		BeforeAll(func() {
+			// Prepare a NS object.
+			regularNS = ns.DeepCopy()
+			regularNS.Name = nsName
+			regularNSJSON := marshalK8sObjJSON(regularNS)
+
+			// Prepare a Job object.
+			regularJob = job.DeepCopy()
+			regularJob.Namespace = nsName
+			regularJob.Name = jobName
+
+			// Create the objects first in the member cluster.
+			Expect(memberClient.Create(ctx, regularNS)).To(Succeed(), "Failed to create the NS object")
+			Expect(memberClient.Create(ctx, regularJob)).To(Succeed(), "Failed to create the Job object")
+
+			// Update the values on the hub cluster side so that diffs will be found.
+			updatedJob := job.DeepCopy()
+			updatedJob.Namespace = nsName
+			updatedJob.Name = jobName
+			// `.spec.completions` is an immutable field in Job objects.
+			updatedJob.Spec.Completions = ptr.To(int32(3))
+			// `.spec.template` is an immutable field in Job objects.
+			updatedJob.Spec.Template.Spec.Containers[0].Image = "busybox:v0.0.1"
+			updatedJSONJSON := marshalK8sObjJSON(updatedJob)
+
+			// Create a new Work object with all the manifest JSONs and proper apply strategy.
+			applyStrategy := &fleetv1beta1.ApplyStrategy{
+				ComparisonOption: fleetv1beta1.ComparisonOptionTypePartialComparison,
+				Type:             fleetv1beta1.ApplyStrategyTypeReportDiff,
+				WhenToTakeOver:   fleetv1beta1.WhenToTakeOverTypeNever,
+			}
+			createWorkObject(workName, applyStrategy, regularNSJSON, updatedJSONJSON)
+		})
+
+		It("should add cleanup finalizer to the Work object", func() {
+			finalizerAddedActual := workFinalizerAddedActual(workName)
+			Eventually(finalizerAddedActual, eventuallyDuration, eventuallyInterval).Should(Succeed(), "Failed to add cleanup finalizer to the Work object")
+		})
+
+		It("should prepare an AppliedWork object", func() {
+			appliedWorkCreatedActual := appliedWorkCreatedActual(workName)
+			Eventually(appliedWorkCreatedActual, eventuallyDuration, eventuallyInterval).Should(Succeed(), "Failed to prepare an AppliedWork object")
+
+			appliedWorkOwnerRef = prepareAppliedWorkOwnerRef(workName)
+		})
+
+		It("should update the Work object status", func() {
+			// Prepare the status information.
+			workConds := []metav1.Condition{
+				{
+					Type:   fleetv1beta1.WorkConditionTypeDiffReported,
+					Status: metav1.ConditionFalse,
+					Reason: condition.WorkNotAllManifestsDiffReportedReason,
+				},
+			}
+			manifestConds := []fleetv1beta1.ManifestCondition{
+				{
+					Identifier: fleetv1beta1.WorkResourceIdentifier{
+						Ordinal:  0,
+						Group:    "",
+						Version:  "v1",
+						Kind:     "Namespace",
+						Resource: "namespaces",
+						Name:     nsName,
+					},
+					Conditions: []metav1.Condition{
+						{
+							Type:               fleetv1beta1.WorkConditionTypeDiffReported,
+							Status:             metav1.ConditionTrue,
+							Reason:             string(ApplyOrReportDiffResTypeNoDiffFound),
+							ObservedGeneration: 0,
+						},
+					},
+				},
+				{
+					Identifier: fleetv1beta1.WorkResourceIdentifier{
+						Ordinal:   1,
+						Group:     "batch",
+						Version:   "v1",
+						Kind:      "Job",
+						Resource:  "jobs",
+						Name:      jobName,
+						Namespace: nsName,
+					},
+					Conditions: []metav1.Condition{
+						{
+							Type:               fleetv1beta1.WorkConditionTypeDiffReported,
+							Status:             metav1.ConditionTrue,
+							Reason:             string(ApplyOrReportDiffResTypeFoundDiffInDegradedMode),
+							ObservedGeneration: 1,
+						},
+					},
+					DiffDetails: &fleetv1beta1.DiffDetails{
+						ObservedInMemberClusterGeneration: &regularJob.Generation,
+						ObservedDiffs: []fleetv1beta1.PatchDetail{
+							{
+								Path:          "/spec/completions",
+								ValueInMember: "2",
+								ValueInHub:    "3",
+							},
+							{
+								Path:          "/spec/template/spec/containers/0/image",
+								ValueInMember: "busybox",
+								ValueInHub:    "busybox:v0.0.1",
+							},
+						},
+					},
+				},
+			}
+
+			// Use custom status comparison logic as in this test case diff calculation is expected
+			// to run in degraded mode, which includes additional dynamic output that need to be
+			// filtered out.
+			Eventually(func() error {
+				// Retrieve the Work object.
+				work := &fleetv1beta1.Work{}
+				if err := hubClient.Get(ctx, client.ObjectKey{Name: workName, Namespace: memberReservedNSName}, work); err != nil {
+					return fmt.Errorf("failed to retrieve the Work object: %w", err)
+				}
+
+				// Prepare the expected Work object status.
+
+				// Update the conditions with the observed generation.
+				//
+				// Note that the observed generation of a manifest condition is that of an applied
+				// resource, not that of the Work object.
+				for idx := range workConds {
+					workConds[idx].ObservedGeneration = work.Generation
+				}
+				wantWorkStatus := fleetv1beta1.WorkStatus{
+					Conditions:         workConds,
+					ManifestConditions: manifestConds,
+				}
+
+				// Check that the Work object status has been updated as expected.
+				if diff := cmp.Diff(
+					work.Status, wantWorkStatus,
+					ignoreFieldConditionLTTMsg,
+					ignoreDiffDetailsObsTime, ignoreDriftDetailsObsTime,
+					cmpopts.SortSlices(lessFuncPatchDetail),
+					cmpopts.IgnoreSliceElements(func(d fleetv1beta1.PatchDetail) bool {
+						return d.Path != "/spec/completions" && d.Path != "/spec/template/spec/containers/0/image"
+					}),
+				); diff != "" {
+					return fmt.Errorf("work status diff (-got, +want):\n%s", diff)
+				}
+
+				// For simplicity reasons, the diff timestamps are not checked.
+				return nil
+			}, eventuallyDuration, eventuallyInterval).Should(Succeed(), "Failed to update work status")
+		})
+
+		It("should not own the objects or apply the manifests to them", func() {
+			Consistently(func() error {
+				// Retrieve the NS object.
+				updatedNS := &corev1.Namespace{}
+				if err := memberClient.Get(ctx, client.ObjectKey{Name: nsName}, updatedNS); err != nil {
+					return fmt.Errorf("failed to retrieve the NS object: %w", err)
+				}
+
+				// Rebuild the NS object to ignore default values automatically.
+				rebuiltGotNS := &corev1.Namespace{
+					ObjectMeta: metav1.ObjectMeta{
+						Name:            updatedNS.Name,
+						OwnerReferences: updatedNS.OwnerReferences,
+					},
+				}
+
+				wantNS := ns.DeepCopy()
+				wantNS.Name = nsName
+				if diff := cmp.Diff(rebuiltGotNS, wantNS, ignoreFieldTypeMetaInNamespace); diff != "" {
+					return fmt.Errorf("namespace diff (-got +want):\n%s", diff)
+				}
+				return nil
+			}, consistentlyDuration, consistentlyInterval).Should(Succeed(), "Failed to leave the NS object alone")
+
+			Consistently(func() error {
+				// Retrieve the Job object.
+				updatedJob := &batchv1.Job{}
+				if err := memberClient.Get(ctx, client.ObjectKey{Namespace: nsName, Name: jobName}, updatedJob); err != nil {
+					return fmt.Errorf("failed to retrieve the Job object: %w", err)
+				}
+
+				// Rebuild the Job object to ignore default values automatically.
+				if len(updatedJob.Spec.Template.Spec.Containers) != 1 {
+					return fmt.Errorf("unexpected number of containers in the Job pod template spec: %d, want 1", len(updatedJob.Spec.Template.Spec.Containers))
+				}
+				rebuiltGotJob := &batchv1.Job{
+					ObjectMeta: metav1.ObjectMeta{
+						Namespace:       updatedJob.Namespace,
+						Name:            updatedJob.Name,
+						OwnerReferences: updatedJob.OwnerReferences,
+					},
+					Spec: batchv1.JobSpec{
+						Parallelism: updatedJob.Spec.Parallelism,
+						Completions: updatedJob.Spec.Completions,
+						Template: corev1.PodTemplateSpec{
+							ObjectMeta: metav1.ObjectMeta{
+								Labels: map[string]string{
+									"app": updatedJob.Spec.Template.ObjectMeta.Labels["app"],
+								},
+							},
+							Spec: corev1.PodSpec{
+								Containers: []corev1.Container{
+									{
+										Name:    updatedJob.Spec.Template.Spec.Containers[0].Name,
+										Image:   updatedJob.Spec.Template.Spec.Containers[0].Image,
+										Command: updatedJob.Spec.Template.Spec.Containers[0].Command,
+									},
+								},
+								RestartPolicy: corev1.RestartPolicyNever,
+							},
+						},
+					},
+				}
+
+				wantJob := job.DeepCopy()
+				wantJob.TypeMeta = metav1.TypeMeta{}
+				wantJob.Namespace = nsName
+				wantJob.Name = jobName
+
+				if diff := cmp.Diff(rebuiltGotJob, wantJob); diff != "" {
+					return fmt.Errorf("job diff (-got +want):\n%s", diff)
+				}
+				return nil
+			}, consistentlyDuration, consistentlyInterval).Should(Succeed(), "Failed to leave the Job object alone")
+		})
+
+		It("should have no applied object reportings in the AppliedWork status", func() {
+			// Prepare the status information.
+			var appliedResourceMeta []fleetv1beta1.AppliedResourceMeta
+
+			appliedWorkStatusUpdatedActual := appliedWorkStatusUpdated(workName, appliedResourceMeta)
+			Eventually(appliedWorkStatusUpdatedActual, eventuallyDuration, eventuallyInterval).Should(Succeed(), "Failed to update appliedWork status")
+		})
+
+		AfterAll(func() {
+			// Delete the Work object and related resources.
+			deleteWorkObject(workName)
+
+			// Ensure that the Job object has been left alone.
+			jobNotRemovedActual := regularJobNotRemovedActual(nsName, jobName)
+			Consistently(jobNotRemovedActual, consistentlyDuration, consistentlyInterval).Should(Succeed(), "Failed to remove the job object")
 
 			// Ensure that the AppliedWork object has been removed.
 			appliedWorkRemovedActual := appliedWorkRemovedActual(workName, nsName)
