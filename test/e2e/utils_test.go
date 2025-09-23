@@ -86,6 +86,18 @@ func createMemberCluster(name, svcAccountName string, labels, annotations map[st
 	Expect(hubClient.Create(ctx, mcObj)).To(Succeed(), "Failed to create member cluster object %s", name)
 }
 
+func updateMemberClusterDeleteOptions(name string, deleteOptions *clusterv1beta1.DeleteOptions) {
+	Eventually(func() error {
+		mcObj := &clusterv1beta1.MemberCluster{}
+		if err := hubClient.Get(ctx, types.NamespacedName{Name: name}, mcObj); err != nil {
+			return err
+		}
+
+		mcObj.Spec.DeleteOptions = deleteOptions
+		return hubClient.Update(ctx, mcObj)
+	}, eventuallyDuration, eventuallyInterval).Should(Succeed(), "Failed to update member cluster delete options")
+}
+
 // markMemberClusterAsHealthy marks the specified member cluster as healthy.
 func markMemberClusterAsHealthy(name string) {
 	Eventually(func() error {
