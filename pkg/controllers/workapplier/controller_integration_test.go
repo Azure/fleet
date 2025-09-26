@@ -286,7 +286,7 @@ func regularJobObjectAppliedActual(nsName, jobName string, appliedWorkOwnerRef *
 	return func() error {
 		// Retrieve the Job object.
 		gotJob := &batchv1.Job{}
-		if err := memberClient.Get(ctx, client.ObjectKey{Namespace: nsName, Name: jobName}, gotJob); err != nil {
+		if err := memberClient1.Get(ctx, client.ObjectKey{Namespace: nsName, Name: jobName}, gotJob); err != nil {
 			return fmt.Errorf("failed to retrieve the Job object: %w", err)
 		}
 
@@ -693,7 +693,7 @@ func regularJobNotRemovedActual(nsName, jobName string) func() error {
 				Name:      jobName,
 			},
 		}
-		if err := memberClient.Get(ctx, client.ObjectKey{Namespace: nsName, Name: jobName}, job); err != nil {
+		if err := memberClient1.Get(ctx, client.ObjectKey{Namespace: nsName, Name: jobName}, job); err != nil {
 			return fmt.Errorf("failed to retrieve the Job object: %w", err)
 		}
 		return nil
@@ -3783,7 +3783,7 @@ var _ = Describe("drift detection and takeover", func() {
 				WhenToApply:      fleetv1beta1.WhenToApplyTypeIfNotDrifted,
 				WhenToTakeOver:   fleetv1beta1.WhenToTakeOverTypeAlways,
 			}
-			createWorkObject(workName, applyStrategy, regularNSJSON, regularJobJSON)
+			createWorkObject(workName, memberReservedNSName1, applyStrategy, regularNSJSON, regularJobJSON)
 		})
 
 		It("should add cleanup finalizer to the Work object", func() {
@@ -3873,13 +3873,13 @@ var _ = Describe("drift detection and takeover", func() {
 			regularNSObjectAppliedActual := regularNSObjectAppliedActual(nsName, appliedWorkOwnerRef)
 			Eventually(regularNSObjectAppliedActual, eventuallyDuration, eventuallyInterval).Should(Succeed(), "Failed to apply the namespace object")
 
-			Expect(memberClient.Get(ctx, client.ObjectKey{Name: nsName}, regularNS)).To(Succeed(), "Failed to retrieve the NS object")
+			Expect(memberClient1.Get(ctx, client.ObjectKey{Name: nsName}, regularNS)).To(Succeed(), "Failed to retrieve the NS object")
 
 			// Ensure that the Job object has been applied as expected.
 			regularJobObjectAppliedActual := regularJobObjectAppliedActual(nsName, jobName, appliedWorkOwnerRef)
 			Eventually(regularJobObjectAppliedActual, eventuallyDuration, eventuallyInterval).Should(Succeed(), "Failed to apply the job object")
 
-			Expect(memberClient.Get(ctx, client.ObjectKey{Name: jobName, Namespace: nsName}, regularJob)).To(Succeed(), "Failed to retrieve the Job object")
+			Expect(memberClient1.Get(ctx, client.ObjectKey{Name: jobName, Namespace: nsName}, regularJob)).To(Succeed(), "Failed to retrieve the Job object")
 		})
 
 		It("should update the AppliedWork object status", func() {
@@ -3918,18 +3918,18 @@ var _ = Describe("drift detection and takeover", func() {
 			// Update the labels in the pod template.
 			//
 			// This is only possible when the Job is just created in the suspended state.
-			Expect(memberClient.Get(ctx, client.ObjectKey{Namespace: nsName, Name: jobName}, regularJob)).To(Succeed(), "Failed to retrieve the Job object")
+			Expect(memberClient1.Get(ctx, client.ObjectKey{Namespace: nsName, Name: jobName}, regularJob)).To(Succeed(), "Failed to retrieve the Job object")
 
 			// Use an Eventually block to guard transient errors.
 			Eventually(func() error {
 				regularJob.Spec.Template.Labels[dummyLabelKey] = dummyLabelValue2
-				return memberClient.Update(ctx, regularJob)
+				return memberClient1.Update(ctx, regularJob)
 			}, eventuallyDuration, eventuallyInterval).Should(Succeed(), "Failed to update the Job object")
 
 			// Unsuspend the Job object. This would make the pod template immutable.
 			Eventually(func() error {
 				regularJob.Spec.Suspend = ptr.To(false)
-				return memberClient.Update(ctx, regularJob)
+				return memberClient1.Update(ctx, regularJob)
 			}, eventuallyDuration, eventuallyInterval).Should(Succeed(), "Failed to unsuspend the Job object")
 		})
 
@@ -4004,7 +4004,7 @@ var _ = Describe("drift detection and takeover", func() {
 			Eventually(func() error {
 				// Retrieve the Work object.
 				work := &fleetv1beta1.Work{}
-				if err := hubClient.Get(ctx, client.ObjectKey{Name: workName, Namespace: memberReservedNSName}, work); err != nil {
+				if err := hubClient.Get(ctx, client.ObjectKey{Name: workName, Namespace: memberReservedNSName1}, work); err != nil {
 					return fmt.Errorf("failed to retrieve the Work object: %w", err)
 				}
 
@@ -4048,7 +4048,7 @@ var _ = Describe("drift detection and takeover", func() {
 			Consistently(func() error {
 				// Retrieve the Job object.
 				gotJob := &batchv1.Job{}
-				if err := memberClient.Get(ctx, client.ObjectKey{Namespace: nsName, Name: jobName}, gotJob); err != nil {
+				if err := memberClient1.Get(ctx, client.ObjectKey{Namespace: nsName, Name: jobName}, gotJob); err != nil {
 					return fmt.Errorf("failed to retrieve the Job object: %w", err)
 				}
 
@@ -4101,7 +4101,7 @@ var _ = Describe("drift detection and takeover", func() {
 				return nil
 			}, consistentlyDuration, consistentlyInterval).Should(Succeed(), "Failed to leave the Job object alone")
 
-			Expect(memberClient.Get(ctx, client.ObjectKey{Name: jobName, Namespace: nsName}, regularJob)).To(Succeed(), "Failed to retrieve the Job object")
+			Expect(memberClient1.Get(ctx, client.ObjectKey{Name: jobName, Namespace: nsName}, regularJob)).To(Succeed(), "Failed to retrieve the Job object")
 		})
 
 		It("should update the AppliedWork object status", func() {
@@ -4126,7 +4126,7 @@ var _ = Describe("drift detection and takeover", func() {
 
 		AfterAll(func() {
 			// Delete the Work object and related resources.
-			deleteWorkObject(workName)
+			deleteWorkObject(workName, memberReservedNSName1)
 
 			// Ensure that the Job object has been left alone.
 			jobNotRemovedActual := regularJobNotRemovedActual(nsName, jobName)
@@ -6272,8 +6272,8 @@ var _ = Describe("report diff", func() {
 			regularJob.Name = jobName
 
 			// Create the objects first in the member cluster.
-			Expect(memberClient.Create(ctx, regularNS)).To(Succeed(), "Failed to create the NS object")
-			Expect(memberClient.Create(ctx, regularJob)).To(Succeed(), "Failed to create the Job object")
+			Expect(memberClient1.Create(ctx, regularNS)).To(Succeed(), "Failed to create the NS object")
+			Expect(memberClient1.Create(ctx, regularJob)).To(Succeed(), "Failed to create the Job object")
 
 			// Update the values on the hub cluster side so that diffs will be found.
 			updatedJob := job.DeepCopy()
@@ -6291,7 +6291,7 @@ var _ = Describe("report diff", func() {
 				Type:             fleetv1beta1.ApplyStrategyTypeReportDiff,
 				WhenToTakeOver:   fleetv1beta1.WhenToTakeOverTypeNever,
 			}
-			createWorkObject(workName, applyStrategy, regularNSJSON, updatedJSONJSON)
+			createWorkObject(workName, memberReservedNSName1, applyStrategy, regularNSJSON, updatedJSONJSON)
 		})
 
 		It("should add cleanup finalizer to the Work object", func() {
@@ -6376,7 +6376,7 @@ var _ = Describe("report diff", func() {
 			Eventually(func() error {
 				// Retrieve the Work object.
 				work := &fleetv1beta1.Work{}
-				if err := hubClient.Get(ctx, client.ObjectKey{Name: workName, Namespace: memberReservedNSName}, work); err != nil {
+				if err := hubClient.Get(ctx, client.ObjectKey{Name: workName, Namespace: memberReservedNSName1}, work); err != nil {
 					return fmt.Errorf("failed to retrieve the Work object: %w", err)
 				}
 
@@ -6416,7 +6416,7 @@ var _ = Describe("report diff", func() {
 			Consistently(func() error {
 				// Retrieve the NS object.
 				updatedNS := &corev1.Namespace{}
-				if err := memberClient.Get(ctx, client.ObjectKey{Name: nsName}, updatedNS); err != nil {
+				if err := memberClient1.Get(ctx, client.ObjectKey{Name: nsName}, updatedNS); err != nil {
 					return fmt.Errorf("failed to retrieve the NS object: %w", err)
 				}
 
@@ -6439,7 +6439,7 @@ var _ = Describe("report diff", func() {
 			Consistently(func() error {
 				// Retrieve the Job object.
 				updatedJob := &batchv1.Job{}
-				if err := memberClient.Get(ctx, client.ObjectKey{Namespace: nsName, Name: jobName}, updatedJob); err != nil {
+				if err := memberClient1.Get(ctx, client.ObjectKey{Namespace: nsName, Name: jobName}, updatedJob); err != nil {
 					return fmt.Errorf("failed to retrieve the Job object: %w", err)
 				}
 
@@ -6498,7 +6498,7 @@ var _ = Describe("report diff", func() {
 
 		AfterAll(func() {
 			// Delete the Work object and related resources.
-			deleteWorkObject(workName)
+			deleteWorkObject(workName, memberReservedNSName1)
 
 			// Ensure that the Job object has been left alone.
 			jobNotRemovedActual := regularJobNotRemovedActual(nsName, jobName)
