@@ -14,63 +14,74 @@ const resourceName = "aks-fleet-managed-by-arm"
 
 var forbidden = metav1.StatusReasonForbidden
 
-func GetValidatingAdmissionPolicy(isHub bool) *admv1.ValidatingAdmissionPolicy {
+func getValidatingAdmissionPolicy(isHub bool) *admv1.ValidatingAdmissionPolicy {
 	vap := &admv1.ValidatingAdmissionPolicy{
-		TypeMeta: metav1.TypeMeta{
-			APIVersion: "admissionregistration.k8s.io/v1",
-			Kind:       "ValidatingAdmissionPolicy",
-		},
 		ObjectMeta: metav1.ObjectMeta{
 			Name: resourceName,
 		},
-		Spec: admv1.ValidatingAdmissionPolicySpec{
-			MatchConstraints: &admv1.MatchResources{
-				ObjectSelector: &metav1.LabelSelector{
-					MatchLabels: map[string]string{
-						"fleet.azure.com/managed-by": "arm",
-					},
-				},
-				ResourceRules: []admv1.NamedRuleWithOperations{
-					{
-						RuleWithOperations: admv1.RuleWithOperations{
-							Rule: admv1.Rule{
-								APIGroups:   []string{""},
-								Resources:   []string{"namespaces"},
-								APIVersions: []string{"v1"},
-							},
-							Operations: []admv1.OperationType{admv1.Create, admv1.Update, admv1.Delete},
-						},
-					},
-					{
-						RuleWithOperations: admv1.RuleWithOperations{
-							Rule: admv1.Rule{
-								APIGroups:   []string{""},
-								Resources:   []string{"resourcequotas"},
-								APIVersions: []string{"v1"},
-							},
-							Operations: []admv1.OperationType{admv1.Create, admv1.Update, admv1.Delete},
-						},
-						ResourceNames: []string{"default"},
-					},
-					{
-						RuleWithOperations: admv1.RuleWithOperations{
-							Rule: admv1.Rule{
-								APIGroups:   []string{"networking.k8s.io"},
-								Resources:   []string{"networkpolicies"},
-								APIVersions: []string{"*"},
-							},
-							Operations: []admv1.OperationType{admv1.Create, admv1.Update, admv1.Delete},
-						},
-						ResourceNames: []string{"default"},
-					},
+	}
+	mutateValidatingAdmissionPolicy(vap, isHub)
+	return vap
+}
+
+func mutateValidatingAdmissionPolicy(vap *admv1.ValidatingAdmissionPolicy, isHub bool) {
+	vap.TypeMeta = metav1.TypeMeta{
+		APIVersion: "admissionregistration.k8s.io/v1",
+		Kind:       "ValidatingAdmissionPolicy",
+	}
+	vap.ObjectMeta = metav1.ObjectMeta{
+		Name: vap.ObjectMeta.Name,
+		Labels: map[string]string{
+			"fleet.azure.com/managed-by": "arm",
+		},
+	}
+	vap.Spec = admv1.ValidatingAdmissionPolicySpec{
+		MatchConstraints: &admv1.MatchResources{
+			ObjectSelector: &metav1.LabelSelector{
+				MatchLabels: map[string]string{
+					"fleet.azure.com/managed-by": "arm",
 				},
 			},
-			Validations: []admv1.Validation{
+			ResourceRules: []admv1.NamedRuleWithOperations{
 				{
-					Expression: `"system:masters" in request.userInfo.groups || "system:serviceaccounts:kube-system" in request.userInfo.groups || "system:serviceaccounts:fleet-system" in request.userInfo.groups`,
-					Message:    "Create, Update, or Delete operations on ARM managed resources is forbidden",
-					Reason:     &forbidden,
+					RuleWithOperations: admv1.RuleWithOperations{
+						Rule: admv1.Rule{
+							APIGroups:   []string{""},
+							Resources:   []string{"namespaces"},
+							APIVersions: []string{"v1"},
+						},
+						Operations: []admv1.OperationType{admv1.Create, admv1.Update, admv1.Delete},
+					},
 				},
+				{
+					RuleWithOperations: admv1.RuleWithOperations{
+						Rule: admv1.Rule{
+							APIGroups:   []string{""},
+							Resources:   []string{"resourcequotas"},
+							APIVersions: []string{"v1"},
+						},
+						Operations: []admv1.OperationType{admv1.Create, admv1.Update, admv1.Delete},
+					},
+					ResourceNames: []string{"default"},
+				},
+				{
+					RuleWithOperations: admv1.RuleWithOperations{
+						Rule: admv1.Rule{
+							APIGroups:   []string{"networking.k8s.io"},
+							Resources:   []string{"networkpolicies"},
+							APIVersions: []string{"*"},
+						},
+						Operations: []admv1.OperationType{admv1.Create, admv1.Update, admv1.Delete},
+					},
+					ResourceNames: []string{"default"},
+				},
+			},
+		},
+		Validations: []admv1.Validation{
+			{
+				Expression: `"system:masters" in request.userInfo.groups || "system:serviceaccounts:kube-system" in request.userInfo.groups || "system:serviceaccounts:fleet-system" in request.userInfo.groups`,
+				Message:    "Create, Update, or Delete operations on ARM managed resources is forbidden",
+				Reason:     &forbidden,
 			},
 		},
 	}
@@ -87,24 +98,33 @@ func GetValidatingAdmissionPolicy(isHub bool) *admv1.ValidatingAdmissionPolicy {
 			},
 		})
 	}
-
-	return vap
 }
 
-func GetValidatingAdmissionPolicyBinding() *admv1.ValidatingAdmissionPolicyBinding {
-	return &admv1.ValidatingAdmissionPolicyBinding{
-		TypeMeta: metav1.TypeMeta{
-			APIVersion: "admissionregistration.k8s.io/v1",
-			Kind:       "ValidatingAdmissionPolicyBinding",
-		},
+func getValidatingAdmissionPolicyBinding() *admv1.ValidatingAdmissionPolicyBinding {
+	vapb := &admv1.ValidatingAdmissionPolicyBinding{
 		ObjectMeta: metav1.ObjectMeta{
 			Name: resourceName,
 		},
-		Spec: admv1.ValidatingAdmissionPolicyBindingSpec{
-			PolicyName: resourceName,
-			ValidationActions: []admv1.ValidationAction{
-				admv1.Deny,
-			},
+	}
+	mutateValidatingAdmissionPolicyBinding(vapb)
+	return vapb
+}
+
+func mutateValidatingAdmissionPolicyBinding(vapb *admv1.ValidatingAdmissionPolicyBinding) {
+	vapb.TypeMeta = metav1.TypeMeta{
+		APIVersion: "admissionregistration.k8s.io/v1",
+		Kind:       "ValidatingAdmissionPolicyBinding",
+	}
+	vapb.ObjectMeta = metav1.ObjectMeta{
+		Name: vapb.ObjectMeta.Name,
+		Labels: map[string]string{
+			"fleet.azure.com/managed-by": "arm",
+		},
+	}
+	vapb.Spec = admv1.ValidatingAdmissionPolicyBindingSpec{
+		PolicyName: resourceName,
+		ValidationActions: []admv1.ValidationAction{
+			admv1.Deny,
 		},
 	}
 }

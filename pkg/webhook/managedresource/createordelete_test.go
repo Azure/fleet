@@ -32,9 +32,9 @@ func TestEnsureVAP(t *testing.T) {
 		t.Fatalf("Failed to add admissionregistration scheme: %v", err)
 	}
 
-	vapHub := GetValidatingAdmissionPolicy(true)
-	vapMember := GetValidatingAdmissionPolicy(false)
-	binding := GetValidatingAdmissionPolicyBinding()
+	vapHub := getValidatingAdmissionPolicy(true)
+	vapMember := getValidatingAdmissionPolicy(false)
+	binding := getValidatingAdmissionPolicyBinding()
 
 	tests := []struct {
 		name                 string
@@ -68,10 +68,15 @@ func TestEnsureVAP(t *testing.T) {
 		{
 			name:  "hub cluster - update existing objects",
 			isHub: true,
-			existingObjs: []client.Object{
-				vapHub.DeepCopy(),
-				binding.DeepCopy(),
-			},
+			existingObjs: func() []client.Object {
+				existingVAP := vapHub.DeepCopy()
+				existingBinding := binding.DeepCopy()
+
+				existingVAP.Spec.Validations = nil
+				existingBinding.Spec.ValidationActions = nil
+
+				return []client.Object{existingVAP, existingBinding}
+			}(),
 			wantErr: false,
 			wantObjects: []client.Object{
 				vapHub.DeepCopy(),
@@ -79,13 +84,13 @@ func TestEnsureVAP(t *testing.T) {
 			},
 		},
 		{
-			name:         "hub cluster - no match error handled gracefully",
+			name:         "hub cluster - skip no match error",
 			isHub:        true,
 			existingObjs: []client.Object{},
 			createOrUpdateErrors: map[client.ObjectKey]error{
 				client.ObjectKeyFromObject(vapHub): &meta.NoKindMatchError{GroupKind: schema.GroupKind{Group: "admissionregistration.k8s.io", Kind: "ValidatingAdmissionPolicy"}},
 			},
-			wantErr: true, // Note: function returns error even for no match
+			wantErr: false,
 		},
 		{
 			name:         "hub cluster - create error propagated",
@@ -111,24 +116,55 @@ func TestEnsureVAP(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
+			tt := tt
 			t.Parallel()
 
+			// Object store for tracking updates (since different names eliminate collisions)
+			objectStore := make(map[client.ObjectKey]client.Object)
+			for _, obj := range tt.existingObjs {
+				key := client.ObjectKeyFromObject(obj)
+				objectStore[key] = obj.DeepCopyObject().(client.Object)
+			}
+
 			interceptorFuncs := interceptor.Funcs{
+				Get: func(ctx context.Context, c client.WithWatch, key client.ObjectKey, obj client.Object, opts ...client.GetOption) error {
+					if storedObj, exists := objectStore[key]; exists {
+						switch v := obj.(type) {
+						case *admv1.ValidatingAdmissionPolicy:
+							if stored, ok := storedObj.(*admv1.ValidatingAdmissionPolicy); ok {
+								*v = *stored
+							}
+						case *admv1.ValidatingAdmissionPolicyBinding:
+							if stored, ok := storedObj.(*admv1.ValidatingAdmissionPolicyBinding); ok {
+								*v = *stored
+							}
+						}
+						return nil
+					}
+					return c.Get(ctx, key, obj, opts...)
+				},
 				Create: func(ctx context.Context, c client.WithWatch, obj client.Object, opts ...client.CreateOption) error {
 					key := client.ObjectKeyFromObject(obj)
 					if err, exists := tt.createOrUpdateErrors[key]; exists {
 						return err
 					}
-					return c.Create(ctx, obj, opts...)
+					err := c.Create(ctx, obj, opts...)
+					if err == nil {
+						objectStore[key] = obj.DeepCopyObject().(client.Object)
+					}
+					return err
 				},
 				Update: func(ctx context.Context, c client.WithWatch, obj client.Object, opts ...client.UpdateOption) error {
 					key := client.ObjectKeyFromObject(obj)
 					if err, exists := tt.createOrUpdateErrors[key]; exists {
 						return err
 					}
-					return c.Update(ctx, obj, opts...)
+					// Update our store with the new object state
+					objectStore[key] = obj.DeepCopyObject().(client.Object)
+					return nil
 				},
 			}
+
 			fakeClient := fake.NewClientBuilder().
 				WithScheme(scheme).
 				WithObjects(tt.existingObjs...).
@@ -162,7 +198,9 @@ func TestEnsureVAP(t *testing.T) {
 				}
 
 				// Compare relevant fields (ignore managed fields, resource version, etc.)
-				ignoreOpts := cmpopts.IgnoreFields(metav1.ObjectMeta{}, "ResourceVersion", "ManagedFields", "Generation")
+				ignoreOpts := cmp.Options{
+					cmpopts.IgnoreFields(metav1.ObjectMeta{}, "ResourceVersion", "ManagedFields", "Generation"),
+				}
 				if diff := cmp.Diff(wantObj, gotObj, ignoreOpts); diff != "" {
 					t.Errorf("Object %s mismatch (-want +got):\n%s", wantObj.GetName(), diff)
 				}
@@ -179,9 +217,9 @@ func TestEnsureNoVAP(t *testing.T) {
 		t.Fatalf("Failed to add admissionregistration scheme: %v", err)
 	}
 
-	vapHub := GetValidatingAdmissionPolicy(true)
-	vapMember := GetValidatingAdmissionPolicy(false)
-	binding := GetValidatingAdmissionPolicyBinding()
+	vapHub := getValidatingAdmissionPolicy(true)
+	vapMember := getValidatingAdmissionPolicy(false)
+	binding := getValidatingAdmissionPolicyBinding()
 
 	tests := []struct {
 		name           string
@@ -257,8 +295,8 @@ func TestEnsureNoVAP(t *testing.T) {
 	}
 
 	for _, tt := range tests {
-		tt := tt
 		t.Run(tt.name, func(t *testing.T) {
+			tt := tt
 			t.Parallel()
 
 			interceptorFuncs := interceptor.Funcs{
@@ -294,7 +332,7 @@ func TestEnsureNoVAP(t *testing.T) {
 			}
 
 			// Verify objects are deleted (or don't exist)
-			expectedObjs := []client.Object{GetValidatingAdmissionPolicy(tt.isHub), GetValidatingAdmissionPolicyBinding()}
+			expectedObjs := []client.Object{getValidatingAdmissionPolicy(tt.isHub), getValidatingAdmissionPolicyBinding()}
 			for _, obj := range expectedObjs {
 				err := fakeClient.Get(context.Background(), client.ObjectKeyFromObject(obj), obj)
 				if !apierrors.IsNotFound(err) {
@@ -302,5 +340,106 @@ func TestEnsureNoVAP(t *testing.T) {
 				}
 			}
 		})
+	}
+}
+
+func TestGetVAPWithMutator(t *testing.T) {
+	t.Parallel()
+
+	tests := []struct {
+		name  string
+		isHub bool
+	}{
+		{
+			name:  "hub cluster VAP",
+			isHub: true,
+		},
+		{
+			name:  "member cluster VAP",
+			isHub: false,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+
+			vap, mutateFunc := getVAPWithMutator(tt.isHub)
+
+			// Verify initial state
+			if vap == nil {
+				t.Fatal("getVAPWithMutator() returned nil VAP")
+			}
+			if mutateFunc == nil {
+				t.Fatal("getVAPWithMutator() returned nil mutate function")
+			}
+
+			// Verify mutate function works
+			originalVAP := vap.DeepCopy()
+			expectedVAP := getValidatingAdmissionPolicy(tt.isHub)
+			ignoreOpts := cmp.Options{
+				cmpopts.IgnoreFields(metav1.ObjectMeta{}, "ResourceVersion", "ManagedFields", "Generation"),
+			}
+			if diff := cmp.Diff(expectedVAP, vap, ignoreOpts); diff != "" {
+				t.Errorf("VAP after mutation mismatch (-want +got):\n%s", diff)
+			}
+
+			vap.Spec = admv1.ValidatingAdmissionPolicySpec{} // Reset spec to empty to test idempotency
+			if diff := cmp.Diff(originalVAP, vap); diff == "" {
+				t.Error("VAP should be different after mutation")
+			}
+
+			// The mutation should restore the spec to the expected state
+			err := mutateFunc()
+			if err != nil {
+				t.Errorf("second mutateFunc() = %v, want nil", err)
+			}
+			if diff := cmp.Diff(expectedVAP, vap, ignoreOpts); diff != "" {
+				t.Errorf("VAP after second mutation mismatch (-want +got):\n%s", diff)
+			}
+		})
+	}
+}
+
+func TestGetVAPBindingWithMutator(t *testing.T) {
+	t.Parallel()
+
+	vapb, mutateFunc := getVAPBindingWithMutator()
+
+	// Verify initial state
+	if vapb == nil {
+		t.Fatal("getVAPBindingWithMutator() returned nil VAP binding")
+	}
+	if mutateFunc == nil {
+		t.Fatal("getVAPBindingWithMutator() returned nil mutate function")
+	}
+
+	// Verify mutate function works
+	originalVAPB := vapb.DeepCopy()
+	err := mutateFunc()
+	if err != nil {
+		t.Errorf("mutateFunc() = %v, want nil", err)
+	}
+
+	expectedVAPB := getValidatingAdmissionPolicyBinding()
+	ignoreOpts := cmp.Options{
+		cmpopts.IgnoreFields(metav1.ObjectMeta{}, "ResourceVersion", "ManagedFields", "Generation"),
+	}
+	if diff := cmp.Diff(expectedVAPB, vapb, ignoreOpts); diff != "" {
+		t.Errorf("VAP binding mismatch (-want +got):\n%s", diff)
+	}
+
+	vapb.Spec = admv1.ValidatingAdmissionPolicyBindingSpec{} // Reset spec to empty to test mutation
+	if diff := cmp.Diff(originalVAPB, vapb); diff == "" {
+		t.Error("VAP binding should be different after mutation")
+	}
+
+	// mutation should restore the spec to the expected state
+	err = mutateFunc()
+	if err != nil {
+		t.Errorf("second mutateFunc() = %v, want nil", err)
+	}
+	if diff := cmp.Diff(expectedVAPB, vapb, ignoreOpts); diff != "" {
+		t.Errorf("VAP binding after second mutation mismatch (-want +got):\n%s", diff)
 	}
 }

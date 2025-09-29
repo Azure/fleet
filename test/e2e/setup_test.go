@@ -382,7 +382,7 @@ func beforeSuiteForAllProcesses() {
 	})
 
 	// Expect that the managedResource VAP and its binding to exist when hub starts
-	checkVAPAndBindingExistence(hubClient)
+	checkVAPAndBindingExistence(hubCluster)
 }
 
 func maxDuration(a, b time.Duration) time.Duration {
@@ -398,7 +398,7 @@ func beforeSuiteForProcess1() {
 	setAllMemberClustersToJoin()
 	checkIfAllMemberClustersHaveJoined()
 	for _, c := range allMemberClusters {
-		checkVAPAndBindingExistence(c.KubeClient)
+		checkVAPAndBindingExistence(c)
 	}
 
 	checkIfAzurePropertyProviderIsWorking()
@@ -419,7 +419,7 @@ var _ = SynchronizedAfterSuite(func() {}, func() {
 	setAllMemberClustersToLeave()
 	checkIfAllMemberClustersHaveLeft()
 	for _, c := range allMemberClusters {
-		checkVAPAndBindingAbsence(c.KubeClient)
+		checkVAPAndBindingAbsence(c)
 	}
 	cleanupInvalidClusters()
 })

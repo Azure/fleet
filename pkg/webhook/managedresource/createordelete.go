@@ -8,6 +8,7 @@ package managedresource
 import (
 	"context"
 
+	v1 "k8s.io/api/admissionregistration/v1"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	"k8s.io/apimachinery/pkg/api/meta"
 	"k8s.io/klog/v2"
@@ -16,14 +17,17 @@ import (
 )
 
 func EnsureNoVAP(ctx context.Context, c client.Client, isHub bool) error {
-	objs := []client.Object{GetValidatingAdmissionPolicy(isHub), GetValidatingAdmissionPolicyBinding()}
+	objs := []client.Object{getValidatingAdmissionPolicy(isHub), getValidatingAdmissionPolicyBinding()}
 	for _, obj := range objs {
 		err := c.Delete(ctx, obj)
-		if err != nil && !apierrors.IsNotFound(err) {
-			if meta.IsNoMatchError(err) {
-				klog.Infof("ValidatingAdmissionPolicy is not supported in this cluster, skipping deletion")
-				return nil
-			}
+		switch {
+		case err == nil, apierrors.IsNotFound(err):
+			// continue
+		case meta.IsNoMatchError(err):
+			klog.Infof("object type %T is not supported in this cluster, continuing", obj)
+			// continue
+		default:
+			klog.Errorf("Delete object type %T failed: %s", obj, err)
 			return err
 		}
 	}
@@ -31,18 +35,51 @@ func EnsureNoVAP(ctx context.Context, c client.Client, isHub bool) error {
 }
 
 func EnsureVAP(ctx context.Context, c client.Client, isHub bool) error {
-	objs := []client.Object{GetValidatingAdmissionPolicy(isHub), GetValidatingAdmissionPolicyBinding()}
-	for _, obj := range objs {
-		opResult, err := controllerutil.CreateOrUpdate(ctx, c, obj, func() error {
-			return nil
-		})
-		if err != nil {
-			if meta.IsNoMatchError(err) {
-				klog.Infof("ValidatingAdmissionPolicy is not supported in this cluster, skipping creation")
-			}
-			klog.Errorf("ValidatingAdmissionPolicy CreateOrUpdate (operation: %s) failed: %s", opResult, err)
+	type vapObjectAndMutator struct {
+		obj    client.Object
+		mutate func() error
+	}
+	vap, mutateVAP := getVAPWithMutator(isHub)
+	vapb, mutateVAPB := getVAPBindingWithMutator()
+	objsAndMutators := []vapObjectAndMutator{
+		{
+			obj:    vap,
+			mutate: mutateVAP,
+		},
+		{
+			obj:    vapb,
+			mutate: mutateVAPB,
+		},
+	}
+
+	for _, objectMutator := range objsAndMutators {
+		opResult, err := controllerutil.CreateOrUpdate(ctx, c, objectMutator.obj, objectMutator.mutate)
+		switch {
+		case err == nil, apierrors.IsNotFound(err):
+			// continue
+		case meta.IsNoMatchError(err):
+			klog.Infof("object type %T is not supported in this cluster, continuing", objectMutator.obj)
+			// continue
+		default:
+			klog.Errorf("CreateOrUpdate (operation: %s) for object type %T failed: %s", opResult, objectMutator.obj, err)
 			return err
 		}
 	}
 	return nil
+}
+
+func getVAPWithMutator(isHub bool) (*v1.ValidatingAdmissionPolicy, func() error) {
+	vap := getValidatingAdmissionPolicy(isHub)
+	return vap, func() error {
+		mutateValidatingAdmissionPolicy(vap, isHub)
+		return nil
+	}
+}
+
+func getVAPBindingWithMutator() (*v1.ValidatingAdmissionPolicyBinding, func() error) {
+	vapb := getValidatingAdmissionPolicyBinding()
+	return vapb, func() error {
+		mutateValidatingAdmissionPolicyBinding(vapb)
+		return nil
+	}
 }

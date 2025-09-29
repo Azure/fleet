@@ -18,7 +18,7 @@ func TestGetValidatingAdmissionPolicy(t *testing.T) {
 	t.Run("member", func(t *testing.T) {
 		t.Parallel()
 
-		vap := GetValidatingAdmissionPolicy(false)
+		vap := getValidatingAdmissionPolicy(false)
 		assert.NotNil(t, vap)
 		assert.NotContains(t, vap.Spec.MatchConstraints.ResourceRules, admv1.NamedRuleWithOperations{
 			RuleWithOperations: admv1.RuleWithOperations{
@@ -35,7 +35,7 @@ func TestGetValidatingAdmissionPolicy(t *testing.T) {
 	t.Run("hub", func(t *testing.T) {
 		t.Parallel()
 
-		vap := GetValidatingAdmissionPolicy(true)
+		vap := getValidatingAdmissionPolicy(true)
 		assert.NotNil(t, vap)
 		assert.Contains(t, vap.Spec.MatchConstraints.ResourceRules, admv1.NamedRuleWithOperations{
 			RuleWithOperations: admv1.RuleWithOperations{
@@ -53,6 +53,6 @@ func TestGetValidatingAdmissionPolicy(t *testing.T) {
 func TestGetValidatingAdmissionPolicyBinding(t *testing.T) {
 	t.Parallel()
 
-	vap := GetValidatingAdmissionPolicyBinding()
+	vap := getValidatingAdmissionPolicyBinding()
 	assert.NotNil(t, vap)
 }
