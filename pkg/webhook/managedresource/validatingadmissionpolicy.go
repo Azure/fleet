@@ -29,11 +29,8 @@ func mutateValidatingAdmissionPolicy(vap *admv1.ValidatingAdmissionPolicy, isHub
 		APIVersion: "admissionregistration.k8s.io/v1",
 		Kind:       "ValidatingAdmissionPolicy",
 	}
-	vap.ObjectMeta = metav1.ObjectMeta{
-		Name: vap.ObjectMeta.Name,
-		Labels: map[string]string{
-			"fleet.azure.com/managed-by": "arm",
-		},
+	vap.ObjectMeta.Labels = map[string]string{
+		"fleet.azure.com/managed-by": "arm",
 	}
 	vap.Spec = admv1.ValidatingAdmissionPolicySpec{
 		MatchConstraints: &admv1.MatchResources{
@@ -115,11 +112,8 @@ func mutateValidatingAdmissionPolicyBinding(vapb *admv1.ValidatingAdmissionPolic
 		APIVersion: "admissionregistration.k8s.io/v1",
 		Kind:       "ValidatingAdmissionPolicyBinding",
 	}
-	vapb.ObjectMeta = metav1.ObjectMeta{
-		Name: vapb.ObjectMeta.Name,
-		Labels: map[string]string{
-			"fleet.azure.com/managed-by": "arm",
-		},
+	vapb.ObjectMeta.Labels = map[string]string{
+		"fleet.azure.com/managed-by": "arm",
 	}
 	vapb.Spec = admv1.ValidatingAdmissionPolicyBindingSpec{
 		PolicyName: resourceName,
