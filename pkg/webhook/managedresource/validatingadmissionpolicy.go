@@ -25,13 +25,13 @@ func getValidatingAdmissionPolicy(isHub bool) *admv1.ValidatingAdmissionPolicy {
 }
 
 func mutateValidatingAdmissionPolicy(vap *admv1.ValidatingAdmissionPolicy, isHub bool) {
-	vap.TypeMeta = metav1.TypeMeta{
-		APIVersion: "admissionregistration.k8s.io/v1",
-		Kind:       "ValidatingAdmissionPolicy",
+	ometa := metav1.ObjectMeta{
+		Labels: map[string]string{
+			"fleet.azure.com/managed-by": "arm",
+		},
+		ResourceVersion: vap.ResourceVersion,
 	}
-	vap.ObjectMeta.Labels = map[string]string{
-		"fleet.azure.com/managed-by": "arm",
-	}
+	vap.ObjectMeta = ometa
 	vap.Spec = admv1.ValidatingAdmissionPolicySpec{
 		MatchConstraints: &admv1.MatchResources{
 			ObjectSelector: &metav1.LabelSelector{
@@ -108,13 +108,13 @@ func getValidatingAdmissionPolicyBinding() *admv1.ValidatingAdmissionPolicyBindi
 }
 
 func mutateValidatingAdmissionPolicyBinding(vapb *admv1.ValidatingAdmissionPolicyBinding) {
-	vapb.TypeMeta = metav1.TypeMeta{
-		APIVersion: "admissionregistration.k8s.io/v1",
-		Kind:       "ValidatingAdmissionPolicyBinding",
+	ometa := metav1.ObjectMeta{
+		Labels: map[string]string{
+			"fleet.azure.com/managed-by": "arm",
+		},
+		ResourceVersion: vapb.ResourceVersion,
 	}
-	vapb.ObjectMeta.Labels = map[string]string{
-		"fleet.azure.com/managed-by": "arm",
-	}
+	vapb.ObjectMeta = ometa
 	vapb.Spec = admv1.ValidatingAdmissionPolicyBindingSpec{
 		PolicyName: resourceName,
 		ValidationActions: []admv1.ValidationAction{
