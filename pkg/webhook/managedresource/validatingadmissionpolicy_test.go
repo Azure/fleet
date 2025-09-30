@@ -20,9 +20,6 @@ func TestGetValidatingAdmissionPolicy(t *testing.T) {
 		t.Parallel()
 
 		vap := getValidatingAdmissionPolicy(false)
-		if vap == nil {
-			t.Errorf("getValidatingAdmissionPolicy(false) = nil, want non-nil")
-		}
 
 		unwantedRule := admv1.NamedRuleWithOperations{
 			RuleWithOperations: admv1.RuleWithOperations{
@@ -34,10 +31,12 @@ func TestGetValidatingAdmissionPolicy(t *testing.T) {
 				Operations: []admv1.OperationType{admv1.Create, admv1.Update, admv1.Delete},
 			},
 		}
-		
-		for _, rule := range vap.Spec.MatchConstraints.ResourceRules {
-			if diff := cmp.Diff(unwantedRule, rule); diff == "" {
-				t.Errorf("getValidatingAdmissionPolicy(false) contains unwanted rule %+v", unwantedRule)
+
+		if vap.Spec.MatchConstraints != nil {
+			for _, rule := range vap.Spec.MatchConstraints.ResourceRules {
+				if diff := cmp.Diff(unwantedRule, rule); diff == "" {
+					t.Errorf("getValidatingAdmissionPolicy(false) contains unwanted rule %+v", unwantedRule)
+				}
 			}
 		}
 	})
@@ -46,9 +45,6 @@ func TestGetValidatingAdmissionPolicy(t *testing.T) {
 		t.Parallel()
 
 		vap := getValidatingAdmissionPolicy(true)
-		if vap == nil {
-			t.Errorf("getValidatingAdmissionPolicy(true) = nil, want non-nil")
-		}
 
 		wantedRule := admv1.NamedRuleWithOperations{
 			RuleWithOperations: admv1.RuleWithOperations{
@@ -60,12 +56,14 @@ func TestGetValidatingAdmissionPolicy(t *testing.T) {
 				Operations: []admv1.OperationType{admv1.Create, admv1.Update, admv1.Delete},
 			},
 		}
-		
+
 		found := false
-		for _, rule := range vap.Spec.MatchConstraints.ResourceRules {
-			if diff := cmp.Diff(wantedRule, rule); diff == "" {
-				found = true
-				break
+		if vap.Spec.MatchConstraints != nil {
+			for _, rule := range vap.Spec.MatchConstraints.ResourceRules {
+				if diff := cmp.Diff(wantedRule, rule); diff == "" {
+					found = true
+					break
+				}
 			}
 		}
 		if !found {
@@ -78,10 +76,10 @@ func TestMutateValidatingAdmissionPolicy(t *testing.T) {
 	t.Parallel()
 
 	tests := []struct {
-		name             string
-		isHub            bool
-		resourceVersion  string
-		initialLabels    map[string]string
+		name            string
+		isHub           bool
+		resourceVersion string
+		initialLabels   map[string]string
 	}{
 		{
 			name:            "preserves ResourceVersion and updates labels for member cluster",
@@ -131,7 +129,7 @@ func TestMutateValidatingAdmissionPolicy(t *testing.T) {
 			if got := vap.Labels["fleet.azure.com/managed-by"]; got != wantManagedByLabel {
 				t.Errorf("mutateValidatingAdmissionPolicy() managed-by label = %v, want %v", got, wantManagedByLabel)
 			}
-			
+
 			// Verify that only the managed-by label exists (other labels are not preserved)
 			wantLabels := map[string]string{
 				"fleet.azure.com/managed-by": "arm",
@@ -156,9 +154,9 @@ func TestMutateValidatingAdmissionPolicyBinding(t *testing.T) {
 	t.Parallel()
 
 	tests := []struct {
-		name             string
-		resourceVersion  string
-		initialLabels    map[string]string
+		name            string
+		resourceVersion string
+		initialLabels   map[string]string
 	}{
 		{
 			name:            "preserves ResourceVersion and updates labels",
@@ -199,7 +197,7 @@ func TestMutateValidatingAdmissionPolicyBinding(t *testing.T) {
 			if got := vapb.Labels["fleet.azure.com/managed-by"]; got != wantManagedByLabel {
 				t.Errorf("mutateValidatingAdmissionPolicyBinding() managed-by label = %v, want %v", got, wantManagedByLabel)
 			}
-			
+
 			// Verify that only the managed-by label exists (other labels are not preserved)
 			wantLabels := map[string]string{
 				"fleet.azure.com/managed-by": "arm",
