@@ -102,6 +102,12 @@ const (
 	// diff reporting has been fully completed.
 	DiffReportedStatusTrueReason = "DiffReportingCompleted"
 
+	// StatusSyncFailedReason is the reason string of placement condition when the status sync failed.
+	StatusSyncFailedReason = "StatusSyncFailed"
+
+	// StatusSyncSucceededReason is the reason string of placement condition when the status sync succeeded.
+	StatusSyncSucceededReason = "StatusSyncSucceeded"
+
 	// TODO: Add a user error reason
 )
 

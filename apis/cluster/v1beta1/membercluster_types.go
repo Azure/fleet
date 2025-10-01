@@ -74,6 +74,30 @@ type MemberClusterSpec struct {
 	// +kubebuilder:validation:MaxItems=100
 	// +optional
 	Taints []Taint `json:"taints,omitempty"`
+
+	// DeleteOptions for deleting the MemberCluster.
+	// +optional
+	DeleteOptions *DeleteOptions `json:"deleteOptions,omitempty"`
+}
+
+// DeleteValidationMode identifies the type of validation when deleting a MemberCluster.
+// +enum
+type DeleteValidationMode string
+
+const (
+	// DeleteValidationModeSkip skips the validation when deleting a MemberCluster.
+	DeleteValidationModeSkip = "Skip"
+
+	// DeleteValidationModeStrict performs strict validation when deleting a MemberCluster.
+	DeleteValidationModeStrict = "Strict"
+)
+
+type DeleteOptions struct {
+	// Mode of validation. Can be "Skip", or "Strict". Default is Strict.
+	// +kubebuilder:validation:Enum=Skip;Strict
+	// +kubebuilder:default=Strict
+	// +kubebuilder:validation:Optional
+	ValidationMode DeleteValidationMode `json:"validationMode,omitempty"`
 }
 
 // PropertyName is the name of a cluster property; it should be a Kubernetes label name.

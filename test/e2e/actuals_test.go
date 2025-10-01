@@ -1269,6 +1269,11 @@ func placementStatusWithOverrideUpdatedActual(
 	}
 }
 
+func namespaceAccessibleCRPStatusUpdatedActual(wantSelectedResourceIdentifiers []placementv1beta1.ResourceIdentifier, wantSelectedClusters, wantUnselectedClusters []string, wantObservedResourceIndex string, statusSyncedConditionStatus metav1.ConditionStatus, isResourceSelectorInvalid bool) func() error {
+	crpKey := types.NamespacedName{Name: fmt.Sprintf(crpNameTemplate, GinkgoParallelProcess())}
+	return customizedCRPStatusUpdatedActualWithStatusSynced(crpKey, wantSelectedResourceIdentifiers, wantSelectedClusters, wantUnselectedClusters, wantObservedResourceIndex, true, statusSyncedConditionStatus, isResourceSelectorInvalid)
+}
+
 func crpStatusUpdatedActual(wantSelectedResourceIdentifiers []placementv1beta1.ResourceIdentifier, wantSelectedClusters, wantUnselectedClusters []string, wantObservedResourceIndex string) func() error {
 	crpKey := types.NamespacedName{Name: fmt.Sprintf(crpNameTemplate, GinkgoParallelProcess())}
 	return customizedPlacementStatusUpdatedActual(crpKey, wantSelectedResourceIdentifiers, wantSelectedClusters, wantUnselectedClusters, wantObservedResourceIndex, true)
@@ -1520,52 +1525,135 @@ func customizedPlacementStatusUpdatedActual(
 			return fmt.Errorf("failed to get placement %s: %w", placementKey, err)
 		}
 
-		wantPlacementStatus := []placementv1beta1.PerClusterPlacementStatus{}
-		for _, name := range wantSelectedClusters {
-			wantPlacementStatus = append(wantPlacementStatus, placementv1beta1.PerClusterPlacementStatus{
-				ClusterName:           name,
-				ObservedResourceIndex: wantObservedResourceIndex,
-				Conditions:            perClusterRolloutCompletedConditions(placement.GetGeneration(), resourceIsTrackable, false),
-			})
-		}
-		for i := 0; i < len(wantUnselectedClusters); i++ {
-			wantPlacementStatus = append(wantPlacementStatus, placementv1beta1.PerClusterPlacementStatus{
-				Conditions: perClusterScheduleFailedConditions(placement.GetGeneration()),
-			})
-		}
-
-		var wantPlacementConditions []metav1.Condition
-		if len(wantSelectedClusters) > 0 {
-			wantPlacementConditions = placementRolloutCompletedConditions(placementKey, placement.GetGeneration(), false)
-		} else {
-			// We don't set the remaining resource conditions.
-			wantPlacementConditions = placementScheduledConditions(placementKey, placement.GetGeneration())
-		}
-
-		if len(wantUnselectedClusters) > 0 {
-			if len(wantSelectedClusters) > 0 {
-				wantPlacementConditions = placementSchedulePartiallyFailedConditions(placementKey, placement.GetGeneration())
-			} else {
-				// we don't set the remaining resource conditions if there is no clusters to select
-				wantPlacementConditions = placementScheduleFailedConditions(placementKey, placement.GetGeneration())
-			}
-		}
-
-		// Note that the placement controller will only keep decisions regarding unselected clusters for a placement if:
-		//
-		// * The placement is of the PickN placement type and the required N count cannot be fulfilled; or
-		// * The placement is of the PickFixed placement type and the list of target clusters specified cannot be fulfilled.
-		wantStatus := &placementv1beta1.PlacementStatus{
-			Conditions:                  wantPlacementConditions,
-			PerClusterPlacementStatuses: wantPlacementStatus,
-			SelectedResources:           wantSelectedResourceIdentifiers,
-			ObservedResourceIndex:       wantObservedResourceIndex,
-		}
+		wantStatus := buildWantPlacementStatus(placementKey, placement.GetGeneration(), wantSelectedResourceIdentifiers, wantSelectedClusters, wantUnselectedClusters, wantObservedResourceIndex, resourceIsTrackable)
 		if diff := cmp.Diff(placement.GetPlacementStatus(), wantStatus, placementStatusCmpOptions...); diff != "" {
 			return fmt.Errorf("Placement status diff (-got, +want): %s", diff)
 		}
 		return nil
 	}
+}
+
+func buildWantPlacementStatus(
+	placementKey types.NamespacedName,
+	placementGeneration int64,
+	wantSelectedResourceIdentifiers []placementv1beta1.ResourceIdentifier,
+	wantSelectedClusters, wantUnselectedClusters []string,
+	wantObservedResourceIndex string,
+	resourceIsTrackable bool,
+) *placementv1beta1.PlacementStatus {
+	wantPlacementStatus := []placementv1beta1.PerClusterPlacementStatus{}
+	for _, name := range wantSelectedClusters {
+		wantPlacementStatus = append(wantPlacementStatus, placementv1beta1.PerClusterPlacementStatus{
+			ClusterName:           name,
+			ObservedResourceIndex: wantObservedResourceIndex,
+			Conditions:            perClusterRolloutCompletedConditions(placementGeneration, resourceIsTrackable, false),
+		})
+	}
+	for i := 0; i < len(wantUnselectedClusters); i++ {
+		wantPlacementStatus = append(wantPlacementStatus, placementv1beta1.PerClusterPlacementStatus{
+			Conditions: perClusterScheduleFailedConditions(placementGeneration),
+		})
+	}
+
+	var wantPlacementConditions []metav1.Condition
+	if len(wantSelectedClusters) > 0 {
+		wantPlacementConditions = placementRolloutCompletedConditions(placementKey, placementGeneration, false)
+	} else {
+		// We don't set the remaining resource conditions.
+		wantPlacementConditions = placementScheduledConditions(placementKey, placementGeneration)
+	}
+
+	if len(wantUnselectedClusters) > 0 {
+		if len(wantSelectedClusters) > 0 {
+			wantPlacementConditions = placementSchedulePartiallyFailedConditions(placementKey, placementGeneration)
+		} else {
+			// we don't set the remaining resource conditions if there is no clusters to select
+			wantPlacementConditions = placementScheduleFailedConditions(placementKey, placementGeneration)
+		}
+	}
+
+	// Note that the placement controller will only keep decisions regarding unselected clusters for a placement if:
+	//
+	// * The placement is of the PickN placement type and the required N count cannot be fulfilled; or
+	// * The placement is of the PickFixed placement type and the list of target clusters specified cannot be fulfilled.
+	wantStatus := &placementv1beta1.PlacementStatus{
+		Conditions:                  wantPlacementConditions,
+		PerClusterPlacementStatuses: wantPlacementStatus,
+		SelectedResources:           wantSelectedResourceIdentifiers,
+		ObservedResourceIndex:       wantObservedResourceIndex,
+	}
+	return wantStatus
+}
+
+func customizedCRPStatusUpdatedActualWithStatusSynced(
+	placementKey types.NamespacedName,
+	wantSelectedResourceIdentifiers []placementv1beta1.ResourceIdentifier,
+	wantSelectedClusters, wantUnselectedClusters []string,
+	wantObservedResourceIndex string,
+	resourceIsTrackable bool,
+	statusSyncedConditionStatus metav1.ConditionStatus,
+	isResourceSelectorInvalid bool,
+) func() error {
+	return func() error {
+		placement, err := retrievePlacement(placementKey)
+		if err != nil {
+			return fmt.Errorf("failed to get placement %s: %w", placementKey, err)
+		}
+
+		wantStatus := buildWantCRPStatusWithStatusSynced(placementKey, placement.GetGeneration(), wantSelectedResourceIdentifiers, wantSelectedClusters, wantUnselectedClusters, wantObservedResourceIndex, resourceIsTrackable, statusSyncedConditionStatus, isResourceSelectorInvalid)
+		if diff := cmp.Diff(placement.GetPlacementStatus(), wantStatus, placementStatusCmpOptions...); diff != "" {
+			return fmt.Errorf("Placement status diff (-got, +want): %s", diff)
+		}
+		return nil
+	}
+}
+
+func buildWantCRPStatusWithStatusSynced(
+	placementKey types.NamespacedName,
+	placementGeneration int64,
+	wantSelectedResourceIdentifiers []placementv1beta1.ResourceIdentifier,
+	wantSelectedClusters, wantUnselectedClusters []string,
+	wantObservedResourceIndex string,
+	resourceIsTrackable bool,
+	statusSyncedConditionStatus metav1.ConditionStatus,
+	isResourceSelectorInvalid bool,
+) *placementv1beta1.PlacementStatus {
+	if isResourceSelectorInvalid {
+		// when namespace resource selector is invalid, the observed generation doesn't change for all condition expect Scheduled.
+		placementGeneration = placementGeneration - 1
+	}
+	wantStatus := buildWantPlacementStatus(placementKey, placementGeneration, wantSelectedResourceIdentifiers, wantSelectedClusters, wantUnselectedClusters, wantObservedResourceIndex, resourceIsTrackable)
+
+	var statusSyncedCondition metav1.Condition
+	switch statusSyncedConditionStatus {
+	case metav1.ConditionTrue:
+		statusSyncedCondition = metav1.Condition{
+			Type:               string(placementv1beta1.ClusterResourcePlacementStatusSyncedConditionType),
+			Status:             metav1.ConditionTrue,
+			Reason:             condition.StatusSyncSucceededReason,
+			ObservedGeneration: placementGeneration,
+		}
+	case metav1.ConditionFalse:
+		statusSyncedCondition = metav1.Condition{
+			Type:               string(placementv1beta1.ClusterResourcePlacementStatusSyncedConditionType),
+			Status:             metav1.ConditionFalse,
+			Reason:             condition.StatusSyncFailedReason,
+			ObservedGeneration: placementGeneration,
+		}
+	}
+	wantStatus.Conditions = append(wantStatus.Conditions, statusSyncedCondition)
+
+	if isResourceSelectorInvalid {
+		for i := range wantStatus.Conditions {
+			if wantStatus.Conditions[i].Type == string(placementv1beta1.ClusterResourcePlacementScheduledConditionType) {
+				wantStatus.Conditions[i].Status = metav1.ConditionFalse
+				wantStatus.Conditions[i].Reason = condition.InvalidResourceSelectorsReason
+				// when namespace resource selector is invalid, the observed generation is only updated for Scheduled condition.
+				wantStatus.Conditions[i].ObservedGeneration = placementGeneration + 1
+			}
+		}
+	}
+	return wantStatus
 }
 
 func safeRolloutWorkloadCRPStatusUpdatedActual(wantSelectedResourceIdentifiers []placementv1beta1.ResourceIdentifier, failedWorkloadResourceIdentifier placementv1beta1.ResourceIdentifier, wantSelectedClusters []string, wantObservedResourceIndex string, failedResourceObservedGeneration int64) func() error {

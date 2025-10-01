@@ -42,7 +42,18 @@ func (v *memberClusterValidator) Handle(ctx context.Context, req admission.Reque
 	mcObjectName := types.NamespacedName{Name: req.Name, Namespace: req.Namespace}
 	klog.V(2).InfoS("Validating webhook handling member cluster", "operation", req.Operation, "memberCluster", mcObjectName)
 
+	var mc clusterv1beta1.MemberCluster
 	if req.Operation == admissionv1.Delete { // Will reject the requests whenever the serviceExport is not deleted
+		if err := v.decoder.DecodeRaw(req.OldObject, &mc); err != nil {
+			klog.ErrorS(err, "Failed to decode member cluster object for validating fields", "userName", req.UserInfo.Username, "groups", req.UserInfo.Groups)
+			return admission.Errored(http.StatusBadRequest, err)
+		}
+
+		if mc.Spec.DeleteOptions != nil && mc.Spec.DeleteOptions.ValidationMode == clusterv1beta1.DeleteValidationModeSkip {
+			klog.V(2).InfoS("Skipping validation for member cluster DELETE", "memberCluster", mcObjectName)
+			return admission.Allowed("Skipping validation for member cluster DELETE")
+		}
+
 		klog.V(2).InfoS("Validating webhook member cluster DELETE", "memberCluster", mcObjectName)
 		namespaceName := fmt.Sprintf(utils.NamespaceNameFormat, mcObjectName.Name)
 		internalServiceExportList := &fleetnetworkingv1alpha1.InternalServiceExportList{}
@@ -59,7 +70,6 @@ func (v *memberClusterValidator) Handle(ctx context.Context, req admission.Reque
 		return admission.Allowed("Member cluster is ready to leave")
 	}
 
-	var mc clusterv1beta1.MemberCluster
 	if err := v.decoder.Decode(req, &mc); err != nil {
 		klog.ErrorS(err, "Failed to decode member cluster object for validating fields", "userName", req.UserInfo.Username, "groups", req.UserInfo.Groups)
 		return admission.Errored(http.StatusBadRequest, err)

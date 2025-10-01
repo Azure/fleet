@@ -98,7 +98,7 @@ func TestCheckForDuplicatedManifests(t *testing.T) {
 	work := &fleetv1beta1.Work{
 		ObjectMeta: metav1.ObjectMeta{
 			Name:      workName,
-			Namespace: memberReservedNSName,
+			Namespace: memberReservedNSName1,
 		},
 	}
 

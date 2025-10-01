@@ -20,7 +20,6 @@ import (
 	"fmt"
 	"time"
 
-	"github.com/google/go-cmp/cmp"
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
 	corev1 "k8s.io/api/core/v1"
@@ -66,9 +65,9 @@ var _ = Describe("ClusterResourcePlacementStatus E2E Tests", Ordered, func() {
 			ensureCRPAndRelatedResourcesDeleted(crpName, allMemberClusters)
 		})
 
-		It("should update CRP status with 2 clusters as expected", func() {
+		It("should update CRP status with 2 clusters with synced condition set to true as expected", func() {
 			expectedClusters := []string{memberCluster2EastCanaryName, memberCluster3WestProdName}
-			statusUpdatedActual := crpStatusUpdatedActual(workResourceIdentifiers(), expectedClusters, nil, "0")
+			statusUpdatedActual := namespaceAccessibleCRPStatusUpdatedActual(workResourceIdentifiers(), expectedClusters, nil, "0", metav1.ConditionTrue, false)
 			Eventually(statusUpdatedActual, crpsEventuallyDuration, eventuallyInterval).Should(Succeed(), "Failed to update CRP status with 2 clusters")
 		})
 
@@ -89,8 +88,8 @@ var _ = Describe("ClusterResourcePlacementStatus E2E Tests", Ordered, func() {
 			}, eventuallyDuration, eventuallyInterval).Should(Succeed(), "Failed to update CRP to select 3 clusters")
 		})
 
-		It("should update CRP status with 3 clusters as expected", func() {
-			statusUpdatedActual := crpStatusUpdatedActual(workResourceIdentifiers(), allMemberClusterNames, nil, "0")
+		It("should update CRP status with 3 clusters with synced condition set to true as expected", func() {
+			statusUpdatedActual := namespaceAccessibleCRPStatusUpdatedActual(workResourceIdentifiers(), allMemberClusterNames, nil, "0", metav1.ConditionTrue, false)
 			Eventually(statusUpdatedActual, crpsEventuallyDuration, eventuallyInterval).Should(Succeed(), "Failed to update CRP status with 3 clusters")
 		})
 
@@ -115,7 +114,7 @@ var _ = Describe("ClusterResourcePlacementStatus E2E Tests", Ordered, func() {
 				Namespace: appNamespace().Name,
 			}
 
-			// Wait for CRPS to be recreated by the controller
+			// Wait for CRPS to be recreated by the controller.
 			Eventually(func() bool {
 				crpStatus := &placementv1beta1.ClusterResourcePlacementStatus{}
 				if err := hubClient.Get(ctx, crpStatusKey, crpStatus); err != nil {
@@ -124,9 +123,14 @@ var _ = Describe("ClusterResourcePlacementStatus E2E Tests", Ordered, func() {
 				return crpStatus.DeletionTimestamp == nil
 			}, eventuallyDuration, eventuallyInterval).Should(BeTrue(), "ClusterResourcePlacementStatus should be recreated after manual deletion")
 
-			// Verify the recreated CRPS matches the current CRP status
+			// Verify the recreated CRPS matches the current CRP status.
 			crpsMatchesActual := statussyncutils.CRPSStatusMatchesCRPActual(ctx, hubClient, crpName, appNamespace().Name)
 			Eventually(crpsMatchesActual, eventuallyDuration, eventuallyInterval).Should(Succeed(), "Recreated ClusterResourcePlacementStatus should match current CRP status")
+		})
+
+		It("CRP status should remain unchanged", func() {
+			statusUpdatedActual := namespaceAccessibleCRPStatusUpdatedActual(workResourceIdentifiers(), allMemberClusterNames, nil, "0", metav1.ConditionTrue, false)
+			Consistently(statusUpdatedActual, consistentlyDuration, consistentlyInterval).Should(Succeed(), "Failed to update CRP status with 3 clusters")
 		})
 
 		It("delete CRP", func() {
@@ -207,7 +211,6 @@ var _ = Describe("ClusterResourcePlacementStatus E2E Tests", Ordered, func() {
 	})
 
 	Context("Namespace deletion with ClusterResourcePlacementStatus, StatusReportingScope is NamespaceAccessible", Ordered, func() {
-		var crpStatusBeforeWait placementv1beta1.PlacementStatus
 		crpName := fmt.Sprintf(crpNameTemplate, GinkgoParallelProcess())
 
 		BeforeAll(func() {
@@ -222,8 +225,7 @@ var _ = Describe("ClusterResourcePlacementStatus E2E Tests", Ordered, func() {
 				Spec: placementv1beta1.PlacementSpec{
 					ResourceSelectors: workResourceSelector(),
 					Policy: &placementv1beta1.PlacementPolicy{
-						PlacementType:    placementv1beta1.PickNPlacementType,
-						NumberOfClusters: ptr.To(int32(2)),
+						PlacementType: placementv1beta1.PickAllPlacementType,
 					},
 					StatusReportingScope: placementv1beta1.NamespaceAccessible,
 				},
@@ -236,12 +238,13 @@ var _ = Describe("ClusterResourcePlacementStatus E2E Tests", Ordered, func() {
 			ensureCRPAndRelatedResourcesDeleted(crpName, allMemberClusters)
 		})
 
-		It("should create ClusterResourcePlacementStatus in the work resources namespace", func() {
+		It("should update CRP status with synced condition set to true", func() {
 			// Wait for CRP status to be updated.
-			expectedClusters := []string{memberCluster2EastCanaryName, memberCluster3WestProdName}
-			statusUpdatedActual := crpStatusUpdatedActual(workResourceIdentifiers(), expectedClusters, nil, "0")
+			statusUpdatedActual := namespaceAccessibleCRPStatusUpdatedActual(workResourceIdentifiers(), allMemberClusterNames, nil, "0", metav1.ConditionTrue, false)
 			Eventually(statusUpdatedActual, crpsEventuallyDuration, eventuallyInterval).Should(Succeed(), "Failed to update CRP status")
+		})
 
+		It("should create ClusterResourcePlacementStatus in the work resources namespace", func() {
 			// Verify CRPS is created in the work resources namespace.
 			crpsMatchesActual := statussyncutils.CRPSStatusMatchesCRPActual(ctx, hubClient, crpName, appNamespace().Name)
 			Eventually(crpsMatchesActual, eventuallyDuration, eventuallyInterval).Should(Succeed(), "ClusterResourcePlacementStatus should be created in work resources namespace")
@@ -266,46 +269,192 @@ var _ = Describe("ClusterResourcePlacementStatus E2E Tests", Ordered, func() {
 			}, consistentlyDuration, consistentlyInterval).Should(BeTrue(), "Namespace should remain deleted")
 		})
 
-		It("should copy CRP status after namespace deletion", func() {
-			// Get the CRP status immediately after namespace deletion.
-			Eventually(func() error {
-				crp := &placementv1beta1.ClusterResourcePlacement{}
-				if err := hubClient.Get(ctx, types.NamespacedName{Name: crpName}, crp); err != nil {
-					return err
-				}
-				crpStatusBeforeWait = *crp.Status.DeepCopy()
-				return nil
-			}, eventuallyDuration, eventuallyInterval).Should(Succeed(), "Failed to get CRP status after namespace deletion")
+		It("should update CRP status with Status synced condition set to false", func() {
+			// Wait for CRP status to be updated.
+			statusUpdatedActual := namespaceAccessibleCRPStatusUpdatedActual([]placementv1beta1.ResourceIdentifier{}, allMemberClusterNames, nil, "1", metav1.ConditionFalse, false)
+			Eventually(statusUpdatedActual, crpsEventuallyDuration, eventuallyInterval).Should(Succeed(), "Failed to update CRP status")
 		})
 
-		It("update CRP spec to trigger status change", func() {
-			// Update CRP spec to trigger a status change.
+		It("should recreate namespace manually", func() {
+			ns := corev1.Namespace{
+				ObjectMeta: metav1.ObjectMeta{
+					Name: appNamespace().Name,
+				},
+			}
+			Expect(hubClient.Create(ctx, &ns)).To(Succeed(), "Failed to recreate work resources namespace")
+
+			// Wait for namespace creation
+			Eventually(func() error {
+				return hubClient.Get(ctx, types.NamespacedName{Name: appNamespace().Name}, &ns)
+			}, eventuallyDuration, eventuallyInterval).Should(Succeed(), fmt.Sprintf("Failed to get %s", appNamespace().Name))
+		})
+
+		It("should update CRP status with Status synced condition set to true", func() {
+			// Wait for CRP status to be updated.
+			statusUpdatedActual := namespaceAccessibleCRPStatusUpdatedActual(workNamespaceIdentifiers(), allMemberClusterNames, nil, "2", metav1.ConditionTrue, false)
+			Eventually(statusUpdatedActual, crpsEventuallyDuration, eventuallyInterval).Should(Succeed(), "Failed to update CRP status")
+		})
+	})
+
+	Context("NamespaceAccessible CRP with namespace selector change for consistency validation - namespace exists", func() {
+		crpName := fmt.Sprintf(crpNameTemplate, GinkgoParallelProcess())
+		newNamespaceName := "new-namespace"
+		BeforeAll(func() {
+			// Create work resources that will be selected by the CRP.
+			createWorkResources()
+
+			// Create another namespace.
+			ns := corev1.Namespace{
+				ObjectMeta: metav1.ObjectMeta{
+					Name: newNamespaceName,
+				},
+			}
+			Expect(hubClient.Create(ctx, &ns)).To(Succeed(), "Failed to create new-namespace")
+			// Wait for namespace creation
+			Eventually(func() error {
+				return hubClient.Get(ctx, types.NamespacedName{Name: newNamespaceName}, &ns)
+			}, eventuallyDuration, eventuallyInterval).Should(Succeed(), fmt.Sprintf("Failed to get %s", newNamespaceName))
+
+			// Create CRP with NamespaceAccessible scope.
+			crp := &placementv1beta1.ClusterResourcePlacement{
+				ObjectMeta: metav1.ObjectMeta{
+					Name: crpName,
+				},
+				Spec: placementv1beta1.PlacementSpec{
+					ResourceSelectors: workResourceSelector(),
+					Policy: &placementv1beta1.PlacementPolicy{
+						PlacementType: placementv1beta1.PickAllPlacementType,
+					},
+					StatusReportingScope: placementv1beta1.NamespaceAccessible,
+				},
+			}
+			Expect(hubClient.Create(ctx, crp)).To(Succeed(), "Failed to create CRP")
+		})
+
+		AfterAll(func() {
+			// Clean up resources.
+			ensureCRPAndRelatedResourcesDeleted(crpName, allMemberClusters)
+
+			// Delete the additional namespace.
+			ns := &corev1.Namespace{
+				ObjectMeta: metav1.ObjectMeta{
+					Name: newNamespaceName,
+				},
+			}
+			Expect(hubClient.Delete(ctx, ns)).To(Succeed(), "Failed to delete new-namespace")
+		})
+
+		It("should update CRP status with initial namespace selection", func() {
+			statusUpdatedActual := namespaceAccessibleCRPStatusUpdatedActual(workResourceIdentifiers(), allMemberClusterNames, nil, "0", metav1.ConditionTrue, false)
+			Eventually(statusUpdatedActual, crpsEventuallyDuration, eventuallyInterval).Should(Succeed(), "Failed to update CRP status")
+		})
+
+		It("should create CRPS in the initial namespace and verify its status", func() {
+			crpsMatchesActual := statussyncutils.CRPSStatusMatchesCRPActual(ctx, hubClient, crpName, appNamespace().Name)
+			Eventually(crpsMatchesActual, eventuallyDuration, eventuallyInterval).Should(Succeed(), "CRPS should be created in initial namespace and match CRP status")
+		})
+
+		It("should update CRP to select a different namespace", func() {
+			// Update CRP to select the new-namespace instead.
 			Eventually(func() error {
 				crp := &placementv1beta1.ClusterResourcePlacement{}
 				if err := hubClient.Get(ctx, types.NamespacedName{Name: crpName}, crp); err != nil {
 					return err
 				}
-				// Change number of clusters to 1 to trigger status update.
-				crp.Spec.Policy.NumberOfClusters = ptr.To(int32(3))
+				crp.Spec.ResourceSelectors = []placementv1beta1.ResourceSelectorTerm{
+					{
+						Group:   corev1.GroupName,
+						Version: "v1",
+						Kind:    "Namespace",
+						Name:    newNamespaceName,
+					},
+				}
 				return hubClient.Update(ctx, crp)
-			}, eventuallyDuration, eventuallyInterval).Should(Succeed(), "Failed to update CRP spec to trigger status change")
+			}, eventuallyDuration, eventuallyInterval).Should(Succeed(), "Failed to update CRP to select different namespace")
 		})
 
-		It("should not update CRP status after namespace deletion", func() {
-			// Since CRPS can't be updated (namespace doesn't exist), CRP status should remain unchanged.
-			Consistently(func() error {
+		It("should update CRP status with scheduled condition set to false", func() {
+			statusUpdatedActual := namespaceAccessibleCRPStatusUpdatedActual(workResourceIdentifiers(), allMemberClusterNames, nil, "0", metav1.ConditionTrue, true)
+			Eventually(statusUpdatedActual, crpsEventuallyDuration, eventuallyInterval).Should(Succeed(), "Failed to update CRP status")
+		})
+
+		It("should update CRP to select original namespace", func() {
+			Eventually(func() error {
 				crp := &placementv1beta1.ClusterResourcePlacement{}
 				if err := hubClient.Get(ctx, types.NamespacedName{Name: crpName}, crp); err != nil {
 					return err
 				}
-				currentStatus := crp.Status
-				// Compare the entire status using cmp.Diff for better error reporting.
-				if diff := cmp.Diff(crpStatusBeforeWait, currentStatus); diff != "" {
-					return fmt.Errorf("CRP status changed after namespace deletion (-expected +actual):\n%s", diff)
-				}
+				crp.Spec.ResourceSelectors = workResourceSelector()
+				return hubClient.Update(ctx, crp)
+			}, eventuallyDuration, eventuallyInterval).Should(Succeed(), "Failed to update CRP to select different namespace")
+		})
 
-				return nil
-			}, consistentlyDuration, consistentlyInterval).Should(Succeed(), "CRP status should remain unchanged after namespace deletion")
+		It("should update CRP status with scheduled condition set to true", func() {
+			statusUpdatedActual := namespaceAccessibleCRPStatusUpdatedActual(workResourceIdentifiers(), allMemberClusterNames, nil, "0", metav1.ConditionTrue, false)
+			Eventually(statusUpdatedActual, crpsEventuallyDuration, eventuallyInterval).Should(Succeed(), "Failed to update CRP status")
+		})
+	})
+
+	Context("NamespaceAccessible CRP with namespace selector change for consistency validation - namespace doesn't exist", func() {
+		crpName := fmt.Sprintf(crpNameTemplate, GinkgoParallelProcess())
+
+		BeforeAll(func() {
+			// Create work resources that will be selected by the CRP.
+			createWorkResources()
+
+			// Create CRP with NamespaceAccessible scope.
+			crp := &placementv1beta1.ClusterResourcePlacement{
+				ObjectMeta: metav1.ObjectMeta{
+					Name: crpName,
+				},
+				Spec: placementv1beta1.PlacementSpec{
+					ResourceSelectors: workResourceSelector(),
+					Policy: &placementv1beta1.PlacementPolicy{
+						PlacementType: placementv1beta1.PickAllPlacementType,
+					},
+					StatusReportingScope: placementv1beta1.NamespaceAccessible,
+				},
+			}
+			Expect(hubClient.Create(ctx, crp)).To(Succeed(), "Failed to create CRP")
+		})
+
+		AfterAll(func() {
+			// Clean up resources.
+			ensureCRPAndRelatedResourcesDeleted(crpName, allMemberClusters)
+		})
+
+		It("should update CRP status with initial namespace selection", func() {
+			statusUpdatedActual := namespaceAccessibleCRPStatusUpdatedActual(workResourceIdentifiers(), allMemberClusterNames, nil, "0", metav1.ConditionTrue, false)
+			Eventually(statusUpdatedActual, crpsEventuallyDuration, eventuallyInterval).Should(Succeed(), "Failed to update CRP status")
+		})
+
+		It("should create CRPS in the initial namespace and verify its status", func() {
+			crpsMatchesActual := statussyncutils.CRPSStatusMatchesCRPActual(ctx, hubClient, crpName, appNamespace().Name)
+			Eventually(crpsMatchesActual, eventuallyDuration, eventuallyInterval).Should(Succeed(), "CRPS should be created in initial namespace and match CRP status")
+		})
+
+		It("should update CRP to select a non-existent namespace", func() {
+			// Update CRP to select the non-existent-namespace instead.
+			Eventually(func() error {
+				crp := &placementv1beta1.ClusterResourcePlacement{}
+				if err := hubClient.Get(ctx, types.NamespacedName{Name: crpName}, crp); err != nil {
+					return err
+				}
+				crp.Spec.ResourceSelectors = []placementv1beta1.ResourceSelectorTerm{
+					{
+						Group:   corev1.GroupName,
+						Version: "v1",
+						Kind:    "Namespace",
+						Name:    "non-existent-namespace",
+					},
+				}
+				return hubClient.Update(ctx, crp)
+			}, eventuallyDuration, eventuallyInterval).Should(Succeed(), "Failed to update CRP to select different namespace")
+		})
+
+		It("should update CRP status with scheduled condition set to false", func() {
+			statusUpdatedActual := namespaceAccessibleCRPStatusUpdatedActual(workResourceIdentifiers(), allMemberClusterNames, nil, "0", metav1.ConditionTrue, true)
+			Eventually(statusUpdatedActual, crpsEventuallyDuration, eventuallyInterval).Should(Succeed(), "Failed to update CRP status")
 		})
 	})
 })

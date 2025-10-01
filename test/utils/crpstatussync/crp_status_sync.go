@@ -42,6 +42,16 @@ func CRPSStatusMatchesCRPActual(ctx context.Context, client client.Client, crpNa
 		}
 
 		// Construct expected CRPS.
+		// Filter out StatusSynced condition as it's specific to CRP status sync process
+		expectedStatus := crp.Status.DeepCopy()
+		var filteredConditions []metav1.Condition
+		for _, condition := range expectedStatus.Conditions {
+			if condition.Type != string(placementv1beta1.ClusterResourcePlacementStatusSyncedConditionType) {
+				filteredConditions = append(filteredConditions, condition)
+			}
+		}
+		expectedStatus.Conditions = filteredConditions
+
 		wantCRPS := &placementv1beta1.ClusterResourcePlacementStatus{
 			ObjectMeta: metav1.ObjectMeta{
 				Name:      crpName,
@@ -57,7 +67,7 @@ func CRPSStatusMatchesCRPActual(ctx context.Context, client client.Client, crpNa
 					},
 				},
 			},
-			PlacementStatus: crp.Status,
+			PlacementStatus: *expectedStatus,
 		}
 
 		// Compare CRPS with expected, ignoring fields that vary.
