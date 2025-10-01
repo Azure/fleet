@@ -19,6 +19,7 @@ package workapplier
 import (
 	"context"
 	"fmt"
+	"strings"
 
 	"github.com/qri-io/jsonpointer"
 	"github.com/wI2L/jsondiff"
@@ -324,10 +325,17 @@ func preparePatchDetails(srcObj, destObj *unstructured.Unstructured) ([]fleetv1b
 		return nil, wrappedErr
 	}
 
+	// Prepare Fleet patch details from the JSON patches.
 	details, err := organizeJSONPatchIntoFleetPatchDetails(patch, srcObjCopy.Object)
 	if err != nil {
 		return nil, fmt.Errorf("failed to organize JSON patch operations into Fleet patch details: %w", err)
 	}
+
+	// Obscure sensitive fields in the patch details.
+	//
+	// This currently only concerns Secret objects (core API group); all the drift/diff outputs regarding
+	// a Secret object's data (`.data` or `.stringData` fields) are obscured.
+	details = obscureSensitiveFieldsInPatchDetails(srcObj, details)
 	return details, nil
 }
 
@@ -368,4 +376,43 @@ func (r *Reconciler) removeLeftBehindAppliedWorkOwnerRefs(ctx context.Context, o
 	}
 
 	return updatedOwnerRefs, nil
+}
+
+// obscureSensitiveFieldsInPatchDetails obscures sensitive fields from the patch details so that
+// such information will not be included in the drift/diff outputs.
+//
+// At this moment fields in the following API objects are discarded:
+//
+// * `.data` and `.stringData` field (and their children) in all Secret objects (`core` API group).
+//
+// Note (chenyu1): there are other Kubernetes API objects that also feature sensitive data,
+// such as TokenRequest and CertificateSigningRequest; these objects are not included in the list
+// as they have the sensitive information in the status, which are not accounted for in the
+// drift/diff calculation in the very beginning.
+func obscureSensitiveFieldsInPatchDetails(
+	srcObj *unstructured.Unstructured, details []fleetv1beta1.PatchDetail,
+) (sanitizedPatchDetails []fleetv1beta1.PatchDetail) {
+	// Verify if the object is a Secret.
+	if srcObj.GetAPIVersion() != "v1" || srcObj.GetKind() != "Secret" {
+		return details
+	}
+
+	for idx := range details {
+		pd := &details[idx]
+		// Note (chenyu1): the string data field in the Secret object is provided by Kubernetes
+		// as a write-only field for convenience reasons; all entries shall be merged into the
+		// data field. Here the code still processes the field just for completeness reasons;
+		// in practice it will never be included as part of the patch details.
+		if strings.HasPrefix(pd.Path, "/data") || strings.HasPrefix(pd.Path, "/stringData") {
+			// Obscure all patch details that concerns the Secret object's data.
+
+			if len(pd.ValueInHub) > 0 {
+				pd.ValueInHub = "(redacted for security reasons)"
+			}
+			if len(pd.ValueInMember) > 0 {
+				pd.ValueInMember = "(redacted for security reasons)"
+			}
+		}
+	}
+	return details
 }

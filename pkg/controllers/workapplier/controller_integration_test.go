@@ -403,6 +403,40 @@ func regularConfigMapObjectAppliedActual(nsName, configMapName string, appliedWo
 	}
 }
 
+func regularSecretObjectAppliedActual(nsName, secretName string, appliedWorkOwnerRef *metav1.OwnerReference) func() error {
+	return func() error {
+		// Retrieve the Secret object.
+		gotSecret := &corev1.Secret{}
+		if err := memberClient1.Get(ctx, client.ObjectKey{Namespace: nsName, Name: secretName}, gotSecret); err != nil {
+			return fmt.Errorf("failed to retrieve the Secret object: %w", err)
+		}
+
+		// Check that the Secret object has been created as expected.
+
+		// To ignore default values automatically, here the test suite rebuilds the objects.
+		wantSecret := secret.DeepCopy()
+		wantSecret.TypeMeta = metav1.TypeMeta{}
+		wantSecret.Namespace = nsName
+		wantSecret.Name = secretName
+		wantSecret.OwnerReferences = []metav1.OwnerReference{
+			*appliedWorkOwnerRef,
+		}
+
+		rebuiltGotSecret := &corev1.Secret{
+			ObjectMeta: metav1.ObjectMeta{
+				Name:            gotSecret.Name,
+				Namespace:       gotSecret.Namespace,
+				OwnerReferences: gotSecret.OwnerReferences,
+			},
+			Data: gotSecret.Data,
+		}
+		if diff := cmp.Diff(rebuiltGotSecret, wantSecret); diff != "" {
+			return fmt.Errorf("secret diff (-got +want):\n%s", diff)
+		}
+		return nil
+	}
+}
+
 func markDeploymentAsAvailable(nsName, deployName string) {
 	// Retrieve the Deployment object.
 	gotDeploy := &appsv1.Deployment{}
@@ -652,6 +686,27 @@ func regularConfigMapRemovedActual(nsName, configMapName string) func() error {
 		// Check that the ConfigMap object has been deleted.
 		if err := memberClient1.Get(ctx, client.ObjectKey{Namespace: nsName, Name: configMapName}, configMap); !errors.IsNotFound(err) {
 			return fmt.Errorf("configMap object still exists or an unexpected error occurred: %w", err)
+		}
+		return nil
+	}
+}
+
+func regularSecretRemovedActual(nsName, secretName string) func() error {
+	return func() error {
+		// Retrieve the Secret object.
+		secret := &corev1.Secret{
+			ObjectMeta: metav1.ObjectMeta{
+				Namespace: nsName,
+				Name:      secretName,
+			},
+		}
+		if err := memberClient1.Delete(ctx, secret); err != nil && !errors.IsNotFound(err) {
+			return fmt.Errorf("failed to delete the Secret object: %w", err)
+		}
+
+		// Check that the Secret object has been deleted.
+		if err := memberClient1.Get(ctx, client.ObjectKey{Namespace: nsName, Name: secretName}, secret); !errors.IsNotFound(err) {
+			return fmt.Errorf("secret object still exists or an unexpected error occurred: %w", err)
 		}
 		return nil
 	}
@@ -5460,6 +5515,593 @@ var _ = Describe("drift detection and takeover", func() {
 			// deletion; consequently this test suite would not attempt to verify its deletion.
 		})
 	})
+
+	Context("obscure sensitive data (drift detection)", Ordered, func() {
+		workName := fmt.Sprintf(workNameTemplate, utils.RandStr())
+		// The environment prepared by the envtest package does not support namespace
+		// deletion; each test case would use a new namespace.
+		nsName := fmt.Sprintf(nsNameTemplate, utils.RandStr())
+
+		var appliedWorkOwnerRef *metav1.OwnerReference
+		var regularNS *corev1.Namespace
+		var regularCM *corev1.ConfigMap
+		var regularSecret *corev1.Secret
+
+		BeforeAll(func() {
+			// Prepare a NS object.
+			regularNS = ns.DeepCopy()
+			regularNS.Name = nsName
+			regularNSJSON := marshalK8sObjJSON(regularNS)
+
+			// Prepare a ConfigMap object.
+			regularCM = configMap.DeepCopy()
+			regularCM.Namespace = nsName
+			regularCMJSON := marshalK8sObjJSON(regularCM)
+
+			// Prepare a Secret object.
+			regularSecret = secret.DeepCopy()
+			regularSecret.Namespace = nsName
+			regularSecretJSON := marshalK8sObjJSON(regularSecret)
+
+			// Create a new Work object with all the manifest JSONs and proper apply strategy.
+			applyStrategy := &fleetv1beta1.ApplyStrategy{
+				Type:             fleetv1beta1.ApplyStrategyTypeClientSideApply,
+				WhenToApply:      fleetv1beta1.WhenToApplyTypeIfNotDrifted,
+				WhenToTakeOver:   fleetv1beta1.WhenToTakeOverTypeNever,
+				ComparisonOption: fleetv1beta1.ComparisonOptionTypePartialComparison,
+			}
+			createWorkObject(workName, memberReservedNSName1, applyStrategy, regularNSJSON, regularCMJSON, regularSecretJSON)
+		})
+
+		It("should add cleanup finalizer to the Work object", func() {
+			finalizerAddedActual := workFinalizerAddedActual(workName)
+			Eventually(finalizerAddedActual, eventuallyDuration, eventuallyInterval).Should(Succeed(), "Failed to add cleanup finalizer to the Work object")
+		})
+
+		It("should prepare an AppliedWork object", func() {
+			appliedWorkCreatedActual := appliedWorkCreatedActual(workName)
+			Eventually(appliedWorkCreatedActual, eventuallyDuration, eventuallyInterval).Should(Succeed(), "Failed to prepare an AppliedWork object")
+
+			appliedWorkOwnerRef = prepareAppliedWorkOwnerRef(workName)
+		})
+
+		It("should apply the manifests", func() {
+			// Ensure that the NS object has been applied as expected.
+			regularNSObjectAppliedActual := regularNSObjectAppliedActual(nsName, appliedWorkOwnerRef)
+			Eventually(regularNSObjectAppliedActual, eventuallyDuration, eventuallyInterval).Should(Succeed(), "Failed to apply the namespace object")
+
+			Expect(memberClient1.Get(ctx, client.ObjectKey{Name: nsName}, regularNS)).To(Succeed(), "Failed to retrieve the NS object")
+
+			// Ensure that the ConfigMap object has been applied as expected.
+			regularCMObjectAppliedActual := regularConfigMapObjectAppliedActual(nsName, configMapName, appliedWorkOwnerRef)
+			Eventually(regularCMObjectAppliedActual, eventuallyDuration, eventuallyInterval).Should(Succeed(), "Failed to apply the configMap object")
+
+			Expect(memberClient1.Get(ctx, client.ObjectKey{Namespace: nsName, Name: configMapName}, regularCM)).To(Succeed(), "Failed to retrieve the ConfigMap object")
+
+			// Ensure that the Secret object has been applied as expected.
+			regularSecretObjectAppliedActual := regularSecretObjectAppliedActual(nsName, secretName, appliedWorkOwnerRef)
+			Eventually(regularSecretObjectAppliedActual, eventuallyDuration, eventuallyInterval).Should(Succeed(), "Failed to apply the secret object")
+
+			Expect(memberClient1.Get(ctx, client.ObjectKey{Namespace: nsName, Name: secretName}, regularSecret)).To(Succeed(), "Failed to retrieve the Secret object")
+		})
+
+		It("should update the Work object status", func() {
+			// Prepare the status information.
+			workConds := []metav1.Condition{
+				{
+					Type:   fleetv1beta1.WorkConditionTypeApplied,
+					Status: metav1.ConditionTrue,
+					Reason: condition.WorkAllManifestsAppliedReason,
+				},
+				{
+					Type:   fleetv1beta1.WorkConditionTypeAvailable,
+					Status: metav1.ConditionTrue,
+					Reason: condition.WorkAllManifestsAvailableReason,
+				},
+			}
+			manifestConds := []fleetv1beta1.ManifestCondition{
+				{
+					Identifier: fleetv1beta1.WorkResourceIdentifier{
+						Ordinal:  0,
+						Group:    "",
+						Version:  "v1",
+						Kind:     "Namespace",
+						Resource: "namespaces",
+						Name:     nsName,
+					},
+					Conditions: []metav1.Condition{
+						{
+							Type:               fleetv1beta1.WorkConditionTypeApplied,
+							Status:             metav1.ConditionTrue,
+							Reason:             string(ApplyOrReportDiffResTypeApplied),
+							ObservedGeneration: 0,
+						},
+						{
+							Type:               fleetv1beta1.WorkConditionTypeAvailable,
+							Status:             metav1.ConditionTrue,
+							Reason:             string(AvailabilityResultTypeAvailable),
+							ObservedGeneration: 0,
+						},
+					},
+				},
+				{
+					Identifier: fleetv1beta1.WorkResourceIdentifier{
+						Ordinal:   1,
+						Group:     "",
+						Version:   "v1",
+						Kind:      "ConfigMap",
+						Resource:  "configmaps",
+						Name:      configMapName,
+						Namespace: nsName,
+					},
+					Conditions: []metav1.Condition{
+						{
+							Type:               fleetv1beta1.WorkConditionTypeApplied,
+							Status:             metav1.ConditionTrue,
+							Reason:             string(ApplyOrReportDiffResTypeApplied),
+							ObservedGeneration: 0,
+						},
+						{
+							Type:               fleetv1beta1.WorkConditionTypeAvailable,
+							Status:             metav1.ConditionTrue,
+							Reason:             string(AvailabilityResultTypeAvailable),
+							ObservedGeneration: 0,
+						},
+					},
+				},
+				{
+					Identifier: fleetv1beta1.WorkResourceIdentifier{
+						Ordinal:   2,
+						Group:     "",
+						Version:   "v1",
+						Kind:      "Secret",
+						Resource:  "secrets",
+						Name:      secretName,
+						Namespace: nsName,
+					},
+					Conditions: []metav1.Condition{
+						{
+							Type:               fleetv1beta1.WorkConditionTypeApplied,
+							Status:             metav1.ConditionTrue,
+							Reason:             string(ApplyOrReportDiffResTypeApplied),
+							ObservedGeneration: 0,
+						},
+						{
+							Type:               fleetv1beta1.WorkConditionTypeAvailable,
+							Status:             metav1.ConditionTrue,
+							Reason:             string(AvailabilityResultTypeAvailable),
+							ObservedGeneration: 0,
+						},
+					},
+				},
+			}
+
+			workStatusUpdatedActual := workStatusUpdated(workName, workConds, manifestConds, nil, nil)
+			Eventually(workStatusUpdatedActual, eventuallyDuration, eventuallyInterval).Should(Succeed(), "Failed to update work status")
+		})
+
+		It("should update the AppliedWork object status", func() {
+			// Prepare the status information.
+			appliedResourceMeta := []fleetv1beta1.AppliedResourceMeta{
+				{
+					WorkResourceIdentifier: fleetv1beta1.WorkResourceIdentifier{
+						Ordinal:  0,
+						Group:    "",
+						Version:  "v1",
+						Kind:     "Namespace",
+						Resource: "namespaces",
+						Name:     nsName,
+					},
+					UID: regularNS.UID,
+				},
+				{
+					WorkResourceIdentifier: fleetv1beta1.WorkResourceIdentifier{
+						Ordinal:   1,
+						Group:     "",
+						Version:   "v1",
+						Kind:      "ConfigMap",
+						Resource:  "configmaps",
+						Name:      configMapName,
+						Namespace: nsName,
+					},
+					UID: regularCM.UID,
+				},
+				{
+					WorkResourceIdentifier: fleetv1beta1.WorkResourceIdentifier{
+						Ordinal:   2,
+						Group:     "",
+						Version:   "v1",
+						Kind:      "Secret",
+						Resource:  "secrets",
+						Name:      secretName,
+						Namespace: nsName,
+					},
+					UID: regularSecret.UID,
+				},
+			}
+
+			appliedWorkStatusUpdatedActual := appliedWorkStatusUpdated(workName, appliedResourceMeta)
+			Eventually(appliedWorkStatusUpdatedActual, eventuallyDuration, eventuallyInterval).Should(Succeed(), "Failed to update appliedWork status")
+		})
+
+		It("can make changes to the objects", func() {
+			// Use Eventually blocks to avoid conflicts.
+			Eventually(func() error {
+				// Retrieve the ConfigMap object.
+				updatedCM := &corev1.ConfigMap{}
+				if err := memberClient1.Get(ctx, client.ObjectKey{Namespace: nsName, Name: configMapName}, updatedCM); err != nil {
+					return fmt.Errorf("failed to retrieve the ConfigMap object: %w", err)
+				}
+
+				// Update the ConfigMap object.
+				if updatedCM.Labels == nil {
+					updatedCM.Labels = map[string]string{}
+				}
+				// Add a label and modify the data entry.
+				updatedCM.Labels[dummyLabelKey] = dummyLabelValue1
+				updatedCM.Data[dummyLabelKey] = dummyLabelValue2
+				if err := memberClient1.Update(ctx, updatedCM); err != nil {
+					return fmt.Errorf("failed to update the ConfigMap object: %w", err)
+				}
+
+				return nil
+			}).Should(Succeed(), "Failed to make changes to the ConfigMap object")
+
+			Eventually(func() error {
+				// Retrieve the Secret object.
+				updatedSecret := &corev1.Secret{}
+				if err := memberClient1.Get(ctx, client.ObjectKey{Namespace: nsName, Name: secretName}, updatedSecret); err != nil {
+					return fmt.Errorf("failed to retrieve the Secret object: %w", err)
+				}
+
+				// Update the Secret object; modify the data entry and add a new string data entry.
+				dummyLabelValue2Bytes := []byte(dummyLabelValue2)
+				b64encoded := make([]byte, base64.StdEncoding.EncodedLen(len(dummyLabelValue2Bytes)))
+				base64.StdEncoding.Encode(b64encoded, dummyLabelValue2Bytes)
+				updatedSecret.Data[dummyLabelKey] = b64encoded
+
+				updatedSecret.StringData = map[string]string{
+					"fooStr": dummyLabelValue3,
+				}
+
+				if err := memberClient1.Update(ctx, updatedSecret); err != nil {
+					return fmt.Errorf("failed to update the Secret object: %w", err)
+				}
+
+				return nil
+			}).Should(Succeed(), "Failed to make changes to the Secret object")
+		})
+
+		It("should stop applying some objects", func() {
+			// Verify that the changes in managed fields are not overwritten.
+			Consistently(func() error {
+				gotCM := &corev1.ConfigMap{}
+				if err := memberClient1.Get(ctx, client.ObjectKey{Namespace: nsName, Name: configMapName}, gotCM); err != nil {
+					return fmt.Errorf("failed to retrieve the ConfigMap object: %w", err)
+				}
+
+				// Rebuild the CM to ignore default/populated values in fields.
+				rebuiltCM := &corev1.ConfigMap{
+					ObjectMeta: metav1.ObjectMeta{
+						Namespace: nsName,
+						Name:      configMapName,
+						Labels:    gotCM.Labels,
+					},
+					Data: gotCM.Data,
+				}
+
+				wantCM := &corev1.ConfigMap{
+					ObjectMeta: metav1.ObjectMeta{
+						Namespace: nsName,
+						Name:      configMapName,
+						Labels: map[string]string{
+							dummyLabelKey: dummyLabelValue1,
+						},
+					},
+					Data: map[string]string{
+						dummyLabelKey: dummyLabelValue2,
+					},
+				}
+
+				if diff := cmp.Diff(rebuiltCM, wantCM); diff != "" {
+					return fmt.Errorf("configMap object diffs (-got, +want):\n%s", diff)
+				}
+				return nil
+			}, consistentlyDuration, consistentlyInterval).Should(Succeed(), "Failed to leave the ConfigMap object alone")
+
+			Consistently(func() error {
+				gotSecret := &corev1.Secret{}
+				if err := memberClient1.Get(ctx, client.ObjectKey{Namespace: nsName, Name: secretName}, gotSecret); err != nil {
+					return fmt.Errorf("failed to retrieve the Secret object: %w", err)
+				}
+
+				// Rebuild the Secret to ignore default/populated values in fields.
+				rebuiltSecret := &corev1.Secret{
+					ObjectMeta: metav1.ObjectMeta{
+						Namespace: nsName,
+						Name:      secretName,
+					},
+					Data:       gotSecret.Data,
+					StringData: gotSecret.StringData,
+				}
+
+				dummyLabelValue2Bytes := []byte(dummyLabelValue2)
+				b64encoded := make([]byte, base64.StdEncoding.EncodedLen(len(dummyLabelValue2Bytes)))
+				base64.StdEncoding.Encode(b64encoded, dummyLabelValue2Bytes)
+				wantSecret := &corev1.Secret{
+					ObjectMeta: metav1.ObjectMeta{
+						Namespace: nsName,
+						Name:      secretName,
+					},
+					Data: map[string][]byte{
+						dummyLabelKey: b64encoded,
+						"fooStr":      []byte(dummyLabelValue3),
+					},
+				}
+
+				if diff := cmp.Diff(rebuiltSecret, wantSecret); diff != "" {
+					return fmt.Errorf("secret object diffs (-got, +want):\n%s", diff)
+				}
+				return nil
+			}, consistentlyDuration, consistentlyInterval).Should(Succeed(), "Failed to leave the Secret object alone")
+		})
+
+		It("should update the Work object status", func() {
+			// Prepare the status information.
+			workConds := []metav1.Condition{
+				{
+					Type:   fleetv1beta1.WorkConditionTypeApplied,
+					Status: metav1.ConditionFalse,
+					Reason: condition.WorkNotAllManifestsAppliedReason,
+				},
+			}
+			manifestConds := []fleetv1beta1.ManifestCondition{
+				{
+					Identifier: fleetv1beta1.WorkResourceIdentifier{
+						Ordinal:  0,
+						Group:    "",
+						Version:  "v1",
+						Kind:     "Namespace",
+						Resource: "namespaces",
+						Name:     nsName,
+					},
+					Conditions: []metav1.Condition{
+						{
+							Type:               fleetv1beta1.WorkConditionTypeApplied,
+							Status:             metav1.ConditionTrue,
+							Reason:             string(ApplyOrReportDiffResTypeApplied),
+							ObservedGeneration: 0,
+						},
+						{
+							Type:               fleetv1beta1.WorkConditionTypeAvailable,
+							Status:             metav1.ConditionTrue,
+							Reason:             string(AvailabilityResultTypeAvailable),
+							ObservedGeneration: 0,
+						},
+					},
+				},
+				{
+					Identifier: fleetv1beta1.WorkResourceIdentifier{
+						Ordinal:   1,
+						Group:     "",
+						Version:   "v1",
+						Kind:      "ConfigMap",
+						Resource:  "configmaps",
+						Name:      configMapName,
+						Namespace: nsName,
+					},
+					Conditions: []metav1.Condition{
+						{
+							Type:               fleetv1beta1.WorkConditionTypeApplied,
+							Status:             metav1.ConditionFalse,
+							Reason:             string(ApplyOrReportDiffResTypeFoundDrifts),
+							ObservedGeneration: 0,
+						},
+					},
+					DriftDetails: &fleetv1beta1.DriftDetails{
+						ObservedInMemberClusterGeneration: regularCM.Generation,
+						ObservedDrifts: []fleetv1beta1.PatchDetail{
+							{
+								Path:          fmt.Sprintf("/data/%s", dummyLabelKey),
+								ValueInMember: dummyLabelValue2,
+								ValueInHub:    dummyLabelValue1,
+							},
+						},
+					},
+				},
+				{
+					Identifier: fleetv1beta1.WorkResourceIdentifier{
+						Ordinal:   2,
+						Group:     "",
+						Version:   "v1",
+						Kind:      "Secret",
+						Resource:  "secrets",
+						Name:      secretName,
+						Namespace: nsName,
+					},
+					Conditions: []metav1.Condition{
+						{
+							Type:               fleetv1beta1.WorkConditionTypeApplied,
+							Status:             metav1.ConditionFalse,
+							Reason:             string(ApplyOrReportDiffResTypeFoundDrifts),
+							ObservedGeneration: 0,
+						},
+					},
+					DriftDetails: &fleetv1beta1.DriftDetails{
+						ObservedInMemberClusterGeneration: regularSecret.Generation,
+						ObservedDrifts: []fleetv1beta1.PatchDetail{
+							{
+								Path:          fmt.Sprintf("/data/%s", dummyLabelKey),
+								ValueInHub:    "(redacted for security reasons)",
+								ValueInMember: "(redacted for security reasons)",
+							},
+						},
+					},
+				},
+			}
+
+			workStatusUpdatedActual := workStatusUpdated(workName, workConds, manifestConds, nil, nil)
+			Eventually(workStatusUpdatedActual, eventuallyDuration, eventuallyInterval).Should(Succeed(), "Failed to update work status")
+		})
+
+		It("can switch to full comparison mode", func() {
+			// Use Eventually block to avoid potential conflicts.
+			Eventually(func() error {
+				work := &fleetv1beta1.Work{}
+				if err := hubClient.Get(ctx, client.ObjectKey{Namespace: memberReservedNSName1, Name: workName}, work); err != nil {
+					return fmt.Errorf("failed to retrieve the Work object: %w", err)
+				}
+
+				if work.Spec.ApplyStrategy == nil {
+					work.Spec.ApplyStrategy = &fleetv1beta1.ApplyStrategy{}
+				}
+				work.Spec.ApplyStrategy.ComparisonOption = fleetv1beta1.ComparisonOptionTypeFullComparison
+				return hubClient.Update(ctx, work)
+			}, eventuallyDuration, eventuallyInterval).Should(Succeed(), "Failed to switch to full comparison mode")
+		})
+
+		// For simplicity reasons this test will not verify again that the objects are not modified,
+		// as another test spec has covered the case.
+		It("should update the Work object status", func() {
+			// Prepare the status information.
+			workConds := []metav1.Condition{
+				{
+					Type:   fleetv1beta1.WorkConditionTypeApplied,
+					Status: metav1.ConditionFalse,
+					Reason: condition.WorkNotAllManifestsAppliedReason,
+				},
+			}
+			manifestConds := []fleetv1beta1.ManifestCondition{
+				{
+					Identifier: fleetv1beta1.WorkResourceIdentifier{
+						Ordinal:  0,
+						Group:    "",
+						Version:  "v1",
+						Kind:     "Namespace",
+						Resource: "namespaces",
+						Name:     nsName,
+					},
+					Conditions: []metav1.Condition{
+						{
+							Type:               fleetv1beta1.WorkConditionTypeApplied,
+							Status:             metav1.ConditionFalse,
+							Reason:             string(ApplyOrReportDiffResTypeFoundDrifts),
+							ObservedGeneration: 0,
+						},
+					},
+					DriftDetails: &fleetv1beta1.DriftDetails{
+						ObservedInMemberClusterGeneration: regularNS.Generation,
+						ObservedDrifts: []fleetv1beta1.PatchDetail{
+							{
+								Path:          "/spec/finalizers",
+								ValueInMember: "[kubernetes]",
+							},
+						},
+					},
+				},
+				{
+					Identifier: fleetv1beta1.WorkResourceIdentifier{
+						Ordinal:   1,
+						Group:     "",
+						Version:   "v1",
+						Kind:      "ConfigMap",
+						Resource:  "configmaps",
+						Name:      configMapName,
+						Namespace: nsName,
+					},
+					Conditions: []metav1.Condition{
+						{
+							Type:               fleetv1beta1.WorkConditionTypeApplied,
+							Status:             metav1.ConditionFalse,
+							Reason:             string(ApplyOrReportDiffResTypeFoundDrifts),
+							ObservedGeneration: 0,
+						},
+					},
+					DriftDetails: &fleetv1beta1.DriftDetails{
+						ObservedInMemberClusterGeneration: regularCM.Generation,
+						ObservedDrifts: []fleetv1beta1.PatchDetail{
+							{
+								Path:          fmt.Sprintf("/data/%s", dummyLabelKey),
+								ValueInMember: dummyLabelValue2,
+								ValueInHub:    dummyLabelValue1,
+							},
+							{
+								Path:          fmt.Sprintf("/metadata/labels/%s", dummyLabelKey),
+								ValueInMember: dummyLabelValue1,
+							},
+						},
+					},
+				},
+				{
+					Identifier: fleetv1beta1.WorkResourceIdentifier{
+						Ordinal:   2,
+						Group:     "",
+						Version:   "v1",
+						Kind:      "Secret",
+						Resource:  "secrets",
+						Name:      secretName,
+						Namespace: nsName,
+					},
+					Conditions: []metav1.Condition{
+						{
+							Type:               fleetv1beta1.WorkConditionTypeApplied,
+							Status:             metav1.ConditionFalse,
+							Reason:             string(ApplyOrReportDiffResTypeFoundDrifts),
+							ObservedGeneration: 0,
+						},
+					},
+					DriftDetails: &fleetv1beta1.DriftDetails{
+						ObservedInMemberClusterGeneration: regularSecret.Generation,
+						ObservedDrifts: []fleetv1beta1.PatchDetail{
+							{
+								Path:          fmt.Sprintf("/data/%s", dummyLabelKey),
+								ValueInHub:    "(redacted for security reasons)",
+								ValueInMember: "(redacted for security reasons)",
+							},
+							{
+								Path:          fmt.Sprintf("/data/%s", "fooStr"),
+								ValueInMember: "(redacted for security reasons)",
+							},
+							{
+								Path:          "/type",
+								ValueInMember: "Opaque",
+							},
+						},
+					},
+				},
+			}
+
+			workStatusUpdatedActual := workStatusUpdated(workName, workConds, manifestConds, nil, nil)
+			Eventually(workStatusUpdatedActual, eventuallyDuration, eventuallyInterval).Should(Succeed(), "Failed to update work status")
+		})
+
+		AfterAll(func() {
+			// Delete the Work object and related resources.
+			deleteWorkObject(workName, memberReservedNSName1)
+
+			// Ensure that the ConfigMap object has been removed.
+			regularCMRemovedActual := regularConfigMapRemovedActual(nsName, configMapName)
+			Eventually(regularCMRemovedActual, eventuallyDuration, eventuallyInterval).Should(Succeed(), "Failed to remove the ConfigMap object")
+
+			// Ensure that the secret object has been removed.
+			regularSecretRemovedActual := regularSecretRemovedActual(nsName, secretName)
+			Eventually(regularSecretRemovedActual, eventuallyDuration, eventuallyInterval).Should(Succeed(), "Failed to remove the Secret object")
+
+			// Kubebuilder suggests that in a testing environment like this, to check for the existence of the AppliedWork object
+			// OwnerReference in the Namespace object (https://book.kubebuilder.io/reference/envtest.html#testing-considerations).
+			checkNSOwnerReferences(workName, nsName)
+
+			// Ensure that the AppliedWork object has been removed.
+			appliedWorkRemovedActual := appliedWorkRemovedActual(workName, nsName)
+			Eventually(appliedWorkRemovedActual, eventuallyDuration, eventuallyInterval).Should(Succeed(), "Failed to remove the AppliedWork object")
+
+			workRemovedActual := workRemovedActual(workName)
+			Eventually(workRemovedActual, eventuallyDuration, eventuallyInterval).Should(Succeed(), "Failed to remove the Work object")
+
+			// The environment prepared by the envtest package does not support namespace
+			// deletion; consequently this test suite would not attempt so verify its deletion.
+		})
+	})
 })
 
 var _ = Describe("report diff", func() {
@@ -6503,6 +7145,463 @@ var _ = Describe("report diff", func() {
 			// Ensure that the Job object has been left alone.
 			jobNotRemovedActual := regularJobNotRemovedActual(nsName, jobName)
 			Consistently(jobNotRemovedActual, consistentlyDuration, consistentlyInterval).Should(Succeed(), "Failed to remove the job object")
+
+			// Ensure that the AppliedWork object has been removed.
+			appliedWorkRemovedActual := appliedWorkRemovedActual(workName, nsName)
+			Eventually(appliedWorkRemovedActual, eventuallyDuration, eventuallyInterval).Should(Succeed(), "Failed to remove the AppliedWork object")
+
+			workRemovedActual := workRemovedActual(workName)
+			Eventually(workRemovedActual, eventuallyDuration, eventuallyInterval).Should(Succeed(), "Failed to remove the Work object")
+
+			// The environment prepared by the envtest package does not support namespace
+			// deletion; consequently this test suite would not attempt so verify its deletion.
+		})
+	})
+
+	Context("obscure sensitive data (report diff mode)", Ordered, func() {
+		workName := fmt.Sprintf(workNameTemplate, utils.RandStr())
+		// The environment prepared by the envtest package does not support namespace
+		// deletion; each test case would use a new namespace.
+		nsName := fmt.Sprintf(nsNameTemplate, utils.RandStr())
+
+		var regularNS *corev1.Namespace
+		var regularCM *corev1.ConfigMap
+		var regularSecret *corev1.Secret
+
+		BeforeAll(func() {
+			// Prepare a NS object.
+			regularNS = ns.DeepCopy()
+			regularNS.Name = nsName
+			regularNSJSON := marshalK8sObjJSON(regularNS)
+
+			// Create the namespace on the member cluster side.
+			Expect(memberClient1.Create(ctx, regularNS.DeepCopy())).To(Succeed(), "Failed to create the NS object")
+
+			// Prepare a ConfigMap object.
+			regularCM = configMap.DeepCopy()
+			regularCM.Namespace = nsName
+			regularCMJSON := marshalK8sObjJSON(regularCM)
+
+			// Create the ConfigMap object on the member cluster side.
+			Expect(memberClient1.Create(ctx, regularCM.DeepCopy())).To(Succeed(), "Failed to create the ConfigMap object")
+
+			// Prepare a Secret object.
+			regularSecret = secret.DeepCopy()
+			regularSecret.Namespace = nsName
+			regularSecretJSON := marshalK8sObjJSON(regularSecret)
+
+			// Create the Secret object on the member cluster side.
+			Expect(memberClient1.Create(ctx, regularSecret.DeepCopy())).To(Succeed(), "Failed to create the Secret object")
+
+			// Create a new Work object with all the manifest JSONs and proper apply strategy.
+			applyStrategy := &fleetv1beta1.ApplyStrategy{
+				Type:             fleetv1beta1.ApplyStrategyTypeReportDiff,
+				WhenToTakeOver:   fleetv1beta1.WhenToTakeOverTypeNever,
+				ComparisonOption: fleetv1beta1.ComparisonOptionTypePartialComparison,
+			}
+			createWorkObject(workName, memberReservedNSName1, applyStrategy, regularNSJSON, regularCMJSON, regularSecretJSON)
+		})
+
+		It("should add cleanup finalizer to the Work object", func() {
+			finalizerAddedActual := workFinalizerAddedActual(workName)
+			Eventually(finalizerAddedActual, eventuallyDuration, eventuallyInterval).Should(Succeed(), "Failed to add cleanup finalizer to the Work object")
+		})
+
+		It("should prepare an AppliedWork object", func() {
+			appliedWorkCreatedActual := appliedWorkCreatedActual(workName)
+			Eventually(appliedWorkCreatedActual, eventuallyDuration, eventuallyInterval).Should(Succeed(), "Failed to prepare an AppliedWork object")
+		})
+
+		// For simplicity reasons, this test spec will not verify individual fields on the objects,
+		// but only the owner references (no owner should be present).
+		It("should not own (take over) any object", func() {
+			Consistently(func() error {
+				// Verify that the regular NS, CM, and Secret objects do not have the appliedWorkOwnerRef as their owner.
+				ns := &corev1.Namespace{}
+				if err := memberClient1.Get(ctx, client.ObjectKey{Name: nsName}, ns); err != nil {
+					return fmt.Errorf("Failed to retrieve the namespace object: %w", err)
+				}
+				if len(ns.OwnerReferences) > 0 {
+					return fmt.Errorf("Namespace %s has owner references in presence: %v", nsName, ns.OwnerReferences)
+				}
+
+				cm := &corev1.ConfigMap{}
+				if err := memberClient1.Get(ctx, client.ObjectKey{Namespace: nsName, Name: configMapName}, cm); err != nil {
+					return fmt.Errorf("Failed to retrieve the ConfigMap object: %w", err)
+				}
+				if len(cm.OwnerReferences) > 0 {
+					return fmt.Errorf("ConfigMap %s has owner references in presence: %v", configMapName, cm.OwnerReferences)
+				}
+
+				sec := &corev1.Secret{}
+				if err := memberClient1.Get(ctx, client.ObjectKey{Namespace: nsName, Name: secretName}, sec); err != nil {
+					return fmt.Errorf("Failed to retrieve the Secret object: %w", err)
+				}
+				if len(sec.OwnerReferences) > 0 {
+					return fmt.Errorf("Secret %s has owner references in presence: %v", secretName, sec.OwnerReferences)
+				}
+				return nil
+			}, consistentlyDuration, consistentlyInterval).Should(Succeed(), "Failed to leave the objects alone")
+		})
+
+		It("should update the Work object status", func() {
+			// Prepare the status information.
+			workConds := []metav1.Condition{
+				{
+					Type:   fleetv1beta1.WorkConditionTypeDiffReported,
+					Status: metav1.ConditionTrue,
+					Reason: condition.WorkAllManifestsDiffReportedReason,
+				},
+			}
+			manifestConds := []fleetv1beta1.ManifestCondition{
+				{
+					Identifier: fleetv1beta1.WorkResourceIdentifier{
+						Ordinal:  0,
+						Group:    "",
+						Version:  "v1",
+						Kind:     "Namespace",
+						Resource: "namespaces",
+						Name:     nsName,
+					},
+					Conditions: []metav1.Condition{
+						{
+							Type:               fleetv1beta1.WorkConditionTypeDiffReported,
+							Status:             metav1.ConditionTrue,
+							Reason:             string(ApplyOrReportDiffResTypeNoDiffFound),
+							ObservedGeneration: 0,
+						},
+					},
+				},
+				{
+					Identifier: fleetv1beta1.WorkResourceIdentifier{
+						Ordinal:   1,
+						Group:     "",
+						Version:   "v1",
+						Kind:      "ConfigMap",
+						Resource:  "configmaps",
+						Name:      configMapName,
+						Namespace: nsName,
+					},
+					Conditions: []metav1.Condition{
+						{
+							Type:               fleetv1beta1.WorkConditionTypeDiffReported,
+							Status:             metav1.ConditionTrue,
+							Reason:             string(ApplyOrReportDiffResTypeNoDiffFound),
+							ObservedGeneration: 0,
+						},
+					},
+				},
+				{
+					Identifier: fleetv1beta1.WorkResourceIdentifier{
+						Ordinal:   2,
+						Group:     "",
+						Version:   "v1",
+						Kind:      "Secret",
+						Resource:  "secrets",
+						Name:      secretName,
+						Namespace: nsName,
+					},
+					Conditions: []metav1.Condition{
+						{
+							Type:               fleetv1beta1.WorkConditionTypeDiffReported,
+							Status:             metav1.ConditionTrue,
+							Reason:             string(ApplyOrReportDiffResTypeNoDiffFound),
+							ObservedGeneration: 0,
+						},
+					},
+				},
+			}
+
+			workStatusUpdatedActual := workStatusUpdated(workName, workConds, manifestConds, nil, nil)
+			Eventually(workStatusUpdatedActual, eventuallyDuration, eventuallyInterval).Should(Succeed(), "Failed to update work status")
+		})
+
+		It("should update the AppliedWork object status", func() {
+			// Prepare the status information.
+			appliedWorkStatusUpdatedActual := appliedWorkStatusUpdated(workName, nil)
+			Eventually(appliedWorkStatusUpdatedActual, eventuallyDuration, eventuallyInterval).Should(Succeed(), "Failed to update appliedWork status")
+		})
+
+		It("can make changes to the objects", func() {
+			// Use Eventually blocks to avoid conflicts.
+			Eventually(func() error {
+				// Retrieve the ConfigMap object.
+				updatedCM := &corev1.ConfigMap{}
+				if err := memberClient1.Get(ctx, client.ObjectKey{Namespace: nsName, Name: configMapName}, updatedCM); err != nil {
+					return fmt.Errorf("failed to retrieve the ConfigMap object: %w", err)
+				}
+
+				// Update the ConfigMap object.
+				if updatedCM.Labels == nil {
+					updatedCM.Labels = map[string]string{}
+				}
+				// Add a label and modify the data entry.
+				updatedCM.Labels[dummyLabelKey] = dummyLabelValue1
+				updatedCM.Data[dummyLabelKey] = dummyLabelValue2
+				if err := memberClient1.Update(ctx, updatedCM); err != nil {
+					return fmt.Errorf("failed to update the ConfigMap object: %w", err)
+				}
+
+				return nil
+			}).Should(Succeed(), "Failed to make changes to the ConfigMap object")
+
+			Eventually(func() error {
+				// Retrieve the Secret object.
+				updatedSecret := &corev1.Secret{}
+				if err := memberClient1.Get(ctx, client.ObjectKey{Namespace: nsName, Name: secretName}, updatedSecret); err != nil {
+					return fmt.Errorf("failed to retrieve the Secret object: %w", err)
+				}
+
+				// Update the Secret object; modify the data entry and add a new string data entry.
+				dummyLabelValue2Bytes := []byte(dummyLabelValue2)
+				b64encoded := make([]byte, base64.StdEncoding.EncodedLen(len(dummyLabelValue2Bytes)))
+				base64.StdEncoding.Encode(b64encoded, dummyLabelValue2Bytes)
+				updatedSecret.Data[dummyLabelKey] = b64encoded
+
+				updatedSecret.StringData = map[string]string{
+					"fooStr": dummyLabelValue3,
+				}
+
+				if err := memberClient1.Update(ctx, updatedSecret); err != nil {
+					return fmt.Errorf("failed to update the Secret object: %w", err)
+				}
+
+				return nil
+			}).Should(Succeed(), "Failed to make changes to the Secret object")
+		})
+
+		It("should update the Work object status", func() {
+			// Prepare the status information.
+			workConds := []metav1.Condition{
+				{
+					Type:   fleetv1beta1.WorkConditionTypeDiffReported,
+					Status: metav1.ConditionTrue,
+					Reason: condition.WorkAllManifestsDiffReportedReason,
+				},
+			}
+			manifestConds := []fleetv1beta1.ManifestCondition{
+				{
+					Identifier: fleetv1beta1.WorkResourceIdentifier{
+						Ordinal:  0,
+						Group:    "",
+						Version:  "v1",
+						Kind:     "Namespace",
+						Resource: "namespaces",
+						Name:     nsName,
+					},
+					Conditions: []metav1.Condition{
+						{
+							Type:               fleetv1beta1.WorkConditionTypeDiffReported,
+							Status:             metav1.ConditionTrue,
+							Reason:             string(ApplyOrReportDiffResTypeNoDiffFound),
+							ObservedGeneration: 0,
+						},
+					},
+				},
+				{
+					Identifier: fleetv1beta1.WorkResourceIdentifier{
+						Ordinal:   1,
+						Group:     "",
+						Version:   "v1",
+						Kind:      "ConfigMap",
+						Resource:  "configmaps",
+						Name:      configMapName,
+						Namespace: nsName,
+					},
+					Conditions: []metav1.Condition{
+						{
+							Type:               fleetv1beta1.WorkConditionTypeDiffReported,
+							Status:             metav1.ConditionTrue,
+							Reason:             string(ApplyOrReportDiffResTypeFoundDiff),
+							ObservedGeneration: 0,
+						},
+					},
+					DiffDetails: &fleetv1beta1.DiffDetails{
+						ObservedInMemberClusterGeneration: &regularCM.Generation,
+						ObservedDiffs: []fleetv1beta1.PatchDetail{
+							{
+								Path:          fmt.Sprintf("/data/%s", dummyLabelKey),
+								ValueInMember: dummyLabelValue2,
+								ValueInHub:    dummyLabelValue1,
+							},
+						},
+					},
+				},
+				{
+					Identifier: fleetv1beta1.WorkResourceIdentifier{
+						Ordinal:   2,
+						Group:     "",
+						Version:   "v1",
+						Kind:      "Secret",
+						Resource:  "secrets",
+						Name:      secretName,
+						Namespace: nsName,
+					},
+					Conditions: []metav1.Condition{
+						{
+							Type:               fleetv1beta1.WorkConditionTypeDiffReported,
+							Status:             metav1.ConditionTrue,
+							Reason:             string(ApplyOrReportDiffResTypeFoundDiff),
+							ObservedGeneration: 0,
+						},
+					},
+					DiffDetails: &fleetv1beta1.DiffDetails{
+						ObservedInMemberClusterGeneration: &regularSecret.Generation,
+						ObservedDiffs: []fleetv1beta1.PatchDetail{
+							{
+								Path:          fmt.Sprintf("/data/%s", dummyLabelKey),
+								ValueInHub:    "(redacted for security reasons)",
+								ValueInMember: "(redacted for security reasons)",
+							},
+						},
+					},
+				},
+			}
+
+			workStatusUpdatedActual := workStatusUpdated(workName, workConds, manifestConds, nil, nil)
+			Eventually(workStatusUpdatedActual, eventuallyDuration, eventuallyInterval).Should(Succeed(), "Failed to update work status")
+		})
+
+		It("can switch to full comparison mode", func() {
+			// Use Eventually block to avoid potential conflicts.
+			Eventually(func() error {
+				work := &fleetv1beta1.Work{}
+				if err := hubClient.Get(ctx, client.ObjectKey{Namespace: memberReservedNSName1, Name: workName}, work); err != nil {
+					return fmt.Errorf("failed to retrieve the Work object: %w", err)
+				}
+
+				if work.Spec.ApplyStrategy == nil {
+					work.Spec.ApplyStrategy = &fleetv1beta1.ApplyStrategy{}
+				}
+				work.Spec.ApplyStrategy.ComparisonOption = fleetv1beta1.ComparisonOptionTypeFullComparison
+				return hubClient.Update(ctx, work)
+			}, eventuallyDuration, eventuallyInterval).Should(Succeed(), "Failed to switch to full comparison mode")
+		})
+
+		It("should update the Work object status", func() {
+			// Prepare the status information.
+			workConds := []metav1.Condition{
+				{
+					Type:   fleetv1beta1.WorkConditionTypeDiffReported,
+					Status: metav1.ConditionTrue,
+					Reason: condition.WorkAllManifestsDiffReportedReason,
+				},
+			}
+			manifestConds := []fleetv1beta1.ManifestCondition{
+				{
+					Identifier: fleetv1beta1.WorkResourceIdentifier{
+						Ordinal:  0,
+						Group:    "",
+						Version:  "v1",
+						Kind:     "Namespace",
+						Resource: "namespaces",
+						Name:     nsName,
+					},
+					Conditions: []metav1.Condition{
+						{
+							Type:               fleetv1beta1.WorkConditionTypeDiffReported,
+							Status:             metav1.ConditionTrue,
+							Reason:             string(ApplyOrReportDiffResTypeFoundDiff),
+							ObservedGeneration: 0,
+						},
+					},
+					DiffDetails: &fleetv1beta1.DiffDetails{
+						ObservedInMemberClusterGeneration: &regularNS.Generation,
+						ObservedDiffs: []fleetv1beta1.PatchDetail{
+							{
+								Path:          "/spec/finalizers",
+								ValueInMember: "[kubernetes]",
+							},
+						},
+					},
+				},
+				{
+					Identifier: fleetv1beta1.WorkResourceIdentifier{
+						Ordinal:   1,
+						Group:     "",
+						Version:   "v1",
+						Kind:      "ConfigMap",
+						Resource:  "configmaps",
+						Name:      configMapName,
+						Namespace: nsName,
+					},
+					Conditions: []metav1.Condition{
+						{
+							Type:               fleetv1beta1.WorkConditionTypeDiffReported,
+							Status:             metav1.ConditionTrue,
+							Reason:             string(ApplyOrReportDiffResTypeFoundDiff),
+							ObservedGeneration: 0,
+						},
+					},
+					DiffDetails: &fleetv1beta1.DiffDetails{
+						ObservedInMemberClusterGeneration: &regularCM.Generation,
+						ObservedDiffs: []fleetv1beta1.PatchDetail{
+							{
+								Path:          fmt.Sprintf("/data/%s", dummyLabelKey),
+								ValueInMember: dummyLabelValue2,
+								ValueInHub:    dummyLabelValue1,
+							},
+							{
+								Path:          fmt.Sprintf("/metadata/labels/%s", dummyLabelKey),
+								ValueInMember: dummyLabelValue1,
+							},
+						},
+					},
+				},
+				{
+					Identifier: fleetv1beta1.WorkResourceIdentifier{
+						Ordinal:   2,
+						Group:     "",
+						Version:   "v1",
+						Kind:      "Secret",
+						Resource:  "secrets",
+						Name:      secretName,
+						Namespace: nsName,
+					},
+					Conditions: []metav1.Condition{
+						{
+							Type:               fleetv1beta1.WorkConditionTypeDiffReported,
+							Status:             metav1.ConditionTrue,
+							Reason:             string(ApplyOrReportDiffResTypeFoundDiff),
+							ObservedGeneration: 0,
+						},
+					},
+					DiffDetails: &fleetv1beta1.DiffDetails{
+						ObservedInMemberClusterGeneration: &regularSecret.Generation,
+						ObservedDiffs: []fleetv1beta1.PatchDetail{
+							{
+								Path:          fmt.Sprintf("/data/%s", dummyLabelKey),
+								ValueInHub:    "(redacted for security reasons)",
+								ValueInMember: "(redacted for security reasons)",
+							},
+							{
+								Path:          fmt.Sprintf("/data/%s", "fooStr"),
+								ValueInMember: "(redacted for security reasons)",
+							},
+							{
+								Path:          "/type",
+								ValueInMember: "Opaque",
+							},
+						},
+					},
+				},
+			}
+
+			workStatusUpdatedActual := workStatusUpdated(workName, workConds, manifestConds, nil, nil)
+			Eventually(workStatusUpdatedActual, eventuallyDuration, eventuallyInterval).Should(Succeed(), "Failed to update work status")
+		})
+
+		AfterAll(func() {
+			// Delete the Work object and related resources.
+			deleteWorkObject(workName, memberReservedNSName1)
+
+			// Ensure that the ConfigMap object has been removed.
+			regularCMRemovedActual := regularConfigMapRemovedActual(nsName, configMapName)
+			Eventually(regularCMRemovedActual, eventuallyDuration, eventuallyInterval).Should(Succeed(), "Failed to remove the ConfigMap object")
+
+			// Ensure that the secret object has been removed.
+			regularSecretRemovedActual := regularSecretRemovedActual(nsName, secretName)
+			Eventually(regularSecretRemovedActual, eventuallyDuration, eventuallyInterval).Should(Succeed(), "Failed to remove the Secret object")
 
 			// Ensure that the AppliedWork object has been removed.
 			appliedWorkRemovedActual := appliedWorkRemovedActual(workName, nsName)

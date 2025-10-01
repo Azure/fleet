@@ -46,6 +46,7 @@ const (
 	deployName      = "deploy-1"
 	jobName         = "job-1"
 	configMapName   = "configmap-1"
+	secretName      = "secret-1"
 	nsName          = "ns-1"
 	clusterRoleName = "clusterrole-1"
 )
@@ -157,6 +158,20 @@ var (
 		},
 		Data: map[string]string{
 			dummyLabelKey: dummyLabelValue1,
+		},
+	}
+
+	secret = &corev1.Secret{
+		TypeMeta: metav1.TypeMeta{
+			APIVersion: "v1",
+			Kind:       "Secret",
+		},
+		ObjectMeta: metav1.ObjectMeta{
+			Namespace: nsName,
+			Name:      secretName,
+		},
+		Data: map[string][]byte{
+			dummyLabelKey: []byte(dummyLabelValue1),
 		},
 	}
 
