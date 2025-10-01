@@ -15,17 +15,14 @@ const resourceName = "aks-fleet-managed-by-arm"
 var forbidden = metav1.StatusReasonForbidden
 
 func getValidatingAdmissionPolicy(isHub bool) *admv1.ValidatingAdmissionPolicy {
-	vap := &admv1.ValidatingAdmissionPolicy{
-		ObjectMeta: metav1.ObjectMeta{
-			Name: resourceName,
-		},
-	}
+	vap := &admv1.ValidatingAdmissionPolicy{}
 	mutateValidatingAdmissionPolicy(vap, isHub)
 	return vap
 }
 
 func mutateValidatingAdmissionPolicy(vap *admv1.ValidatingAdmissionPolicy, isHub bool) {
 	ometa := metav1.ObjectMeta{
+		Name: resourceName,
 		Labels: map[string]string{
 			"fleet.azure.com/managed-by": "arm",
 		},
@@ -98,17 +95,14 @@ func mutateValidatingAdmissionPolicy(vap *admv1.ValidatingAdmissionPolicy, isHub
 }
 
 func getValidatingAdmissionPolicyBinding() *admv1.ValidatingAdmissionPolicyBinding {
-	vapb := &admv1.ValidatingAdmissionPolicyBinding{
-		ObjectMeta: metav1.ObjectMeta{
-			Name: resourceName,
-		},
-	}
+	vapb := &admv1.ValidatingAdmissionPolicyBinding{}
 	mutateValidatingAdmissionPolicyBinding(vapb)
 	return vapb
 }
 
 func mutateValidatingAdmissionPolicyBinding(vapb *admv1.ValidatingAdmissionPolicyBinding) {
 	ometa := metav1.ObjectMeta{
+		Name: resourceName,
 		Labels: map[string]string{
 			"fleet.azure.com/managed-by": "arm",
 		},
