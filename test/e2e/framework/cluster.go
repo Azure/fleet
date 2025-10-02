@@ -22,6 +22,7 @@ import (
 	"github.com/onsi/gomega"
 	"k8s.io/apimachinery/pkg/api/meta"
 	"k8s.io/apimachinery/pkg/runtime"
+	"k8s.io/client-go/discovery"
 	"k8s.io/client-go/dynamic"
 	"k8s.io/client-go/rest"
 	"k8s.io/client-go/tools/clientcmd"
@@ -127,4 +128,13 @@ func GetImpersonateClientConfig(cluster *Cluster) clientcmd.ClientConfig {
 				ImpersonateGroups: []string{"system:authenticated"},
 			},
 		})
+}
+
+func GetDiscoveryClient(cluster *Cluster) *discovery.DiscoveryClient {
+	clusterConfig := GetClientConfig(cluster)
+	restConfig, err := clusterConfig.ClientConfig()
+	if err != nil {
+		gomega.Expect(err).Should(gomega.Succeed(), "Failed to set up rest config")
+	}
+	return discovery.NewDiscoveryClientForConfigOrDie(restConfig)
 }
