@@ -429,6 +429,17 @@ func setManifestDiffReportedCondition(
 			Message:            ApplyOrReportDiffResTypeFoundDiffDescription,
 			ObservedGeneration: inMemberClusterObjGeneration,
 		}
+	case applyOrReportDiffResTyp == ApplyOrReportDiffResTypeFoundDiffInDegradedMode:
+		// Found diffs in degraded mode.
+		//
+		// This is not considered as a system error.
+		diffReportedCond = &metav1.Condition{
+			Type:               fleetv1beta1.WorkConditionTypeDiffReported,
+			Status:             metav1.ConditionTrue,
+			Reason:             string(ApplyOrReportDiffResTypeFoundDiffInDegradedMode),
+			Message:            ApplyOrReportDiffResTypeFoundDiffInDegradedModeDescription,
+			ObservedGeneration: inMemberClusterObjGeneration,
+		}
 	default:
 		// There are cases where the work applier might not be able to complete the diff reporting
 		// due to failures in the pre-processing or processing stage (e.g., the manifest cannot be decoded,

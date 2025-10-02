@@ -330,7 +330,63 @@ var _ = Describe("Test member cluster join and leave flow", Label("joinleave"), 
 				}
 			})
 
-			// Skip the serviceExport check
+			It("create a dummy internalServiceExport in the reserved member namespace", func() {
+				for idx := range allMemberClusterNames {
+					memberCluster := allMemberClusters[idx]
+					namespaceName := fmt.Sprintf(utils.NamespaceNameFormat, memberCluster.ClusterName)
+					internalServiceExport := &fleetnetworkingv1alpha1.InternalServiceExport{
+						ObjectMeta: metav1.ObjectMeta{
+							Namespace: namespaceName,
+							Name:      internalServiceExportName,
+						},
+						Spec: fleetnetworkingv1alpha1.InternalServiceExportSpec{
+							ServiceReference: fleetnetworkingv1alpha1.ExportedObjectReference{
+								NamespacedName:  "test-namespace/test-svc",
+								ClusterID:       memberCluster.ClusterName,
+								Kind:            "Service",
+								Namespace:       "test-namespace",
+								Name:            "test-svc",
+								ResourceVersion: "0",
+								UID:             "00000000-0000-0000-0000-000000000000",
+							},
+							Ports: []fleetnetworkingv1alpha1.ServicePort{
+								{
+									Protocol: corev1.ProtocolTCP,
+									Port:     4848,
+								},
+							},
+						},
+					}
+					Expect(hubClient.Create(ctx, internalServiceExport)).To(Succeed(), "Failed to create internalServiceExport")
+				}
+			})
+
+			It("Should fail the unjoin requests", func() {
+				for idx := range allMemberClusters {
+					memberCluster := allMemberClusters[idx]
+					mcObj := &clusterv1beta1.MemberCluster{
+						ObjectMeta: metav1.ObjectMeta{
+							Name: memberCluster.ClusterName,
+						},
+					}
+					err := hubClient.Delete(ctx, mcObj)
+					Expect(err).ShouldNot(Succeed(), "Want the deletion to be denied")
+					var statusErr *apierrors.StatusError
+					Expect(errors.As(err, &statusErr)).To(BeTrue(), fmt.Sprintf("Delete memberCluster call produced error %s. Error type wanted is %s.", reflect.TypeOf(err), reflect.TypeOf(&apierrors.StatusError{})))
+					Expect(statusErr.ErrStatus.Message).Should(MatchRegexp("Please delete serviceExport test-namespace/test-svc in the member cluster before leaving, request is denied"))
+				}
+			})
+
+			It("Updating the member cluster to skip validation", func() {
+				for idx := range allMemberClusterNames {
+					memberCluster := allMemberClusters[idx]
+					deleteOptions := &clusterv1beta1.DeleteOptions{
+						ValidationMode: clusterv1beta1.DeleteValidationModeSkip,
+					}
+					updateMemberClusterDeleteOptions(memberCluster.ClusterName, deleteOptions)
+				}
+			})
+
 			It("Should be able to trigger the member cluster DELETE", func() {
 				setAllMemberClustersToLeave()
 			})

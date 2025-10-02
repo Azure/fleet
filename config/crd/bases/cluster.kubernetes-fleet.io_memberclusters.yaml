@@ -432,6 +432,18 @@ spec:
           spec:
             description: The desired state of MemberCluster.
             properties:
+              deleteOptions:
+                description: DeleteOptions for deleting the MemberCluster.
+                properties:
+                  validationMode:
+                    default: Strict
+                    description: Mode of validation. Can be "Skip", or "Strict". Default
+                      is Strict.
+                    enum:
+                    - Skip
+                    - Strict
+                    type: string
+                type: object
               heartbeatPeriodSeconds:
                 default: 60
                 description: 'How often (in seconds) for the member cluster to send

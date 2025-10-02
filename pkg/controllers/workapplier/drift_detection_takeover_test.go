@@ -98,16 +98,17 @@ func TestTakeOverPreExistingObject(t *testing.T) {
 	})
 
 	testCases := []struct {
-		name                        string
-		gvr                         *schema.GroupVersionResource
-		manifestObj                 *unstructured.Unstructured
-		inMemberClusterObj          *unstructured.Unstructured
-		workObj                     *fleetv1beta1.Work
-		applyStrategy               *fleetv1beta1.ApplyStrategy
-		expectedAppliedWorkOwnerRef *metav1.OwnerReference
-		wantErred                   bool
-		wantTakeOverObj             *unstructured.Unstructured
-		wantPatchDetails            []fleetv1beta1.PatchDetail
+		name                             string
+		gvr                              *schema.GroupVersionResource
+		manifestObj                      *unstructured.Unstructured
+		inMemberClusterObj               *unstructured.Unstructured
+		workObj                          *fleetv1beta1.Work
+		applyStrategy                    *fleetv1beta1.ApplyStrategy
+		expectedAppliedWorkOwnerRef      *metav1.OwnerReference
+		wantErred                        bool
+		wantTakeOverObj                  *unstructured.Unstructured
+		wantPatchDetails                 []fleetv1beta1.PatchDetail
+		wantDiffCalculatedInDegradedMode bool
 	}{
 		{
 			name:               "existing non-Fleet owner, co-ownership not allowed",
@@ -129,7 +130,7 @@ func TestTakeOverPreExistingObject(t *testing.T) {
 			workObj: &fleetv1beta1.Work{
 				ObjectMeta: metav1.ObjectMeta{
 					Name:      "dummy-work",
-					Namespace: memberReservedNSName,
+					Namespace: memberReservedNSName1,
 				},
 			},
 			applyStrategy: &fleetv1beta1.ApplyStrategy{
@@ -206,10 +207,10 @@ func TestTakeOverPreExistingObject(t *testing.T) {
 			r := &Reconciler{
 				hubClient:          fakeHubClient,
 				spokeDynamicClient: fakeMemberClient,
-				workNameSpace:      memberReservedNSName,
+				workNameSpace:      memberReservedNSName1,
 			}
 
-			takenOverObj, patchDetails, err := r.takeOverPreExistingObject(
+			takenOverObj, patchDetails, diffCalculatedInDegradedMode, err := r.takeOverPreExistingObject(
 				ctx,
 				tc.gvr,
 				tc.manifestObj, tc.inMemberClusterObj,
@@ -230,6 +231,9 @@ func TestTakeOverPreExistingObject(t *testing.T) {
 			}
 			if diff := cmp.Diff(patchDetails, tc.wantPatchDetails); diff != "" {
 				t.Errorf("patchDetails mismatches (-got, +want):\n%s", diff)
+			}
+			if diffCalculatedInDegradedMode != tc.wantDiffCalculatedInDegradedMode {
+				t.Errorf("diffCalculatedInDegradedMode = %v, want %v", diffCalculatedInDegradedMode, tc.wantDiffCalculatedInDegradedMode)
 			}
 		})
 	}
@@ -496,7 +500,7 @@ func TestRemoveLeftBehindAppliedWorkOwnerRefs(t *testing.T) {
 			workObj: &fleetv1beta1.Work{
 				ObjectMeta: metav1.ObjectMeta{
 					Name:      workName,
-					Namespace: memberReservedNSName,
+					Namespace: memberReservedNSName1,
 				},
 			},
 		},
@@ -512,7 +516,7 @@ func TestRemoveLeftBehindAppliedWorkOwnerRefs(t *testing.T) {
 
 			r := &Reconciler{
 				hubClient:     fakeHubClient,
-				workNameSpace: memberReservedNSName,
+				workNameSpace: memberReservedNSName1,
 			}
 
 			gotOwnerRefs, err := r.removeLeftBehindAppliedWorkOwnerRefs(ctx, tc.ownerRefs)
@@ -720,6 +724,154 @@ func TestOrganizeJSONPatchIntoFleetPatchDetails(t *testing.T) {
 			}
 
 			if diff := cmp.Diff(gotPatchDetails, tc.wantPatchDetails); diff != "" {
+				t.Errorf("patchDetails mismatches (-got, +want):\n%s", diff)
+			}
+		})
+	}
+}
+
+// TestObscureSensitiveFieldsInPatchDetails tets the obscureSensitiveFieldsInPatchDetails function.
+func TestObscureSensitiveFieldsInPatchDetails(t *testing.T) {
+	secret := &corev1.Secret{
+		TypeMeta: metav1.TypeMeta{
+			APIVersion: "v1",
+			Kind:       "Secret",
+		},
+		ObjectMeta: metav1.ObjectMeta{
+			Namespace: "default",
+			Name:      "app",
+		},
+	}
+	unstructuredSecret := toUnstructured(t, secret)
+
+	testCases := []struct {
+		name string
+		// This object is only needed for API version/kind comparison reasons; its data will not be
+		// used in the test spec.
+		srcObj           *unstructured.Unstructured
+		patchDetails     []fleetv1beta1.PatchDetail
+		wantPatchDetails []fleetv1beta1.PatchDetail
+	}{
+		{
+			name:   "not a secret object (same API group, namespace)",
+			srcObj: toUnstructured(t, ns.DeepCopy()),
+			patchDetails: []fleetv1beta1.PatchDetail{
+				{
+					Path:          "/labels/foo",
+					ValueInMember: "bar",
+				},
+			},
+			wantPatchDetails: []fleetv1beta1.PatchDetail{
+				{
+					Path:          "/labels/foo",
+					ValueInMember: "bar",
+				},
+			},
+		},
+		{
+			name:   "not a secret object (same API group, config map)",
+			srcObj: toUnstructured(t, configMap.DeepCopy()),
+			patchDetails: []fleetv1beta1.PatchDetail{
+				{
+					Path:          "/data/foo",
+					ValueInMember: "bar",
+				},
+			},
+			wantPatchDetails: []fleetv1beta1.PatchDetail{
+				{
+					Path:          "/data/foo",
+					ValueInMember: "bar",
+				},
+			},
+		},
+		{
+			name:   "not a secret object (different API group)",
+			srcObj: toUnstructured(t, deploy.DeepCopy()),
+			patchDetails: []fleetv1beta1.PatchDetail{
+				{
+					Path:          "/labels/foo",
+					ValueInMember: "bar",
+				},
+			},
+			wantPatchDetails: []fleetv1beta1.PatchDetail{
+				{
+					Path:          "/labels/foo",
+					ValueInMember: "bar",
+				},
+			},
+		},
+		{
+			name:   "secret object (no data patches)",
+			srcObj: unstructuredSecret,
+			patchDetails: []fleetv1beta1.PatchDetail{
+				{
+					Path:          "/labels/foo",
+					ValueInMember: "bar",
+				},
+			},
+			wantPatchDetails: []fleetv1beta1.PatchDetail{
+				{
+					Path:          "/labels/foo",
+					ValueInMember: "bar",
+				},
+			},
+		},
+		{
+			name:   "secret object (data patches, hub diff only)",
+			srcObj: unstructuredSecret,
+			patchDetails: []fleetv1beta1.PatchDetail{
+				{
+					Path:       "/data/foo",
+					ValueInHub: "bar",
+				},
+			},
+			wantPatchDetails: []fleetv1beta1.PatchDetail{
+				{
+					Path:       "/data/foo",
+					ValueInHub: "(redacted for security reasons)",
+				},
+			},
+		},
+		{
+			name:   "secret object (data patches, member diff only)",
+			srcObj: unstructuredSecret,
+			patchDetails: []fleetv1beta1.PatchDetail{
+				{
+					Path:          "/data/foo",
+					ValueInMember: "bar",
+				},
+			},
+			wantPatchDetails: []fleetv1beta1.PatchDetail{
+				{
+					Path:          "/data/foo",
+					ValueInMember: "(redacted for security reasons)",
+				},
+			},
+		},
+		{
+			name:   "secret object (string data patches, both end diffs)",
+			srcObj: unstructuredSecret,
+			patchDetails: []fleetv1beta1.PatchDetail{
+				{
+					Path:          "/stringData/foo",
+					ValueInHub:    "bar",
+					ValueInMember: "baz",
+				},
+			},
+			wantPatchDetails: []fleetv1beta1.PatchDetail{
+				{
+					Path:          "/stringData/foo",
+					ValueInHub:    "(redacted for security reasons)",
+					ValueInMember: "(redacted for security reasons)",
+				},
+			},
+		},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			updatedPD := obscureSensitiveFieldsInPatchDetails(tc.srcObj, tc.patchDetails)
+			if diff := cmp.Diff(updatedPD, tc.wantPatchDetails); diff != "" {
 				t.Errorf("patchDetails mismatches (-got, +want):\n%s", diff)
 			}
 		})

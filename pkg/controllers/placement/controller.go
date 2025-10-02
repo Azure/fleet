@@ -142,6 +142,19 @@ func (r *Reconciler) handleUpdate(ctx context.Context, placementObj fleetv1beta1
 		}
 	}
 
+	// Validate namespace selector consistency for NamespaceAccessible CRPs.
+	if isNamespaceAccessibleCRP(placementObj) {
+		isValid, err := r.validateNamespaceSelectorConsistency(ctx, placementObj)
+		if err != nil {
+			klog.V(2).ErrorS(err, "Namespace resource selector validation failed for NamespaceAccessible CRP", "placement", placementKObj)
+			return ctrl.Result{}, err
+		}
+		if !isValid {
+			klog.V(2).InfoS("Invalid Namespace resource selector specified for NamespaceAccessible CRP, stopping reconciliation", "placement", placementKObj)
+			return ctrl.Result{}, nil
+		}
+	}
+
 	// validate the resource selectors first before creating any snapshot
 	envelopeObjCount, selectedResources, selectedResourceIDs, err := r.selectResourcesForPlacement(placementObj)
 	if err != nil {
@@ -160,15 +173,16 @@ func (r *Reconciler) handleUpdate(ctx context.Context, placementObj fleetv1beta1
 		}
 		placementObj.SetConditions(scheduleCondition)
 
-		// Sync ClusterResourcePlacementStatus object if StatusReportingScope is NamespaceAccessible
-		if syncErr := r.syncClusterResourcePlacementStatus(ctx, placementObj); syncErr != nil {
-			klog.ErrorS(syncErr, "Failed to sync ClusterResourcePlacementStatus", "placement", placementKObj)
-			return ctrl.Result{}, syncErr
-		}
-
 		if updateErr := r.Client.Status().Update(ctx, placementObj); updateErr != nil {
 			klog.ErrorS(updateErr, "Failed to update the status", "placement", placementKObj)
 			return ctrl.Result{}, controller.NewUpdateIgnoreConflictError(updateErr)
+		}
+		klog.V(2).InfoS("Updated the placement status with scheduled condition", "placement", placementKObj)
+
+		if isNamespaceAccessibleCRP(placementObj) {
+			if err := r.handleNamespaceAccessibleCRP(ctx, placementObj); err != nil {
+				return ctrl.Result{}, err
+			}
 		}
 
 		// no need to retry faster, the user needs to fix the resource selectors
@@ -212,17 +226,17 @@ func (r *Reconciler) handleUpdate(ctx context.Context, placementObj fleetv1beta1
 		return ctrl.Result{}, err
 	}
 
-	// Sync ClusterResourcePlacementStatus object if StatusReportingScope is NamespaceAccessible
-	if err := r.syncClusterResourcePlacementStatus(ctx, placementObj); err != nil {
-		klog.ErrorS(err, "Failed to sync ClusterResourcePlacementStatus", "placement", placementKObj)
-		return ctrl.Result{}, err
-	}
-
 	if err := r.Client.Status().Update(ctx, placementObj); err != nil {
 		klog.ErrorS(err, "Failed to update the status", "placement", placementKObj)
 		return ctrl.Result{}, err
 	}
 	klog.V(2).InfoS("Updated the placement status", "placement", placementKObj)
+
+	if isNamespaceAccessibleCRP(placementObj) {
+		if err := r.handleNamespaceAccessibleCRP(ctx, placementObj); err != nil {
+			return ctrl.Result{}, err
+		}
+	}
 
 	// We skip checking the last resource condition (available) because it will be covered by checking isRolloutCompleted func.
 	for i := condition.RolloutStartedCondition; i < condition.TotalCondition-1; i++ {

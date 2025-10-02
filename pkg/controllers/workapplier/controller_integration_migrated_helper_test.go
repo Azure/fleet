@@ -41,7 +41,7 @@ func createWorkWithManifest(manifest runtime.Object) *fleetv1beta1.Work {
 	newWork := fleetv1beta1.Work{
 		ObjectMeta: metav1.ObjectMeta{
 			Name:      "work-" + utilrand.String(5),
-			Namespace: memberReservedNSName,
+			Namespace: memberReservedNSName1,
 		},
 		Spec: fleetv1beta1.WorkSpec{
 			Workload: fleetv1beta1.WorkloadTemplate{
@@ -59,7 +59,7 @@ func createWorkWithManifest(manifest runtime.Object) *fleetv1beta1.Work {
 // verifyAppliedConfigMap verifies that the applied CM is the same as the CM we want to apply
 func verifyAppliedConfigMap(cm *corev1.ConfigMap) *corev1.ConfigMap {
 	var appliedCM corev1.ConfigMap
-	Expect(memberClient.Get(context.Background(), types.NamespacedName{Name: cm.GetName(), Namespace: cm.GetNamespace()}, &appliedCM)).Should(Succeed())
+	Expect(memberClient1.Get(context.Background(), types.NamespacedName{Name: cm.GetName(), Namespace: cm.GetNamespace()}, &appliedCM)).Should(Succeed())
 
 	By("Check the config map label")
 	Expect(cmp.Diff(appliedCM.Labels, cm.Labels)).Should(BeEmpty())
@@ -81,7 +81,7 @@ func verifyAppliedConfigMap(cm *corev1.ConfigMap) *corev1.ConfigMap {
 func waitForWorkToApply(workName string) *fleetv1beta1.Work {
 	var resultWork fleetv1beta1.Work
 	Eventually(func() bool {
-		err := hubClient.Get(context.Background(), types.NamespacedName{Name: workName, Namespace: memberReservedNSName}, &resultWork)
+		err := hubClient.Get(context.Background(), types.NamespacedName{Name: workName, Namespace: memberReservedNSName1}, &resultWork)
 		if err != nil {
 			return false
 		}
@@ -105,7 +105,7 @@ func waitForWorkToApply(workName string) *fleetv1beta1.Work {
 func waitForWorkToBeAvailable(workName string) *fleetv1beta1.Work {
 	var resultWork fleetv1beta1.Work
 	Eventually(func() bool {
-		err := hubClient.Get(context.Background(), types.NamespacedName{Name: workName, Namespace: memberReservedNSName}, &resultWork)
+		err := hubClient.Get(context.Background(), types.NamespacedName{Name: workName, Namespace: memberReservedNSName1}, &resultWork)
 		if err != nil {
 			return false
 		}

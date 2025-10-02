@@ -108,7 +108,7 @@ var _ = Describe("Work Controller", func() {
 
 			By("Check applied config map")
 			var configMap corev1.ConfigMap
-			Expect(memberClient.Get(context.Background(), types.NamespacedName{Name: cmName, Namespace: cmNamespace}, &configMap)).Should(Succeed())
+			Expect(memberClient1.Get(context.Background(), types.NamespacedName{Name: cmName, Namespace: cmNamespace}, &configMap)).Should(Succeed())
 			Expect(cmp.Diff(configMap.Labels, cm.Labels)).Should(BeEmpty())
 			Expect(cmp.Diff(configMap.Data, cm.Data)).Should(BeEmpty())
 
@@ -223,11 +223,11 @@ var _ = Describe("Work Controller", func() {
 			// remove label key2 and key3
 			delete(cm.Labels, "labelKey2")
 			delete(cm.Labels, "labelKey3")
-			Expect(memberClient.Update(context.Background(), appliedCM)).Should(Succeed())
+			Expect(memberClient1.Update(context.Background(), appliedCM)).Should(Succeed())
 
 			By("Get the last applied config map and verify it's updated")
 			var modifiedCM corev1.ConfigMap
-			Expect(memberClient.Get(context.Background(), types.NamespacedName{Name: cm.GetName(), Namespace: cm.GetNamespace()}, &modifiedCM)).Should(Succeed())
+			Expect(memberClient1.Get(context.Background(), types.NamespacedName{Name: cm.GetName(), Namespace: cm.GetNamespace()}, &modifiedCM)).Should(Succeed())
 			Expect(cmp.Diff(appliedCM.Labels, modifiedCM.Labels)).Should(BeEmpty())
 			Expect(cmp.Diff(appliedCM.Data, modifiedCM.Data)).Should(BeEmpty())
 
@@ -250,7 +250,7 @@ var _ = Describe("Work Controller", func() {
 			waitForWorkToApply(work.GetName())
 
 			By("Get the last applied config map")
-			Expect(memberClient.Get(context.Background(), types.NamespacedName{Name: cmName, Namespace: cmNamespace}, appliedCM)).Should(Succeed())
+			Expect(memberClient1.Get(context.Background(), types.NamespacedName{Name: cmName, Namespace: cmNamespace}, appliedCM)).Should(Succeed())
 
 			By("Check the config map data")
 			// data1's value picks up our change
@@ -317,7 +317,7 @@ var _ = Describe("Work Controller", func() {
 
 			By("Check applied TestResource")
 			var appliedTestResource testv1alpha1.TestResource
-			Expect(memberClient.Get(context.Background(), types.NamespacedName{Name: testResourceName, Namespace: testResourceNamespace}, &appliedTestResource)).Should(Succeed())
+			Expect(memberClient1.Get(context.Background(), types.NamespacedName{Name: testResourceName, Namespace: testResourceNamespace}, &appliedTestResource)).Should(Succeed())
 
 			By("verify the TestResource spec")
 			Expect(cmp.Diff(appliedTestResource.Spec, testResource.Spec)).Should(BeEmpty())
@@ -338,11 +338,11 @@ var _ = Describe("Work Controller", func() {
 			appliedTestResource.Spec.Items = []string{"a", "b"}
 			appliedTestResource.Spec.Foo = "foo1"
 			appliedTestResource.Spec.Bar = "bar1"
-			Expect(memberClient.Update(context.Background(), &appliedTestResource)).Should(Succeed())
+			Expect(memberClient1.Update(context.Background(), &appliedTestResource)).Should(Succeed())
 
 			By("Verify applied TestResource modified")
 			var modifiedTestResource testv1alpha1.TestResource
-			Expect(memberClient.Get(context.Background(), types.NamespacedName{Name: testResourceName, Namespace: testResourceNamespace}, &modifiedTestResource)).Should(Succeed())
+			Expect(memberClient1.Get(context.Background(), types.NamespacedName{Name: testResourceName, Namespace: testResourceNamespace}, &modifiedTestResource)).Should(Succeed())
 			Expect(cmp.Diff(appliedTestResource.Spec, modifiedTestResource.Spec)).Should(BeEmpty())
 
 			By("Modify the TestResource")
@@ -364,7 +364,7 @@ var _ = Describe("Work Controller", func() {
 			waitForWorkToApply(work.GetName())
 
 			By("Get the last applied TestResource")
-			Expect(memberClient.Get(context.Background(), types.NamespacedName{Name: testResourceName, Namespace: testResourceNamespace}, &appliedTestResource)).Should(Succeed())
+			Expect(memberClient1.Get(context.Background(), types.NamespacedName{Name: testResourceName, Namespace: testResourceNamespace}, &appliedTestResource)).Should(Succeed())
 
 			By("Check the TestResource spec, its an override for arrays")
 			expectedItems := []string{"a", "b"}
@@ -412,11 +412,11 @@ var _ = Describe("Work Controller", func() {
 
 			By("Delete the last applied annotation from the current resource")
 			delete(appliedCM.Annotations, fleetv1beta1.LastAppliedConfigAnnotation)
-			Expect(memberClient.Update(ctx, appliedCM)).Should(Succeed())
+			Expect(memberClient1.Update(ctx, appliedCM)).Should(Succeed())
 
 			By("Get the last applied config map and verify it does not have the last applied annotation")
 			var modifiedCM corev1.ConfigMap
-			Expect(memberClient.Get(ctx, types.NamespacedName{Name: cm.GetName(), Namespace: cm.GetNamespace()}, &modifiedCM)).Should(Succeed())
+			Expect(memberClient1.Get(ctx, types.NamespacedName{Name: cm.GetName(), Namespace: cm.GetNamespace()}, &modifiedCM)).Should(Succeed())
 			Expect(modifiedCM.Annotations[fleetv1beta1.LastAppliedConfigAnnotation]).Should(BeEmpty())
 
 			By("Modify the manifest")
@@ -438,7 +438,7 @@ var _ = Describe("Work Controller", func() {
 			waitForWorkToApply(work.GetName())
 
 			By("Check applied configMap is modified even without the last applied annotation")
-			Expect(memberClient.Get(ctx, types.NamespacedName{Name: cmName, Namespace: cmNamespace}, appliedCM)).Should(Succeed())
+			Expect(memberClient1.Get(ctx, types.NamespacedName{Name: cmName, Namespace: cmNamespace}, appliedCM)).Should(Succeed())
 			verifyAppliedConfigMap(cm)
 
 			Expect(hubClient.Delete(ctx, work)).Should(Succeed(), "Failed to deleted the work")
@@ -533,7 +533,7 @@ var _ = Describe("Work Controller", func() {
 					Data: data,
 				}
 				// make sure we can call join as many as possible
-				Expect(workApplier.Join(ctx)).Should(Succeed())
+				Expect(workApplier1.Join(ctx)).Should(Succeed())
 				work = createWorkWithManifest(cm)
 				err := hubClient.Create(ctx, work)
 				Expect(err).ToNot(HaveOccurred())
@@ -548,7 +548,7 @@ var _ = Describe("Work Controller", func() {
 
 			By("mark the work controller as leave")
 			Eventually(func() error {
-				return workApplier.Leave(ctx)
+				return workApplier1.Leave(ctx)
 			}, eventuallyDuration, eventuallyInterval).Should(Succeed())
 
 			By("make sure the manifests have no finalizer and its status match the member cluster")
@@ -561,12 +561,12 @@ var _ = Describe("Work Controller", func() {
 			}
 			for i := 0; i < numWork; i++ {
 				var resultWork fleetv1beta1.Work
-				Expect(hubClient.Get(ctx, types.NamespacedName{Name: works[i].GetName(), Namespace: memberReservedNSName}, &resultWork)).Should(Succeed())
+				Expect(hubClient.Get(ctx, types.NamespacedName{Name: works[i].GetName(), Namespace: memberReservedNSName1}, &resultWork)).Should(Succeed())
 				Expect(controllerutil.ContainsFinalizer(&resultWork, fleetv1beta1.WorkFinalizer)).Should(BeFalse())
 				// make sure that leave can be called as many times as possible
 				// The work may be updated and may hit 409 error.
 				Eventually(func() error {
-					return workApplier.Leave(ctx)
+					return workApplier1.Leave(ctx)
 				}, eventuallyDuration, eventuallyInterval).Should(Succeed(), "Failed to set the work controller to leave")
 				By(fmt.Sprintf("change the work = %s", work.GetName()))
 				cm = &corev1.ConfigMap{
@@ -591,7 +591,7 @@ var _ = Describe("Work Controller", func() {
 				for i := 0; i < numWork; i++ {
 					By(fmt.Sprintf("updated the work = %s", works[i].GetName()))
 					var resultWork fleetv1beta1.Work
-					err := hubClient.Get(context.Background(), types.NamespacedName{Name: works[i].GetName(), Namespace: memberReservedNSName}, &resultWork)
+					err := hubClient.Get(context.Background(), types.NamespacedName{Name: works[i].GetName(), Namespace: memberReservedNSName1}, &resultWork)
 					Expect(err).Should(Succeed())
 					Expect(controllerutil.ContainsFinalizer(&resultWork, fleetv1beta1.WorkFinalizer)).Should(BeFalse())
 					applyCond := meta.FindStatusCondition(resultWork.Status.Conditions, fleetv1beta1.WorkConditionTypeApplied)
@@ -599,14 +599,14 @@ var _ = Describe("Work Controller", func() {
 						return false
 					}
 					By("check if the config map is not changed")
-					Expect(memberClient.Get(ctx, types.NamespacedName{Name: cmNames[i], Namespace: cmNamespace}, &configMap)).Should(Succeed())
+					Expect(memberClient1.Get(ctx, types.NamespacedName{Name: cmNames[i], Namespace: cmNamespace}, &configMap)).Should(Succeed())
 					Expect(cmp.Diff(configMap.Data, data)).Should(BeEmpty())
 				}
 				return true
 			}, eventuallyDuration, eventuallyInterval).Should(BeTrue())
 
 			By("enable the work controller again")
-			Expect(workApplier.Join(ctx)).Should(Succeed())
+			Expect(workApplier1.Join(ctx)).Should(Succeed())
 
 			By("make sure the work change get picked up")
 			for i := 0; i < numWork; i++ {
@@ -614,7 +614,7 @@ var _ = Describe("Work Controller", func() {
 				Expect(len(resultWork.Status.ManifestConditions)).Should(Equal(1))
 				Expect(meta.IsStatusConditionTrue(resultWork.Status.ManifestConditions[0].Conditions, fleetv1beta1.WorkConditionTypeApplied)).Should(BeTrue())
 				By("the work is applied, check if the applied config map is updated")
-				Expect(memberClient.Get(ctx, types.NamespacedName{Name: cmNames[i], Namespace: cmNamespace}, &configMap)).Should(Succeed())
+				Expect(memberClient1.Get(ctx, types.NamespacedName{Name: cmNames[i], Namespace: cmNamespace}, &configMap)).Should(Succeed())
 				Expect(cmp.Diff(configMap.Data, newData)).Should(BeEmpty())
 			}
 		})
@@ -634,7 +634,7 @@ var _ = Describe("Work Status Reconciler", func() {
 				Name: resourceNamespace,
 			},
 		}
-		Expect(memberClient.Create(context.Background(), &rns)).Should(Succeed(), "Failed to create the resource namespace")
+		Expect(memberClient1.Create(context.Background(), &rns)).Should(Succeed(), "Failed to create the resource namespace")
 
 		// Create the Work object with some type of Manifest resource.
 		cm = &corev1.ConfigMap{
@@ -668,7 +668,7 @@ var _ = Describe("Work Status Reconciler", func() {
 		work = &fleetv1beta1.Work{
 			ObjectMeta: metav1.ObjectMeta{
 				Name:      "work-" + utilrand.String(5),
-				Namespace: memberReservedNSName,
+				Namespace: memberReservedNSName1,
 			},
 			Spec: fleetv1beta1.WorkSpec{
 				Workload: fleetv1beta1.WorkloadTemplate{
@@ -688,7 +688,7 @@ var _ = Describe("Work Status Reconciler", func() {
 	AfterEach(func() {
 		// TODO: Ensure that all resources are being deleted.
 		Expect(hubClient.Delete(context.Background(), work)).Should(Succeed())
-		Expect(memberClient.Delete(context.Background(), &rns)).Should(Succeed())
+		Expect(memberClient1.Delete(context.Background(), &rns)).Should(Succeed())
 	})
 
 	It("Should delete the manifest from the member cluster after it is removed from work", func() {
@@ -698,7 +698,7 @@ var _ = Describe("Work Status Reconciler", func() {
 		By("Make sure that the work is applied")
 		currentWork := waitForWorkToApply(work.Name)
 		var appliedWork fleetv1beta1.AppliedWork
-		Expect(memberClient.Get(context.Background(), types.NamespacedName{Name: work.Name}, &appliedWork)).Should(Succeed())
+		Expect(memberClient1.Get(context.Background(), types.NamespacedName{Name: work.Name}, &appliedWork)).Should(Succeed())
 		Expect(len(appliedWork.Status.AppliedResources)).Should(Equal(2))
 
 		By("Remove configMap 2 from the work")
@@ -712,12 +712,12 @@ var _ = Describe("Work Status Reconciler", func() {
 		By("Verify that the resource is removed from the cluster")
 		Eventually(func() bool {
 			var configMap corev1.ConfigMap
-			return apierrors.IsNotFound(memberClient.Get(context.Background(), types.NamespacedName{Name: cm2.Name, Namespace: resourceNamespace}, &configMap))
+			return apierrors.IsNotFound(memberClient1.Get(context.Background(), types.NamespacedName{Name: cm2.Name, Namespace: resourceNamespace}, &configMap))
 		}, eventuallyDuration, eventuallyInterval).Should(BeTrue())
 
 		By("Verify that the appliedWork status is correct")
 		Eventually(func() bool {
-			Expect(memberClient.Get(context.Background(), types.NamespacedName{Name: work.Name}, &appliedWork)).Should(Succeed())
+			Expect(memberClient1.Get(context.Background(), types.NamespacedName{Name: work.Name}, &appliedWork)).Should(Succeed())
 			return len(appliedWork.Status.AppliedResources) == 1
 		}, eventuallyDuration, eventuallyInterval).Should(BeTrue())
 		Expect(appliedWork.Status.AppliedResources[0].Name).Should(Equal(cm.GetName()))
@@ -734,7 +734,7 @@ var _ = Describe("Work Status Reconciler", func() {
 		By("Make sure that the work is applied")
 		currentWork := waitForWorkToApply(work.Name)
 		var appliedWork fleetv1beta1.AppliedWork
-		Expect(memberClient.Get(context.Background(), types.NamespacedName{Name: work.Name}, &appliedWork)).Should(Succeed())
+		Expect(memberClient1.Get(context.Background(), types.NamespacedName{Name: work.Name}, &appliedWork)).Should(Succeed())
 		Expect(len(appliedWork.Status.AppliedResources)).Should(Equal(2))
 
 		By("replace configMap with a bad object from the work")
@@ -759,17 +759,17 @@ var _ = Describe("Work Status Reconciler", func() {
 		By("Verify that the configMaps are removed from the cluster even if the new resource didn't apply")
 		Eventually(func() bool {
 			var configMap corev1.ConfigMap
-			return apierrors.IsNotFound(memberClient.Get(context.Background(), types.NamespacedName{Name: cm.Name, Namespace: resourceNamespace}, &configMap))
+			return apierrors.IsNotFound(memberClient1.Get(context.Background(), types.NamespacedName{Name: cm.Name, Namespace: resourceNamespace}, &configMap))
 		}, eventuallyDuration, eventuallyInterval).Should(BeTrue())
 
 		Eventually(func() bool {
 			var configMap corev1.ConfigMap
-			return apierrors.IsNotFound(memberClient.Get(context.Background(), types.NamespacedName{Name: cm2.Name, Namespace: resourceNamespace}, &configMap))
+			return apierrors.IsNotFound(memberClient1.Get(context.Background(), types.NamespacedName{Name: cm2.Name, Namespace: resourceNamespace}, &configMap))
 		}, eventuallyDuration, eventuallyInterval).Should(BeTrue())
 
 		By("Verify that the appliedWork status is correct")
 		Eventually(func() bool {
-			Expect(memberClient.Get(context.Background(), types.NamespacedName{Name: work.Name}, &appliedWork)).Should(Succeed())
+			Expect(memberClient1.Get(context.Background(), types.NamespacedName{Name: work.Name}, &appliedWork)).Should(Succeed())
 			return len(appliedWork.Status.AppliedResources) == 0
 		}, eventuallyDuration, eventuallyInterval).Should(BeTrue())
 	})
@@ -781,14 +781,14 @@ var _ = Describe("Work Status Reconciler", func() {
 		By("Make sure that the work is applied")
 		currentWork := waitForWorkToApply(work.Name)
 		var appliedWork fleetv1beta1.AppliedWork
-		Expect(memberClient.Get(context.Background(), types.NamespacedName{Name: work.Name}, &appliedWork)).Should(Succeed())
+		Expect(memberClient1.Get(context.Background(), types.NamespacedName{Name: work.Name}, &appliedWork)).Should(Succeed())
 		Expect(len(appliedWork.Status.AppliedResources)).Should(Equal(2))
 
 		By("Make sure that the manifests exist on the member cluster")
 		Eventually(func() bool {
 			var configMap corev1.ConfigMap
-			return memberClient.Get(context.Background(), types.NamespacedName{Name: cm2.Name, Namespace: resourceNamespace}, &configMap) == nil &&
-				memberClient.Get(context.Background(), types.NamespacedName{Name: cm.Name, Namespace: resourceNamespace}, &configMap) == nil
+			return memberClient1.Get(context.Background(), types.NamespacedName{Name: cm2.Name, Namespace: resourceNamespace}, &configMap) == nil &&
+				memberClient1.Get(context.Background(), types.NamespacedName{Name: cm.Name, Namespace: resourceNamespace}, &configMap) == nil
 		}, eventuallyDuration, eventuallyInterval).Should(BeTrue())
 
 		By("Change the order of the two configs in the work")
@@ -805,13 +805,13 @@ var _ = Describe("Work Status Reconciler", func() {
 		By("Verify that nothing is removed from the cluster")
 		Consistently(func() bool {
 			var configMap corev1.ConfigMap
-			return memberClient.Get(context.Background(), types.NamespacedName{Name: cm2.Name, Namespace: resourceNamespace}, &configMap) == nil &&
-				memberClient.Get(context.Background(), types.NamespacedName{Name: cm.Name, Namespace: resourceNamespace}, &configMap) == nil
+			return memberClient1.Get(context.Background(), types.NamespacedName{Name: cm2.Name, Namespace: resourceNamespace}, &configMap) == nil &&
+				memberClient1.Get(context.Background(), types.NamespacedName{Name: cm.Name, Namespace: resourceNamespace}, &configMap) == nil
 		}, consistentlyDuration, consistentlyInterval).Should(BeTrue())
 
 		By("Verify that the appliedWork status is correct")
 		Eventually(func() bool {
-			Expect(memberClient.Get(context.Background(), types.NamespacedName{Name: work.Name}, &appliedWork)).Should(Succeed())
+			Expect(memberClient1.Get(context.Background(), types.NamespacedName{Name: work.Name}, &appliedWork)).Should(Succeed())
 			return len(appliedWork.Status.AppliedResources) == 2
 		}, eventuallyDuration, eventuallyInterval).Should(BeTrue())
 		Expect(appliedWork.Status.AppliedResources[0].Name).Should(Equal(cm2.GetName()))
