@@ -397,6 +397,7 @@ func beforeSuiteForProcess1() {
 
 	setAllMemberClustersToJoin()
 	checkIfAllMemberClustersHaveJoined()
+	// TODO: add checks for VAP and its binding existence in Join Leave scenarios
 	for _, c := range allMemberClusters {
 		checkVAPAndBindingExistence(c)
 	}
@@ -418,6 +419,7 @@ var _ = SynchronizedAfterSuite(func() {}, func() {
 	deleteTestResourceCRD()
 	setAllMemberClustersToLeave()
 	checkIfAllMemberClustersHaveLeft()
+	// TODO: add checks for VAP and its binding absence in Join Leave scenarios
 	for _, c := range allMemberClusters {
 		checkVAPAndBindingAbsence(c)
 	}

@@ -127,6 +127,8 @@ func TestEnsureVAP(t *testing.T) {
 			}
 
 			interceptorFuncs := interceptor.Funcs{
+				// This is needed for a test scenario that GET would retrieve the same object as what was created/updated.
+				// TODO: refactor to simplify this. The store should not be needed as UPDATE should update the same object provided in fakeClient's WithObjects
 				Get: func(ctx context.Context, c client.WithWatch, key client.ObjectKey, obj client.Object, opts ...client.GetOption) error {
 					if storedObj, exists := objectStore[key]; exists {
 						switch v := obj.(type) {

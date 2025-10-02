@@ -39,6 +39,7 @@ func EnsureVAP(ctx context.Context, c client.Client, isHub bool) error {
 		obj    client.Object
 		mutate func() error
 	}
+	// TODO: this can be simplified by dealing with the specific type rather than using client.Object
 	vap, mutateVAP := getVAPWithMutator(isHub)
 	vapb, mutateVAPB := getVAPBindingWithMutator()
 	objsAndMutators := []vapObjectAndMutator{
