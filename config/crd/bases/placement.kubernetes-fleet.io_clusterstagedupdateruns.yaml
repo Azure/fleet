@@ -1773,7 +1773,7 @@ spec:
                 type: string
               stagedUpdateStrategySnapshot:
                 description: |-
-                  StagedUpdateStrategySnapshot is the snapshot of the StagedUpdateStrategy used for the update run.
+                  UpdateStrategySnapshot is the snapshot of the UpdateStrategy used for the update run.
                   The snapshot is immutable during the update run.
                   The strategy is applied to the list of clusters scheduled by the CRP according to the current policy.
                   The update run fails to initialize if the strategy fails to produce a valid list of stages where each selected

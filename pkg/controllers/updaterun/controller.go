@@ -380,11 +380,11 @@ func emitUpdateRunStatusMetric(updateRun *placementv1beta1.ClusterStagedUpdateRu
 
 func removeWaitTimeFromUpdateRunStatus(updateRun *placementv1beta1.ClusterStagedUpdateRun) {
 	// Remove waitTime from the updateRun status for AfterStageTask for type Approval.
-	if updateRun.Status.StagedUpdateStrategySnapshot != nil {
-		for i := range updateRun.Status.StagedUpdateStrategySnapshot.Stages {
-			for j := range updateRun.Status.StagedUpdateStrategySnapshot.Stages[i].AfterStageTasks {
-				if updateRun.Status.StagedUpdateStrategySnapshot.Stages[i].AfterStageTasks[j].Type == placementv1beta1.AfterStageTaskTypeApproval {
-					updateRun.Status.StagedUpdateStrategySnapshot.Stages[i].AfterStageTasks[j].WaitTime = nil
+	if updateRun.Status.UpdateStrategySnapshot != nil {
+		for i := range updateRun.Status.UpdateStrategySnapshot.Stages {
+			for j := range updateRun.Status.UpdateStrategySnapshot.Stages[i].AfterStageTasks {
+				if updateRun.Status.UpdateStrategySnapshot.Stages[i].AfterStageTasks[j].Type == placementv1beta1.AfterStageTaskTypeApproval {
+					updateRun.Status.UpdateStrategySnapshot.Stages[i].AfterStageTasks[j].WaitTime = nil
 				}
 			}
 		}

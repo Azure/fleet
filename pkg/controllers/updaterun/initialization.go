@@ -255,7 +255,7 @@ func (r *Reconciler) generateStagesByStrategy(
 	}
 
 	// This won't change even if the stagedUpdateStrategy changes or is deleted after the updateRun is initialized.
-	updateRun.Status.StagedUpdateStrategySnapshot = &updateStrategy.Spec
+	updateRun.Status.UpdateStrategySnapshot = &updateStrategy.Spec
 	// Remove waitTime from the updateRun status for AfterStageTask for type Approval.
 	removeWaitTimeFromUpdateRunStatus(updateRun)
 
@@ -294,10 +294,10 @@ func (r *Reconciler) computeRunStageStatus(
 	for _, binding := range scheduledBindings {
 		allSelectedClusters[binding.Spec.TargetCluster] = struct{}{}
 	}
-	stagesStatus := make([]placementv1beta1.StageUpdatingStatus, 0, len(updateRun.Status.StagedUpdateStrategySnapshot.Stages))
+	stagesStatus := make([]placementv1beta1.StageUpdatingStatus, 0, len(updateRun.Status.UpdateStrategySnapshot.Stages))
 
 	// Apply the label selectors from the ClusterStagedUpdateStrategy to filter the clusters.
-	for _, stage := range updateRun.Status.StagedUpdateStrategySnapshot.Stages {
+	for _, stage := range updateRun.Status.UpdateStrategySnapshot.Stages {
 		if err := validateAfterStageTask(stage.AfterStageTasks); err != nil {
 			klog.ErrorS(err, "Failed to validate the after stage tasks", "clusterStagedUpdateStrategy", updateStrategyName, "stage name", stage.Name, "clusterStagedUpdateRun", updateRunRef)
 			// no more retries here.

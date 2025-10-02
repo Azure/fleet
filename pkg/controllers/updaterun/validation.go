@@ -101,11 +101,11 @@ func (r *Reconciler) validateStagesStatus(
 	updateRunRef := klog.KObj(updateRun)
 
 	// Recompute the stage status which does not include the delete stage.
-	// Note that the compute process uses the StagedUpdateStrategySnapshot in status,
+	// Note that the compute process uses the UpdateStrategySnapshot in status,
 	// so it won't affect anything if the actual updateStrategy has changed.
-	if updateRun.Status.StagedUpdateStrategySnapshot == nil {
-		unexpectedErr := controller.NewUnexpectedBehaviorError(fmt.Errorf("the clusterStagedUpdateRun has nil stagedUpdateStrategySnapshot"))
-		klog.ErrorS(unexpectedErr, "Failed to find the stagedUpdateStrategySnapshot in the clusterStagedUpdateRun", "clusterStagedUpdateRun", updateRunRef)
+	if updateRun.Status.UpdateStrategySnapshot == nil {
+		unexpectedErr := controller.NewUnexpectedBehaviorError(fmt.Errorf("the clusterStagedUpdateRun has nil updateStrategySnapshot"))
+		klog.ErrorS(unexpectedErr, "Failed to find the updateStrategySnapshot in the clusterStagedUpdateRun", "clusterStagedUpdateRun", updateRunRef)
 		return -1, fmt.Errorf("%w: %s", errStagedUpdatedAborted, unexpectedErr.Error())
 	}
 	if err := r.computeRunStageStatus(ctx, scheduledBindings, updateRunCopy); err != nil {

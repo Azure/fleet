@@ -46,7 +46,7 @@ var _ = Describe("UpdateRun validation tests", func() {
 		var unscheduledClusters []*clusterv1beta1.MemberCluster
 		var resourceSnapshot *placementv1beta1.ClusterResourceSnapshot
 		var clusterResourceOverride *placementv1beta1.ClusterResourceOverrideSnapshot
-		var wantStatus *placementv1beta1.StagedUpdateRunStatus
+		var wantStatus *placementv1beta1.UpdateRunStatus
 
 		BeforeEach(func() {
 			testUpdateRunName = "updaterun-" + utils.RandStr()
@@ -260,15 +260,15 @@ var _ = Describe("UpdateRun validation tests", func() {
 				validateUpdateRunMetricsEmitted(generateProgressingMetric(updateRun), generateFailedMetric(updateRun))
 			})
 
-			It("Should fail to validate if the StagedUpdateStrategySnapshot is nil", func() {
-				By("Updating the status.StagedUpdateStrategySnapshot to nil")
-				updateRun.Status.StagedUpdateStrategySnapshot = nil
+			It("Should fail to validate if the UpdateStrategySnapshot is nil", func() {
+				By("Updating the status.UpdateStrategySnapshot to nil")
+				updateRun.Status.UpdateStrategySnapshot = nil
 				Expect(k8sClient.Status().Update(ctx, updateRun)).Should(Succeed())
 
 				By("Validating the validation failed")
 				wantStatus = generateFailedValidationStatus(updateRun, wantStatus)
-				wantStatus.StagedUpdateStrategySnapshot = nil
-				validateClusterStagedUpdateRunStatus(ctx, updateRun, wantStatus, "the clusterStagedUpdateRun has nil stagedUpdateStrategySnapshot")
+				wantStatus.UpdateStrategySnapshot = nil
+				validateClusterStagedUpdateRunStatus(ctx, updateRun, wantStatus, "the clusterStagedUpdateRun has nil updateStrategySnapshot")
 			})
 
 			It("Should fail to validate if the StagesStatus is nil", func() {
@@ -295,7 +295,7 @@ var _ = Describe("UpdateRun validation tests", func() {
 
 			It("Should fail to validate if the number of stages has changed", func() {
 				By("Adding a stage to the updateRun status")
-				updateRun.Status.StagedUpdateStrategySnapshot.Stages = append(updateRun.Status.StagedUpdateStrategySnapshot.Stages, placementv1beta1.StageConfig{
+				updateRun.Status.UpdateStrategySnapshot.Stages = append(updateRun.Status.UpdateStrategySnapshot.Stages, placementv1beta1.StageConfig{
 					Name: "stage3",
 					LabelSelector: &metav1.LabelSelector{
 						MatchLabels: map[string]string{
@@ -308,7 +308,7 @@ var _ = Describe("UpdateRun validation tests", func() {
 
 				By("Validating the validation failed")
 				wantStatus = generateFailedValidationStatus(updateRun, wantStatus)
-				wantStatus.StagedUpdateStrategySnapshot.Stages = append(wantStatus.StagedUpdateStrategySnapshot.Stages, placementv1beta1.StageConfig{
+				wantStatus.UpdateStrategySnapshot.Stages = append(wantStatus.UpdateStrategySnapshot.Stages, placementv1beta1.StageConfig{
 					Name: "stage3",
 					LabelSelector: &metav1.LabelSelector{
 						MatchLabels: map[string]string{
@@ -322,12 +322,12 @@ var _ = Describe("UpdateRun validation tests", func() {
 
 			It("Should fail to validate if stage name has changed", func() {
 				By("Changing the name of a stage")
-				updateRun.Status.StagedUpdateStrategySnapshot.Stages[0].Name = "stage3"
+				updateRun.Status.UpdateStrategySnapshot.Stages[0].Name = "stage3"
 				Expect(k8sClient.Status().Update(ctx, updateRun)).Should(Succeed())
 
 				By("Validating the validation failed")
 				wantStatus = generateFailedValidationStatus(updateRun, wantStatus)
-				wantStatus.StagedUpdateStrategySnapshot.Stages[0].Name = "stage3"
+				wantStatus.UpdateStrategySnapshot.Stages[0].Name = "stage3"
 				validateClusterStagedUpdateRunStatus(ctx, updateRun, wantStatus, "index `0` stage name in the clusterStagedUpdateRun has changed")
 			})
 
@@ -365,7 +365,7 @@ var _ = Describe("UpdateRun validation tests", func() {
 		var unscheduledClusters []*clusterv1beta1.MemberCluster
 		var resourceSnapshot *placementv1beta1.ClusterResourceSnapshot
 		var clusterResourceOverride *placementv1beta1.ClusterResourceOverrideSnapshot
-		var wantStatus *placementv1beta1.StagedUpdateRunStatus
+		var wantStatus *placementv1beta1.UpdateRunStatus
 		BeforeEach(func() {
 			testUpdateRunName = "updaterun-" + utils.RandStr()
 			testCRPName = "crp-" + utils.RandStr()
@@ -506,7 +506,7 @@ var _ = Describe("UpdateRun validation tests", func() {
 func validateClusterStagedUpdateRunStatus(
 	ctx context.Context,
 	updateRun *placementv1beta1.ClusterStagedUpdateRun,
-	want *placementv1beta1.StagedUpdateRunStatus,
+	want *placementv1beta1.UpdateRunStatus,
 	message string,
 ) {
 	Eventually(func() error {
@@ -530,7 +530,7 @@ func validateClusterStagedUpdateRunStatus(
 func validateClusterStagedUpdateRunStatusConsistently(
 	ctx context.Context,
 	updateRun *placementv1beta1.ClusterStagedUpdateRun,
-	want *placementv1beta1.StagedUpdateRunStatus,
+	want *placementv1beta1.UpdateRunStatus,
 	message string,
 ) {
 	Consistently(func() error {
@@ -553,8 +553,8 @@ func validateClusterStagedUpdateRunStatusConsistently(
 
 func generateFailedValidationStatus(
 	updateRun *placementv1beta1.ClusterStagedUpdateRun,
-	started *placementv1beta1.StagedUpdateRunStatus,
-) *placementv1beta1.StagedUpdateRunStatus {
+	started *placementv1beta1.UpdateRunStatus,
+) *placementv1beta1.UpdateRunStatus {
 	started.Conditions[1] = generateFalseProgressingCondition(updateRun, placementv1beta1.StagedUpdateRunConditionProgressing, false)
 	started.Conditions = append(started.Conditions, generateFalseCondition(updateRun, placementv1beta1.StagedUpdateRunConditionSucceeded))
 	return started

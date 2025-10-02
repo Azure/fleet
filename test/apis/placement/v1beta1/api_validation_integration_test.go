@@ -1097,7 +1097,7 @@ var _ = Describe("Test placement v1beta1 API validation", func() {
 				ObjectMeta: metav1.ObjectMeta{
 					Name: fmt.Sprintf(validupdateRunNameTemplate, GinkgoParallelProcess()),
 				},
-				Spec: placementv1beta1.StagedUpdateRunSpec{
+				Spec: placementv1beta1.UpdateRunSpec{
 					PlacementName: "test-placement",
 				},
 			}
@@ -1118,7 +1118,7 @@ var _ = Describe("Test placement v1beta1 API validation", func() {
 				ObjectMeta: metav1.ObjectMeta{
 					Name: fmt.Sprintf(updateRunStrategyNameTemplate, GinkgoParallelProcess()),
 				},
-				Spec: placementv1beta1.StagedUpdateStrategySpec{
+				Spec: placementv1beta1.UpdateStrategySpec{
 					Stages: []placementv1beta1.StageConfig{
 						{
 							Name: fmt.Sprintf(updateRunStageNameTemplate, GinkgoParallelProcess(), 1),
@@ -1165,7 +1165,7 @@ var _ = Describe("Test placement v1beta1 API validation", func() {
 				ObjectMeta: metav1.ObjectMeta{
 					Name: fmt.Sprintf(updateRunStrategyNameTemplate, GinkgoParallelProcess()),
 				},
-				Spec: placementv1beta1.StagedUpdateStrategySpec{
+				Spec: placementv1beta1.UpdateStrategySpec{
 					Stages: []placementv1beta1.StageConfig{
 						{
 							Name: fmt.Sprintf(invalidupdateRunStageNameTemplate, GinkgoParallelProcess(), 1),
@@ -1184,7 +1184,7 @@ var _ = Describe("Test placement v1beta1 API validation", func() {
 				ObjectMeta: metav1.ObjectMeta{
 					Name: fmt.Sprintf(updateRunStrategyNameTemplate, GinkgoParallelProcess()),
 				},
-				Spec: placementv1beta1.StagedUpdateStrategySpec{
+				Spec: placementv1beta1.UpdateStrategySpec{
 					Stages: []placementv1beta1.StageConfig{
 						{
 							Name: fmt.Sprintf(updateRunStageNameTemplate, GinkgoParallelProcess(), 1) + "-A",
@@ -1203,7 +1203,7 @@ var _ = Describe("Test placement v1beta1 API validation", func() {
 				ObjectMeta: metav1.ObjectMeta{
 					Name: fmt.Sprintf(updateRunStrategyNameTemplate, GinkgoParallelProcess()),
 				},
-				Spec: placementv1beta1.StagedUpdateStrategySpec{
+				Spec: placementv1beta1.UpdateStrategySpec{
 					Stages: []placementv1beta1.StageConfig{
 						{
 							Name: fmt.Sprintf(updateRunStageNameTemplate, GinkgoParallelProcess(), 1),
@@ -1234,7 +1234,7 @@ var _ = Describe("Test placement v1beta1 API validation", func() {
 				ObjectMeta: metav1.ObjectMeta{
 					Name: fmt.Sprintf(updateRunStrategyNameTemplate, GinkgoParallelProcess()),
 				},
-				Spec: placementv1beta1.StagedUpdateStrategySpec{
+				Spec: placementv1beta1.UpdateStrategySpec{
 					Stages: []placementv1beta1.StageConfig{
 						{
 							Name: fmt.Sprintf(updateRunStageNameTemplate, GinkgoParallelProcess(), 1),
@@ -1263,7 +1263,7 @@ var _ = Describe("Test placement v1beta1 API validation", func() {
 				ObjectMeta: metav1.ObjectMeta{
 					Name: fmt.Sprintf(updateRunStrategyNameTemplate, GinkgoParallelProcess()),
 				},
-				Spec: placementv1beta1.StagedUpdateStrategySpec{
+				Spec: placementv1beta1.UpdateStrategySpec{
 					Stages: []placementv1beta1.StageConfig{
 						{
 							Name: fmt.Sprintf(updateRunStageNameTemplate, GinkgoParallelProcess(), 1),
@@ -1292,7 +1292,7 @@ var _ = Describe("Test placement v1beta1 API validation", func() {
 				ObjectMeta: metav1.ObjectMeta{
 					Name: fmt.Sprintf(updateRunStrategyNameTemplate, GinkgoParallelProcess()),
 				},
-				Spec: placementv1beta1.StagedUpdateStrategySpec{
+				Spec: placementv1beta1.UpdateStrategySpec{
 					Stages: []placementv1beta1.StageConfig{
 						{
 							Name: fmt.Sprintf(updateRunStageNameTemplate, GinkgoParallelProcess(), 1),
@@ -1316,7 +1316,7 @@ var _ = Describe("Test placement v1beta1 API validation", func() {
 				ObjectMeta: metav1.ObjectMeta{
 					Name: fmt.Sprintf(updateRunStrategyNameTemplate, GinkgoParallelProcess()),
 				},
-				Spec: placementv1beta1.StagedUpdateStrategySpec{
+				Spec: placementv1beta1.UpdateStrategySpec{
 					Stages: []placementv1beta1.StageConfig{
 						{
 							Name: fmt.Sprintf(updateRunStageNameTemplate, GinkgoParallelProcess(), 1),

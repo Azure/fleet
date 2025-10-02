@@ -1316,7 +1316,7 @@ var _ = Describe("Test member cluster join and leave flow with updateRun", Label
 			ObjectMeta: metav1.ObjectMeta{
 				Name: strategyName,
 			},
-			Spec: placementv1beta1.StagedUpdateStrategySpec{
+			Spec: placementv1beta1.UpdateStrategySpec{
 				Stages: []placementv1beta1.StageConfig{
 					{
 						Name: "all",
@@ -1579,7 +1579,7 @@ func createStagedUpdateStrategySucceed(strategyName string) *placementv1beta1.Cl
 		ObjectMeta: metav1.ObjectMeta{
 			Name: strategyName,
 		},
-		Spec: placementv1beta1.StagedUpdateStrategySpec{
+		Spec: placementv1beta1.UpdateStrategySpec{
 			Stages: []placementv1beta1.StageConfig{
 				{
 					Name: envCanary,
@@ -1666,7 +1666,7 @@ func createStagedUpdateRunSucceed(updateRunName, crpName, resourceSnapshotIndex,
 		ObjectMeta: metav1.ObjectMeta{
 			Name: updateRunName,
 		},
-		Spec: placementv1beta1.StagedUpdateRunSpec{
+		Spec: placementv1beta1.UpdateRunSpec{
 			PlacementName:            crpName,
 			ResourceSnapshotIndex:    resourceSnapshotIndex,
 			StagedUpdateStrategyName: strategyName,

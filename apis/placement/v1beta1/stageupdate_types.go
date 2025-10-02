@@ -17,8 +17,68 @@ limitations under the License.
 package v1beta1
 
 import (
+	"k8s.io/apimachinery/pkg/api/meta"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"sigs.k8s.io/controller-runtime/pkg/client"
+
+	"github.com/kubefleet-dev/kubefleet/apis"
 )
+
+// make sure the UpdateRunObj and UpdateRunObjList interfaces are implemented by the
+// ClusterStagedUpdateRun and StagedUpdateRun types.
+var _ UpdateRunObj = &ClusterStagedUpdateRun{}
+var _ UpdateRunObj = &StagedUpdateRun{}
+var _ UpdateRunObjList = &ClusterStagedUpdateRunList{}
+var _ UpdateRunObjList = &StagedUpdateRunList{}
+
+// make sure the UpdateStrategyObj and UpdateStrategyObjList interfaces are implemented by the
+// ClusterStagedUpdateStrategy and StagedUpdateStrategy types.
+var _ UpdateStrategyObj = &ClusterStagedUpdateStrategy{}
+var _ UpdateStrategyObj = &StagedUpdateStrategy{}
+var _ UpdateStrategyObjList = &ClusterStagedUpdateStrategyList{}
+var _ UpdateStrategyObjList = &StagedUpdateStrategyList{}
+
+// make sure the ApprovalRequestObj and ApprovalRequestObjList interfaces are implemented by the
+// ClusterApprovalRequest and ApprovalRequest types.
+var _ ApprovalRequestObj = &ClusterApprovalRequest{}
+var _ ApprovalRequestObj = &ApprovalRequest{}
+var _ ApprovalRequestObjList = &ClusterApprovalRequestList{}
+var _ ApprovalRequestObjList = &ApprovalRequestList{}
+
+// UpdateRunSpecGetterSetter offers the functionality to work with UpdateRunSpec.
+// +kubebuilder:object:generate=false
+type UpdateRunSpecGetterSetter interface {
+	GetUpdateRunSpec() *UpdateRunSpec
+	SetUpdateRunSpec(UpdateRunSpec)
+}
+
+// UpdateRunStatusGetterSetter offers the functionality to work with UpdateRunStatus.
+// +kubebuilder:object:generate=false
+type UpdateRunStatusGetterSetter interface {
+	GetUpdateRunStatus() *UpdateRunStatus
+	SetUpdateRunStatus(UpdateRunStatus)
+}
+
+// UpdateRunObj offers the functionality to work with staged update run objects, including ClusterStagedUpdateRuns and StagedUpdateRuns.
+// +kubebuilder:object:generate=false
+type UpdateRunObj interface {
+	apis.ConditionedObj
+	UpdateRunSpecGetterSetter
+	UpdateRunStatusGetterSetter
+}
+
+// UpdateRunListItemGetter offers the functionality to get a list of UpdateRunObj items.
+// +kubebuilder:object:generate=false
+type UpdateRunListItemGetter interface {
+	GetUpdateRunObjs() []UpdateRunObj
+}
+
+// UpdateRunObjList offers the functionality to work with staged update run object list.
+// +kubebuilder:object:generate=false
+type UpdateRunObjList interface {
+	client.ObjectList
+	UpdateRunListItemGetter
+}
 
 // +genclient
 // +genclient:Cluster
@@ -49,16 +109,46 @@ type ClusterStagedUpdateRun struct {
 	// The desired state of ClusterStagedUpdateRun. The spec is immutable.
 	// +kubebuilder:validation:Required
 	// +kubebuilder:validation:XValidation:rule="self == oldSelf",message="The spec field is immutable"
-	Spec StagedUpdateRunSpec `json:"spec"`
+	Spec UpdateRunSpec `json:"spec"`
 
 	// The observed status of ClusterStagedUpdateRun.
 	// +kubebuilder:validation:Optional
-	Status StagedUpdateRunStatus `json:"status,omitempty"`
+	Status UpdateRunStatus `json:"status,omitempty"`
 }
 
-// StagedUpdateRunSpec defines the desired rollout strategy and the snapshot indices of the resources to be updated.
+// GetCondition returns the condition of the ClusterStagedUpdateRun.
+func (c *ClusterStagedUpdateRun) GetCondition(conditionType string) *metav1.Condition {
+	return meta.FindStatusCondition(c.Status.Conditions, conditionType)
+}
+
+// SetConditions sets the conditions of the ClusterStagedUpdateRun.
+func (c *ClusterStagedUpdateRun) SetConditions(conditions ...metav1.Condition) {
+	c.Status.Conditions = conditions
+}
+
+// GetUpdateRunSpec returns the staged update run spec.
+func (c *ClusterStagedUpdateRun) GetUpdateRunSpec() *UpdateRunSpec {
+	return &c.Spec
+}
+
+// SetUpdateRunSpec sets the staged update run spec.
+func (c *ClusterStagedUpdateRun) SetUpdateRunSpec(spec UpdateRunSpec) {
+	c.Spec = spec
+}
+
+// GetUpdateRunStatus returns the staged update run status.
+func (c *ClusterStagedUpdateRun) GetUpdateRunStatus() *UpdateRunStatus {
+	return &c.Status
+}
+
+// SetUpdateRunStatus sets the staged update run status.
+func (c *ClusterStagedUpdateRun) SetUpdateRunStatus(status UpdateRunStatus) {
+	c.Status = status
+}
+
+// UpdateRunSpec defines the desired rollout strategy and the snapshot indices of the resources to be updated.
 // It specifies a stage-by-stage update process across selected clusters for the given ResourcePlacement object.
-type StagedUpdateRunSpec struct {
+type UpdateRunSpec struct {
 	// PlacementName is the name of placement that this update run is applied to.
 	// There can be multiple active update runs for each placement, but
 	// it's up to the DevOps team to ensure they don't conflict with each other.
@@ -79,6 +169,33 @@ type StagedUpdateRunSpec struct {
 	StagedUpdateStrategyName string `json:"stagedRolloutStrategyName"`
 }
 
+// UpdateStrategySpecGetterSetter offers the functionality to work with UpdateStrategySpec.
+// +kubebuilder:object:generate=false
+type UpdateStrategySpecGetterSetter interface {
+	GetUpdateStrategySpec() *UpdateStrategySpec
+	SetUpdateStrategySpec(UpdateStrategySpec)
+}
+
+// UpdateStrategyObj offers the functionality to work with staged update strategy objects, including ClusterStagedUpdateStrategies and StagedUpdateStrategies.
+// +kubebuilder:object:generate=false
+type UpdateStrategyObj interface {
+	client.Object
+	UpdateStrategySpecGetterSetter
+}
+
+// UpdateStrategyListItemGetter offers the functionality to get a list of UpdateStrategyObj items.
+// +kubebuilder:object:generate=false
+type UpdateStrategyListItemGetter interface {
+	GetUpdateStrategyObjs() []UpdateStrategyObj
+}
+
+// UpdateStrategyObjList offers the functionality to work with staged update strategy object list.
+// +kubebuilder:object:generate=false
+type UpdateStrategyObjList interface {
+	client.ObjectList
+	UpdateStrategyListItemGetter
+}
+
 // +genclient
 // +genclient:cluster
 // +kubebuilder:object:root=true
@@ -95,11 +212,21 @@ type ClusterStagedUpdateStrategy struct {
 
 	// The desired state of ClusterStagedUpdateStrategy.
 	// +kubebuilder:validation:Required
-	Spec StagedUpdateStrategySpec `json:"spec"`
+	Spec UpdateStrategySpec `json:"spec"`
 }
 
-// StagedUpdateStrategySpec defines the desired state of the StagedUpdateStrategy.
-type StagedUpdateStrategySpec struct {
+// GetUpdateStrategySpec returns the staged update strategy spec.
+func (c *ClusterStagedUpdateStrategy) GetUpdateStrategySpec() *UpdateStrategySpec {
+	return &c.Spec
+}
+
+// SetUpdateStrategySpec sets the staged update strategy spec.
+func (c *ClusterStagedUpdateStrategy) SetUpdateStrategySpec(spec UpdateStrategySpec) {
+	c.Spec = spec
+}
+
+// UpdateStrategySpec defines the desired state of the StagedUpdateStrategy.
+type UpdateStrategySpec struct {
 	// Stage specifies the configuration for each update stage.
 	// +kubebuilder:validation:MaxItems=31
 	// +kubebuilder:validation:Required
@@ -113,6 +240,15 @@ type ClusterStagedUpdateStrategyList struct {
 	metav1.TypeMeta `json:",inline"`
 	metav1.ListMeta `json:"metadata,omitempty"`
 	Items           []ClusterStagedUpdateStrategy `json:"items"`
+}
+
+// GetUpdateStrategyObjs returns the update strategy objects in the list.
+func (c *ClusterStagedUpdateStrategyList) GetUpdateStrategyObjs() []UpdateStrategyObj {
+	objs := make([]UpdateStrategyObj, len(c.Items))
+	for i := range c.Items {
+		objs[i] = &c.Items[i]
+	}
+	return objs
 }
 
 // StageConfig describes a single update stage.
@@ -162,8 +298,8 @@ type AfterStageTask struct {
 	WaitTime *metav1.Duration `json:"waitTime,omitempty"`
 }
 
-// StagedUpdateRunStatus defines the observed state of the ClusterStagedUpdateRun.
-type StagedUpdateRunStatus struct {
+// UpdateRunStatus defines the observed state of the ClusterStagedUpdateRun.
+type UpdateRunStatus struct {
 	// PolicySnapShotIndexUsed records the policy snapshot index of the ClusterResourcePlacement (CRP) that
 	// the update run is based on. The index represents the latest policy snapshot at the start of the update run.
 	// If a newer policy snapshot is detected after the run starts, the staged update run is abandoned.
@@ -185,13 +321,13 @@ type StagedUpdateRunStatus struct {
 	// +kubebuilder:validation:Optional
 	ApplyStrategy *ApplyStrategy `json:"appliedStrategy,omitempty"`
 
-	// StagedUpdateStrategySnapshot is the snapshot of the StagedUpdateStrategy used for the update run.
+	// UpdateStrategySnapshot is the snapshot of the UpdateStrategy used for the update run.
 	// The snapshot is immutable during the update run.
 	// The strategy is applied to the list of clusters scheduled by the CRP according to the current policy.
 	// The update run fails to initialize if the strategy fails to produce a valid list of stages where each selected
 	// cluster is included in exactly one stage.
 	// +kubebuilder:validation:Optional
-	StagedUpdateStrategySnapshot *StagedUpdateStrategySpec `json:"stagedUpdateStrategySnapshot,omitempty"`
+	UpdateStrategySnapshot *UpdateStrategySpec `json:"stagedUpdateStrategySnapshot,omitempty"`
 
 	// StagesStatus lists the current updating status of each stage.
 	// The list is empty if the update run is not started or failed to initialize.
@@ -412,6 +548,50 @@ type ClusterStagedUpdateRunList struct {
 	Items           []ClusterStagedUpdateRun `json:"items"`
 }
 
+// GetUpdateRunObjs returns the update run objects in the list.
+func (c *ClusterStagedUpdateRunList) GetUpdateRunObjs() []UpdateRunObj {
+	objs := make([]UpdateRunObj, len(c.Items))
+	for i := range c.Items {
+		objs[i] = &c.Items[i]
+	}
+	return objs
+}
+
+// ApprovalRequestSpecGetterSetter offers the functionality to work with ApprovalRequestSpec.
+// +kubebuilder:object:generate=false
+type ApprovalRequestSpecGetterSetter interface {
+	GetApprovalRequestSpec() *ApprovalRequestSpec
+	SetApprovalRequestSpec(ApprovalRequestSpec)
+}
+
+// ApprovalRequestStatusGetterSetter offers the functionality to work with ApprovalRequestStatus.
+// +kubebuilder:object:generate=false
+type ApprovalRequestStatusGetterSetter interface {
+	GetApprovalRequestStatus() *ApprovalRequestStatus
+	SetApprovalRequestStatus(ApprovalRequestStatus)
+}
+
+// ApprovalRequestObj offers the functionality to work with approval request objects, including ClusterApprovalRequests and ApprovalRequests.
+// +kubebuilder:object:generate=false
+type ApprovalRequestObj interface {
+	apis.ConditionedObj
+	ApprovalRequestSpecGetterSetter
+	ApprovalRequestStatusGetterSetter
+}
+
+// ApprovalRequestListItemGetter offers the functionality to get a list of ApprovalRequestObj items.
+// +kubebuilder:object:generate=false
+type ApprovalRequestListItemGetter interface {
+	GetApprovalRequestObjs() []ApprovalRequestObj
+}
+
+// ApprovalRequestObjList offers the functionality to work with approval request object list.
+// +kubebuilder:object:generate=false
+type ApprovalRequestObjList interface {
+	client.ObjectList
+	ApprovalRequestListItemGetter
+}
+
 // +genclient
 // +genclient:Cluster
 // +kubebuilder:object:root=true
@@ -441,6 +621,36 @@ type ClusterApprovalRequest struct {
 	// The observed state of ClusterApprovalRequest.
 	// +kubebuilder:validation:Optional
 	Status ApprovalRequestStatus `json:"status,omitempty"`
+}
+
+// GetCondition returns the condition of the ClusterApprovalRequest.
+func (c *ClusterApprovalRequest) GetCondition(conditionType string) *metav1.Condition {
+	return meta.FindStatusCondition(c.Status.Conditions, conditionType)
+}
+
+// SetConditions sets the conditions of the ClusterApprovalRequest.
+func (c *ClusterApprovalRequest) SetConditions(conditions ...metav1.Condition) {
+	c.Status.Conditions = conditions
+}
+
+// GetApprovalRequestSpec returns the approval request spec.
+func (c *ClusterApprovalRequest) GetApprovalRequestSpec() *ApprovalRequestSpec {
+	return &c.Spec
+}
+
+// SetApprovalRequestSpec sets the approval request spec.
+func (c *ClusterApprovalRequest) SetApprovalRequestSpec(spec ApprovalRequestSpec) {
+	c.Spec = spec
+}
+
+// GetApprovalRequestStatus returns the approval request status.
+func (c *ClusterApprovalRequest) GetApprovalRequestStatus() *ApprovalRequestStatus {
+	return &c.Status
+}
+
+// SetApprovalRequestStatus sets the approval request status.
+func (c *ClusterApprovalRequest) SetApprovalRequestStatus(status ApprovalRequestStatus) {
+	c.Status = status
 }
 
 // ApprovalRequestSpec defines the desired state of the update run approval request.
@@ -492,8 +702,224 @@ type ClusterApprovalRequestList struct {
 	Items           []ClusterApprovalRequest `json:"items"`
 }
 
+// GetApprovalRequestObjs returns the approval request objects in the list.
+func (c *ClusterApprovalRequestList) GetApprovalRequestObjs() []ApprovalRequestObj {
+	objs := make([]ApprovalRequestObj, len(c.Items))
+	for i := range c.Items {
+		objs[i] = &c.Items[i]
+	}
+	return objs
+}
+
+// +genclient
+// +kubebuilder:object:root=true
+// +kubebuilder:subresource:status
+// +kubebuilder:resource:scope=Namespaced,categories={fleet,fleet-placement},shortName=sur
+// +k8s:deepcopy-gen:interfaces=k8s.io/apimachinery/pkg/runtime.Object
+// +kubebuilder:storageversion
+// +kubebuilder:printcolumn:JSONPath=`.spec.placementName`,name="Placement",type=string
+// +kubebuilder:printcolumn:JSONPath=`.spec.resourceSnapshotIndex`,name="Resource-Snapshot-Index",type=string
+// +kubebuilder:printcolumn:JSONPath=`.status.policySnapshotIndexUsed`,name="Policy-Snapshot-Index",type=string
+// +kubebuilder:printcolumn:JSONPath=`.status.conditions[?(@.type=="Initialized")].status`,name="Initialized",type=string
+// +kubebuilder:printcolumn:JSONPath=`.status.conditions[?(@.type=="Succeeded")].status`,name="Succeeded",type=string
+// +kubebuilder:printcolumn:JSONPath=`.metadata.creationTimestamp`,name="Age",type=date
+// +kubebuilder:printcolumn:JSONPath=`.spec.stagedRolloutStrategyName`,name="Strategy",priority=1,type=string
+// +kubebuilder:validation:XValidation:rule="size(self.metadata.name) < 128",message="metadata.name max length is 127"
+
+// StagedUpdateRun represents a stage by stage update process that applies ResourcePlacement
+// selected resources to specified clusters.
+// Resources from unselected clusters are removed after all stages in the update strategy are completed.
+// Each StagedUpdateRun object corresponds to a single release of a specific resource version.
+// The release is abandoned if the StagedUpdateRun object is deleted or the scheduling decision changes.
+// The name of the StagedUpdateRun must conform to RFC 1123.
+type StagedUpdateRun struct {
+	metav1.TypeMeta   `json:",inline"`
+	metav1.ObjectMeta `json:"metadata,omitempty"`
+
+	// The desired state of StagedUpdateRun. The spec is immutable.
+	// +kubebuilder:validation:Required
+	// +kubebuilder:validation:XValidation:rule="self == oldSelf",message="The spec field is immutable"
+	Spec UpdateRunSpec `json:"spec"`
+
+	// The observed status of StagedUpdateRun.
+	// +kubebuilder:validation:Optional
+	Status UpdateRunStatus `json:"status,omitempty"`
+}
+
+// GetCondition returns the condition of the StagedUpdateRun.
+func (s *StagedUpdateRun) GetCondition(conditionType string) *metav1.Condition {
+	return meta.FindStatusCondition(s.Status.Conditions, conditionType)
+}
+
+// SetConditions sets the conditions of the StagedUpdateRun.
+func (s *StagedUpdateRun) SetConditions(conditions ...metav1.Condition) {
+	s.Status.Conditions = conditions
+}
+
+// GetUpdateRunSpec returns the staged update run spec.
+func (s *StagedUpdateRun) GetUpdateRunSpec() *UpdateRunSpec {
+	return &s.Spec
+}
+
+// SetUpdateRunSpec sets the staged update run spec.
+func (s *StagedUpdateRun) SetUpdateRunSpec(spec UpdateRunSpec) {
+	s.Spec = spec
+}
+
+// GetUpdateRunStatus returns the staged update run status.
+func (s *StagedUpdateRun) GetUpdateRunStatus() *UpdateRunStatus {
+	return &s.Status
+}
+
+// SetUpdateRunStatus sets the staged update run status.
+func (s *StagedUpdateRun) SetUpdateRunStatus(status UpdateRunStatus) {
+	s.Status = status
+}
+
+// StagedUpdateRunList contains a list of StagedUpdateRun.
+// +kubebuilder:resource:scope=Namespaced
+// +k8s:deepcopy-gen:interfaces=k8s.io/apimachinery/pkg/runtime.Object
+type StagedUpdateRunList struct {
+	metav1.TypeMeta `json:",inline"`
+	metav1.ListMeta `json:"metadata,omitempty"`
+	Items           []StagedUpdateRun `json:"items"`
+}
+
+// GetUpdateRunObjs returns the update run objects in the list.
+func (s *StagedUpdateRunList) GetUpdateRunObjs() []UpdateRunObj {
+	objs := make([]UpdateRunObj, len(s.Items))
+	for i := range s.Items {
+		objs[i] = &s.Items[i]
+	}
+	return objs
+}
+
+// +genclient
+// +kubebuilder:object:root=true
+// +kubebuilder:resource:scope=Namespaced,categories={fleet,fleet-placement},shortName=sus
+// +k8s:deepcopy-gen:interfaces=k8s.io/apimachinery/pkg/runtime.Object
+// +kubebuilder:storageversion
+
+// StagedUpdateStrategy defines a reusable strategy that specifies the stages and the sequence
+// in which the selected cluster resources will be updated on the member clusters.
+type StagedUpdateStrategy struct {
+	metav1.TypeMeta   `json:",inline"`
+	metav1.ObjectMeta `json:"metadata,omitempty"`
+
+	// The desired state of StagedUpdateStrategy.
+	// +kubebuilder:validation:Required
+	Spec UpdateStrategySpec `json:"spec"`
+}
+
+// GetUpdateStrategySpec returns the staged update strategy spec.
+func (s *StagedUpdateStrategy) GetUpdateStrategySpec() *UpdateStrategySpec {
+	return &s.Spec
+}
+
+// SetUpdateStrategySpec sets the staged update strategy spec.
+func (s *StagedUpdateStrategy) SetUpdateStrategySpec(spec UpdateStrategySpec) {
+	s.Spec = spec
+}
+
+// StagedUpdateStrategyList contains a list of StagedUpdateStrategy.
+// +kubebuilder:resource:scope=Namespaced
+// +k8s:deepcopy-gen:interfaces=k8s.io/apimachinery/pkg/runtime.Object
+type StagedUpdateStrategyList struct {
+	metav1.TypeMeta `json:",inline"`
+	metav1.ListMeta `json:"metadata,omitempty"`
+	Items           []StagedUpdateStrategy `json:"items"`
+}
+
+// GetUpdateStrategyObjs returns the update strategy objects in the list.
+func (s *StagedUpdateStrategyList) GetUpdateStrategyObjs() []UpdateStrategyObj {
+	objs := make([]UpdateStrategyObj, len(s.Items))
+	for i := range s.Items {
+		objs[i] = &s.Items[i]
+	}
+	return objs
+}
+
+// +genclient
+// +kubebuilder:object:root=true
+// +kubebuilder:subresource:status
+// +kubebuilder:resource:scope=Namespaced,categories={fleet,fleet-placement},shortName=areq
+// +k8s:deepcopy-gen:interfaces=k8s.io/apimachinery/pkg/runtime.Object
+// +kubebuilder:storageversion
+// +kubebuilder:printcolumn:JSONPath=`.spec.parentStageRollout`,name="Update-Run",type=string
+// +kubebuilder:printcolumn:JSONPath=`.spec.targetStage`,name="Stage",type=string
+// +kubebuilder:printcolumn:JSONPath=`.status.conditions[?(@.type=="Approved")].status`,name="Approved",type=string
+// +kubebuilder:printcolumn:JSONPath=`.metadata.creationTimestamp`,name="Age",type=date
+
+// ApprovalRequest defines a request for user approval for staged update run.
+// The request object MUST have the following labels:
+//   - `TargetUpdateRun`: Points to the staged update run that this approval request is for.
+//   - `TargetStage`: The name of the stage that this approval request is for.
+//   - `IsLatestUpdateRunApproval`: Indicates whether this approval request is the latest one related to this update run.
+type ApprovalRequest struct {
+	metav1.TypeMeta   `json:",inline"`
+	metav1.ObjectMeta `json:"metadata,omitempty"`
+
+	// The desired state of ApprovalRequest.
+	// +kubebuilder:validation:XValidation:rule="self == oldSelf",message="The spec field is immutable"
+	// +kubebuilder:validation:Required
+	Spec ApprovalRequestSpec `json:"spec"`
+
+	// The observed state of ApprovalRequest.
+	// +kubebuilder:validation:Optional
+	Status ApprovalRequestStatus `json:"status,omitempty"`
+}
+
+// GetCondition returns the condition of the ApprovalRequest.
+func (a *ApprovalRequest) GetCondition(conditionType string) *metav1.Condition {
+	return meta.FindStatusCondition(a.Status.Conditions, conditionType)
+}
+
+// SetConditions sets the conditions of the ApprovalRequest.
+func (a *ApprovalRequest) SetConditions(conditions ...metav1.Condition) {
+	a.Status.Conditions = conditions
+}
+
+// GetApprovalRequestSpec returns the approval request spec.
+func (a *ApprovalRequest) GetApprovalRequestSpec() *ApprovalRequestSpec {
+	return &a.Spec
+}
+
+// SetApprovalRequestSpec sets the approval request spec.
+func (a *ApprovalRequest) SetApprovalRequestSpec(spec ApprovalRequestSpec) {
+	a.Spec = spec
+}
+
+// GetApprovalRequestStatus returns the approval request status.
+func (a *ApprovalRequest) GetApprovalRequestStatus() *ApprovalRequestStatus {
+	return &a.Status
+}
+
+// SetApprovalRequestStatus sets the approval request status.
+func (a *ApprovalRequest) SetApprovalRequestStatus(status ApprovalRequestStatus) {
+	a.Status = status
+}
+
+// ApprovalRequestList contains a list of ApprovalRequest.
+// +kubebuilder:resource:scope=Namespaced
+// +k8s:deepcopy-gen:interfaces=k8s.io/apimachinery/pkg/runtime.Object
+type ApprovalRequestList struct {
+	metav1.TypeMeta `json:",inline"`
+	metav1.ListMeta `json:"metadata,omitempty"`
+	Items           []ApprovalRequest `json:"items"`
+}
+
+// GetApprovalRequestObjs returns the approval request objects in the list.
+func (a *ApprovalRequestList) GetApprovalRequestObjs() []ApprovalRequestObj {
+	objs := make([]ApprovalRequestObj, len(a.Items))
+	for i := range a.Items {
+		objs[i] = &a.Items[i]
+	}
+	return objs
+}
+
 func init() {
 	SchemeBuilder.Register(
 		&ClusterStagedUpdateRun{}, &ClusterStagedUpdateRunList{}, &ClusterStagedUpdateStrategy{}, &ClusterStagedUpdateStrategyList{}, &ClusterApprovalRequest{}, &ClusterApprovalRequestList{},
+		&StagedUpdateRun{}, &StagedUpdateRunList{}, &StagedUpdateStrategy{}, &StagedUpdateStrategyList{}, &ApprovalRequest{}, &ApprovalRequestList{},
 	)
 }

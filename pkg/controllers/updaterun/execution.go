@@ -296,7 +296,7 @@ func (r *Reconciler) executeDeleteStage(
 func (r *Reconciler) checkAfterStageTasksStatus(ctx context.Context, updatingStageIndex int, updateRun *placementv1beta1.ClusterStagedUpdateRun) (bool, time.Duration, error) {
 	updateRunRef := klog.KObj(updateRun)
 	updatingStageStatus := &updateRun.Status.StagesStatus[updatingStageIndex]
-	updatingStage := &updateRun.Status.StagedUpdateStrategySnapshot.Stages[updatingStageIndex]
+	updatingStage := &updateRun.Status.UpdateStrategySnapshot.Stages[updatingStageIndex]
 	if updatingStage.AfterStageTasks == nil {
 		klog.V(2).InfoS("There is no after stage task for this stage", "stage", updatingStage.Name, "clusterStagedUpdateRun", updateRunRef)
 		return true, 0, nil

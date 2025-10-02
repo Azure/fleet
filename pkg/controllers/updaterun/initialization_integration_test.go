@@ -875,12 +875,12 @@ func generateSucceededInitializationStatus(
 	policySnapshot *placementv1beta1.ClusterSchedulingPolicySnapshot,
 	updateStrategy *placementv1beta1.ClusterStagedUpdateStrategy,
 	clusterResourceOverride *placementv1beta1.ClusterResourceOverrideSnapshot,
-) *placementv1beta1.StagedUpdateRunStatus {
-	status := &placementv1beta1.StagedUpdateRunStatus{
-		PolicySnapshotIndexUsed:      policySnapshot.Labels[placementv1beta1.PolicyIndexLabel],
-		PolicyObservedClusterCount:   10,
-		ApplyStrategy:                crp.Spec.Strategy.ApplyStrategy.DeepCopy(),
-		StagedUpdateStrategySnapshot: &updateStrategy.Spec,
+) *placementv1beta1.UpdateRunStatus {
+	status := &placementv1beta1.UpdateRunStatus{
+		PolicySnapshotIndexUsed:    policySnapshot.Labels[placementv1beta1.PolicyIndexLabel],
+		PolicyObservedClusterCount: 10,
+		ApplyStrategy:              crp.Spec.Strategy.ApplyStrategy.DeepCopy(),
+		UpdateStrategySnapshot:     &updateStrategy.Spec,
 		StagesStatus: []placementv1beta1.StageUpdatingStatus{
 			{
 				StageName: "stage1",
@@ -935,12 +935,12 @@ func generateSucceededInitializationStatusForSmallClusters(
 	updateRun *placementv1beta1.ClusterStagedUpdateRun,
 	policySnapshot *placementv1beta1.ClusterSchedulingPolicySnapshot,
 	updateStrategy *placementv1beta1.ClusterStagedUpdateStrategy,
-) *placementv1beta1.StagedUpdateRunStatus {
-	status := &placementv1beta1.StagedUpdateRunStatus{
-		PolicySnapshotIndexUsed:      policySnapshot.Labels[placementv1beta1.PolicyIndexLabel],
-		PolicyObservedClusterCount:   3,
-		ApplyStrategy:                crp.Spec.Strategy.ApplyStrategy.DeepCopy(),
-		StagedUpdateStrategySnapshot: &updateStrategy.Spec,
+) *placementv1beta1.UpdateRunStatus {
+	status := &placementv1beta1.UpdateRunStatus{
+		PolicySnapshotIndexUsed:    policySnapshot.Labels[placementv1beta1.PolicyIndexLabel],
+		PolicyObservedClusterCount: 3,
+		ApplyStrategy:              crp.Spec.Strategy.ApplyStrategy.DeepCopy(),
+		UpdateStrategySnapshot:     &updateStrategy.Spec,
 		StagesStatus: []placementv1beta1.StageUpdatingStatus{
 			{
 				StageName: "stage1",
@@ -976,8 +976,8 @@ func generateSucceededInitializationStatusForSmallClusters(
 
 func generateExecutionStartedStatus(
 	updateRun *placementv1beta1.ClusterStagedUpdateRun,
-	initialized *placementv1beta1.StagedUpdateRunStatus,
-) *placementv1beta1.StagedUpdateRunStatus {
+	initialized *placementv1beta1.UpdateRunStatus,
+) *placementv1beta1.UpdateRunStatus {
 	// Mark updateRun execution has started.
 	initialized.Conditions = append(initialized.Conditions, generateTrueCondition(updateRun, placementv1beta1.StagedUpdateRunConditionProgressing))
 	// Mark updateRun 1st stage has started.

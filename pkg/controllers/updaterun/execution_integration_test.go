@@ -45,7 +45,7 @@ var _ = Describe("UpdateRun execution tests - double stages", func() {
 	var unscheduledClusters []*clusterv1beta1.MemberCluster
 	var resourceSnapshot *placementv1beta1.ClusterResourceSnapshot
 	var clusterResourceOverride *placementv1beta1.ClusterResourceOverrideSnapshot
-	var wantStatus *placementv1beta1.StagedUpdateRunStatus
+	var wantStatus *placementv1beta1.UpdateRunStatus
 	var numTargetClusters int
 	var numUnscheduledClusters int
 
@@ -586,7 +586,7 @@ var _ = Describe("UpdateRun execution tests - single stage", func() {
 	var resourceBindings []*placementv1beta1.ClusterResourceBinding
 	var targetClusters []*clusterv1beta1.MemberCluster
 	var resourceSnapshot *placementv1beta1.ClusterResourceSnapshot
-	var wantStatus *placementv1beta1.StagedUpdateRunStatus
+	var wantStatus *placementv1beta1.UpdateRunStatus
 
 	BeforeEach(OncePerOrdered, func() {
 		testUpdateRunName = "updaterun-" + utils.RandStr()

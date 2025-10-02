@@ -336,7 +336,7 @@ func generateTestClusterStagedUpdateRun() *placementv1beta1.ClusterStagedUpdateR
 		ObjectMeta: metav1.ObjectMeta{
 			Name: testUpdateRunName,
 		},
-		Spec: placementv1beta1.StagedUpdateRunSpec{
+		Spec: placementv1beta1.UpdateRunSpec{
 			PlacementName:            testCRPName,
 			ResourceSnapshotIndex:    testResourceSnapshotIndex,
 			StagedUpdateStrategyName: testUpdateStrategyName,
@@ -493,7 +493,7 @@ func generateTestClusterStagedUpdateStrategy() *placementv1beta1.ClusterStagedUp
 		ObjectMeta: metav1.ObjectMeta{
 			Name: testUpdateStrategyName,
 		},
-		Spec: placementv1beta1.StagedUpdateStrategySpec{
+		Spec: placementv1beta1.UpdateStrategySpec{
 			Stages: []placementv1beta1.StageConfig{
 				{
 					Name: "stage1",
@@ -547,7 +547,7 @@ func generateTestClusterStagedUpdateStrategyWithSingleStage(afterStageTasks []pl
 		ObjectMeta: metav1.ObjectMeta{
 			Name: testUpdateStrategyName,
 		},
-		Spec: placementv1beta1.StagedUpdateStrategySpec{
+		Spec: placementv1beta1.UpdateStrategySpec{
 			Stages: []placementv1beta1.StageConfig{
 				{
 					Name:            "stage1",

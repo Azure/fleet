@@ -103,7 +103,7 @@ func TestIsBindingSyncedWithClusterStatus(t *testing.T) {
 			name:                 "isBindingSyncedWithClusterStatus should return false if binding and updateRun have different applyStrategy",
 			resourceSnapshotName: "test-1-snapshot",
 			updateRun: &placementv1beta1.ClusterStagedUpdateRun{
-				Status: placementv1beta1.StagedUpdateRunStatus{
+				Status: placementv1beta1.UpdateRunStatus{
 					ApplyStrategy: &placementv1beta1.ApplyStrategy{
 						Type: placementv1beta1.ApplyStrategyTypeClientSideApply,
 					},
@@ -135,7 +135,7 @@ func TestIsBindingSyncedWithClusterStatus(t *testing.T) {
 			name:                 "isBindingSyncedWithClusterStatus should return true if resourceSnapshot, applyStrategy, and override lists are all deep equal",
 			resourceSnapshotName: "test-1-snapshot",
 			updateRun: &placementv1beta1.ClusterStagedUpdateRun{
-				Status: placementv1beta1.StagedUpdateRunStatus{
+				Status: placementv1beta1.UpdateRunStatus{
 					ApplyStrategy: &placementv1beta1.ApplyStrategy{
 						Type: placementv1beta1.ApplyStrategyTypeReportDiff,
 					},

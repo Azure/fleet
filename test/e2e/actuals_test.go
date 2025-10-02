@@ -2016,7 +2016,7 @@ func updateRunStatusSucceededActual(
 	wantPolicyIndex string,
 	wantClusterCount int,
 	wantApplyStrategy *placementv1beta1.ApplyStrategy,
-	wantStrategySpec *placementv1beta1.StagedUpdateStrategySpec,
+	wantStrategySpec *placementv1beta1.UpdateStrategySpec,
 	wantSelectedClusters [][]string,
 	wantUnscheduledClusters []string,
 	wantCROs map[string][]string,
@@ -2028,11 +2028,11 @@ func updateRunStatusSucceededActual(
 			return err
 		}
 
-		wantStatus := placementv1beta1.StagedUpdateRunStatus{
-			PolicySnapshotIndexUsed:      wantPolicyIndex,
-			PolicyObservedClusterCount:   wantClusterCount,
-			ApplyStrategy:                wantApplyStrategy.DeepCopy(),
-			StagedUpdateStrategySnapshot: wantStrategySpec,
+		wantStatus := placementv1beta1.UpdateRunStatus{
+			PolicySnapshotIndexUsed:    wantPolicyIndex,
+			PolicyObservedClusterCount: wantClusterCount,
+			ApplyStrategy:              wantApplyStrategy.DeepCopy(),
+			UpdateStrategySnapshot:     wantStrategySpec,
 		}
 		stagesStatus := make([]placementv1beta1.StageUpdatingStatus, len(wantStrategySpec.Stages))
 		for i, stage := range wantStrategySpec.Stages {
