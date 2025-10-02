@@ -1526,8 +1526,15 @@ func customizedPlacementStatusUpdatedActual(
 		}
 
 		wantStatus := buildWantPlacementStatus(placementKey, placement.GetGeneration(), wantSelectedResourceIdentifiers, wantSelectedClusters, wantUnselectedClusters, wantObservedResourceIndex, resourceIsTrackable)
-		if diff := cmp.Diff(placement.GetPlacementStatus(), wantStatus, placementStatusCmpOptions...); diff != "" {
-			return fmt.Errorf("Placement status diff (-got, +want): %s", diff)
+		if wantObservedResourceIndex == "0" {
+			// When the observedResourceIndex is "0", it means the placement is just created and the placement controller
+			if diff := cmp.Diff(placement.GetPlacementStatus(), wantStatus, placementStatusCmpOptionsOnCreate...); diff != "" {
+				return fmt.Errorf("Placement status diff (-got, +want): %s", diff)
+			}
+		} else {
+			if diff := cmp.Diff(placement.GetPlacementStatus(), wantStatus, placementStatusCmpOptions...); diff != "" {
+				return fmt.Errorf("Placement status diff (-got, +want): %s", diff)
+			}
 		}
 		return nil
 	}

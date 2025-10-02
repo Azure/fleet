@@ -219,9 +219,11 @@ var (
 			// disappear from the status of the MemberCluster object.
 			c.Type == string(clusterv1beta1.ConditionTypeClusterPropertyProviderStarted)
 	})
-	ignoreTimeTypeFields                                  = cmpopts.IgnoreTypes(time.Time{}, metav1.Time{})
-	ignorePlacementStatusDriftedPlacementsTimestampFields = cmpopts.IgnoreFields(placementv1beta1.DriftedResourcePlacement{}, "ObservationTime", "FirstDriftedObservedTime")
-	ignorePlacementStatusDiffedPlacementsTimestampFields  = cmpopts.IgnoreFields(placementv1beta1.DiffedResourcePlacement{}, "ObservationTime", "FirstDiffedObservedTime")
+	ignoreTimeTypeFields                                      = cmpopts.IgnoreTypes(time.Time{}, metav1.Time{})
+	ignorePlacementStatusDriftedPlacementsTimestampFields     = cmpopts.IgnoreFields(placementv1beta1.DriftedResourcePlacement{}, "ObservationTime", "FirstDriftedObservedTime")
+	ignorePlacementStatusDiffedPlacementsTimestampFields      = cmpopts.IgnoreFields(placementv1beta1.DiffedResourcePlacement{}, "ObservationTime", "FirstDiffedObservedTime")
+	ignorePerClusterPlacementStatusObservedResourceIndexField = cmpopts.IgnoreFields(placementv1beta1.PerClusterPlacementStatus{}, "ObservedResourceIndex")
+	ignorePlacementStatusObservedResourceIndexField           = cmpopts.IgnoreFields(placementv1beta1.PlacementStatus{}, "ObservedResourceIndex")
 
 	placementStatusCmpOptions = cmp.Options{
 		cmpopts.SortSlices(lessFuncCondition),
@@ -233,6 +235,21 @@ var (
 		utils.IgnoreConditionLTTAndMessageFields,
 		ignorePlacementStatusDriftedPlacementsTimestampFields,
 		ignorePlacementStatusDiffedPlacementsTimestampFields,
+		cmpopts.EquateEmpty(),
+	}
+
+	placementStatusCmpOptionsOnCreate = cmp.Options{
+		cmpopts.SortSlices(lessFuncCondition),
+		cmpopts.SortSlices(lessFuncPlacementStatus),
+		cmpopts.SortSlices(utils.LessFuncResourceIdentifier),
+		cmpopts.SortSlices(utils.LessFuncFailedResourcePlacements),
+		cmpopts.SortSlices(utils.LessFuncDiffedResourcePlacements),
+		cmpopts.SortSlices(utils.LessFuncDriftedResourcePlacements),
+		utils.IgnoreConditionLTTAndMessageFields,
+		ignorePlacementStatusDriftedPlacementsTimestampFields,
+		ignorePlacementStatusDiffedPlacementsTimestampFields,
+		ignorePlacementStatusObservedResourceIndexField,
+		ignorePerClusterPlacementStatusObservedResourceIndexField,
 		cmpopts.EquateEmpty(),
 	}
 

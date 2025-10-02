@@ -652,7 +652,11 @@ func ensureMemberClusterAndRelatedResourcesDeletion(memberClusterName string) {
 	Eventually(func() error {
 		ns := corev1.Namespace{}
 		if err := hubClient.Get(ctx, types.NamespacedName{Name: reservedNSName}, &ns); !k8serrors.IsNotFound(err) {
-			return fmt.Errorf("namespace still exists or an unexpected error occurred: %w", err)
+			if err == nil {
+				return fmt.Errorf("work namespace %s still exists on cluster %s: deletion timestamp: %v, current timestamp: %v",
+					ns.Name, memberClusterName, ns.GetDeletionTimestamp(), time.Now())
+			}
+			return fmt.Errorf("an unexpected error occurred: %w", err)
 		}
 		return nil
 	}, eventuallyDuration, eventuallyInterval).Should(Succeed(), "Failed to remove reserved namespace")
