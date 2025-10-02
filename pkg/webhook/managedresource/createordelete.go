@@ -55,7 +55,7 @@ func EnsureVAP(ctx context.Context, c client.Client, isHub bool) error {
 	for _, objectMutator := range objsAndMutators {
 		opResult, err := controllerutil.CreateOrUpdate(ctx, c, objectMutator.obj, objectMutator.mutate)
 		switch {
-		case err == nil, apierrors.IsNotFound(err):
+		case err == nil:
 			// continue
 		case meta.IsNoMatchError(err):
 			klog.Infof("object type %T is not supported in this cluster, continuing", objectMutator.obj)
