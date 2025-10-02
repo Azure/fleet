@@ -10,7 +10,7 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 )
 
-// TODO use a differnt name for binding to simplify the code
+// TODO use a different name for binding to simplify the code
 // and add a migration path
 const resourceName = "aks-fleet-managed-by-arm"
 

@@ -377,17 +377,17 @@ func TestGetVAPWithMutator(t *testing.T) {
 			}
 
 			// Verify mutate function works
-			originalVAP := vap.DeepCopy()
-			expectedVAP := getValidatingAdmissionPolicy(tt.isHub)
+			gotVAP := vap.DeepCopy()
+			wantVAP := getValidatingAdmissionPolicy(tt.isHub)
 			ignoreOpts := cmp.Options{
 				cmpopts.IgnoreFields(metav1.ObjectMeta{}, "ResourceVersion", "ManagedFields", "Generation"),
 			}
-			if diff := cmp.Diff(expectedVAP, vap, ignoreOpts); diff != "" {
+			if diff := cmp.Diff(wantVAP, vap, ignoreOpts); diff != "" {
 				t.Errorf("VAP after mutation mismatch (-want +got):\n%s", diff)
 			}
 
 			vap.Spec = admv1.ValidatingAdmissionPolicySpec{} // Reset spec to empty to test idempotency
-			if diff := cmp.Diff(originalVAP, vap); diff == "" {
+			if diff := cmp.Diff(gotVAP, vap); diff == "" {
 				t.Error("VAP should be different after mutation")
 			}
 
@@ -396,7 +396,7 @@ func TestGetVAPWithMutator(t *testing.T) {
 			if err != nil {
 				t.Errorf("second mutateFunc() = %v, want nil", err)
 			}
-			if diff := cmp.Diff(expectedVAP, vap, ignoreOpts); diff != "" {
+			if diff := cmp.Diff(wantVAP, vap, ignoreOpts); diff != "" {
 				t.Errorf("VAP after second mutation mismatch (-want +got):\n%s", diff)
 			}
 		})

@@ -189,7 +189,6 @@ func checkVAPAndBindingAbsence(c *framework.Cluster) {
 }
 
 var _ = Describe("ValidatingAdmissionPolicy for Managed Resources", Label("managedresource"), Ordered, func() {
-
 	Context("Version-agnostic tests", func() {
 		It("should allow operations on unmanaged namespace for non-system:masters user", func() {
 			unmanagedNS := createUnmanagedNamespace("test-unmanaged-ns")
