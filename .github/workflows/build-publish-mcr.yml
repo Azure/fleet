@@ -19,6 +19,7 @@ env:
   # `public` indicates images to MCR will be publicly available, and will be removed in the final MCR images
   REGISTRY_REPO: public/aks/fleet
   ARC_REGISTRY_REPO: public/microsoft.fleetmember
+  COPA_VERSION: 0.11.1
 
 jobs:
   prepare-variables:
@@ -256,3 +257,293 @@ jobs:
           -t ${{ secrets.AZURE_REGISTRY }}/${{ env.REGISTRY_REPO}}/crd-installer:${{ needs.prepare-variables.outputs.release_tag }} \
           ${{ secrets.AZURE_REGISTRY }}/${{ env.REGISTRY_REPO}}/crd-installer:${{ needs.prepare-variables.outputs.release_tag }}-amd64 \
           ${{ secrets.AZURE_REGISTRY }}/${{ env.REGISTRY_REPO}}/crd-installer:${{ needs.prepare-variables.outputs.release_tag }}-arm64
+
+  # COPA (Copacetic) Vulnerability Patching Job.
+  # This job scans the multi-arch images for OS package vulnerabilities and creates patched versions.
+  # Patched images are pushed to ACR/MCR with '-patched' suffix, coexisting with original images.
+  copa-patch-images:
+    runs-on:
+      labels: [self-hosted, "1ES.Pool=1es-aks-fleet-pool-ubuntu"]
+    needs: [prepare-variables, create-image-manifest-bundle]
+    steps:
+      - uses: actions/checkout@v5
+        with:
+          ref: ${{ needs.prepare-variables.outputs.release_tag }}
+      
+      - name: 'Login to ACR for COPA patching.'
+        # Authenticates with Azure Container Registry to access and push patched images.
+        run: |
+          az login --identity 
+          az acr login -n ${{ secrets.AZURE_REGISTRY }}
+
+      - name: 'Set up Docker Buildx for COPA patching.'
+        # Creates a Docker buildx builder instance required for COPA's multi-platform patching operations.
+        run: |
+          docker buildx create --use --name copa-builder
+          docker buildx inspect --bootstrap
+
+      - name: 'Download and setup COPA CLI.'
+        # Downloads the latest COPA (Copacetic) CLI tool for vulnerability patching.
+        # Uses version ${{ env.COPA_VERSION }} which is the latest stable release.
+        run: |
+          echo "Downloading COPA v${{ env.COPA_VERSION }} (latest stable version) for vulnerability patching."
+          wget https://github.com/project-copacetic/copacetic/releases/download/v${{ env.COPA_VERSION }}/copa_${{ env.COPA_VERSION }}_linux_amd64.tar.gz
+          tar -xzf copa_${{ env.COPA_VERSION }}_linux_amd64.tar.gz
+          chmod +x copa
+          echo "COPA CLI v${{ env.COPA_VERSION }} setup complete."
+
+      # Scan and patch Hub Agent image
+      - name: 'Generate Trivy vulnerability report for hub-agent.'
+        # Scans the hub-agent multi-arch image for OS package vulnerabilities using Trivy scanner.
+        # Only scans for fixable OS vulnerabilities that COPA can actually patch.
+        run: |
+          docker run --rm -v /var/run/docker.sock:/var/run/docker.sock \
+            -v $(pwd):/workspace \
+            aquasecurity/trivy:0.57.0 image \
+            --format json \
+            --output /workspace/hub-agent-report.json \
+            --ignore-unfixed \
+            --vuln-type os \
+            --username ${{ github.actor }} \
+            --password-stdin \
+            ${{ secrets.AZURE_REGISTRY }}/${{ env.REGISTRY_REPO}}/hub-agent:${{ needs.prepare-variables.outputs.release_tag }} <<< "${{ secrets.GITHUB_TOKEN }}"
+        continue-on-error: true
+
+      - name: 'Check vulnerability count for hub-agent.'
+        # Parses the Trivy JSON report to count OS package vulnerabilities.
+        # Sets output variable used to conditionally trigger COPA patching.
+        id: hub_agent_vuln_count
+        run: |
+          if [ -f "hub-agent-report.json" ]; then
+            vuln_count=$(jq 'if .Results then [.Results[] | select(.Class=="os-pkgs" and .Vulnerabilities!=null) | .Vulnerabilities[]] | length else 0 end' hub-agent-report.json)
+            echo "vuln_count=$vuln_count" >> $GITHUB_OUTPUT
+            echo "Found $vuln_count OS package vulnerabilities in hub-agent image."
+          else
+            echo "vuln_count=0" >> $GITHUB_OUTPUT
+            echo "No vulnerability report found for hub-agent."
+          fi
+
+      - name: 'COPA patch hub-agent image.'
+        # Patches the hub-agent image if vulnerabilities were found.
+        # Creates a new patched image with '-patched' suffix alongside the original.
+        if: steps.hub_agent_vuln_count.outputs.vuln_count > 0
+        id: copa_patch_hub_agent
+        run: |
+          echo "Patching hub-agent image with ${{ steps.hub_agent_vuln_count.outputs.vuln_count }} vulnerabilities."
+          ./copa patch \
+            -i ${{ secrets.AZURE_REGISTRY }}/${{ env.REGISTRY_REPO}}/hub-agent:${{ needs.prepare-variables.outputs.release_tag }} \
+            -r hub-agent-report.json \
+            -t ${{ needs.prepare-variables.outputs.release_tag }}-patched
+          echo "copa_patch=true" >> $GITHUB_OUTPUT
+          echo "Successfully created patched hub-agent image."
+
+      - name: 'Push patched hub-agent image.'
+        # Pushes the patched hub-agent image to ACR/MCR if patching was successful.
+        # Patched image uses original tag with '-patched' suffix for easy identification.
+        if: steps.copa_patch_hub_agent.outputs.copa_patch == 'true'
+        run: |
+          echo "Pushing patched hub-agent image to registry."
+          docker push ${{ secrets.AZURE_REGISTRY }}/${{ env.REGISTRY_REPO}}/hub-agent:${{ needs.prepare-variables.outputs.release_tag }}-patched
+          echo "Patched hub-agent image available at: ${{ secrets.AZURE_REGISTRY }}/${{ env.REGISTRY_REPO}}/hub-agent:${{ needs.prepare-variables.outputs.release_tag }}-patched"
+
+      # Scan and patch Member Agent image
+      - name: 'Generate Trivy vulnerability report for member-agent.'
+        # Scans the member-agent multi-arch image for OS package vulnerabilities using Trivy scanner.
+        # Only scans for fixable OS vulnerabilities that COPA can actually patch.
+        run: |
+          docker run --rm -v /var/run/docker.sock:/var/run/docker.sock \
+            -v $(pwd):/workspace \
+            aquasecurity/trivy:0.57.0 image \
+            --format json \
+            --output /workspace/member-agent-report.json \
+            --ignore-unfixed \
+            --vuln-type os \
+            --username ${{ github.actor }} \
+            --password-stdin \
+            ${{ secrets.AZURE_REGISTRY }}/${{ env.REGISTRY_REPO}}/member-agent:${{ needs.prepare-variables.outputs.release_tag }} <<< "${{ secrets.GITHUB_TOKEN }}"
+        continue-on-error: true
+
+      - name: 'Check vulnerability count for member-agent.'
+        # Parses the Trivy JSON report to count OS package vulnerabilities.
+        # Sets output variable used to conditionally trigger COPA patching.
+        id: member_agent_vuln_count
+        run: |
+          if [ -f "member-agent-report.json" ]; then
+            vuln_count=$(jq 'if .Results then [.Results[] | select(.Class=="os-pkgs" and .Vulnerabilities!=null) | .Vulnerabilities[]] | length else 0 end' member-agent-report.json)
+            echo "vuln_count=$vuln_count" >> $GITHUB_OUTPUT
+            echo "Found $vuln_count OS package vulnerabilities in member-agent image."
+          else
+            echo "vuln_count=0" >> $GITHUB_OUTPUT
+            echo "No vulnerability report found for member-agent."
+          fi
+
+      - name: 'COPA patch member-agent image.'
+        # Patches the member-agent image if vulnerabilities were found.
+        # Creates a new patched image with '-patched' suffix alongside the original.
+        if: steps.member_agent_vuln_count.outputs.vuln_count > 0
+        id: copa_patch_member_agent
+        run: |
+          echo "Patching member-agent image with ${{ steps.member_agent_vuln_count.outputs.vuln_count }} vulnerabilities."
+          ./copa patch \
+            -i ${{ secrets.AZURE_REGISTRY }}/${{ env.REGISTRY_REPO}}/member-agent:${{ needs.prepare-variables.outputs.release_tag }} \
+            -r member-agent-report.json \
+            -t ${{ needs.prepare-variables.outputs.release_tag }}-patched
+          echo "copa_patch=true" >> $GITHUB_OUTPUT
+          echo "Successfully created patched member-agent image."
+
+      - name: 'Push patched member-agent image.'
+        # Pushes the patched member-agent image to ACR/MCR if patching was successful.
+        # Patched image uses original tag with '-patched' suffix for easy identification.
+        if: steps.copa_patch_member_agent.outputs.copa_patch == 'true'
+        run: |
+          echo "Pushing patched member-agent image to registry."
+          docker push ${{ secrets.AZURE_REGISTRY }}/${{ env.REGISTRY_REPO}}/member-agent:${{ needs.prepare-variables.outputs.release_tag }}-patched
+          echo "Patched member-agent image available at: ${{ secrets.AZURE_REGISTRY }}/${{ env.REGISTRY_REPO}}/member-agent:${{ needs.prepare-variables.outputs.release_tag }}-patched"
+
+      # Scan and patch Refresh Token image
+      - name: 'Generate Trivy vulnerability report for refresh-token.'
+        # Scans the refresh-token multi-arch image for OS package vulnerabilities using Trivy scanner.
+        # Only scans for fixable OS vulnerabilities that COPA can actually patch.
+        run: |
+          docker run --rm -v /var/run/docker.sock:/var/run/docker.sock \
+            -v $(pwd):/workspace \
+            aquasecurity/trivy:0.57.0 image \
+            --format json \
+            --output /workspace/refresh-token-report.json \
+            --ignore-unfixed \
+            --vuln-type os \
+            --username ${{ github.actor }} \
+            --password-stdin \
+            ${{ secrets.AZURE_REGISTRY }}/${{ env.REGISTRY_REPO}}/refresh-token:${{ needs.prepare-variables.outputs.release_tag }} <<< "${{ secrets.GITHUB_TOKEN }}"
+        continue-on-error: true
+
+      - name: 'Check vulnerability count for refresh-token.'
+        # Parses the Trivy JSON report to count OS package vulnerabilities.
+        # Sets output variable used to conditionally trigger COPA patching.
+        id: refresh_token_vuln_count
+        run: |
+          if [ -f "refresh-token-report.json" ]; then
+            vuln_count=$(jq 'if .Results then [.Results[] | select(.Class=="os-pkgs" and .Vulnerabilities!=null) | .Vulnerabilities[]] | length else 0 end' refresh-token-report.json)
+            echo "vuln_count=$vuln_count" >> $GITHUB_OUTPUT
+            echo "Found $vuln_count OS package vulnerabilities in refresh-token image."
+          else
+            echo "vuln_count=0" >> $GITHUB_OUTPUT
+            echo "No vulnerability report found for refresh-token."
+          fi
+
+      - name: 'COPA patch refresh-token image.'
+        # Patches the refresh-token image if vulnerabilities were found.
+        # Creates a new patched image with '-patched' suffix alongside the original.
+        if: steps.refresh_token_vuln_count.outputs.vuln_count > 0
+        id: copa_patch_refresh_token
+        run: |
+          echo "Patching refresh-token image with ${{ steps.refresh_token_vuln_count.outputs.vuln_count }} vulnerabilities."
+          ./copa patch \
+            -i ${{ secrets.AZURE_REGISTRY }}/${{ env.REGISTRY_REPO}}/refresh-token:${{ needs.prepare-variables.outputs.release_tag }} \
+            -r refresh-token-report.json \
+            -t ${{ needs.prepare-variables.outputs.release_tag }}-patched
+          echo "copa_patch=true" >> $GITHUB_OUTPUT
+          echo "Successfully created patched refresh-token image."
+
+      - name: 'Push patched refresh-token image.'
+        # Pushes the patched refresh-token image to ACR/MCR if patching was successful.
+        # Patched image uses original tag with '-patched' suffix for easy identification.
+        if: steps.copa_patch_refresh_token.outputs.copa_patch == 'true'
+        run: |
+          echo "Pushing patched refresh-token image to registry."
+          docker push ${{ secrets.AZURE_REGISTRY }}/${{ env.REGISTRY_REPO}}/refresh-token:${{ needs.prepare-variables.outputs.release_tag }}-patched
+          echo "Patched refresh-token image available at: ${{ secrets.AZURE_REGISTRY }}/${{ env.REGISTRY_REPO}}/refresh-token:${{ needs.prepare-variables.outputs.release_tag }}-patched"
+
+      # Scan and patch CRD Installer image
+      - name: 'Generate Trivy vulnerability report for crd-installer.'
+        # Scans the crd-installer multi-arch image for OS package vulnerabilities using Trivy scanner.
+        # Only scans for fixable OS vulnerabilities that COPA can actually patch.
+        run: |
+          docker run --rm -v /var/run/docker.sock:/var/run/docker.sock \
+            -v $(pwd):/workspace \
+            aquasecurity/trivy:0.57.0 image \
+            --format json \
+            --output /workspace/crd-installer-report.json \
+            --ignore-unfixed \
+            --vuln-type os \
+            --username ${{ github.actor }} \
+            --password-stdin \
+            ${{ secrets.AZURE_REGISTRY }}/${{ env.REGISTRY_REPO}}/crd-installer:${{ needs.prepare-variables.outputs.release_tag }} <<< "${{ secrets.GITHUB_TOKEN }}"
+        continue-on-error: true
+
+      - name: 'Check vulnerability count for crd-installer.'
+        # Parses the Trivy JSON report to count OS package vulnerabilities.
+        # Sets output variable used to conditionally trigger COPA patching.
+        id: crd_installer_vuln_count
+        run: |
+          if [ -f "crd-installer-report.json" ]; then
+            vuln_count=$(jq 'if .Results then [.Results[] | select(.Class=="os-pkgs" and .Vulnerabilities!=null) | .Vulnerabilities[]] | length else 0 end' crd-installer-report.json)
+            echo "vuln_count=$vuln_count" >> $GITHUB_OUTPUT
+            echo "Found $vuln_count OS package vulnerabilities in crd-installer image."
+          else
+            echo "vuln_count=0" >> $GITHUB_OUTPUT
+            echo "No vulnerability report found for crd-installer."
+          fi
+
+      - name: 'COPA patch crd-installer image.'
+        # Patches the crd-installer image if vulnerabilities were found.
+        # Creates a new patched image with '-patched' suffix alongside the original.
+        if: steps.crd_installer_vuln_count.outputs.vuln_count > 0
+        id: copa_patch_crd_installer
+        run: |
+          echo "Patching crd-installer image with ${{ steps.crd_installer_vuln_count.outputs.vuln_count }} vulnerabilities."
+          ./copa patch \
+            -i ${{ secrets.AZURE_REGISTRY }}/${{ env.REGISTRY_REPO}}/crd-installer:${{ needs.prepare-variables.outputs.release_tag }} \
+            -r crd-installer-report.json \
+            -t ${{ needs.prepare-variables.outputs.release_tag }}-patched
+          echo "copa_patch=true" >> $GITHUB_OUTPUT
+          echo "Successfully created patched crd-installer image."
+
+      - name: 'Push patched crd-installer image.'
+        # Pushes the patched crd-installer image to ACR/MCR if patching was successful.
+        # Patched image uses original tag with '-patched' suffix for easy identification.
+        if: steps.copa_patch_crd_installer.outputs.copa_patch == 'true'
+        run: |
+          echo "Pushing patched crd-installer image to registry."
+          docker push ${{ secrets.AZURE_REGISTRY }}/${{ env.REGISTRY_REPO}}/crd-installer:${{ needs.prepare-variables.outputs.release_tag }}-patched
+          echo "Patched crd-installer image available at: ${{ secrets.AZURE_REGISTRY }}/${{ env.REGISTRY_REPO}}/crd-installer:${{ needs.prepare-variables.outputs.release_tag }}-patched"
+
+      # Summary Report for COPA patching results
+      - name: 'COPA patching summary report.'
+        # Provides a comprehensive summary of the COPA patching process results.
+        # Shows which images were patched and where patched versions are available in ACR/MCR.
+        run: |
+          echo "=== COPA Vulnerability Patching Summary for MCR Release ==="
+          echo "Original images pushed to: ${{ secrets.AZURE_REGISTRY }}/${{ env.REGISTRY_REPO}}"
+          echo "Release tag: ${{ needs.prepare-variables.outputs.release_tag }}"
+          echo ""
+          echo "Hub Agent: ${{ steps.hub_agent_vuln_count.outputs.vuln_count }} vulnerabilities found"
+          if [ "${{ steps.copa_patch_hub_agent.outputs.copa_patch }}" == "true" ]; then
+            echo "  ✅ Patched version: ${{ secrets.AZURE_REGISTRY }}/${{ env.REGISTRY_REPO}}/hub-agent:${{ needs.prepare-variables.outputs.release_tag }}-patched"
+          else
+            echo "  ℹ️  No patching needed"
+          fi
+          echo ""
+          echo "Member Agent: ${{ steps.member_agent_vuln_count.outputs.vuln_count }} vulnerabilities found"
+          if [ "${{ steps.copa_patch_member_agent.outputs.copa_patch }}" == "true" ]; then
+            echo "  ✅ Patched version: ${{ secrets.AZURE_REGISTRY }}/${{ env.REGISTRY_REPO}}/member-agent:${{ needs.prepare-variables.outputs.release_tag }}-patched"
+          else
+            echo "  ℹ️  No patching needed"
+          fi
+          echo ""
+          echo "Refresh Token: ${{ steps.refresh_token_vuln_count.outputs.vuln_count }} vulnerabilities found"
+          if [ "${{ steps.copa_patch_refresh_token.outputs.copa_patch }}" == "true" ]; then
+            echo "  ✅ Patched version: ${{ secrets.AZURE_REGISTRY }}/${{ env.REGISTRY_REPO}}/refresh-token:${{ needs.prepare-variables.outputs.release_tag }}-patched"
+          else
+            echo "  ℹ️  No patching needed"
+          fi
+          echo ""
+          echo "CRD Installer: ${{ steps.crd_installer_vuln_count.outputs.vuln_count }} vulnerabilities found"
+          if [ "${{ steps.copa_patch_crd_installer.outputs.copa_patch }}" == "true" ]; then
+            echo "  ✅ Patched version: ${{ secrets.AZURE_REGISTRY }}/${{ env.REGISTRY_REPO}}/crd-installer:${{ needs.prepare-variables.outputs.release_tag }}-patched"
+          else
+            echo "  ℹ️  No patching needed"
+          fi
+          echo ""
+          echo "🔒 COPA patching complete for MCR release."
+          echo "📦 Both original and patched images will be available in Microsoft Container Registry (MCR)."
