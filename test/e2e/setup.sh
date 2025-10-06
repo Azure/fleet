@@ -45,7 +45,7 @@ AKS_NODE_REGIONS=("westus" "northeurope" "eastasia")
 #
 # Note that this is for information only; kind nodes always use the same fixed setup
 # (total/allocatable capacity = host capacity).
-AKS_NODE_SKUS=("Standard_A4_v2" "Standard_B4ms" "Standard_D8s_v5" "Standard_E16_v5" "Standard_M16ms")
+AKS_NODE_SKUS=("Standard_B2ats_v2" "Standard_B2ts_v2" "Standard_D8s_v5" "Standard_E16_v5" "Standard_M16ms")
 AKS_SKU_COUNT=${#AKS_NODE_SKUS[@]}
 # The number of clusters that has pre-defined configuration for testing purposes.
 RESERVED_CLUSTER_COUNT=${MEMBER_CLUSTER_COUNT}
