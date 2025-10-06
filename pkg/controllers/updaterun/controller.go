@@ -378,13 +378,14 @@ func emitUpdateRunStatusMetric(updateRun *placementv1beta1.ClusterStagedUpdateRu
 	klog.V(2).InfoS("There's no valid status condition on updateRun, status updating failed possibly", "updateRun", klog.KObj(updateRun))
 }
 
-func removeWaitTimeFromUpdateRunStatus(updateRun *placementv1beta1.ClusterStagedUpdateRun) {
+func removeWaitTimeFromUpdateRunStatus(updateRun placementv1beta1.UpdateRunObj) {
 	// Remove waitTime from the updateRun status for AfterStageTask for type Approval.
-	if updateRun.Status.UpdateStrategySnapshot != nil {
-		for i := range updateRun.Status.UpdateStrategySnapshot.Stages {
-			for j := range updateRun.Status.UpdateStrategySnapshot.Stages[i].AfterStageTasks {
-				if updateRun.Status.UpdateStrategySnapshot.Stages[i].AfterStageTasks[j].Type == placementv1beta1.AfterStageTaskTypeApproval {
-					updateRun.Status.UpdateStrategySnapshot.Stages[i].AfterStageTasks[j].WaitTime = nil
+	updateRunStatus := updateRun.GetUpdateRunStatus()
+	if updateRunStatus.UpdateStrategySnapshot != nil {
+		for i := range updateRunStatus.UpdateStrategySnapshot.Stages {
+			for j := range updateRunStatus.UpdateStrategySnapshot.Stages[i].AfterStageTasks {
+				if updateRunStatus.UpdateStrategySnapshot.Stages[i].AfterStageTasks[j].Type == placementv1beta1.AfterStageTaskTypeApproval {
+					updateRunStatus.UpdateStrategySnapshot.Stages[i].AfterStageTasks[j].WaitTime = nil
 				}
 			}
 		}

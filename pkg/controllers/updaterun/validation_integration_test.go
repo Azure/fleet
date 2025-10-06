@@ -172,7 +172,7 @@ var _ = Describe("UpdateRun validation tests", func() {
 
 				By("Validating the validation failed")
 				wantStatus = generateFailedValidationStatus(updateRun, wantStatus)
-				validateClusterStagedUpdateRunStatus(ctx, updateRun, wantStatus, "parent clusterResourcePlacement not found")
+				validateClusterStagedUpdateRunStatus(ctx, updateRun, wantStatus, "parent placement not found")
 			})
 
 			It("Should fail to validate if CRP does not have external rollout strategy type", func() {
@@ -183,7 +183,7 @@ var _ = Describe("UpdateRun validation tests", func() {
 				By("Validating the validation failed")
 				wantStatus = generateFailedValidationStatus(updateRun, wantStatus)
 				validateClusterStagedUpdateRunStatus(ctx, updateRun, wantStatus,
-					"parent clusterResourcePlacement does not have an external rollout strategy")
+					"parent placement does not have an external rollout strategy")
 			})
 
 			It("Should fail to valdiate if the ApplyStrategy in the CRP has changed", func() {

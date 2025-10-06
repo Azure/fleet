@@ -18,6 +18,7 @@ package controller
 
 import (
 	"context"
+	"fmt"
 
 	"k8s.io/apimachinery/pkg/types"
 	"sigs.k8s.io/controller-runtime/pkg/client"
@@ -121,4 +122,19 @@ func ConvertRBArrayToBindingObjs(bindings []*placementv1beta1.ResourceBinding) [
 		result[i] = binding
 	}
 	return result
+}
+
+// TODO(arvindth): remove method once we have updated updateRun controller to use interfaces.
+// ConvertBindingObjsToConcreteCRBArray converts a slice of BindingObj interfaces to a slice of concrete ClusterResourceBinding pointers.
+func ConvertBindingObjsToConcreteCRBArray(bindingObjs []placementv1beta1.BindingObj) ([]*placementv1beta1.ClusterResourceBinding, error) {
+	bindings := make([]*placementv1beta1.ClusterResourceBinding, len(bindingObjs))
+
+	for i, bindingObj := range bindingObjs {
+		if crb, ok := bindingObj.(*placementv1beta1.ClusterResourceBinding); ok {
+			bindings[i] = crb
+		} else {
+			return nil, fmt.Errorf("expected ClusterResourceBinding but got %T - initialize function needs further refactoring for namespace-scoped resources", bindingObj)
+		}
+	}
+	return bindings, nil
 }

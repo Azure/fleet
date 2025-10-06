@@ -43,8 +43,8 @@ func (r *Reconciler) validate(
 	updateRunCopy := updateRun.DeepCopy()
 	klog.V(2).InfoS("Start to validate the clusterStagedUpdateRun", "clusterStagedUpdateRun", updateRunRef)
 
-	// Validate the ClusterResourcePlacement object referenced by the ClusterStagedUpdateRun.
-	placementName, err := r.validateCRP(ctx, updateRunCopy)
+	// Validate the Placement object referenced by the UpdateRun.
+	placementName, err := r.validatePlacement(ctx, updateRunCopy)
 	if err != nil {
 		return -1, nil, nil, err
 	}
@@ -85,7 +85,18 @@ func (r *Reconciler) validate(
 	if err != nil {
 		return -1, nil, nil, err
 	}
-	return updatingStageIndex, scheduledBindings, toBeDeletedBindings, nil
+
+	// TODO (arvindth): remove this conversion step after refactoring other functions to use interface types.
+	concreteScheduledBindings, err := controller.ConvertBindingObjsToConcreteCRBArray(scheduledBindings)
+	if err != nil {
+		return -1, nil, nil, err
+	}
+	concreateToBeDeletedBindings, err := controller.ConvertBindingObjsToConcreteCRBArray(toBeDeletedBindings)
+	if err != nil {
+		return -1, nil, nil, err
+	}
+
+	return updatingStageIndex, concreteScheduledBindings, concreateToBeDeletedBindings, nil
 }
 
 // validateStagesStatus validates both the update and delete stages of the ClusterStagedUpdateRun.
@@ -95,7 +106,7 @@ func (r *Reconciler) validate(
 // If the updating stage index is len(updateRun.Status.StagesStatus), the next stage to be updated will be the delete stage.
 func (r *Reconciler) validateStagesStatus(
 	ctx context.Context,
-	scheduledBindings, toBeDeletedBindings []*placementv1beta1.ClusterResourceBinding,
+	scheduledBindings, toBeDeletedBindings []placementv1beta1.BindingObj,
 	updateRun, updateRunCopy *placementv1beta1.ClusterStagedUpdateRun,
 ) (int, error) {
 	updateRunRef := klog.KObj(updateRun)
@@ -256,7 +267,7 @@ func validateClusterUpdatingStatus(
 // It returns the updating stage index, or any error encountered.
 func validateDeleteStageStatus(
 	updatingStageIndex, lastFinishedStageIndex, totalStages int,
-	toBeDeletedBindings []*placementv1beta1.ClusterResourceBinding,
+	toBeDeletedBindings []placementv1beta1.BindingObj,
 	updateRun *placementv1beta1.ClusterStagedUpdateRun,
 ) (int, error) {
 	updateRunRef := klog.KObj(updateRun)
@@ -275,9 +286,10 @@ func validateDeleteStageStatus(
 		deletingClusterMap[cluster.ClusterName] = struct{}{}
 	}
 	for _, binding := range toBeDeletedBindings {
-		if _, ok := deletingClusterMap[binding.Spec.TargetCluster]; !ok {
-			unexpectedErr := controller.NewUnexpectedBehaviorError(fmt.Errorf("the cluster `%s` to be deleted is not in the delete stage", binding.Spec.TargetCluster))
-			klog.ErrorS(unexpectedErr, "Detect new cluster to be unscheduled", "clusterResourceBinding", klog.KObj(binding), "clusterStagedUpdateRun", updateRunRef)
+		bindingSpec := binding.GetBindingSpec()
+		if _, ok := deletingClusterMap[bindingSpec.TargetCluster]; !ok {
+			unexpectedErr := controller.NewUnexpectedBehaviorError(fmt.Errorf("the cluster `%s` to be deleted is not in the delete stage", bindingSpec.TargetCluster))
+			klog.ErrorS(unexpectedErr, "Detect new cluster to be unscheduled", "binding", klog.KObj(binding), "clusterStagedUpdateRun", updateRunRef)
 			return -1, fmt.Errorf("%w: %s", errStagedUpdatedAborted, unexpectedErr.Error())
 		}
 	}
