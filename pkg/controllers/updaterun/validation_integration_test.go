@@ -193,7 +193,7 @@ var _ = Describe("UpdateRun validation tests", func() {
 
 				By("Validating the validation failed")
 				wantStatus = generateFailedValidationStatus(updateRun, wantStatus)
-				validateClusterStagedUpdateRunStatus(ctx, updateRun, wantStatus, "the applyStrategy in the clusterStagedUpdateRun is outdated")
+				validateClusterStagedUpdateRunStatus(ctx, updateRun, wantStatus, "the applyStrategy in the updateRun is outdated")
 			})
 		})
 
@@ -230,7 +230,7 @@ var _ = Describe("UpdateRun validation tests", func() {
 				By("Validating the validation failed")
 				wantStatus = generateFailedValidationStatus(updateRun, wantStatus)
 				validateClusterStagedUpdateRunStatus(ctx, updateRun, wantStatus,
-					"the policy snapshot index used in the clusterStagedUpdateRun is outdated")
+					"the policy snapshot index used in the updateRun is outdated")
 
 				By("Deleting the new policySnapshot")
 				Expect(k8sClient.Delete(ctx, newPolicySnapshot)).Should(Succeed())
@@ -247,7 +247,7 @@ var _ = Describe("UpdateRun validation tests", func() {
 				By("Validating the validation failed")
 				wantStatus = generateFailedValidationStatus(updateRun, wantStatus)
 				validateClusterStagedUpdateRunStatus(ctx, updateRun, wantStatus,
-					"the cluster count initialized in the clusterStagedUpdateRun is outdated")
+					"the cluster count initialized in the updateRun is outdated")
 
 				By("Checking update run status metrics are emitted")
 				validateUpdateRunMetricsEmitted(generateProgressingMetric(updateRun), generateFailedMetric(updateRun))
@@ -268,7 +268,7 @@ var _ = Describe("UpdateRun validation tests", func() {
 				By("Validating the validation failed")
 				wantStatus = generateFailedValidationStatus(updateRun, wantStatus)
 				wantStatus.UpdateStrategySnapshot = nil
-				validateClusterStagedUpdateRunStatus(ctx, updateRun, wantStatus, "the clusterStagedUpdateRun has nil updateStrategySnapshot")
+				validateClusterStagedUpdateRunStatus(ctx, updateRun, wantStatus, "the updateRun has nil updateStrategySnapshot")
 			})
 
 			It("Should fail to validate if the StagesStatus is nil", func() {
@@ -279,7 +279,7 @@ var _ = Describe("UpdateRun validation tests", func() {
 				By("Validating the validation failed")
 				wantStatus = generateFailedValidationStatus(updateRun, wantStatus)
 				wantStatus.StagesStatus = nil
-				validateClusterStagedUpdateRunStatus(ctx, updateRun, wantStatus, "the clusterStagedUpdateRun has nil stagesStatus")
+				validateClusterStagedUpdateRunStatus(ctx, updateRun, wantStatus, "the updateRun has nil stagesStatus")
 			})
 
 			It("Should fail to validate if the DeletionStageStatus is nil", func() {
@@ -290,7 +290,7 @@ var _ = Describe("UpdateRun validation tests", func() {
 				By("Validating the validation failed")
 				wantStatus = generateFailedValidationStatus(updateRun, wantStatus)
 				wantStatus.DeletionStageStatus = nil
-				validateClusterStagedUpdateRunStatus(ctx, updateRun, wantStatus, "the clusterStagedUpdateRun has nil deletionStageStatus")
+				validateClusterStagedUpdateRunStatus(ctx, updateRun, wantStatus, "the updateRun has nil deletionStageStatus")
 			})
 
 			It("Should fail to validate if the number of stages has changed", func() {
@@ -317,7 +317,7 @@ var _ = Describe("UpdateRun validation tests", func() {
 						},
 					},
 				})
-				validateClusterStagedUpdateRunStatus(ctx, updateRun, wantStatus, "the number of stages in the clusterStagedUpdateRun has changed")
+				validateClusterStagedUpdateRunStatus(ctx, updateRun, wantStatus, "the number of stages in the updateRun has changed")
 			})
 
 			It("Should fail to validate if stage name has changed", func() {
@@ -328,7 +328,7 @@ var _ = Describe("UpdateRun validation tests", func() {
 				By("Validating the validation failed")
 				wantStatus = generateFailedValidationStatus(updateRun, wantStatus)
 				wantStatus.UpdateStrategySnapshot.Stages[0].Name = "stage3"
-				validateClusterStagedUpdateRunStatus(ctx, updateRun, wantStatus, "index `0` stage name in the clusterStagedUpdateRun has changed")
+				validateClusterStagedUpdateRunStatus(ctx, updateRun, wantStatus, "index `0` stage name in the updateRun has changed")
 			})
 
 			It("Should fail to validate if the number of clusters has changed in a stage", func() {

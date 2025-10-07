@@ -252,7 +252,7 @@ func TestValidateDeleteStageStatus(t *testing.T) {
 		{
 			name:                   "validateDeleteStageStatus should return error if delete stage status is nil",
 			deleteStageStatus:      nil,
-			wantErr:                wrapErr(true, fmt.Errorf("the clusterStagedUpdateRun has nil deletionStageStatus")),
+			wantErr:                wrapErr(true, fmt.Errorf("the updateRun has nil deletionStageStatus")),
 			wantUpdatingStageIndex: -1,
 		},
 		{
