@@ -36,6 +36,8 @@ const (
 	// AKSClusterNodeSKULabelName is the node label added by AKS, which indicated the SKU
 	// of the node.
 	AKSClusterNodeSKULabelName = "beta.kubernetes.io/instance-type"
+
+	ReservedNameForUndefinedSKU = "undefined"
 )
 
 const (
@@ -581,4 +583,21 @@ func (nt *NodeTracker) Costs() (perCPUCoreCost, perGBMemoryCost float64, warning
 		nt.calculateCosts()
 	}
 	return nt.costs.perCPUCoreHourlyCost, nt.costs.perGBMemoryHourlyCost, nt.costs.warnings, nt.costs.err
+}
+
+// NodeCountPerSKU returns a counter that tracks the number of nodes per SKU in the cluster.
+func (nt *NodeTracker) NodeCountPerSKU() map[string]int {
+	nt.mu.RLock()
+	defer nt.mu.RUnlock()
+
+	// Return a copy to avoid leaks/unexpected edits.
+	res := make(map[string]int, len(nt.nodeSetBySKU))
+	for sku, ns := range nt.nodeSetBySKU {
+		// For those nodes without a SKU, use `undefined` as the SKU name.
+		if len(sku) == 0 {
+			sku = ReservedNameForUndefinedSKU
+		}
+		res[sku] = len(ns)
+	}
+	return res
 }

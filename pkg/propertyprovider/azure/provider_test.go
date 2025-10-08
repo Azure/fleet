@@ -220,6 +220,12 @@ func TestCollect(t *testing.T) {
 					propertyprovider.NodeCountProperty: {
 						Value: "2",
 					},
+					clusterv1beta1.PropertyName(fmt.Sprintf(NodeCountPerSKUPropertyTmpl, nodeSKU1)): {
+						Value: "1",
+					},
+					clusterv1beta1.PropertyName(fmt.Sprintf(NodeCountPerSKUPropertyTmpl, nodeSKU2)): {
+						Value: "1",
+					},
 					PerCPUCoreCostProperty: {
 						Value: "0.167",
 					},
@@ -311,6 +317,12 @@ func TestCollect(t *testing.T) {
 					propertyprovider.NodeCountProperty: {
 						Value: "2",
 					},
+					clusterv1beta1.PropertyName(fmt.Sprintf(NodeCountPerSKUPropertyTmpl, nodeSKU1)): {
+						Value: "1",
+					},
+					clusterv1beta1.PropertyName(fmt.Sprintf(NodeCountPerSKUPropertyTmpl, nodeSKU2)): {
+						Value: "1",
+					},
 					PerCPUCoreCostProperty: {
 						Value: "0.167",
 					},
@@ -391,6 +403,9 @@ func TestCollect(t *testing.T) {
 					propertyprovider.NodeCountProperty: {
 						Value: "2",
 					},
+					clusterv1beta1.PropertyName(fmt.Sprintf(NodeCountPerSKUPropertyTmpl, nodeSKU3)): {
+						Value: "2",
+					},
 				},
 				Resources: clusterv1beta1.ResourceUsage{
 					Capacity: corev1.ResourceList{
@@ -467,6 +482,12 @@ func TestCollect(t *testing.T) {
 					propertyprovider.NodeCountProperty: {
 						Value: "2",
 					},
+					clusterv1beta1.PropertyName(fmt.Sprintf(NodeCountPerSKUPropertyTmpl, nodeSKU1)): {
+						Value: "1",
+					},
+					clusterv1beta1.PropertyName(fmt.Sprintf(NodeCountPerSKUPropertyTmpl, nodeSKU3)): {
+						Value: "1",
+					},
 				},
 				Resources: clusterv1beta1.ResourceUsage{
 					Capacity: corev1.ResourceList{
@@ -539,6 +560,12 @@ func TestCollect(t *testing.T) {
 				Properties: map[clusterv1beta1.PropertyName]clusterv1beta1.PropertyValue{
 					propertyprovider.NodeCountProperty: {
 						Value: "2",
+					},
+					clusterv1beta1.PropertyName(fmt.Sprintf(NodeCountPerSKUPropertyTmpl, nodeSKU1)): {
+						Value: "1",
+					},
+					clusterv1beta1.PropertyName(fmt.Sprintf(NodeCountPerSKUPropertyTmpl, trackers.ReservedNameForUndefinedSKU)): {
+						Value: "1",
 					},
 				},
 				Resources: clusterv1beta1.ResourceUsage{
@@ -616,6 +643,12 @@ func TestCollect(t *testing.T) {
 					propertyprovider.NodeCountProperty: {
 						Value: "2",
 					},
+					clusterv1beta1.PropertyName(fmt.Sprintf(NodeCountPerSKUPropertyTmpl, nodeSKU1)): {
+						Value: "1",
+					},
+					clusterv1beta1.PropertyName(fmt.Sprintf(NodeCountPerSKUPropertyTmpl, nodeKnownMissingSKU)): {
+						Value: "1",
+					},
 				},
 				Resources: clusterv1beta1.ResourceUsage{
 					Capacity: corev1.ResourceList{
@@ -652,6 +685,12 @@ func TestCollect(t *testing.T) {
 				Properties: map[clusterv1beta1.PropertyName]clusterv1beta1.PropertyValue{
 					propertyprovider.NodeCountProperty: {
 						Value: "2",
+					},
+					clusterv1beta1.PropertyName(fmt.Sprintf(NodeCountPerSKUPropertyTmpl, nodeSKU1)): {
+						Value: "1",
+					},
+					clusterv1beta1.PropertyName(fmt.Sprintf(NodeCountPerSKUPropertyTmpl, nodeSKU2)): {
+						Value: "1",
 					},
 					PerCPUCoreCostProperty: {
 						Value: "0.167",
@@ -791,6 +830,9 @@ func TestCollectWithDisabledFeatures(t *testing.T) {
 					propertyprovider.NodeCountProperty: {
 						Value: "1",
 					},
+					clusterv1beta1.PropertyName(fmt.Sprintf(NodeCountPerSKUPropertyTmpl, nodeSKU1)): {
+						Value: "1",
+					},
 				},
 				Resources: clusterv1beta1.ResourceUsage{
 					Capacity: corev1.ResourceList{
@@ -817,6 +859,9 @@ func TestCollectWithDisabledFeatures(t *testing.T) {
 			wantPropertyCollectionResponse: propertyprovider.PropertyCollectionResponse{
 				Properties: map[clusterv1beta1.PropertyName]clusterv1beta1.PropertyValue{
 					propertyprovider.NodeCountProperty: {
+						Value: "1",
+					},
+					clusterv1beta1.PropertyName(fmt.Sprintf(NodeCountPerSKUPropertyTmpl, nodeSKU1)): {
 						Value: "1",
 					},
 					PerCPUCoreCostProperty: {
@@ -854,6 +899,9 @@ func TestCollectWithDisabledFeatures(t *testing.T) {
 			wantPropertyCollectionResponse: propertyprovider.PropertyCollectionResponse{
 				Properties: map[clusterv1beta1.PropertyName]clusterv1beta1.PropertyValue{
 					propertyprovider.NodeCountProperty: {
+						Value: "1",
+					},
+					clusterv1beta1.PropertyName(fmt.Sprintf(NodeCountPerSKUPropertyTmpl, nodeSKU1)): {
 						Value: "1",
 					},
 				},

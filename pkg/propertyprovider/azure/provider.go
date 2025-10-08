@@ -53,6 +53,8 @@ const (
 	// a Kubernetes cluster.
 	PerGBMemoryCostProperty = "kubernetes.azure.com/per-gb-memory-cost"
 
+	NodeCountPerSKUPropertyTmpl = "kubernetes.azure.com/vm-size/%s/count"
+
 	CostPrecisionTemplate = "%.3f"
 )
 
@@ -284,13 +286,10 @@ func (p *PropertyProvider) Collect(ctx context.Context) propertyprovider.Propert
 	conds := make([]metav1.Condition, 0, 1)
 
 	// Collect the non-resource properties.
-
-	// Collect the node count property.
 	properties := make(map[clusterv1beta1.PropertyName]clusterv1beta1.PropertyValue)
-	properties[propertyprovider.NodeCountProperty] = clusterv1beta1.PropertyValue{
-		Value:           fmt.Sprintf("%d", p.nodeTracker.NodeCount()),
-		ObservationTime: metav1.Now(),
-	}
+
+	// Collect node-count related properties.
+	p.collectNodeCountRelatedProperties(ctx, properties)
 
 	// Collect the cost properties (if enabled).
 	if p.isCostCollectionEnabled {
@@ -315,6 +314,27 @@ func (p *PropertyProvider) Collect(ctx context.Context) propertyprovider.Propert
 		Properties: properties,
 		Resources:  resources,
 		Conditions: conds,
+	}
+}
+
+// collectNodeCountRelatedProperties collects the node-count related properties.
+func (p *PropertyProvider) collectNodeCountRelatedProperties(_ context.Context, properties map[clusterv1beta1.PropertyName]clusterv1beta1.PropertyValue) {
+	now := metav1.Now()
+
+	// Collect the total node count as a property.
+	properties[propertyprovider.NodeCountProperty] = clusterv1beta1.PropertyValue{
+		Value:           fmt.Sprintf("%d", p.nodeTracker.NodeCount()),
+		ObservationTime: now,
+	}
+
+	// Collect the per-SKU node counts as properties.
+	nodeCountPerSKU := p.nodeTracker.NodeCountPerSKU()
+	for sku, count := range nodeCountPerSKU {
+		pName := fmt.Sprintf(NodeCountPerSKUPropertyTmpl, sku)
+		properties[clusterv1beta1.PropertyName(pName)] = clusterv1beta1.PropertyValue{
+			Value:           fmt.Sprintf("%d", count),
+			ObservationTime: now,
+		}
 	}
 }
 

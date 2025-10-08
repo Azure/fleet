@@ -187,6 +187,16 @@ var (
 				isPricingDataStale = true
 			}
 
+			nodeCountPerSKU := map[string]int{}
+			for idx := range nodes {
+				node := nodes[idx]
+				sku := node.Labels[trackers.AKSClusterNodeSKULabelName]
+				if sku == "" {
+					sku = trackers.ReservedNameForUndefinedSKU
+				}
+				nodeCountPerSKU[sku]++
+			}
+
 			for idx := range nodes {
 				node := nodes[idx]
 				sku := node.Labels[trackers.AKSClusterNodeSKULabelName]
@@ -229,6 +239,11 @@ var (
 				propertyprovider.NodeCountProperty: {
 					Value: fmt.Sprintf("%d", len(nodes)),
 				},
+			}
+			for sku, count := range nodeCountPerSKU {
+				wantProperties[clusterv1beta1.PropertyName(fmt.Sprintf(NodeCountPerSKUPropertyTmpl, sku))] = clusterv1beta1.PropertyValue{
+					Value: fmt.Sprintf("%d", count),
+				}
 			}
 
 			if costCollectionErr == nil && isCostsEnabled {

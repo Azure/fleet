@@ -351,6 +351,17 @@ func summarizeAKSClusterProperties(memberCluster *framework.Cluster, mcObj *clus
 		return nil, fmt.Errorf("no nodes are found")
 	}
 
+	nodeCountBySKU := map[string]int{}
+	for idx := range nodeList.Items {
+		node := nodeList.Items[idx]
+
+		nodeSKU := node.Labels[trackers.AKSClusterNodeSKULabelName]
+		if len(nodeSKU) == 0 {
+			nodeSKU = trackers.ReservedNameForUndefinedSKU
+		}
+		nodeCountBySKU[nodeSKU]++
+	}
+
 	totalCPUCapacity := resource.Quantity{}
 	totalMemoryCapacity := resource.Quantity{}
 	allocatableCPUCapacity := resource.Quantity{}
@@ -405,18 +416,25 @@ func summarizeAKSClusterProperties(memberCluster *framework.Cluster, mcObj *clus
 		availableMemoryCapacity.Sub(requestedMemoryCapacity)
 	}
 
-	status := clusterv1beta1.MemberClusterStatus{
-		Properties: map[clusterv1beta1.PropertyName]clusterv1beta1.PropertyValue{
-			propertyprovider.NodeCountProperty: {
-				Value: fmt.Sprintf("%d", nodeCount),
-			},
-			azure.PerCPUCoreCostProperty: {
-				Value: fmt.Sprintf(azure.CostPrecisionTemplate, perCPUCoreCost),
-			},
-			azure.PerGBMemoryCostProperty: {
-				Value: fmt.Sprintf(azure.CostPrecisionTemplate, perGBMemoryCost),
-			},
+	properties := map[clusterv1beta1.PropertyName]clusterv1beta1.PropertyValue{
+		propertyprovider.NodeCountProperty: {
+			Value: fmt.Sprintf("%d", nodeCount),
 		},
+		azure.PerCPUCoreCostProperty: {
+			Value: fmt.Sprintf(azure.CostPrecisionTemplate, perCPUCoreCost),
+		},
+		azure.PerGBMemoryCostProperty: {
+			Value: fmt.Sprintf(azure.CostPrecisionTemplate, perGBMemoryCost),
+		},
+	}
+	for sku, count := range nodeCountBySKU {
+		pName := clusterv1beta1.PropertyName(fmt.Sprintf(azure.NodeCountPerSKUPropertyTmpl, sku))
+		properties[pName] = clusterv1beta1.PropertyValue{
+			Value: fmt.Sprintf("%d", count),
+		}
+	}
+	status := clusterv1beta1.MemberClusterStatus{
+		Properties: properties,
 		ResourceUsage: clusterv1beta1.ResourceUsage{
 			Capacity: corev1.ResourceList{
 				corev1.ResourceCPU:    totalCPUCapacity,
