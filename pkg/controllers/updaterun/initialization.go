@@ -44,7 +44,7 @@ import (
 func (r *Reconciler) initialize(
 	ctx context.Context,
 	updateRun placementv1beta1.UpdateRunObj,
-) ([]*placementv1beta1.ClusterResourceBinding, []*placementv1beta1.ClusterResourceBinding, error) {
+) ([]placementv1beta1.BindingObj, []placementv1beta1.BindingObj, error) {
 	// Validate the Placement object referenced by the UpdateRun.
 	placementNamespacedName, err := r.validatePlacement(ctx, updateRun)
 	if err != nil {
@@ -70,17 +70,7 @@ func (r *Reconciler) initialize(
 		return nil, nil, err
 	}
 
-	// TODO (arvindth): remove this conversion step after refactoring other functions in the controller to use interface types.
-	concreteScheduledBindings, err := controller.ConvertBindingObjsToConcreteCRBArray(scheduledBindings)
-	if err != nil {
-		return nil, nil, err
-	}
-	concreteToBeDeletedBindings, err := controller.ConvertBindingObjsToConcreteCRBArray(toBeDeletedBindings)
-	if err != nil {
-		return nil, nil, err
-	}
-
-	return concreteScheduledBindings, concreteToBeDeletedBindings, r.recordInitializationSucceeded(ctx, updateRun)
+	return scheduledBindings, toBeDeletedBindings, r.recordInitializationSucceeded(ctx, updateRun)
 }
 
 // validatePlacement validates the Placement object referenced by the UpdateRun.

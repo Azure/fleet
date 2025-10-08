@@ -37,7 +37,7 @@ import (
 func (r *Reconciler) validate(
 	ctx context.Context,
 	updateRun placementv1beta1.UpdateRunObj,
-) (int, []*placementv1beta1.ClusterResourceBinding, []*placementv1beta1.ClusterResourceBinding, error) {
+) (int, []placementv1beta1.BindingObj, []placementv1beta1.BindingObj, error) {
 	// Some of the validating function changes the object, so we need to make a copy of the object.
 	updateRunRef := klog.KObj(updateRun)
 	updateRunStatus := updateRun.GetUpdateRunStatus()
@@ -88,17 +88,7 @@ func (r *Reconciler) validate(
 		return -1, nil, nil, err
 	}
 
-	// TODO (arvindth): remove this conversion step after refactoring other functions to use interface types.
-	concreteScheduledBindings, err := controller.ConvertBindingObjsToConcreteCRBArray(scheduledBindings)
-	if err != nil {
-		return -1, nil, nil, err
-	}
-	concreateToBeDeletedBindings, err := controller.ConvertBindingObjsToConcreteCRBArray(toBeDeletedBindings)
-	if err != nil {
-		return -1, nil, nil, err
-	}
-
-	return updatingStageIndex, concreteScheduledBindings, concreateToBeDeletedBindings, nil
+	return updatingStageIndex, scheduledBindings, toBeDeletedBindings, nil
 }
 
 // validateStagesStatus validates both the update and delete stages of the UpdateRun.

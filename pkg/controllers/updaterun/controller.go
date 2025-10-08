@@ -105,7 +105,7 @@ func (r *Reconciler) Reconcile(ctx context.Context, req runtime.Request) (runtim
 	defer emitUpdateRunStatusMetric(&updateRun)
 
 	var updatingStageIndex int
-	var toBeUpdatedBindings, toBeDeletedBindings []*placementv1beta1.ClusterResourceBinding
+	var toBeUpdatedBindings, toBeDeletedBindings []placementv1beta1.BindingObj
 	var err error
 	initCond := meta.FindStatusCondition(updateRun.Status.Conditions, string(placementv1beta1.StagedUpdateRunConditionInitialized))
 	if !condition.IsConditionStatusTrue(initCond, updateRun.Generation) {
