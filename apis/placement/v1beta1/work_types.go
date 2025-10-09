@@ -68,6 +68,10 @@ type WorkSpec struct {
 	// and is owned by other appliers.
 	// +optional
 	ApplyStrategy *ApplyStrategy `json:"applyStrategy,omitempty"`
+
+	// ReportBackStrategy describes how to report back the status of applied resources on the member cluster.
+	// +optional
+	ReportBackStrategy *ReportBackStrategy `json:"reportBackStrategy,omitempty"`
 }
 
 // WorkloadTemplate represents the manifest workload to be deployed on spoke cluster
@@ -142,7 +146,7 @@ type DriftDetails struct {
 	// +kubebuilder:validation:Required
 	ObservedInMemberClusterGeneration int64 `json:"observedInMemberClusterGeneration"`
 
-	// FirsftDriftedObservedTime is the timestamp when the drift was first detected.
+	// FirstDriftedObservedTime is the timestamp when the drift was first detected.
 	//
 	// +kubebuilder:validation:Required
 	// +kubebuilder:validation:Type=string
@@ -176,7 +180,7 @@ type DiffDetails struct {
 	// +kubebuilder:validation:Optional
 	ObservedInMemberClusterGeneration *int64 `json:"observedInMemberClusterGeneration"`
 
-	// FirsftDiffedObservedTime is the timestamp when the configuration difference
+	// FirstDiffedObservedTime is the timestamp when the configuration difference
 	// was first detected.
 	//
 	// +kubebuilder:validation:Required
@@ -194,6 +198,19 @@ type DiffDetails struct {
 	//
 	// +kubebuilder:validation:Optional
 	ObservedDiffs []PatchDetail `json:"observedDiffs,omitempty"`
+}
+
+type BackReportedStatus struct {
+	// +kubebuilder:validation:EmbeddedResource
+	// +kubebuilder:pruning:PreserveUnknownFields
+	ObservedStatus runtime.RawExtension `json:"observedStatus,omitempty"`
+
+	// ObservationTime is the timestamp when the status was last back reported.
+	//
+	// +kubebuilder:validation:Required
+	// +kubebuilder:validation:Type=string
+	// +kubebuilder:validation:Format=date-time
+	ObservationTime metav1.Time `json:"observationTime"`
 }
 
 // ManifestCondition represents the conditions of the resources deployed on
@@ -228,6 +245,11 @@ type ManifestCondition struct {
 	//
 	// +kubebuilder:validation:Optional
 	DiffDetails *DiffDetails `json:"diffDetails,omitempty"`
+
+	// BackReportedStatus is the status reported back from the member cluster (if applicable).
+	//
+	// +kubebuilder:validation:Optional
+	BackReportedStatus *BackReportedStatus `json:"backReportedStatus,omitempty"`
 }
 
 // +genclient
