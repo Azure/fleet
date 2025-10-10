@@ -6,7 +6,7 @@ set -o pipefail
 
 # Before updating the default kind image to use, verify that the version is supported
 # by the current kind release.
-KIND_IMAGE="${KIND_IMAGE:-kindest/node:v1.31.0}"
+KIND_IMAGE="${KIND_IMAGE:-kindest/node:v1.33.4}"
 KUBECONFIG="${KUBECONFIG:-$HOME/.kube/config}"
 MEMBER_CLUSTER_COUNT=$1
 
@@ -126,7 +126,7 @@ helm install hub-agent ../../charts/hub-agent/ \
     --set webhookClientConnectionType=service \
     --set forceDeleteWaitTime="1m0s" \
     --set clusterUnhealthyThreshold="3m0s" \
-    --set logFileMaxSize=1000000 \
+    --set logFileMaxSize=100000 \
     --set resourceSnapshotCreationMinimumInterval=$RESOURCE_SNAPSHOT_CREATION_MINIMUM_INTERVAL \
     --set resourceChangesCollectionDuration=$RESOURCE_CHANGES_COLLECTION_DURATION
 

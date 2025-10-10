@@ -1506,7 +1506,7 @@ func crpStatusWithExternalStrategyActual(
 		}
 
 		if diff := cmp.Diff(crp.Status, wantStatus, placementStatusCmpOptions...); diff != "" {
-			return fmt.Errorf("CRP status diff (-got, +want): %s", diff)
+			return fmt.Errorf("CRP status diff (-got, +want): %s for CRP %s", diff, crpName)
 		}
 		return nil
 	}
@@ -1529,11 +1529,11 @@ func customizedPlacementStatusUpdatedActual(
 		if wantObservedResourceIndex == "0" {
 			// When the observedResourceIndex is "0", it means the placement is just created and the placement controller
 			if diff := cmp.Diff(placement.GetPlacementStatus(), wantStatus, placementStatusCmpOptionsOnCreate...); diff != "" {
-				return fmt.Errorf("Placement status diff (-got, +want): %s", diff)
+				return fmt.Errorf("Placement status diff (-got, +want): %s for placement %v", diff, placementKey)
 			}
 		} else {
 			if diff := cmp.Diff(placement.GetPlacementStatus(), wantStatus, placementStatusCmpOptions...); diff != "" {
-				return fmt.Errorf("Placement status diff (-got, +want): %s", diff)
+				return fmt.Errorf("Placement status diff (-got, +want): %s for placement %v", diff, placementKey)
 			}
 		}
 		return nil

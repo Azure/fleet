@@ -328,7 +328,7 @@ func (nt *NodeTracker) trackSKU(node *corev1.Node) bool {
 		return true
 	default:
 		// No further action is needed if the node's SKU remains the same.
-		klog.V(2).InfoS("The node's SKU has not changed", "sku", sku, "node", klog.KObj(node))
+		klog.V(3).InfoS("The node's SKU has not changed", "sku", sku, "node", klog.KObj(node))
 		return false
 	}
 }

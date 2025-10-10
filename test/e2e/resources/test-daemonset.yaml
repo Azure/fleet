@@ -16,7 +16,7 @@ spec:
     spec:
       containers:
         - name: fluentd-elasticsearch
-          image: quay.io/fluentd_elasticsearch/fluentd:v2.5.2
+          image: quay.io/fluentd_elasticsearch/fluentd:v4.11
           resources:
             limits:
               cpu: 250m

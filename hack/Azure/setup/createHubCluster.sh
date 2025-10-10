@@ -40,7 +40,7 @@ helm install hub-agent charts/hub-agent/ \
   --set ConcurrentRolloutSyncs=20 \
   --set hubAPIQPS=100 \
   --set hubAPIBurst=1000 \
-  --set logFileMaxSize=100000000 \
+  --set logFileMaxSize=5000 \
   --set MaxFleetSizeSupported=100
 
 # Check the status of the hub agent

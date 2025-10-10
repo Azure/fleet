@@ -229,7 +229,7 @@ func (r *Reconciler) takeOverInMemberClusterObjectIfApplicable(
 ) (shouldSkipProcessing bool) {
 	if !shouldInitiateTakeOverAttempt(bundle.inMemberClusterObj, work.Spec.ApplyStrategy, expectedAppliedWorkOwnerRef) {
 		// Takeover is not necessary; proceed with the processing.
-		klog.V(2).InfoS("Takeover is not needed; skip the step")
+		klog.V(2).InfoS("Takeover is not needed; skip the step", "work", klog.KObj(work), "GVR", *bundle.gvr, "manifestObj", bundle.workResourceIdentifierStr)
 		return false
 	}
 
