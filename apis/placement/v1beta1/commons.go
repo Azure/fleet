@@ -145,9 +145,9 @@ const (
 	// This is used to remember if an "unscheduled" binding was moved from a "bound" state or a "scheduled" state.
 	PreviousBindingStateAnnotation = FleetPrefix + "previous-binding-state"
 
-	// ClusterStagedUpdateRunFinalizer is used by the ClusterStagedUpdateRun controller to make sure that the ClusterStagedUpdateRun
+	// UpdateRunFinalizer is used by the UpdateRun controller to make sure that the UpdateRun
 	// object is not deleted until all its dependent resources are deleted.
-	ClusterStagedUpdateRunFinalizer = FleetPrefix + "stagedupdaterun-finalizer"
+	UpdateRunFinalizer = FleetPrefix + "stagedupdaterun-finalizer"
 
 	// TargetUpdateRunLabel indicates the target update run on a staged run related object.
 	TargetUpdateRunLabel = FleetPrefix + "targetupdaterun"

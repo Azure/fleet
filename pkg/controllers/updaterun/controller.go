@@ -14,7 +14,7 @@ See the License for the specific language governing permissions and
 limitations under the License.
 */
 
-// Package updaterun features a controller to reconcile the clusterStagedUpdateRun objects.
+// Package updaterun features a controller to reconcile the updateRun objects.
 package updaterun
 
 import (
@@ -49,14 +49,14 @@ import (
 )
 
 var (
-	// errStagedUpdatedAborted is the error when the ClusterStagedUpdateRun is aborted.
-	errStagedUpdatedAborted = fmt.Errorf("cannot continue the ClusterStagedUpdateRun")
-	// errInitializedFailed is the error when the ClusterStagedUpdateRun fails to initialize.
+	// errStagedUpdatedAborted is the error when the updateRun is aborted.
+	errStagedUpdatedAborted = fmt.Errorf("cannot continue the updateRun")
+	// errInitializedFailed is the error when the updateRun fails to initialize.
 	// It is a wrapped error of errStagedUpdatedAborted, because some initialization functions are reused in the validation step.
-	errInitializedFailed = fmt.Errorf("%w: failed to initialize the clusterStagedUpdateRun", errStagedUpdatedAborted)
+	errInitializedFailed = fmt.Errorf("%w: failed to initialize the updateRun", errStagedUpdatedAborted)
 )
 
-// Reconciler reconciles a ClusterStagedUpdateRun object.
+// Reconciler reconciles an updateRun object.
 type Reconciler struct {
 	client.Client
 	recorder record.EventRecorder
@@ -66,28 +66,28 @@ type Reconciler struct {
 
 func (r *Reconciler) Reconcile(ctx context.Context, req runtime.Request) (runtime.Result, error) {
 	startTime := time.Now()
-	klog.V(2).InfoS("ClusterStagedUpdateRun reconciliation starts", "clusterStagedUpdateRun", req.NamespacedName)
+	klog.V(2).InfoS("UpdateRun reconciliation starts", "updateRun", req.NamespacedName)
 	defer func() {
 		latency := time.Since(startTime).Milliseconds()
-		klog.V(2).InfoS("ClusterStagedUpdateRun reconciliation ends", "clusterStagedUpdateRun", req.NamespacedName, "latency", latency)
+		klog.V(2).InfoS("UpdateRun reconciliation ends", "updateRun", req.NamespacedName, "latency", latency)
 	}()
 
-	var updateRun placementv1beta1.ClusterStagedUpdateRun
-	if err := r.Client.Get(ctx, req.NamespacedName, &updateRun); err != nil {
-		klog.ErrorS(err, "Failed to get clusterStagedUpdateRun object", "clusterStagedUpdateRun", req.Name)
+	updateRun, err := controller.FetchUpdateRunFromRequest(ctx, r.Client, req)
+	if err != nil {
+		klog.ErrorS(err, "Failed to get updateRun object", "updateRun", req.NamespacedName)
 		return runtime.Result{}, client.IgnoreNotFound(err)
 	}
-	runObjRef := klog.KObj(&updateRun)
+	runObjRef := klog.KObj(updateRun)
 
 	// Remove waitTime from the updateRun status for AfterStageTask for type Approval.
-	removeWaitTimeFromUpdateRunStatus(&updateRun)
+	removeWaitTimeFromUpdateRunStatus(updateRun)
 
-	// Handle the deletion of the clusterStagedUpdateRun.
-	if !updateRun.DeletionTimestamp.IsZero() {
-		klog.V(2).InfoS("The clusterStagedUpdateRun is being deleted", "clusterStagedUpdateRun", runObjRef)
-		deleted, waitTime, err := r.handleDelete(ctx, updateRun.DeepCopy())
-		if err != nil {
-			return runtime.Result{}, err
+	// Handle the deletion of the updateRun.
+	if !updateRun.GetDeletionTimestamp().IsZero() {
+		klog.V(2).InfoS("The updateRun is being deleted", "updateRun", runObjRef)
+		deleted, waitTime, deleteErr := r.handleDelete(ctx, updateRun.DeepCopyObject().(placementv1beta1.UpdateRunObj))
+		if deleteErr != nil {
+			return runtime.Result{}, deleteErr
 		}
 		if deleted {
 			return runtime.Result{}, nil
@@ -95,170 +95,180 @@ func (r *Reconciler) Reconcile(ctx context.Context, req runtime.Request) (runtim
 		return runtime.Result{RequeueAfter: waitTime}, nil
 	}
 
-	// Add the finalizer to the clusterStagedUpdateRun.
-	if err := r.ensureFinalizer(ctx, &updateRun); err != nil {
-		klog.ErrorS(err, "Failed to add the finalizer to the clusterStagedUpdateRun", "clusterStagedUpdateRun", runObjRef)
+	// Add the finalizer to the updateRun.
+	if err := r.ensureFinalizer(ctx, updateRun); err != nil {
+		klog.ErrorS(err, "Failed to add the finalizer to the updateRun", "updateRun", runObjRef)
 		return runtime.Result{}, err
 	}
 
 	// Emit the update run status metric based on status conditions in the updateRun.
-	defer emitUpdateRunStatusMetric(&updateRun)
+	defer emitUpdateRunStatusMetric(updateRun)
 
 	var updatingStageIndex int
 	var toBeUpdatedBindings, toBeDeletedBindings []placementv1beta1.BindingObj
-	var err error
-	initCond := meta.FindStatusCondition(updateRun.Status.Conditions, string(placementv1beta1.StagedUpdateRunConditionInitialized))
-	if !condition.IsConditionStatusTrue(initCond, updateRun.Generation) {
-		if condition.IsConditionStatusFalse(initCond, updateRun.Generation) {
-			klog.V(2).InfoS("The clusterStagedUpdateRun has failed to initialize", "errorMsg", initCond.Message, "clusterStagedUpdateRun", runObjRef)
+	updateRunStatus := updateRun.GetUpdateRunStatus()
+	initCond := meta.FindStatusCondition(updateRunStatus.Conditions, string(placementv1beta1.StagedUpdateRunConditionInitialized))
+	if !condition.IsConditionStatusTrue(initCond, updateRun.GetGeneration()) {
+		if condition.IsConditionStatusFalse(initCond, updateRun.GetGeneration()) {
+			klog.V(2).InfoS("The updateRun has failed to initialize", "errorMsg", initCond.Message, "updateRun", runObjRef)
 			return runtime.Result{}, nil
 		}
-		if toBeUpdatedBindings, toBeDeletedBindings, err = r.initialize(ctx, &updateRun); err != nil {
-			klog.ErrorS(err, "Failed to initialize the clusterStagedUpdateRun", "clusterStagedUpdateRun", runObjRef)
+		var initErr error
+		if toBeUpdatedBindings, toBeDeletedBindings, initErr = r.initialize(ctx, updateRun); initErr != nil {
+			klog.ErrorS(initErr, "Failed to initialize the updateRun", "updateRun", runObjRef)
 			// errInitializedFailed cannot be retried.
-			if errors.Is(err, errInitializedFailed) {
-				return runtime.Result{}, r.recordInitializationFailed(ctx, &updateRun, err.Error())
+			if errors.Is(initErr, errInitializedFailed) {
+				return runtime.Result{}, r.recordInitializationFailed(ctx, updateRun, initErr.Error())
 			}
-			return runtime.Result{}, err
+			return runtime.Result{}, initErr
 		}
 		updatingStageIndex = 0 // start from the first stage.
-		klog.V(2).InfoS("Initialized the clusterStagedUpdateRun", "clusterStagedUpdateRun", runObjRef)
+		klog.V(2).InfoS("Initialized the updateRun", "updateRun", runObjRef)
 	} else {
-		klog.V(2).InfoS("The clusterStagedUpdateRun is initialized", "clusterStagedUpdateRun", runObjRef)
-		// Check if the clusterStagedUpdateRun is finished.
-		finishedCond := meta.FindStatusCondition(updateRun.Status.Conditions, string(placementv1beta1.StagedUpdateRunConditionSucceeded))
-		if condition.IsConditionStatusTrue(finishedCond, updateRun.Generation) || condition.IsConditionStatusFalse(finishedCond, updateRun.Generation) {
-			klog.V(2).InfoS("The clusterStagedUpdateRun is finished", "finishedSuccessfully", finishedCond.Status, "clusterStagedUpdateRun", runObjRef)
+		klog.V(2).InfoS("The updateRun is initialized", "updateRun", runObjRef)
+		// Check if the updateRun is finished.
+		finishedCond := meta.FindStatusCondition(updateRunStatus.Conditions, string(placementv1beta1.StagedUpdateRunConditionSucceeded))
+		if condition.IsConditionStatusTrue(finishedCond, updateRun.GetGeneration()) || condition.IsConditionStatusFalse(finishedCond, updateRun.GetGeneration()) {
+			klog.V(2).InfoS("The updateRun is finished", "finishedSuccessfully", finishedCond.Status, "updateRun", runObjRef)
 			return runtime.Result{}, nil
 		}
-
-		// Validate the clusterStagedUpdateRun status to ensure the update can be continued and get the updating stage index and cluster indices.
-		if updatingStageIndex, toBeUpdatedBindings, toBeDeletedBindings, err = r.validate(ctx, &updateRun); err != nil {
+		var validateErr error
+		// Validate the updateRun status to ensure the update can be continued and get the updating stage index and cluster indices.
+		if updatingStageIndex, toBeUpdatedBindings, toBeDeletedBindings, validateErr = r.validate(ctx, updateRun); validateErr != nil {
 			// errStagedUpdatedAborted cannot be retried.
-			if errors.Is(err, errStagedUpdatedAborted) {
-				return runtime.Result{}, r.recordUpdateRunFailed(ctx, &updateRun, err.Error())
+			if errors.Is(validateErr, errStagedUpdatedAborted) {
+				return runtime.Result{}, r.recordUpdateRunFailed(ctx, updateRun, validateErr.Error())
 			}
-			return runtime.Result{}, err
+			return runtime.Result{}, validateErr
 		}
-		klog.V(2).InfoS("The clusterStagedUpdateRun is validated", "clusterStagedUpdateRun", runObjRef)
+		klog.V(2).InfoS("The updateRun is validated", "updateRun", runObjRef)
 	}
 
 	// The previous run is completed but the update to the status failed.
 	if updatingStageIndex == -1 {
-		klog.V(2).InfoS("The clusterStagedUpdateRun is completed", "clusterStagedUpdateRun", runObjRef)
-		return runtime.Result{}, r.recordUpdateRunSucceeded(ctx, &updateRun)
+		klog.V(2).InfoS("The updateRun is completed", "updateRun", runObjRef)
+		return runtime.Result{}, r.recordUpdateRunSucceeded(ctx, updateRun)
 	}
 
 	// Execute the updateRun.
-	klog.V(2).InfoS("Continue to execute the clusterStagedUpdateRun", "updatingStageIndex", updatingStageIndex, "clusterStagedUpdateRun", runObjRef)
-	finished, waitTime, execErr := r.execute(ctx, &updateRun, updatingStageIndex, toBeUpdatedBindings, toBeDeletedBindings)
+	klog.V(2).InfoS("Continue to execute the updateRun", "updatingStageIndex", updatingStageIndex, "updateRun", runObjRef)
+	finished, waitTime, execErr := r.execute(ctx, updateRun, updatingStageIndex, toBeUpdatedBindings, toBeDeletedBindings)
 	if errors.Is(execErr, errStagedUpdatedAborted) {
 		// errStagedUpdatedAborted cannot be retried.
-		return runtime.Result{}, r.recordUpdateRunFailed(ctx, &updateRun, execErr.Error())
+		return runtime.Result{}, r.recordUpdateRunFailed(ctx, updateRun, execErr.Error())
 	}
 
 	if finished {
-		klog.V(2).InfoS("The clusterStagedUpdateRun is completed", "clusterStagedUpdateRun", runObjRef)
-		return runtime.Result{}, r.recordUpdateRunSucceeded(ctx, &updateRun)
+		klog.V(2).InfoS("The updateRun is completed", "updateRun", runObjRef)
+		return runtime.Result{}, r.recordUpdateRunSucceeded(ctx, updateRun)
 	}
 
 	// The execution is not finished yet or it encounters a retriable error.
 	// We need to record the status and requeue.
-	if updateErr := r.recordUpdateRunStatus(ctx, &updateRun); updateErr != nil {
+	if updateErr := r.recordUpdateRunStatus(ctx, updateRun); updateErr != nil {
 		return runtime.Result{}, updateErr
 	}
-	klog.V(2).InfoS("The clusterStagedUpdateRun is not finished yet", "requeueWaitTime", waitTime, "execErr", execErr, "clusterStagedUpdateRun", runObjRef)
+	klog.V(2).InfoS("The updateRun is not finished yet", "requeueWaitTime", waitTime, "execErr", execErr, "updateRun", runObjRef)
 	if execErr != nil {
 		return runtime.Result{}, execErr
 	}
 	return runtime.Result{Requeue: true, RequeueAfter: waitTime}, nil
 }
 
-// handleDelete handles the deletion of the clusterStagedUpdateRun object.
-// We delete all the dependent resources, including approvalRequest objects, of the clusterStagedUpdateRun object.
-func (r *Reconciler) handleDelete(ctx context.Context, updateRun *placementv1beta1.ClusterStagedUpdateRun) (bool, time.Duration, error) {
+// handleDelete handles the deletion of the updateRun object.
+// We delete all the dependent resources, including approvalRequest objects, of the updateRun object.
+func (r *Reconciler) handleDelete(ctx context.Context, updateRun placementv1beta1.UpdateRunObj) (bool, time.Duration, error) {
 	runObjRef := klog.KObj(updateRun)
 	// Delete all the associated approvalRequests.
-	approvalRequest := &placementv1beta1.ClusterApprovalRequest{}
-	if err := r.Client.DeleteAllOf(ctx, approvalRequest, client.MatchingLabels{placementv1beta1.TargetUpdateRunLabel: updateRun.GetName()}); err != nil {
-		klog.ErrorS(err, "Failed to delete all associated approvalRequests", "clusterStagedUpdateRun", runObjRef)
+	var approvalRequest placementv1beta1.ApprovalRequestObj
+	deleteOptions := []client.DeleteAllOfOption{client.MatchingLabels{placementv1beta1.TargetUpdateRunLabel: updateRun.GetName()}}
+	if updateRun.GetNamespace() == "" {
+		approvalRequest = &placementv1beta1.ClusterApprovalRequest{}
+	} else {
+		approvalRequest = &placementv1beta1.ApprovalRequest{}
+		deleteOptions = append(deleteOptions, client.InNamespace(updateRun.GetNamespace()))
+	}
+	if err := r.Client.DeleteAllOf(ctx, approvalRequest, deleteOptions...); err != nil {
+		klog.ErrorS(err, "Failed to delete all associated approvalRequests", "updateRun", runObjRef)
 		return false, 0, controller.NewAPIServerError(false, err)
 	}
-	klog.V(2).InfoS("Deleted all approvalRequests associated with the clusterStagedUpdateRun", "clusterStagedUpdateRun", runObjRef)
+	klog.V(2).InfoS("Deleted all approvalRequests associated with the updateRun", "updateRun", runObjRef)
 
 	// Delete the update run status metric.
-	metrics.FleetUpdateRunStatusLastTimestampSeconds.DeletePartialMatch(prometheus.Labels{"name": updateRun.GetName()})
+	metrics.FleetUpdateRunStatusLastTimestampSeconds.DeletePartialMatch(prometheus.Labels{"namespace": updateRun.GetNamespace(), "name": updateRun.GetName()})
 
-	controllerutil.RemoveFinalizer(updateRun, placementv1beta1.ClusterStagedUpdateRunFinalizer)
+	controllerutil.RemoveFinalizer(updateRun, placementv1beta1.UpdateRunFinalizer)
 	if err := r.Client.Update(ctx, updateRun); err != nil {
-		klog.ErrorS(err, "Failed to remove updateRun finalizer", "clusterStagedUpdateRun", runObjRef)
+		klog.ErrorS(err, "Failed to remove updateRun finalizer", "updateRun", runObjRef)
 		return false, 0, controller.NewUpdateIgnoreConflictError(err)
 	}
 	return true, 0, nil
 }
 
-// ensureFinalizer makes sure that the ClusterStagedUpdateRun CR has a finalizer on it.
-func (r *Reconciler) ensureFinalizer(ctx context.Context, updateRun *placementv1beta1.ClusterStagedUpdateRun) error {
-	if controllerutil.ContainsFinalizer(updateRun, placementv1beta1.ClusterStagedUpdateRunFinalizer) {
+// ensureFinalizer makes sure that the updateRun CR has a finalizer on it.
+func (r *Reconciler) ensureFinalizer(ctx context.Context, updateRun placementv1beta1.UpdateRunObj) error {
+	if controllerutil.ContainsFinalizer(updateRun, placementv1beta1.UpdateRunFinalizer) {
 		return nil
 	}
-	klog.InfoS("Added the staged update run finalizer", "stagedUpdateRun", klog.KObj(updateRun))
-	controllerutil.AddFinalizer(updateRun, placementv1beta1.ClusterStagedUpdateRunFinalizer)
+	klog.InfoS("Added the updateRun finalizer", "updateRun", klog.KObj(updateRun))
+	controllerutil.AddFinalizer(updateRun, placementv1beta1.UpdateRunFinalizer)
 	return r.Update(ctx, updateRun, client.FieldOwner(utils.UpdateRunControllerFieldManagerName))
 }
 
-// recordUpdateRunSucceeded records the succeeded condition in the ClusterStagedUpdateRun status.
-func (r *Reconciler) recordUpdateRunSucceeded(ctx context.Context, updateRun *placementv1beta1.ClusterStagedUpdateRun) error {
-	meta.SetStatusCondition(&updateRun.Status.Conditions, metav1.Condition{
+// recordUpdateRunSucceeded records the succeeded condition in the updateRun status.
+func (r *Reconciler) recordUpdateRunSucceeded(ctx context.Context, updateRun placementv1beta1.UpdateRunObj) error {
+	updateRunStatus := updateRun.GetUpdateRunStatus()
+	meta.SetStatusCondition(&updateRunStatus.Conditions, metav1.Condition{
 		Type:               string(placementv1beta1.StagedUpdateRunConditionProgressing),
 		Status:             metav1.ConditionFalse,
-		ObservedGeneration: updateRun.Generation,
+		ObservedGeneration: updateRun.GetGeneration(),
 		Reason:             condition.UpdateRunSucceededReason,
 		Message:            "All stages are completed",
 	})
-	meta.SetStatusCondition(&updateRun.Status.Conditions, metav1.Condition{
+	meta.SetStatusCondition(&updateRunStatus.Conditions, metav1.Condition{
 		Type:               string(placementv1beta1.StagedUpdateRunConditionSucceeded),
 		Status:             metav1.ConditionTrue,
-		ObservedGeneration: updateRun.Generation,
+		ObservedGeneration: updateRun.GetGeneration(),
 		Reason:             condition.UpdateRunSucceededReason,
 		Message:            "All stages are completed successfully",
 	})
 	if updateErr := r.Client.Status().Update(ctx, updateRun); updateErr != nil {
-		klog.ErrorS(updateErr, "Failed to update the ClusterStagedUpdateRun status as succeeded", "clusterStagedUpdateRun", klog.KObj(updateRun))
+		klog.ErrorS(updateErr, "Failed to update the updateRun status as succeeded", "updateRun", klog.KObj(updateRun))
 		// updateErr can be retried.
 		return controller.NewUpdateIgnoreConflictError(updateErr)
 	}
 	return nil
 }
 
-// recordUpdateRunFailed records the failed condition in the ClusterStagedUpdateRun status.
-func (r *Reconciler) recordUpdateRunFailed(ctx context.Context, updateRun *placementv1beta1.ClusterStagedUpdateRun, message string) error {
-	meta.SetStatusCondition(&updateRun.Status.Conditions, metav1.Condition{
+// recordUpdateRunFailed records the failed condition in the updateRun status.
+func (r *Reconciler) recordUpdateRunFailed(ctx context.Context, updateRun placementv1beta1.UpdateRunObj, message string) error {
+	updateRunStatus := updateRun.GetUpdateRunStatus()
+	meta.SetStatusCondition(&updateRunStatus.Conditions, metav1.Condition{
 		Type:               string(placementv1beta1.StagedUpdateRunConditionProgressing),
 		Status:             metav1.ConditionFalse,
-		ObservedGeneration: updateRun.Generation,
+		ObservedGeneration: updateRun.GetGeneration(),
 		Reason:             condition.UpdateRunFailedReason,
 		Message:            "The stages are aborted due to a non-recoverable error",
 	})
-	meta.SetStatusCondition(&updateRun.Status.Conditions, metav1.Condition{
+	meta.SetStatusCondition(&updateRunStatus.Conditions, metav1.Condition{
 		Type:               string(placementv1beta1.StagedUpdateRunConditionSucceeded),
 		Status:             metav1.ConditionFalse,
-		ObservedGeneration: updateRun.Generation,
+		ObservedGeneration: updateRun.GetGeneration(),
 		Reason:             condition.UpdateRunFailedReason,
 		Message:            message,
 	})
 	if updateErr := r.Client.Status().Update(ctx, updateRun); updateErr != nil {
-		klog.ErrorS(updateErr, "Failed to update the ClusterStagedUpdateRun status as failed", "clusterStagedUpdateRun", klog.KObj(updateRun))
+		klog.ErrorS(updateErr, "Failed to update the updateRun status as failed", "updateRun", klog.KObj(updateRun))
 		// updateErr can be retried.
 		return controller.NewUpdateIgnoreConflictError(updateErr)
 	}
 	return nil
 }
 
-// recordUpdateRunStatus records the ClusterStagedUpdateRun status.
-func (r *Reconciler) recordUpdateRunStatus(ctx context.Context, updateRun *placementv1beta1.ClusterStagedUpdateRun) error {
+// recordUpdateRunStatus records the updateRun status.
+func (r *Reconciler) recordUpdateRunStatus(ctx context.Context, updateRun placementv1beta1.UpdateRunObj) error {
 	if updateErr := r.Client.Status().Update(ctx, updateRun); updateErr != nil {
-		klog.ErrorS(updateErr, "Failed to update the ClusterStagedUpdateRun status", "clusterStagedUpdateRun", klog.KObj(updateRun))
+		klog.ErrorS(updateErr, "Failed to update the updateRun status", "updateRun", klog.KObj(updateRun))
 		return controller.NewUpdateIgnoreConflictError(updateErr)
 	}
 	return nil
@@ -349,27 +359,28 @@ func handleClusterApprovalRequestDelete(obj client.Object, q workqueue.TypedRate
 }
 
 // emitUpdateRunStatusMetric emits the update run status metric based on status conditions in the updateRun.
-func emitUpdateRunStatusMetric(updateRun *placementv1beta1.ClusterStagedUpdateRun) {
-	generation := updateRun.Generation
+func emitUpdateRunStatusMetric(updateRun placementv1beta1.UpdateRunObj) {
+	generation := updateRun.GetGeneration()
 	genStr := strconv.FormatInt(generation, 10)
 
-	succeedCond := meta.FindStatusCondition(updateRun.Status.Conditions, string(placementv1beta1.StagedUpdateRunConditionSucceeded))
+	updateRunStatus := updateRun.GetUpdateRunStatus()
+	succeedCond := meta.FindStatusCondition(updateRunStatus.Conditions, string(placementv1beta1.StagedUpdateRunConditionSucceeded))
 	if succeedCond != nil && succeedCond.ObservedGeneration == generation {
-		metrics.FleetUpdateRunStatusLastTimestampSeconds.WithLabelValues(updateRun.Name, genStr,
+		metrics.FleetUpdateRunStatusLastTimestampSeconds.WithLabelValues(updateRun.GetNamespace(), updateRun.GetName(), genStr,
 			string(placementv1beta1.StagedUpdateRunConditionSucceeded), string(succeedCond.Status), succeedCond.Reason).SetToCurrentTime()
 		return
 	}
 
-	progressingCond := meta.FindStatusCondition(updateRun.Status.Conditions, string(placementv1beta1.StagedUpdateRunConditionProgressing))
+	progressingCond := meta.FindStatusCondition(updateRunStatus.Conditions, string(placementv1beta1.StagedUpdateRunConditionProgressing))
 	if progressingCond != nil && progressingCond.ObservedGeneration == generation {
-		metrics.FleetUpdateRunStatusLastTimestampSeconds.WithLabelValues(updateRun.Name, genStr,
+		metrics.FleetUpdateRunStatusLastTimestampSeconds.WithLabelValues(updateRun.GetNamespace(), updateRun.GetName(), genStr,
 			string(placementv1beta1.StagedUpdateRunConditionProgressing), string(progressingCond.Status), progressingCond.Reason).SetToCurrentTime()
 		return
 	}
 
-	initializedCond := meta.FindStatusCondition(updateRun.Status.Conditions, string(placementv1beta1.StagedUpdateRunConditionInitialized))
+	initializedCond := meta.FindStatusCondition(updateRunStatus.Conditions, string(placementv1beta1.StagedUpdateRunConditionInitialized))
 	if initializedCond != nil && initializedCond.ObservedGeneration == generation {
-		metrics.FleetUpdateRunStatusLastTimestampSeconds.WithLabelValues(updateRun.Name, genStr,
+		metrics.FleetUpdateRunStatusLastTimestampSeconds.WithLabelValues(updateRun.GetNamespace(), updateRun.GetName(), genStr,
 			string(placementv1beta1.StagedUpdateRunConditionInitialized), string(initializedCond.Status), initializedCond.Reason).SetToCurrentTime()
 		return
 	}

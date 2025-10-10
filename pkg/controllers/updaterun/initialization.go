@@ -556,17 +556,18 @@ func (r *Reconciler) recordInitializationSucceeded(ctx context.Context, updateRu
 	return nil
 }
 
-// recordInitializationFailed records the failed initialization condition in the ClusterStagedUpdateRun status.
-func (r *Reconciler) recordInitializationFailed(ctx context.Context, updateRun *placementv1beta1.ClusterStagedUpdateRun, message string) error {
-	meta.SetStatusCondition(&updateRun.Status.Conditions, metav1.Condition{
+// recordInitializationFailed records the failed initialization condition in the updateRun status.
+func (r *Reconciler) recordInitializationFailed(ctx context.Context, updateRun placementv1beta1.UpdateRunObj, message string) error {
+	updateRunStatus := updateRun.GetUpdateRunStatus()
+	meta.SetStatusCondition(&updateRunStatus.Conditions, metav1.Condition{
 		Type:               string(placementv1beta1.StagedUpdateRunConditionInitialized),
 		Status:             metav1.ConditionFalse,
-		ObservedGeneration: updateRun.Generation,
+		ObservedGeneration: updateRun.GetGeneration(),
 		Reason:             condition.UpdateRunInitializeFailedReason,
 		Message:            message,
 	})
 	if updateErr := r.Client.Status().Update(ctx, updateRun); updateErr != nil {
-		klog.ErrorS(updateErr, "Failed to update the ClusterStagedUpdateRun status as failed to initialize", "clusterStagedUpdateRun", klog.KObj(updateRun))
+		klog.ErrorS(updateErr, "Failed to update the updateRun status as failed to initialize", "updateRun", klog.KObj(updateRun))
 		// updateErr can be retried.
 		return controller.NewUpdateIgnoreConflictError(updateErr)
 	}

@@ -62,7 +62,7 @@ var (
 	FleetUpdateRunStatusLastTimestampSeconds = prometheus.NewGaugeVec(prometheus.GaugeOpts{
 		Name: "fleet_workload_update_run_status_last_timestamp_seconds",
 		Help: "Last update timestamp of update run status in seconds",
-	}, []string{"name", "generation", "condition", "status", "reason"})
+	}, []string{"namespace", "name", "generation", "condition", "status", "reason"})
 )
 
 var (

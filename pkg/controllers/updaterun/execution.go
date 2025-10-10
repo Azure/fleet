@@ -674,7 +674,7 @@ func markAfterStageRequestCreated(afterStageTaskStatus *placementv1beta1.AfterSt
 		Status:             metav1.ConditionTrue,
 		ObservedGeneration: generation,
 		Reason:             condition.AfterStageTaskApprovalRequestCreatedReason,
-		Message:            "ClusterApprovalRequest is created",
+		Message:            "ApprovalRequest object is created",
 	})
 }
 
@@ -685,7 +685,7 @@ func markAfterStageRequestApproved(afterStageTaskStatus *placementv1beta1.AfterS
 		Status:             metav1.ConditionTrue,
 		ObservedGeneration: generation,
 		Reason:             condition.AfterStageTaskApprovalRequestApprovedReason,
-		Message:            "ClusterApprovalRequest is approved",
+		Message:            "ApprovalRequest object is approved",
 	})
 }
 
