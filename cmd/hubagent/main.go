@@ -124,7 +124,8 @@ func main() {
 	mgrOpts := ctrl.Options{
 		Scheme: scheme,
 		Cache: cache.Options{
-			SyncPeriod: &opts.ResyncPeriod.Duration,
+			SyncPeriod:       &opts.ResyncPeriod.Duration,
+			DefaultTransform: cache.TransformStripManagedFields(),
 		},
 		LeaderElection:             opts.LeaderElection.LeaderElect,
 		LeaderElectionID:           opts.LeaderElection.ResourceName,
