@@ -25,6 +25,7 @@ import (
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
 	corev1 "k8s.io/api/core/v1"
+	"k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/types"
 	"k8s.io/apimachinery/pkg/util/intstr"
@@ -601,9 +602,30 @@ var _ = Describe("validating CRP when resources exists", Ordered, func() {
 		})
 
 		AfterAll(func() {
-			ensureCRPAndRelatedResourcesDeleted(crpName, allMemberClusters)
+			// Must delete the conflicting CRP first, otherwise it might re-create the resources when we check
+			// if the original CRP has been fully deleted.
+			//
+			// And here the test suite will not use the shared common deletion logic as it will attempt to verify
+			// resources that are not managed by the conflicting CRP.
+			Eventually(func() error {
+				conflictedCRP := &placementv1beta1.ClusterResourcePlacement{
+					ObjectMeta: metav1.ObjectMeta{
+						Name: conflictedCRPName,
+					},
+				}
 
-			ensureCRPAndRelatedResourcesDeleted(conflictedCRPName, allMemberClusters)
+				if err := hubClient.Delete(ctx, conflictedCRP); err != nil && !errors.IsNotFound(err) {
+					return fmt.Errorf("failed to delete CRP %s: %w", conflictedCRPName, err)
+				}
+
+				// Wait until the CRP is fully deleted.
+				if err := hubClient.Get(ctx, types.NamespacedName{Name: conflictedCRPName}, conflictedCRP); !errors.IsNotFound(err) {
+					return fmt.Errorf("CRP %s is still present or an unexpected error has occurred: %w", conflictedCRPName, err)
+				}
+				return nil
+			}, eventuallyDuration, eventuallyInterval).Should(Succeed(), "Failed to delete CRP %s", conflictedCRPName)
+
+			ensureCRPAndRelatedResourcesDeleted(crpName, allMemberClusters)
 		})
 	})
 })

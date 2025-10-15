@@ -88,7 +88,7 @@ const (
 	// Do not bump this value unless you have a good reason. This is to safeguard any performance related regressions.
 	eventuallyDuration = time.Second * 10
 	// this is for workload related test cases
-	workloadEventuallyDuration = time.Second * 645
+	workloadEventuallyDuration = time.Second * 45
 	// This is for cluster setup.
 	longEventuallyDuration = time.Minute * 2
 	eventuallyInterval     = time.Millisecond * 250

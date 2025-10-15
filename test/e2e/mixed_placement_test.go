@@ -277,15 +277,12 @@ var _ = Describe("mixed ClusterResourcePlacement and ResourcePlacement negative 
 			Eventually(rpStatusUpdatedActual, eventuallyDuration, eventuallyInterval).Should(Succeed(), "Failed to update RP %s status as expected", rpName)
 
 			By("creating a CRP that uses PickAll strategy")
+			// Note that this CRP will take over namespaces.
 			createCRP(crpName)
 		})
 
 		AfterAll(func() {
 			ensureRPAndRelatedResourcesDeleted(types.NamespacedName{Name: rpName, Namespace: workNamespaceName}, allMemberClusters)
-			By("CRP should take over the work resources")
-			// ConfigMap on the hub was deleted in the previous step.
-			crpStatusUpdatedActual := crpStatusUpdatedActual(workNamespaceIdentifiers(), allMemberClusterNames, nil, "1")
-			Eventually(crpStatusUpdatedActual, eventuallyDuration, eventuallyInterval).Should(Succeed(), "Failed to update CRP status as expected")
 			ensureCRPAndRelatedResourcesDeleted(crpName, allMemberClusters)
 		})
 
@@ -344,6 +341,35 @@ var _ = Describe("mixed ClusterResourcePlacement and ResourcePlacement negative 
 				return nil
 			}
 			Eventually(crpStatusUpdatedActual, eventuallyDuration, eventuallyInterval).Should(Succeed(), "Failed to update RP %s status as expected", rpName)
+		})
+
+		// The CRP must give up on the configMap first, otherwise it might attempt re-create the configMap
+		// during the cleanup process.
+		It("can update the CRP to give up on the configMap", func() {
+			Eventually(func() error {
+				crp := &placementv1beta1.ClusterResourcePlacement{}
+				if err := hubClient.Get(ctx, types.NamespacedName{Name: crpName}, crp); err != nil {
+					return fmt.Errorf("failed to get the CRP %s: %w", crpName, err)
+				}
+
+				crp.Spec.ResourceSelectors = namespaceOnlySelector()
+				if err := hubClient.Update(ctx, crp); err != nil {
+					return fmt.Errorf("failed to update the CRP %s: %w", crpName, err)
+				}
+				return nil
+			}, eventuallyDuration, eventuallyInterval).Should(Succeed(), "Failed to update the CRP %s to give up on the configMap", crpName)
+		})
+
+		It("should update CRP status as expected", func() {
+			nsOnlyResIds := []placementv1beta1.ResourceIdentifier{
+				{
+					Kind:    "Namespace",
+					Name:    workNamespaceName,
+					Version: "v1",
+				},
+			}
+			crpStatusUpdatedActual := crpStatusUpdatedActual(nsOnlyResIds, allMemberClusterNames, nil, "1")
+			Eventually(crpStatusUpdatedActual, eventuallyDuration, eventuallyInterval).Should(Succeed(), "Failed to update CRP status as expected")
 		})
 	})
 })

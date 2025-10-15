@@ -127,6 +127,7 @@ helm install hub-agent ../../charts/hub-agent/ \
     --set forceDeleteWaitTime="1m0s" \
     --set clusterUnhealthyThreshold="3m0s" \
     --set logFileMaxSize=100000 \
+    --set MaxConcurrentClusterPlacement=200 \
     --set resourceSnapshotCreationMinimumInterval=$RESOURCE_SNAPSHOT_CREATION_MINIMUM_INTERVAL \
     --set resourceChangesCollectionDuration=$RESOURCE_CHANGES_COLLECTION_DURATION
 

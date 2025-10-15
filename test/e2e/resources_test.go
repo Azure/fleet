@@ -172,20 +172,20 @@ func appDeployment() appsv1.Deployment {
 			Replicas: ptr.To(int32(1)),
 			Selector: &metav1.LabelSelector{
 				MatchLabels: map[string]string{
-					"app": "nginx",
+					"app": "pause",
 				},
 			},
 			Template: corev1.PodTemplateSpec{
 				ObjectMeta: metav1.ObjectMeta{
 					Labels: map[string]string{
-						"app": "nginx",
+						"app": "pause",
 					},
 				},
 				Spec: corev1.PodSpec{
 					Containers: []corev1.Container{
 						{
-							Name:  "nginx",
-							Image: "nginx",
+							Name:  "pause",
+							Image: "k8s.gcr.io/pause:3.8",
 						},
 					},
 					TerminationGracePeriodSeconds: ptr.To(int64(60)),

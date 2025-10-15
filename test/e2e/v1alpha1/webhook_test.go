@@ -113,15 +113,8 @@ var _ = Describe("Fleet's Hub cluster webhook tests", func() {
 					Spec: corev1.PodSpec{
 						Containers: []corev1.Container{
 							{
-								Name:  "nginx",
-								Image: "nginx:1.14.2",
-								Ports: []corev1.ContainerPort{
-									{
-										Name:          "http",
-										Protocol:      corev1.ProtocolTCP,
-										ContainerPort: 80,
-									},
-								},
+								Name:  "pause",
+								Image: "k8s.gcr.io/pause:3.8",
 							},
 						},
 					},
@@ -168,15 +161,8 @@ var _ = Describe("Fleet's Hub cluster webhook tests", func() {
 				Spec: corev1.PodSpec{
 					Containers: []corev1.Container{
 						{
-							Name:  "nginx",
-							Image: "nginx:1.14.2",
-							Ports: []corev1.ContainerPort{
-								{
-									Name:          "http",
-									Protocol:      corev1.ProtocolTCP,
-									ContainerPort: 80,
-								},
-							},
+							Name:  "pause",
+							Image: "k8s.gcr.io/pause:3.8",
 						},
 					},
 				},
@@ -456,15 +442,8 @@ var _ = Describe("Fleet's Hub cluster webhook tests", func() {
 							Spec: corev1.PodSpec{
 								Containers: []corev1.Container{
 									{
-										Name:  "nginx",
-										Image: "nginx",
-										Ports: []corev1.ContainerPort{
-											{
-												Name:          "http",
-												Protocol:      corev1.ProtocolTCP,
-												ContainerPort: 80,
-											},
-										},
+										Name:  "pause",
+										Image: "k8s.gcr.io/pause:3.8",
 									},
 								},
 							},
@@ -513,15 +492,8 @@ var _ = Describe("Fleet's Hub cluster webhook tests", func() {
 						Spec: corev1.PodSpec{
 							Containers: []corev1.Container{
 								{
-									Name:  "nginx",
-									Image: "nginx",
-									Ports: []corev1.ContainerPort{
-										{
-											Name:          "http",
-											Protocol:      corev1.ProtocolTCP,
-											ContainerPort: 80,
-										},
-									},
+									Name:  "pause",
+									Image: "k8s.gcr.io/pause:3.8",
 								},
 							},
 						},

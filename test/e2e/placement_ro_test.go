@@ -26,6 +26,8 @@ import (
 	"k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/types"
+	"k8s.io/apimachinery/pkg/util/intstr"
+	"k8s.io/utils/ptr"
 
 	placementv1beta1 "github.com/kubefleet-dev/kubefleet/apis/placement/v1beta1"
 	scheduler "github.com/kubefleet-dev/kubefleet/pkg/scheduler/framework"
@@ -581,8 +583,45 @@ var _ = Context("creating resourceOverride and resource becomes invalid after ov
 	BeforeAll(func() {
 		By("creating work resources")
 		createWorkResources()
+
 		// Create the CRP.
-		createCRP(crpName)
+		crp := &placementv1beta1.ClusterResourcePlacement{
+			ObjectMeta: metav1.ObjectMeta{
+				Name: crpName,
+				// Add a custom finalizer; this would allow us to better observe
+				// the behavior of the controllers.
+				Finalizers: []string{customDeletionBlockerFinalizer},
+			},
+			Spec: placementv1beta1.PlacementSpec{
+				ResourceSelectors: workResourceSelector(),
+				Strategy: placementv1beta1.RolloutStrategy{
+					Type: placementv1beta1.RollingUpdateRolloutStrategyType,
+					RollingUpdate: &placementv1beta1.RollingUpdateConfig{
+						UnavailablePeriodSeconds: ptr.To(2),
+						MaxUnavailable:           ptr.To(intstr.FromString("100%")),
+					},
+				},
+			},
+		}
+		Expect(hubClient.Create(ctx, crp)).To(Succeed(), "Failed to create CRP %s", crpName)
+	})
+
+	AfterAll(func() {
+		By(fmt.Sprintf("deleting placement %s and related resources", crpName))
+		ensureCRPAndRelatedResourcesDeleted(crpName, allMemberClusters)
+
+		By(fmt.Sprintf("deleting resourceOverride %s", roName))
+		cleanupResourceOverride(roName, roNamespace)
+	})
+
+	// Verify the status before creating the overrides, so that we can be certain about the resource index
+	// to check for when the override is actually being picked up by Fleet agents.
+	It("should update CRP status as expected", func() {
+		crpStatusUpdatedActual := crpStatusUpdatedActual(workResourceIdentifiers(), allMemberClusterNames, nil, "0")
+		Eventually(crpStatusUpdatedActual, eventuallyDuration, eventuallyInterval).Should(Succeed(), "Failed to update CRP %s status as expected", crpName)
+	})
+
+	It("can create a override that breaks the resource", func() {
 		// Create the ro.
 		ro := &placementv1beta1.ResourceOverride{
 			ObjectMeta: metav1.ObjectMeta{
@@ -616,14 +655,6 @@ var _ = Context("creating resourceOverride and resource becomes invalid after ov
 		Expect(hubClient.Create(ctx, ro)).To(Succeed(), "Failed to create resourceOverride %s", roName)
 	})
 
-	AfterAll(func() {
-		By(fmt.Sprintf("deleting placement %s and related resources", crpName))
-		ensureCRPAndRelatedResourcesDeleted(crpName, allMemberClusters)
-
-		By(fmt.Sprintf("deleting resourceOverride %s", roName))
-		cleanupResourceOverride(roName, roNamespace)
-	})
-
 	It("should update CRP status as expected", func() {
 		wantRONames := []placementv1beta1.NamespacedName{
 			{Namespace: roNamespace, Name: fmt.Sprintf(placementv1beta1.OverrideSnapshotNameFmt, roName, 0)},
@@ -632,8 +663,13 @@ var _ = Context("creating resourceOverride and resource becomes invalid after ov
 		Eventually(crpStatusUpdatedActual, eventuallyDuration, eventuallyInterval).Should(Succeed(), "Failed to update CRP %s status as expected", crpName)
 	})
 
-	// This check will ignore the annotation of resources.
-	It("should not place the selected resources on member clusters", checkIfRemovedWorkResourcesFromAllMemberClusters)
+	// For simplicity reasons, this test spec will only check if the annotation hasn't been added.
+	It("should not place the selected resources on member clusters", func() {
+		for idx := range allMemberClusters {
+			memberCluster := allMemberClusters[idx]
+			Eventually(validateConfigMapNoAnnotationKeyOnCluster(memberCluster, roTestAnnotationKey)).Should(Succeed(), "Failed to find the annotation of config map on %s", memberCluster.ClusterName)
+		}
+	})
 })
 
 var _ = Context("creating resourceOverride with a templated rules with cluster name to override configMap", Ordered, func() {

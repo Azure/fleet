@@ -18,6 +18,7 @@ package e2e
 
 import (
 	"fmt"
+	"time"
 
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
@@ -152,13 +153,25 @@ var _ = Describe("ClusterResourcePlacement eviction of bound binding, no taint s
 		Eventually(crpEvictionStatusUpdatedActual, eventuallyDuration, eventuallyInterval).Should(Succeed(), "Failed to update cluster resource placement eviction status as expected")
 	})
 
-	// specifying a longer timeout, the namespace is being evicted while a new namespace is propagated with the same name leading to a failed takeover.
+	// The two test specs below use a longer timeout; due to the async nature of our controllers, the controllers
+	// might not act fast enough even if the eviction object has reported a successful eviction (the eviction controller
+	// considers an eviction to be successful as soon as the target binding has been marked for deletion; it will
+	// not wait for its final removal), which might lead to a number of inconsistencies.
+	//
+	// TO-DO: longer timeouts are not an ultimate solution; identify better signals that can prove that the CRP
+	// status has been refreshed (LTT?).
 	It("should ensure evicted cluster is picked again by scheduler & update cluster resource placement status as expected", func() {
 		crpStatusUpdatedActual := crpStatusUpdatedActual(workResourceIdentifiers(), allMemberClusterNames, nil, "0")
-		Eventually(crpStatusUpdatedActual, workloadEventuallyDuration, eventuallyInterval).Should(Succeed(), "Failed to update cluster resource placement status as expected")
+		Eventually(crpStatusUpdatedActual, workloadEventuallyDuration, time.Second*5).Should(Succeed(), "Failed to update cluster resource placement status as expected")
 	})
 
-	It("should still place resources on the all available member clusters", checkIfPlacedWorkResourcesOnAllMemberClusters)
+	It("should still place resources on the all available member clusters", func() {
+		for idx := range allMemberClusters {
+			memberCluster := allMemberClusters[idx]
+			workResourcesPlacedActual := workNamespaceAndConfigMapPlacedOnClusterActual(memberCluster)
+			Eventually(workResourcesPlacedActual, workloadEventuallyDuration, time.Second*5).Should(Succeed(), "Failed to place work resources on member cluster %s", memberCluster.ClusterName)
+		}
+	})
 })
 
 var _ = Describe("ClusterResourcePlacement eviction of bound binding - PickAll CRP, PDB with MinAvailable specified as Integer to protect resources on all clusters, eviction denied", Ordered, func() {

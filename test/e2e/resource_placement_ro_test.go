@@ -26,6 +26,8 @@ import (
 	"k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/types"
+	"k8s.io/apimachinery/pkg/util/intstr"
+	"k8s.io/utils/ptr"
 
 	placementv1beta1 "github.com/kubefleet-dev/kubefleet/apis/placement/v1beta1"
 	scheduler "github.com/kubefleet-dev/kubefleet/pkg/scheduler/framework"
@@ -489,8 +491,43 @@ var _ = Describe("placing namespaced scoped resources using a RP with ResourceOv
 			createConfigMap()
 
 			// Create the RP.
-			createRP(workNamespace, rpName)
+			rp := &placementv1beta1.ResourcePlacement{
+				ObjectMeta: metav1.ObjectMeta{
+					Name:      rpName,
+					Namespace: fmt.Sprintf(workNamespaceNameTemplate, GinkgoParallelProcess()),
+					// Add a custom finalizer; this would allow us to better observe
+					// the behavior of the controllers.
+					Finalizers: []string{customDeletionBlockerFinalizer},
+				},
+				Spec: placementv1beta1.PlacementSpec{
+					ResourceSelectors: configMapSelector(),
+					Strategy: placementv1beta1.RolloutStrategy{
+						Type: placementv1beta1.RollingUpdateRolloutStrategyType,
+						RollingUpdate: &placementv1beta1.RollingUpdateConfig{
+							UnavailablePeriodSeconds: ptr.To(2),
+							MaxUnavailable:           ptr.To(intstr.FromString("100%")),
+						},
+					},
+				},
+			}
+			Expect(hubClient.Create(ctx, rp)).To(Succeed(), "Failed to create resource placement %s/%s", workNamespace, rpName)
+		})
 
+		AfterAll(func() {
+			By(fmt.Sprintf("deleting resource placement %s/%s and related resources", workNamespace, rpName))
+			ensureRPAndRelatedResourcesDeleted(types.NamespacedName{Name: rpName, Namespace: workNamespace}, allMemberClusters)
+
+			By(fmt.Sprintf("deleting resourceOverride %s", roName))
+			cleanupResourceOverride(roName, workNamespace)
+		})
+
+		// Verify the status before creating the overrides for consistency reasons.
+		It("should update the RP status as expected", func() {
+			rpStatusUpdatedActual := rpStatusUpdatedActual(appConfigMapIdentifiers(), allMemberClusterNames, nil, "0")
+			Eventually(rpStatusUpdatedActual, eventuallyDuration, eventuallyInterval).Should(Succeed(), "Failed to update RP %s status as expected", rpName)
+		})
+
+		It("can create the resource override that breaks the resource", func() {
 			// Create the ro.
 			ro := &placementv1beta1.ResourceOverride{
 				ObjectMeta: metav1.ObjectMeta{
@@ -525,14 +562,6 @@ var _ = Describe("placing namespaced scoped resources using a RP with ResourceOv
 			Expect(hubClient.Create(ctx, ro)).To(Succeed(), "Failed to create resourceOverride %s", roName)
 		})
 
-		AfterAll(func() {
-			By(fmt.Sprintf("deleting resource placement %s/%s and related resources", workNamespace, rpName))
-			ensureRPAndRelatedResourcesDeleted(types.NamespacedName{Name: rpName, Namespace: workNamespace}, allMemberClusters)
-
-			By(fmt.Sprintf("deleting resourceOverride %s", roName))
-			cleanupResourceOverride(roName, workNamespace)
-		})
-
 		It("should update RP status as expected", func() {
 			wantRONames := []placementv1beta1.NamespacedName{
 				{Namespace: workNamespace, Name: fmt.Sprintf(placementv1beta1.OverrideSnapshotNameFmt, roName, 0)},
@@ -541,8 +570,13 @@ var _ = Describe("placing namespaced scoped resources using a RP with ResourceOv
 			Eventually(rpStatusUpdatedActual, eventuallyDuration, eventuallyInterval).Should(Succeed(), "Failed to update RP %s status as expected", rpName)
 		})
 
-		// This check will ignore the annotation of resources.
-		It("should not place the selected resources on member clusters", checkIfRemovedConfigMapFromAllMemberClusters)
+		// For simplicity reasons, this test spec will only check if the annotation hasn't been added.
+		It("should not place the selected resources on member clusters", func() {
+			for idx := range allMemberClusters {
+				memberCluster := allMemberClusters[idx]
+				Eventually(validateConfigMapNoAnnotationKeyOnCluster(memberCluster, roTestAnnotationKey)).Should(Succeed(), "Failed to find the annotation of config map on %s", memberCluster.ClusterName)
+			}
+		})
 	})
 
 	Context("creating resourceOverride with templated rules with cluster name to override configMap for ResourcePlacement", Ordered, func() {

@@ -240,7 +240,7 @@ var _ = Describe("placing resources using a CRP of PickFixed placement type", fu
 			Eventually(resourcePlacedActual, eventuallyDuration, eventuallyInterval).Should(Succeed(), "Failed to place resources on specified clusters")
 		})
 
-		It("should add finalizer to work resources on the specified clusters", func() {
+		It("can add finalizer to work resources on the specified clusters", func() {
 			Eventually(func() error {
 				if err := memberCluster1EastProd.KubeClient.Get(ctx, types.NamespacedName{Namespace: workNamespaceName, Name: appConfigMapName}, &currentConfigMap); err != nil {
 					return err
@@ -270,22 +270,52 @@ var _ = Describe("placing resources using a CRP of PickFixed placement type", fu
 		})
 
 		It("should have a deletion timestamp on work objects", func() {
-			work := &placementv1beta1.Work{}
-			Expect(hubClient.Get(ctx, types.NamespacedName{Namespace: fmt.Sprintf("fleet-member-%s", memberCluster1EastProdName), Name: fmt.Sprintf("%s-work", crpName)}, work)).Should(Succeed(), "Failed to get work")
-			Expect(work.DeletionTimestamp).ShouldNot(BeNil(), "Work should have a deletion timestamp")
+			// Use an Eventually block as the Fleet controllers might not be fast enough.
+			//
+			// Note that the CRP controller will ignore deleted bindings when reporting status.
+			Eventually(func() error {
+				work := &placementv1beta1.Work{}
+				reservedMemberNSName := fmt.Sprintf("fleet-member-%s", memberCluster1EastProdName)
+				workName := fmt.Sprintf("%s-work", crpName)
+				if err := hubClient.Get(ctx, types.NamespacedName{Namespace: reservedMemberNSName, Name: workName}, work); err != nil {
+					return fmt.Errorf("failed to get work: %w", err)
+				}
 
-			appliedWork := &placementv1beta1.AppliedWork{}
-			Expect(memberCluster1EastProd.KubeClient.Get(ctx, types.NamespacedName{Name: fmt.Sprintf("%s-work", crpName)}, appliedWork)).Should(Succeed(), "Failed to get appliedwork")
-			Expect(appliedWork.DeletionTimestamp).ShouldNot(BeNil(), "AppliedWork should have a deletion timestamp")
+				if work.DeletionTimestamp == nil {
+					return fmt.Errorf("work %s in namespace %s has not yet been marked for deletion", workName, reservedMemberNSName)
+				}
+				return nil
+			}, eventuallyDuration, eventuallyInterval).Should(Succeed(), "Failed to verify that work has been marked for deletion")
+
+			Eventually(func() error {
+				appliedWork := &placementv1beta1.AppliedWork{}
+				appliedWorkName := fmt.Sprintf("%s-work", crpName)
+				if err := memberCluster1EastProd.KubeClient.Get(ctx, types.NamespacedName{Name: appliedWorkName}, appliedWork); err != nil {
+					return fmt.Errorf("failed to get appliedwork: %w", err)
+				}
+
+				if appliedWork.DeletionTimestamp == nil {
+					return fmt.Errorf("appliedwork %s has not yet been marked for deletion", appliedWorkName)
+				}
+				return nil
+			}, eventuallyDuration, eventuallyInterval).Should(Succeed(), "Failed to verify that appliedwork has been marked for deletion")
 		})
 
 		It("configmap should still exists on previously specified cluster and be in deleting state", func() {
-			configMap := &corev1.ConfigMap{}
-			Expect(memberCluster1EastProd.KubeClient.Get(ctx, types.NamespacedName{Namespace: workNamespaceName, Name: appConfigMapName}, configMap)).Should(Succeed(), "Failed to get configmap")
-			Expect(configMap.DeletionTimestamp).ShouldNot(BeNil(), "ConfigMap should have a deletion timestamp")
+			// Use an Eventually block as the Fleet agent might not be fast enough.
+			Eventually(func() error {
+				configMap := &corev1.ConfigMap{}
+				if err := memberCluster1EastProd.KubeClient.Get(ctx, types.NamespacedName{Namespace: workNamespaceName, Name: appConfigMapName}, configMap); err != nil {
+					return err
+				}
+				if configMap.DeletionTimestamp == nil {
+					return fmt.Errorf("configMap %s has not yet been marked for deletion", appConfigMapName)
+				}
+				return nil
+			}, eventuallyDuration, eventuallyInterval).Should(Succeed(), "Failed to verify that configMap has been marked for deletion")
 		})
 
-		It("should remove finalizer from work resources on the specified clusters", func() {
+		It("can remove finalizer from work resources on the specified clusters", func() {
 			configMap := &corev1.ConfigMap{}
 			Expect(memberCluster1EastProd.KubeClient.Get(ctx, types.NamespacedName{Namespace: workNamespaceName, Name: appConfigMapName}, configMap)).Should(Succeed(), "Failed to get configmap")
 			controllerutil.RemoveFinalizer(configMap, "example.com/finalizer")
