@@ -116,7 +116,7 @@ var _ = BeforeSuite(func() {
 	err = (&Reconciler{
 		Client:          k8sClient,
 		InformerManager: dynamicInformerManager,
-	}).SetupWithManager(mgr)
+	}).SetupWithManagerForClusterStagedUpdateRun(mgr)
 	Expect(err).Should(Succeed())
 
 	// Register metrics.

@@ -30,18 +30,37 @@ import (
 	placementv1beta1 "github.com/kubefleet-dev/kubefleet/apis/placement/v1beta1"
 )
 
-func TestHandleClusterApprovalRequestUpdate(t *testing.T) {
+func TestHandleApprovalRequestUpdate(t *testing.T) {
 	tests := map[string]struct {
-		oldObj        client.Object
-		newObj        client.Object
-		shouldEnqueue bool
-		queuedName    string
+		oldObj          client.Object
+		newObj          client.Object
+		shouldEnqueue   bool
+		queuedName      string
+		isClusterScoped bool
 	}{
-		"it should not enqueue anything if the obj is not a ClusterApprovalRequest": {
-			oldObj:        &placementv1beta1.ClusterStagedUpdateRun{},
-			shouldEnqueue: false,
+		"cluster-scoped: it should not enqueue anything if the obj is not a ClusterApprovalRequest": {
+			oldObj:          &placementv1beta1.ClusterStagedUpdateRun{},
+			shouldEnqueue:   false,
+			isClusterScoped: true,
 		},
-		"it should not enqueue anything if targetUpdateRun in spec is empty": {
+		"namespaced: it should not enqueue anything if the obj is not an ApprovalRequest": {
+			oldObj:          &placementv1beta1.StagedUpdateRun{},
+			shouldEnqueue:   false,
+			isClusterScoped: false,
+		},
+		"cluster-scoped: it should not enqueue anything if newObj is not a ClusterApprovalRequest": {
+			oldObj:          &placementv1beta1.ClusterApprovalRequest{},
+			newObj:          &placementv1beta1.ClusterStagedUpdateRun{},
+			shouldEnqueue:   false,
+			isClusterScoped: true,
+		},
+		"namespaced: it should not enqueue anything if newObj is not an ApprovalRequest": {
+			oldObj:          &placementv1beta1.ApprovalRequest{},
+			newObj:          &placementv1beta1.StagedUpdateRun{},
+			shouldEnqueue:   false,
+			isClusterScoped: false,
+		},
+		"cluster-scoped: it should not enqueue anything if targetUpdateRun in spec is empty": {
 			oldObj: &placementv1beta1.ClusterApprovalRequest{
 				ObjectMeta: metav1.ObjectMeta{
 					Generation: 1,
@@ -67,9 +86,39 @@ func TestHandleClusterApprovalRequestUpdate(t *testing.T) {
 					},
 				},
 			},
-			shouldEnqueue: false,
+			shouldEnqueue:   false,
+			isClusterScoped: true,
 		},
-		"it should enqueue the targetUpdateRun if oldObj is not approved while newobj is approved": {
+		"namespaced: it should not enqueue anything if targetUpdateRun in spec is empty": {
+			oldObj: &placementv1beta1.ApprovalRequest{
+				ObjectMeta: metav1.ObjectMeta{
+					Generation: 1,
+				},
+				Spec: placementv1beta1.ApprovalRequestSpec{
+					TargetUpdateRun: "",
+				},
+			},
+			newObj: &placementv1beta1.ApprovalRequest{
+				ObjectMeta: metav1.ObjectMeta{
+					Generation: 1,
+				},
+				Spec: placementv1beta1.ApprovalRequestSpec{
+					TargetUpdateRun: "",
+				},
+				Status: placementv1beta1.ApprovalRequestStatus{
+					Conditions: []metav1.Condition{
+						{
+							Status:             metav1.ConditionTrue,
+							Type:               string(placementv1beta1.ApprovalRequestConditionApproved),
+							ObservedGeneration: 1,
+						},
+					},
+				},
+			},
+			shouldEnqueue:   false,
+			isClusterScoped: false,
+		},
+		"cluster-scoped: it should enqueue the targetUpdateRun if oldObj is not approved while newobj is approved": {
 			oldObj: &placementv1beta1.ClusterApprovalRequest{
 				ObjectMeta: metav1.ObjectMeta{
 					Generation: 1,
@@ -95,10 +144,41 @@ func TestHandleClusterApprovalRequestUpdate(t *testing.T) {
 					},
 				},
 			},
-			shouldEnqueue: true,
-			queuedName:    "test",
+			shouldEnqueue:   true,
+			queuedName:      "test",
+			isClusterScoped: true,
 		},
-		"it should enqueue the targetUpdateRun if oldObj is not declined while newobj is approved": {
+		"namespaced: it should enqueue the targetUpdateRun if oldObj is not approved while newobj is approved": {
+			oldObj: &placementv1beta1.ApprovalRequest{
+				ObjectMeta: metav1.ObjectMeta{
+					Generation: 1,
+				},
+				Spec: placementv1beta1.ApprovalRequestSpec{
+					TargetUpdateRun: "test",
+				},
+			},
+			newObj: &placementv1beta1.ApprovalRequest{
+				ObjectMeta: metav1.ObjectMeta{
+					Generation: 1,
+				},
+				Spec: placementv1beta1.ApprovalRequestSpec{
+					TargetUpdateRun: "test",
+				},
+				Status: placementv1beta1.ApprovalRequestStatus{
+					Conditions: []metav1.Condition{
+						{
+							Status:             metav1.ConditionTrue,
+							Type:               string(placementv1beta1.ApprovalRequestConditionApproved),
+							ObservedGeneration: 1,
+						},
+					},
+				},
+			},
+			shouldEnqueue:   true,
+			queuedName:      "test",
+			isClusterScoped: false,
+		},
+		"cluster-scoped: it should enqueue the targetUpdateRun if oldObj is not declined while newobj is approved": {
 			oldObj: &placementv1beta1.ClusterApprovalRequest{
 				ObjectMeta: metav1.ObjectMeta{
 					Generation: 1,
@@ -133,10 +213,50 @@ func TestHandleClusterApprovalRequestUpdate(t *testing.T) {
 					},
 				},
 			},
-			shouldEnqueue: true,
-			queuedName:    "test",
+			shouldEnqueue:   true,
+			queuedName:      "test",
+			isClusterScoped: true,
 		},
-		"it should enqueue the targetUpdateRun if oldObj is approved while newobj is not approved": {
+		"namespaced: it should enqueue the targetUpdateRun if oldObj is not declined while newobj is approved": {
+			oldObj: &placementv1beta1.ApprovalRequest{
+				ObjectMeta: metav1.ObjectMeta{
+					Generation: 1,
+				},
+				Spec: placementv1beta1.ApprovalRequestSpec{
+					TargetUpdateRun: "test",
+				},
+				Status: placementv1beta1.ApprovalRequestStatus{
+					Conditions: []metav1.Condition{
+						{
+							Status:             metav1.ConditionFalse,
+							Type:               string(placementv1beta1.ApprovalRequestConditionApproved),
+							ObservedGeneration: 1,
+						},
+					},
+				},
+			},
+			newObj: &placementv1beta1.ApprovalRequest{
+				ObjectMeta: metav1.ObjectMeta{
+					Generation: 1,
+				},
+				Spec: placementv1beta1.ApprovalRequestSpec{
+					TargetUpdateRun: "test",
+				},
+				Status: placementv1beta1.ApprovalRequestStatus{
+					Conditions: []metav1.Condition{
+						{
+							Status:             metav1.ConditionTrue,
+							Type:               string(placementv1beta1.ApprovalRequestConditionApproved),
+							ObservedGeneration: 1,
+						},
+					},
+				},
+			},
+			shouldEnqueue:   true,
+			queuedName:      "test",
+			isClusterScoped: false,
+		},
+		"cluster-scoped: it should enqueue the targetUpdateRun if oldObj is approved while newobj is not approved": {
 			oldObj: &placementv1beta1.ClusterApprovalRequest{
 				ObjectMeta: metav1.ObjectMeta{
 					Generation: 1,
@@ -162,10 +282,41 @@ func TestHandleClusterApprovalRequestUpdate(t *testing.T) {
 					TargetUpdateRun: "test",
 				},
 			},
-			shouldEnqueue: true,
-			queuedName:    "test",
+			shouldEnqueue:   true,
+			queuedName:      "test",
+			isClusterScoped: true,
 		},
-		"it should enqueue the targetUpdateRun if oldObj is approved while newobj is declined": {
+		"namespaced: it should enqueue the targetUpdateRun if oldObj is approved while newobj is not approved": {
+			oldObj: &placementv1beta1.ApprovalRequest{
+				ObjectMeta: metav1.ObjectMeta{
+					Generation: 1,
+				},
+				Spec: placementv1beta1.ApprovalRequestSpec{
+					TargetUpdateRun: "test",
+				},
+				Status: placementv1beta1.ApprovalRequestStatus{
+					Conditions: []metav1.Condition{
+						{
+							Status:             metav1.ConditionTrue,
+							Type:               string(placementv1beta1.ApprovalRequestConditionApproved),
+							ObservedGeneration: 1,
+						},
+					},
+				},
+			},
+			newObj: &placementv1beta1.ApprovalRequest{
+				ObjectMeta: metav1.ObjectMeta{
+					Generation: 1,
+				},
+				Spec: placementv1beta1.ApprovalRequestSpec{
+					TargetUpdateRun: "test",
+				},
+			},
+			shouldEnqueue:   true,
+			queuedName:      "test",
+			isClusterScoped: false,
+		},
+		"cluster-scoped: it should enqueue the targetUpdateRun if oldObj is approved while newobj is declined": {
 			oldObj: &placementv1beta1.ClusterApprovalRequest{
 				ObjectMeta: metav1.ObjectMeta{
 					Generation: 1,
@@ -200,10 +351,50 @@ func TestHandleClusterApprovalRequestUpdate(t *testing.T) {
 					},
 				},
 			},
-			shouldEnqueue: true,
-			queuedName:    "test",
+			shouldEnqueue:   true,
+			queuedName:      "test",
+			isClusterScoped: true,
 		},
-		"it should not enqueue the targetUpdateRun if neither oldObj nor newobj is approved": {
+		"namespaced: it should enqueue the targetUpdateRun if oldObj is approved while newobj is declined": {
+			oldObj: &placementv1beta1.ApprovalRequest{
+				ObjectMeta: metav1.ObjectMeta{
+					Generation: 1,
+				},
+				Spec: placementv1beta1.ApprovalRequestSpec{
+					TargetUpdateRun: "test",
+				},
+				Status: placementv1beta1.ApprovalRequestStatus{
+					Conditions: []metav1.Condition{
+						{
+							Status:             metav1.ConditionTrue,
+							Type:               string(placementv1beta1.ApprovalRequestConditionApproved),
+							ObservedGeneration: 1,
+						},
+					},
+				},
+			},
+			newObj: &placementv1beta1.ApprovalRequest{
+				ObjectMeta: metav1.ObjectMeta{
+					Generation: 1,
+				},
+				Spec: placementv1beta1.ApprovalRequestSpec{
+					TargetUpdateRun: "test",
+				},
+				Status: placementv1beta1.ApprovalRequestStatus{
+					Conditions: []metav1.Condition{
+						{
+							Status:             metav1.ConditionFalse,
+							Type:               string(placementv1beta1.ApprovalRequestConditionApproved),
+							ObservedGeneration: 1,
+						},
+					},
+				},
+			},
+			shouldEnqueue:   true,
+			queuedName:      "test",
+			isClusterScoped: false,
+		},
+		"cluster-scoped: it should not enqueue the targetUpdateRun if neither oldObj nor newobj is approved": {
 			oldObj: &placementv1beta1.ClusterApprovalRequest{
 				ObjectMeta: metav1.ObjectMeta{
 					Generation: 1,
@@ -220,9 +411,30 @@ func TestHandleClusterApprovalRequestUpdate(t *testing.T) {
 					TargetUpdateRun: "test",
 				},
 			},
-			shouldEnqueue: false,
+			shouldEnqueue:   false,
+			isClusterScoped: true,
 		},
-		"it should not enqueue the targetUpdateRun if both oldObj and newobj are approved": {
+		"namespaced: it should not enqueue the targetUpdateRun if neither oldObj nor newobj is approved": {
+			oldObj: &placementv1beta1.ApprovalRequest{
+				ObjectMeta: metav1.ObjectMeta{
+					Generation: 1,
+				},
+				Spec: placementv1beta1.ApprovalRequestSpec{
+					TargetUpdateRun: "test",
+				},
+			},
+			newObj: &placementv1beta1.ApprovalRequest{
+				ObjectMeta: metav1.ObjectMeta{
+					Generation: 1,
+				},
+				Spec: placementv1beta1.ApprovalRequestSpec{
+					TargetUpdateRun: "test",
+				},
+			},
+			shouldEnqueue:   false,
+			isClusterScoped: false,
+		},
+		"cluster-scoped: it should not enqueue the targetUpdateRun if both oldObj and newobj are approved": {
 			oldObj: &placementv1beta1.ClusterApprovalRequest{
 				ObjectMeta: metav1.ObjectMeta{
 					Generation: 1,
@@ -257,9 +469,48 @@ func TestHandleClusterApprovalRequestUpdate(t *testing.T) {
 					},
 				},
 			},
-			shouldEnqueue: false,
+			shouldEnqueue:   false,
+			isClusterScoped: true,
 		},
-		"it should not enqueue the targetUpdateRun if both oldObj and newobj are declined": {
+		"namespaced: it should not enqueue the targetUpdateRun if both oldObj and newobj are approved": {
+			oldObj: &placementv1beta1.ApprovalRequest{
+				ObjectMeta: metav1.ObjectMeta{
+					Generation: 1,
+				},
+				Spec: placementv1beta1.ApprovalRequestSpec{
+					TargetUpdateRun: "test",
+				},
+				Status: placementv1beta1.ApprovalRequestStatus{
+					Conditions: []metav1.Condition{
+						{
+							Status:             metav1.ConditionTrue,
+							Type:               string(placementv1beta1.ApprovalRequestConditionApproved),
+							ObservedGeneration: 1,
+						},
+					},
+				},
+			},
+			newObj: &placementv1beta1.ApprovalRequest{
+				ObjectMeta: metav1.ObjectMeta{
+					Generation: 1,
+				},
+				Spec: placementv1beta1.ApprovalRequestSpec{
+					TargetUpdateRun: "test",
+				},
+				Status: placementv1beta1.ApprovalRequestStatus{
+					Conditions: []metav1.Condition{
+						{
+							Status:             metav1.ConditionTrue,
+							Type:               string(placementv1beta1.ApprovalRequestConditionApproved),
+							ObservedGeneration: 1,
+						},
+					},
+				},
+			},
+			shouldEnqueue:   false,
+			isClusterScoped: false,
+		},
+		"cluster-scoped: it should not enqueue the targetUpdateRun if both oldObj and newobj are declined": {
 			oldObj: &placementv1beta1.ClusterApprovalRequest{
 				ObjectMeta: metav1.ObjectMeta{
 					Generation: 1,
@@ -294,14 +545,53 @@ func TestHandleClusterApprovalRequestUpdate(t *testing.T) {
 					},
 				},
 			},
-			shouldEnqueue: false,
+			shouldEnqueue:   false,
+			isClusterScoped: true,
+		},
+		"namespaced: it should not enqueue the targetUpdateRun if both oldObj and newobj are declined": {
+			oldObj: &placementv1beta1.ApprovalRequest{
+				ObjectMeta: metav1.ObjectMeta{
+					Generation: 1,
+				},
+				Spec: placementv1beta1.ApprovalRequestSpec{
+					TargetUpdateRun: "test",
+				},
+				Status: placementv1beta1.ApprovalRequestStatus{
+					Conditions: []metav1.Condition{
+						{
+							Status:             metav1.ConditionFalse,
+							Type:               string(placementv1beta1.ApprovalRequestConditionApproved),
+							ObservedGeneration: 1,
+						},
+					},
+				},
+			},
+			newObj: &placementv1beta1.ApprovalRequest{
+				ObjectMeta: metav1.ObjectMeta{
+					Generation: 1,
+				},
+				Spec: placementv1beta1.ApprovalRequestSpec{
+					TargetUpdateRun: "test",
+				},
+				Status: placementv1beta1.ApprovalRequestStatus{
+					Conditions: []metav1.Condition{
+						{
+							Status:             metav1.ConditionFalse,
+							Type:               string(placementv1beta1.ApprovalRequestConditionApproved),
+							ObservedGeneration: 1,
+						},
+					},
+				},
+			},
+			shouldEnqueue:   false,
+			isClusterScoped: false,
 		},
 	}
 	for name, tt := range tests {
 		t.Run(name, func(t *testing.T) {
 			queue := &controllertest.Queue{TypedInterface: workqueue.NewTypedRateLimitingQueue[reconcile.Request](
 				workqueue.DefaultTypedItemBasedRateLimiter[reconcile.Request]())}
-			handleClusterApprovalRequestUpdate(tt.oldObj, tt.newObj, queue)
+			handleApprovalRequestUpdate(tt.oldObj, tt.newObj, queue, tt.isClusterScoped)
 			if got := queue.Len() != 0; got != tt.shouldEnqueue {
 				t.Fatalf("handleClusterApprovalRequest() shouldEnqueue got %t, want %t", got, tt.shouldEnqueue)
 			}
@@ -315,25 +605,42 @@ func TestHandleClusterApprovalRequestUpdate(t *testing.T) {
 	}
 }
 
-func TestHandleClusterApprovalRequestDelete(t *testing.T) {
+func TestHandleApprovalRequestDelete(t *testing.T) {
 	tests := map[string]struct {
-		obj           client.Object
-		shouldEnqueue bool
-		queuedName    string
+		obj             client.Object
+		shouldEnqueue   bool
+		queuedName      string
+		isClusterScoped bool
 	}{
-		"it should not enqueue anything if the obj is not a ClusterApprovalRequest": {
-			obj:           &placementv1beta1.ClusterStagedUpdateRun{},
-			shouldEnqueue: false,
+		"cluster-scoped: it should not enqueue anything if the obj is not a ClusterApprovalRequest": {
+			obj:             &placementv1beta1.ClusterStagedUpdateRun{},
+			shouldEnqueue:   false,
+			isClusterScoped: true,
 		},
-		"it should not enqueue anything if targetUpdateRun in spec is empty": {
+		"namespaced: it should not enqueue anything if the obj is not an ApprovalRequest": {
+			obj:             &placementv1beta1.StagedUpdateRun{},
+			shouldEnqueue:   false,
+			isClusterScoped: false,
+		},
+		"cluster-scoped: it should not enqueue anything if targetUpdateRun in spec is empty": {
 			obj: &placementv1beta1.ClusterApprovalRequest{
 				Spec: placementv1beta1.ApprovalRequestSpec{
 					TargetUpdateRun: "",
 				},
 			},
-			shouldEnqueue: false,
+			shouldEnqueue:   false,
+			isClusterScoped: true,
 		},
-		"it should enqueue the targetUpdateRun, if ClusterApprovalRequest has neither Approved/ApprovalAccepted status set": {
+		"namespaced: it should not enqueue anything if targetUpdateRun in spec is empty": {
+			obj: &placementv1beta1.ApprovalRequest{
+				Spec: placementv1beta1.ApprovalRequestSpec{
+					TargetUpdateRun: "",
+				},
+			},
+			shouldEnqueue:   false,
+			isClusterScoped: false,
+		},
+		"cluster-scoped: it should enqueue the targetUpdateRun, if ClusterApprovalRequest has neither Approved/ApprovalAccepted status set": {
 			obj: &placementv1beta1.ClusterApprovalRequest{
 				ObjectMeta: metav1.ObjectMeta{
 					Generation: 1,
@@ -342,10 +649,24 @@ func TestHandleClusterApprovalRequestDelete(t *testing.T) {
 					TargetUpdateRun: "test-update-run",
 				},
 			},
-			shouldEnqueue: true,
-			queuedName:    "test-update-run",
+			shouldEnqueue:   true,
+			queuedName:      "test-update-run",
+			isClusterScoped: true,
 		},
-		"it should enqueue the targetUpdateRun, if ClusterApprovalRequest has only Approved status set to true": {
+		"namespaced: it should enqueue the targetUpdateRun, if ApprovalRequest has neither Approved/ApprovalAccepted status set": {
+			obj: &placementv1beta1.ApprovalRequest{
+				ObjectMeta: metav1.ObjectMeta{
+					Generation: 1,
+				},
+				Spec: placementv1beta1.ApprovalRequestSpec{
+					TargetUpdateRun: "test-update-run",
+				},
+			},
+			shouldEnqueue:   true,
+			queuedName:      "test-update-run",
+			isClusterScoped: false,
+		},
+		"cluster-scoped: it should enqueue the targetUpdateRun, if ClusterApprovalRequest has only Approved status set to true": {
 			obj: &placementv1beta1.ClusterApprovalRequest{
 				ObjectMeta: metav1.ObjectMeta{
 					Generation: 1,
@@ -363,10 +684,33 @@ func TestHandleClusterApprovalRequestDelete(t *testing.T) {
 					},
 				},
 			},
-			shouldEnqueue: true,
-			queuedName:    "test-update-run",
+			shouldEnqueue:   true,
+			queuedName:      "test-update-run",
+			isClusterScoped: true,
 		},
-		"it should enqueue the targetUpdateRun, if ClusterApprovalRequest has only Approved status set to false": {
+		"namespaced: it should enqueue the targetUpdateRun, if ApprovalRequest has only Approved status set to true": {
+			obj: &placementv1beta1.ApprovalRequest{
+				ObjectMeta: metav1.ObjectMeta{
+					Generation: 1,
+				},
+				Spec: placementv1beta1.ApprovalRequestSpec{
+					TargetUpdateRun: "test-update-run",
+				},
+				Status: placementv1beta1.ApprovalRequestStatus{
+					Conditions: []metav1.Condition{
+						{
+							Status:             metav1.ConditionTrue,
+							Type:               string(placementv1beta1.ApprovalRequestConditionApproved),
+							ObservedGeneration: 1,
+						},
+					},
+				},
+			},
+			shouldEnqueue:   true,
+			queuedName:      "test-update-run",
+			isClusterScoped: false,
+		},
+		"cluster-scoped: it should enqueue the targetUpdateRun, if ClusterApprovalRequest has only Approved status set to false": {
 			obj: &placementv1beta1.ClusterApprovalRequest{
 				ObjectMeta: metav1.ObjectMeta{
 					Generation: 1,
@@ -384,10 +728,33 @@ func TestHandleClusterApprovalRequestDelete(t *testing.T) {
 					},
 				},
 			},
-			shouldEnqueue: true,
-			queuedName:    "test-update-run",
+			shouldEnqueue:   true,
+			queuedName:      "test-update-run",
+			isClusterScoped: true,
 		},
-		"it should not enqueue updateRun, if ClusterApprovalRequest has Approved set to false, ApprovalAccepted status set to true": {
+		"namespaced: it should enqueue the targetUpdateRun, if ApprovalRequest has only Approved status set to false": {
+			obj: &placementv1beta1.ApprovalRequest{
+				ObjectMeta: metav1.ObjectMeta{
+					Generation: 1,
+				},
+				Spec: placementv1beta1.ApprovalRequestSpec{
+					TargetUpdateRun: "test-update-run",
+				},
+				Status: placementv1beta1.ApprovalRequestStatus{
+					Conditions: []metav1.Condition{
+						{
+							Status:             metav1.ConditionTrue,
+							Type:               string(placementv1beta1.ApprovalRequestConditionApproved),
+							ObservedGeneration: 1,
+						},
+					},
+				},
+			},
+			shouldEnqueue:   true,
+			queuedName:      "test-update-run",
+			isClusterScoped: false,
+		},
+		"cluster-scoped: it should not enqueue updateRun, if ClusterApprovalRequest has Approved set to false, ApprovalAccepted status set to true": {
 			obj: &placementv1beta1.ClusterApprovalRequest{
 				ObjectMeta: metav1.ObjectMeta{
 					Generation: 1,
@@ -410,9 +777,36 @@ func TestHandleClusterApprovalRequestDelete(t *testing.T) {
 					},
 				},
 			},
-			shouldEnqueue: false,
+			shouldEnqueue:   false,
+			isClusterScoped: true,
 		},
-		"it should not enqueue updateRun, if ClusterApprovalRequest has Approved, ApprovalAccepted status set to true": {
+		"namespaced: it should not enqueue updateRun, if ApprovalRequest has Approved set to false, ApprovalAccepted status set to true": {
+			obj: &placementv1beta1.ApprovalRequest{
+				ObjectMeta: metav1.ObjectMeta{
+					Generation: 1,
+				},
+				Spec: placementv1beta1.ApprovalRequestSpec{
+					TargetUpdateRun: "test-update-run",
+				},
+				Status: placementv1beta1.ApprovalRequestStatus{
+					Conditions: []metav1.Condition{
+						{
+							Status:             metav1.ConditionFalse,
+							Type:               string(placementv1beta1.ApprovalRequestConditionApproved),
+							ObservedGeneration: 1,
+						},
+						{
+							Status:             metav1.ConditionTrue,
+							Type:               string(placementv1beta1.ApprovalRequestConditionApprovalAccepted),
+							ObservedGeneration: 1,
+						},
+					},
+				},
+			},
+			shouldEnqueue:   false,
+			isClusterScoped: false,
+		},
+		"cluster-scoped: it should not enqueue updateRun, if ClusterApprovalRequest has Approved, ApprovalAccepted status set to true": {
 			obj: &placementv1beta1.ClusterApprovalRequest{
 				ObjectMeta: metav1.ObjectMeta{
 					Generation: 1,
@@ -435,7 +829,34 @@ func TestHandleClusterApprovalRequestDelete(t *testing.T) {
 					},
 				},
 			},
-			shouldEnqueue: false,
+			shouldEnqueue:   false,
+			isClusterScoped: true,
+		},
+		"namespaced: it should not enqueue updateRun, if ApprovalRequest has Approved, ApprovalAccepted status set to true": {
+			obj: &placementv1beta1.ApprovalRequest{
+				ObjectMeta: metav1.ObjectMeta{
+					Generation: 1,
+				},
+				Spec: placementv1beta1.ApprovalRequestSpec{
+					TargetUpdateRun: "test-update-run",
+				},
+				Status: placementv1beta1.ApprovalRequestStatus{
+					Conditions: []metav1.Condition{
+						{
+							Status:             metav1.ConditionTrue,
+							Type:               string(placementv1beta1.ApprovalRequestConditionApproved),
+							ObservedGeneration: 1,
+						},
+						{
+							Status:             metav1.ConditionTrue,
+							Type:               string(placementv1beta1.ApprovalRequestConditionApprovalAccepted),
+							ObservedGeneration: 1,
+						},
+					},
+				},
+			},
+			shouldEnqueue:   false,
+			isClusterScoped: false,
 		},
 	}
 
@@ -443,7 +864,7 @@ func TestHandleClusterApprovalRequestDelete(t *testing.T) {
 		t.Run(name, func(t *testing.T) {
 			queue := &controllertest.Queue{TypedInterface: workqueue.NewTypedRateLimitingQueue[reconcile.Request](
 				workqueue.DefaultTypedItemBasedRateLimiter[reconcile.Request]())}
-			handleClusterApprovalRequestDelete(tt.obj, queue)
+			handleApprovalRequestDelete(tt.obj, queue, tt.isClusterScoped)
 			if got := queue.Len() != 0; got != tt.shouldEnqueue {
 				t.Fatalf("handleClusterApprovalRequestDelete() shouldEnqueue got %t, want %t", got, tt.shouldEnqueue)
 			}

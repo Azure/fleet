@@ -36,6 +36,7 @@ import (
 	"github.com/kubefleet-dev/kubefleet/pkg/utils/annotations"
 	"github.com/kubefleet-dev/kubefleet/pkg/utils/condition"
 	"github.com/kubefleet-dev/kubefleet/pkg/utils/controller"
+	"github.com/kubefleet-dev/kubefleet/pkg/utils/defaulter"
 	"github.com/kubefleet-dev/kubefleet/pkg/utils/overrider"
 )
 
@@ -95,6 +96,10 @@ func (r *Reconciler) validatePlacement(ctx context.Context, updateRun placementv
 		klog.ErrorS(err, "Failed to get placement", "placement", placementKey, "updateRun", updateRunRef)
 		return types.NamespacedName{}, controller.NewAPIServerError(true, err)
 	}
+
+	// fill out all the default values for placement, mutation webhook is not setup for resource placement.
+	// TODO: setup mutation webhook for resource placement.
+	defaulter.SetPlacementDefaults(placement)
 
 	// Check if the Placement has an external rollout strategy.
 	placementSpec := placement.GetPlacementSpec()

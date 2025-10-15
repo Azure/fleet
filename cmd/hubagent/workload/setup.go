@@ -114,6 +114,12 @@ var (
 		placementv1beta1.GroupVersion.WithKind(placementv1beta1.ClusterApprovalRequestKind),
 	}
 
+	stagedUpdateRunGVKs = []schema.GroupVersionKind{
+		placementv1beta1.GroupVersion.WithKind(placementv1beta1.StagedUpdateRunKind),
+		placementv1beta1.GroupVersion.WithKind(placementv1beta1.StagedUpdateStrategyKind),
+		placementv1beta1.GroupVersion.WithKind(placementv1beta1.ApprovalRequestKind),
+	}
+
 	clusterInventoryGVKs = []schema.GroupVersionKind{
 		clusterinventory.GroupVersion.WithKind("ClusterProfile"),
 	}
@@ -331,9 +337,26 @@ func SetupControllers(ctx context.Context, wg *sync.WaitGroup, mgr ctrl.Manager,
 			if err = (&updaterun.Reconciler{
 				Client:          mgr.GetClient(),
 				InformerManager: dynamicInformerManager,
-			}).SetupWithManager(mgr); err != nil {
+			}).SetupWithManagerForClusterStagedUpdateRun(mgr); err != nil {
 				klog.ErrorS(err, "Unable to set up clusterStagedUpdateRun controller")
 				return err
+			}
+
+			if opts.EnableResourcePlacement {
+				for _, gvk := range stagedUpdateRunGVKs {
+					if err = utils.CheckCRDInstalled(discoverClient, gvk); err != nil {
+						klog.ErrorS(err, "Unable to find the required CRD", "GVK", gvk)
+						return err
+					}
+				}
+				klog.Info("Setting up stagedUpdateRun controller")
+				if err = (&updaterun.Reconciler{
+					Client:          mgr.GetClient(),
+					InformerManager: dynamicInformerManager,
+				}).SetupWithManagerForStagedUpdateRun(mgr); err != nil {
+					klog.ErrorS(err, "Unable to set up stagedUpdateRun controller")
+					return err
+				}
 			}
 		}
 

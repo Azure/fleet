@@ -519,6 +519,23 @@ func crpRolloutPendingDueToExternalStrategyConditions(generation int64) []metav1
 	}
 }
 
+func rpRolloutPendingDueToExternalStrategyConditions(generation int64) []metav1.Condition {
+	return []metav1.Condition{
+		{
+			Type:               string(placementv1beta1.ResourcePlacementScheduledConditionType),
+			Status:             metav1.ConditionTrue,
+			Reason:             scheduler.FullyScheduledReason,
+			ObservedGeneration: generation,
+		},
+		{
+			Type:               string(placementv1beta1.ResourcePlacementRolloutStartedConditionType),
+			Status:             metav1.ConditionUnknown,
+			Reason:             condition.RolloutControlledByExternalControllerReason,
+			ObservedGeneration: generation,
+		},
+	}
+}
+
 func rpAppliedFailedConditions(generation int64) []metav1.Condition {
 	return []metav1.Condition{
 		{
@@ -1413,9 +1430,6 @@ func crpStatusWithExternalStrategyActual(
 	wantResourceOverrides map[string][]placementv1beta1.NamespacedName,
 ) func() error {
 	crpName := fmt.Sprintf(crpNameTemplate, GinkgoParallelProcess())
-	nsName := fmt.Sprintf(workNamespaceNameTemplate, GinkgoParallelProcess())
-	cmName := fmt.Sprintf(appConfigMapNameTemplate, GinkgoParallelProcess())
-
 	return func() error {
 		crp := &placementv1beta1.ClusterResourcePlacement{}
 		if err := hubClient.Get(ctx, types.NamespacedName{Name: crpName}, crp); err != nil {
@@ -1424,71 +1438,8 @@ func crpStatusWithExternalStrategyActual(
 
 		reportDiff := crp.Spec.Strategy.ApplyStrategy != nil && crp.Spec.Strategy.ApplyStrategy.Type == placementv1beta1.ApplyStrategyTypeReportDiff
 
-		var wantPlacementStatus []placementv1beta1.PerClusterPlacementStatus
-		crpHasOverrides := false
-		for i, name := range wantSelectedClusters {
-			if !wantRolloutCompletedPerCluster[i] {
-				// No observed resource index for this cluster, assume rollout is still pending.
-				wantPlacementStatus = append(wantPlacementStatus, placementv1beta1.PerClusterPlacementStatus{
-					ClusterName:           name,
-					Conditions:            perClusterRolloutUnknownConditions(crp.Generation),
-					ObservedResourceIndex: wantObservedResourceIndexPerCluster[i],
-				})
-			} else {
-				wantResourceOverrides, hasRO := wantResourceOverrides[name]
-				wantClusterResourceOverrides, hasCRO := wantClusterResourceOverrides[name]
-				hasOverrides := (hasRO && len(wantResourceOverrides) > 0) || (hasCRO && len(wantClusterResourceOverrides) > 0)
-				if hasOverrides {
-					crpHasOverrides = true
-				}
-				if reportDiff {
-					wantPlacementStatus = append(wantPlacementStatus, placementv1beta1.PerClusterPlacementStatus{
-						ClusterName:                        name,
-						Conditions:                         perClusterDiffReportedConditions(crp.Generation),
-						ApplicableResourceOverrides:        wantResourceOverrides,
-						ApplicableClusterResourceOverrides: wantClusterResourceOverrides,
-						ObservedResourceIndex:              wantObservedResourceIndexPerCluster[i],
-						DiffedPlacements: []placementv1beta1.DiffedResourcePlacement{
-							{
-								ResourceIdentifier: placementv1beta1.ResourceIdentifier{
-									Version: "v1",
-									Kind:    "Namespace",
-									Name:    nsName,
-								},
-								ObservedDiffs: []placementv1beta1.PatchDetail{
-									{
-										Path:       "/",
-										ValueInHub: "(the whole object)",
-									},
-								},
-							},
-							{
-								ResourceIdentifier: placementv1beta1.ResourceIdentifier{
-									Version:   "v1",
-									Kind:      "ConfigMap",
-									Name:      cmName,
-									Namespace: nsName,
-								},
-								ObservedDiffs: []placementv1beta1.PatchDetail{
-									{
-										Path:       "/",
-										ValueInHub: "(the whole object)",
-									},
-								},
-							},
-						},
-					})
-				} else {
-					wantPlacementStatus = append(wantPlacementStatus, placementv1beta1.PerClusterPlacementStatus{
-						ClusterName:                        name,
-						Conditions:                         perClusterRolloutCompletedConditions(crp.Generation, true, hasOverrides),
-						ApplicableResourceOverrides:        wantResourceOverrides,
-						ApplicableClusterResourceOverrides: wantClusterResourceOverrides,
-						ObservedResourceIndex:              wantObservedResourceIndexPerCluster[i],
-					})
-				}
-			}
-		}
+		wantPlacementStatus, crpHasOverrides := buildPerClusterPlacementStatusesAndHasOverrides(
+			crp.Generation, reportDiff, wantSelectedClusters, wantObservedResourceIndexPerCluster, wantRolloutCompletedPerCluster, wantClusterResourceOverrides, wantResourceOverrides)
 
 		wantStatus := placementv1beta1.PlacementStatus{
 			PerClusterPlacementStatuses: wantPlacementStatus,
@@ -1510,6 +1461,131 @@ func crpStatusWithExternalStrategyActual(
 		}
 		return nil
 	}
+}
+
+func rpStatusWithExternalStrategyActual(
+	wantSelectedResourceIdentifiers []placementv1beta1.ResourceIdentifier,
+	wantObservedResourceIndex string,
+	wantRPRolloutCompleted bool,
+	wantSelectedClusters []string,
+	wantObservedResourceIndexPerCluster []string,
+	wantRolloutCompletedPerCluster []bool,
+	wantClusterResourceOverrides map[string][]string,
+	wantResourceOverrides map[string][]placementv1beta1.NamespacedName,
+) func() error {
+	rpName := fmt.Sprintf(rpNameTemplate, GinkgoParallelProcess())
+	rpNamespace := fmt.Sprintf(workNamespaceNameTemplate, GinkgoParallelProcess())
+	return func() error {
+		rp := &placementv1beta1.ResourcePlacement{}
+		if err := hubClient.Get(ctx, client.ObjectKey{Name: rpName, Namespace: rpNamespace}, rp); err != nil {
+			return err
+		}
+
+		reportDiff := rp.Spec.Strategy.ApplyStrategy != nil && rp.Spec.Strategy.ApplyStrategy.Type == placementv1beta1.ApplyStrategyTypeReportDiff
+
+		wantPlacementStatus, rpHasOverrides := buildPerClusterPlacementStatusesAndHasOverrides(
+			rp.Generation, reportDiff, wantSelectedClusters, wantObservedResourceIndexPerCluster, wantRolloutCompletedPerCluster, wantClusterResourceOverrides, wantResourceOverrides)
+
+		wantStatus := placementv1beta1.PlacementStatus{
+			PerClusterPlacementStatuses: wantPlacementStatus,
+			SelectedResources:           wantSelectedResourceIdentifiers,
+			ObservedResourceIndex:       wantObservedResourceIndex,
+		}
+		if wantRPRolloutCompleted {
+			if reportDiff {
+				wantStatus.Conditions = rpDiffReportedConditions(rp.Generation, rpHasOverrides)
+			} else {
+				wantStatus.Conditions = rpRolloutCompletedConditions(rp.Generation, rpHasOverrides)
+			}
+		} else {
+			wantStatus.Conditions = rpRolloutPendingDueToExternalStrategyConditions(rp.Generation)
+		}
+
+		if diff := cmp.Diff(rp.Status, wantStatus, placementStatusCmpOptions...); diff != "" {
+			return fmt.Errorf("RP status diff (-got, +want): %s", diff)
+		}
+		return nil
+	}
+}
+
+func buildPerClusterPlacementStatusesAndHasOverrides(
+	generation int64,
+	reportDiff bool,
+	wantSelectedClusters []string,
+	wantObservedResourceIndexPerCluster []string,
+	wantRolloutCompletedPerCluster []bool,
+	wantClusterResourceOverrides map[string][]string,
+	wantResourceOverrides map[string][]placementv1beta1.NamespacedName,
+) ([]placementv1beta1.PerClusterPlacementStatus, bool) {
+	nsName := fmt.Sprintf(workNamespaceNameTemplate, GinkgoParallelProcess())
+	cmName := fmt.Sprintf(appConfigMapNameTemplate, GinkgoParallelProcess())
+	var wantPlacementStatuses []placementv1beta1.PerClusterPlacementStatus
+	placementHasOverrides := false
+	for i, name := range wantSelectedClusters {
+		if !wantRolloutCompletedPerCluster[i] {
+			// No observed resource index for this cluster, assume rollout is still pending.
+			wantPlacementStatuses = append(wantPlacementStatuses, placementv1beta1.PerClusterPlacementStatus{
+				ClusterName:           name,
+				Conditions:            perClusterRolloutUnknownConditions(generation),
+				ObservedResourceIndex: wantObservedResourceIndexPerCluster[i],
+			})
+		} else {
+			wantResourceOverrides, hasRO := wantResourceOverrides[name]
+			wantClusterResourceOverrides, hasCRO := wantClusterResourceOverrides[name]
+			hasOverrides := (hasRO && len(wantResourceOverrides) > 0) || (hasCRO && len(wantClusterResourceOverrides) > 0)
+			if hasOverrides {
+				placementHasOverrides = true
+			}
+			if reportDiff {
+				wantPlacementStatuses = append(wantPlacementStatuses, placementv1beta1.PerClusterPlacementStatus{
+					ClusterName:                        name,
+					Conditions:                         perClusterDiffReportedConditions(generation),
+					ApplicableResourceOverrides:        wantResourceOverrides,
+					ApplicableClusterResourceOverrides: wantClusterResourceOverrides,
+					ObservedResourceIndex:              wantObservedResourceIndexPerCluster[i],
+					// TODO(arvindth): Need to update this when we have more test cases for staged UpdateRun.
+					DiffedPlacements: []placementv1beta1.DiffedResourcePlacement{
+						{
+							ResourceIdentifier: placementv1beta1.ResourceIdentifier{
+								Version: "v1",
+								Kind:    "Namespace",
+								Name:    nsName,
+							},
+							ObservedDiffs: []placementv1beta1.PatchDetail{
+								{
+									Path:       "/",
+									ValueInHub: "(the whole object)",
+								},
+							},
+						},
+						{
+							ResourceIdentifier: placementv1beta1.ResourceIdentifier{
+								Version:   "v1",
+								Kind:      "ConfigMap",
+								Name:      cmName,
+								Namespace: nsName,
+							},
+							ObservedDiffs: []placementv1beta1.PatchDetail{
+								{
+									Path:       "/",
+									ValueInHub: "(the whole object)",
+								},
+							},
+						},
+					},
+				})
+			} else {
+				wantPlacementStatuses = append(wantPlacementStatuses, placementv1beta1.PerClusterPlacementStatus{
+					ClusterName:                        name,
+					Conditions:                         perClusterRolloutCompletedConditions(generation, true, hasOverrides),
+					ApplicableResourceOverrides:        wantResourceOverrides,
+					ApplicableClusterResourceOverrides: wantClusterResourceOverrides,
+					ObservedResourceIndex:              wantObservedResourceIndexPerCluster[i],
+				})
+			}
+		}
+	}
+	return wantPlacementStatuses, placementHasOverrides
 }
 
 func customizedPlacementStatusUpdatedActual(
@@ -2011,7 +2087,7 @@ func updateRunSucceedConditions(generation int64) []metav1.Condition {
 	}
 }
 
-func updateRunStatusSucceededActual(
+func clusterStagedUpdateRunStatusSucceededActual(
 	updateRunName string,
 	wantPolicyIndex string,
 	wantClusterCount int,
@@ -2034,39 +2110,9 @@ func updateRunStatusSucceededActual(
 			ApplyStrategy:              wantApplyStrategy.DeepCopy(),
 			UpdateStrategySnapshot:     wantStrategySpec,
 		}
-		stagesStatus := make([]placementv1beta1.StageUpdatingStatus, len(wantStrategySpec.Stages))
-		for i, stage := range wantStrategySpec.Stages {
-			stagesStatus[i].StageName = stage.Name
-			stagesStatus[i].Clusters = make([]placementv1beta1.ClusterUpdatingStatus, len(wantSelectedClusters[i]))
-			for j := range stagesStatus[i].Clusters {
-				stagesStatus[i].Clusters[j].ClusterName = wantSelectedClusters[i][j]
-				stagesStatus[i].Clusters[j].ClusterResourceOverrideSnapshots = wantCROs[wantSelectedClusters[i][j]]
-				stagesStatus[i].Clusters[j].ResourceOverrideSnapshots = wantROs[wantSelectedClusters[i][j]]
-				stagesStatus[i].Clusters[j].Conditions = updateRunClusterRolloutSucceedConditions(updateRun.Generation)
-			}
-			stagesStatus[i].AfterStageTaskStatus = make([]placementv1beta1.AfterStageTaskStatus, len(stage.AfterStageTasks))
-			for j, task := range stage.AfterStageTasks {
-				stagesStatus[i].AfterStageTaskStatus[j].Type = task.Type
-				if task.Type == placementv1beta1.AfterStageTaskTypeApproval {
-					stagesStatus[i].AfterStageTaskStatus[j].ApprovalRequestName = fmt.Sprintf(placementv1beta1.ApprovalTaskNameFmt, updateRun.Name, stage.Name)
-				}
-				stagesStatus[i].AfterStageTaskStatus[j].Conditions = updateRunAfterStageTaskSucceedConditions(updateRun.Generation, task.Type)
-			}
-			stagesStatus[i].Conditions = updateRunStageRolloutSucceedConditions(updateRun.Generation)
-		}
 
-		deleteStageStatus := &placementv1beta1.StageUpdatingStatus{
-			StageName: "kubernetes-fleet.io/deleteStage",
-		}
-		deleteStageStatus.Clusters = make([]placementv1beta1.ClusterUpdatingStatus, len(wantUnscheduledClusters))
-		for i := range deleteStageStatus.Clusters {
-			deleteStageStatus.Clusters[i].ClusterName = wantUnscheduledClusters[i]
-			deleteStageStatus.Clusters[i].Conditions = updateRunClusterRolloutSucceedConditions(updateRun.Generation)
-		}
-		deleteStageStatus.Conditions = updateRunStageRolloutSucceedConditions(updateRun.Generation)
-
-		wantStatus.StagesStatus = stagesStatus
-		wantStatus.DeletionStageStatus = deleteStageStatus
+		wantStatus.StagesStatus = buildStageUpdatingStatuses(wantStrategySpec, wantSelectedClusters, wantCROs, wantROs, updateRun)
+		wantStatus.DeletionStageStatus = buildDeletionStageStatus(wantUnscheduledClusters, updateRun)
 		wantStatus.Conditions = updateRunSucceedConditions(updateRun.Generation)
 		if diff := cmp.Diff(updateRun.Status, wantStatus, updateRunStatusCmpOption...); diff != "" {
 			return fmt.Errorf("UpdateRun status diff (-got, +want): %s", diff)
@@ -2075,7 +2121,87 @@ func updateRunStatusSucceededActual(
 	}
 }
 
-func updateRunAndApprovalRequestsRemovedActual(updateRunName string) func() error {
+func stagedUpdateRunStatusSucceededActual(
+	updateRunName, namespace string,
+	wantPolicyIndex string,
+	wantClusterCount int,
+	wantApplyStrategy *placementv1beta1.ApplyStrategy,
+	wantStrategySpec *placementv1beta1.UpdateStrategySpec,
+	wantSelectedClusters [][]string,
+	wantUnscheduledClusters []string,
+	wantCROs map[string][]string,
+	wantROs map[string][]placementv1beta1.NamespacedName,
+) func() error {
+	return func() error {
+		updateRun := &placementv1beta1.StagedUpdateRun{}
+		if err := hubClient.Get(ctx, client.ObjectKey{Name: updateRunName, Namespace: namespace}, updateRun); err != nil {
+			return err
+		}
+
+		wantStatus := placementv1beta1.UpdateRunStatus{
+			PolicySnapshotIndexUsed:    wantPolicyIndex,
+			PolicyObservedClusterCount: wantClusterCount,
+			ApplyStrategy:              wantApplyStrategy.DeepCopy(),
+			UpdateStrategySnapshot:     wantStrategySpec,
+		}
+
+		wantStatus.StagesStatus = buildStageUpdatingStatuses(wantStrategySpec, wantSelectedClusters, wantCROs, wantROs, updateRun)
+		wantStatus.DeletionStageStatus = buildDeletionStageStatus(wantUnscheduledClusters, updateRun)
+		wantStatus.Conditions = updateRunSucceedConditions(updateRun.Generation)
+		if diff := cmp.Diff(updateRun.Status, wantStatus, updateRunStatusCmpOption...); diff != "" {
+			return fmt.Errorf("UpdateRun status diff (-got, +want): %s", diff)
+		}
+		return nil
+	}
+}
+
+func buildStageUpdatingStatuses(
+	wantStrategySpec *placementv1beta1.UpdateStrategySpec,
+	wantSelectedClusters [][]string,
+	wantCROs map[string][]string,
+	wantROs map[string][]placementv1beta1.NamespacedName,
+	updateRun placementv1beta1.UpdateRunObj,
+) []placementv1beta1.StageUpdatingStatus {
+	stagesStatus := make([]placementv1beta1.StageUpdatingStatus, len(wantStrategySpec.Stages))
+	for i, stage := range wantStrategySpec.Stages {
+		stagesStatus[i].StageName = stage.Name
+		stagesStatus[i].Clusters = make([]placementv1beta1.ClusterUpdatingStatus, len(wantSelectedClusters[i]))
+		for j := range stagesStatus[i].Clusters {
+			stagesStatus[i].Clusters[j].ClusterName = wantSelectedClusters[i][j]
+			stagesStatus[i].Clusters[j].ClusterResourceOverrideSnapshots = wantCROs[wantSelectedClusters[i][j]]
+			stagesStatus[i].Clusters[j].ResourceOverrideSnapshots = wantROs[wantSelectedClusters[i][j]]
+			stagesStatus[i].Clusters[j].Conditions = updateRunClusterRolloutSucceedConditions(updateRun.GetGeneration())
+		}
+		stagesStatus[i].AfterStageTaskStatus = make([]placementv1beta1.AfterStageTaskStatus, len(stage.AfterStageTasks))
+		for j, task := range stage.AfterStageTasks {
+			stagesStatus[i].AfterStageTaskStatus[j].Type = task.Type
+			if task.Type == placementv1beta1.AfterStageTaskTypeApproval {
+				stagesStatus[i].AfterStageTaskStatus[j].ApprovalRequestName = fmt.Sprintf(placementv1beta1.ApprovalTaskNameFmt, updateRun.GetName(), stage.Name)
+			}
+			stagesStatus[i].AfterStageTaskStatus[j].Conditions = updateRunAfterStageTaskSucceedConditions(updateRun.GetGeneration(), task.Type)
+		}
+		stagesStatus[i].Conditions = updateRunStageRolloutSucceedConditions(updateRun.GetGeneration())
+	}
+	return stagesStatus
+}
+
+func buildDeletionStageStatus(
+	wantUnscheduledClusters []string,
+	updateRun placementv1beta1.UpdateRunObj,
+) *placementv1beta1.StageUpdatingStatus {
+	deleteStageStatus := &placementv1beta1.StageUpdatingStatus{
+		StageName: "kubernetes-fleet.io/deleteStage",
+	}
+	deleteStageStatus.Clusters = make([]placementv1beta1.ClusterUpdatingStatus, len(wantUnscheduledClusters))
+	for i := range deleteStageStatus.Clusters {
+		deleteStageStatus.Clusters[i].ClusterName = wantUnscheduledClusters[i]
+		deleteStageStatus.Clusters[i].Conditions = updateRunClusterRolloutSucceedConditions(updateRun.GetGeneration())
+	}
+	deleteStageStatus.Conditions = updateRunStageRolloutSucceedConditions(updateRun.GetGeneration())
+	return deleteStageStatus
+}
+
+func clusterStagedUpdateRunAndClusterApprovalRequestsRemovedActual(updateRunName string) func() error {
 	return func() error {
 		if err := hubClient.Get(ctx, types.NamespacedName{Name: updateRunName}, &placementv1beta1.ClusterStagedUpdateRun{}); !errors.IsNotFound(err) {
 			return fmt.Errorf("UpdateRun still exists or an unexpected error occurred: %w", err)
@@ -2094,7 +2220,26 @@ func updateRunAndApprovalRequestsRemovedActual(updateRunName string) func() erro
 	}
 }
 
-func updateRunStrategyRemovedActual(strategyName string) func() error {
+func stagedUpdateRunAndApprovalRequestsRemovedActual(updateRunName, namespace string) func() error {
+	return func() error {
+		if err := hubClient.Get(ctx, client.ObjectKey{Name: updateRunName, Namespace: namespace}, &placementv1beta1.StagedUpdateRun{}); !errors.IsNotFound(err) {
+			return fmt.Errorf("UpdateRun still exists or an unexpected error occurred: %w", err)
+		}
+
+		appReqList := &placementv1beta1.ApprovalRequestList{}
+		if err := hubClient.List(ctx, appReqList, client.InNamespace(namespace), client.MatchingLabels{
+			placementv1beta1.TargetUpdateRunLabel: updateRunName,
+		}); err != nil {
+			return fmt.Errorf("failed to list ApprovalRequests: %w", err)
+		}
+		if len(appReqList.Items) > 0 {
+			return fmt.Errorf("ApprovalRequests still exist: %v", appReqList.Items)
+		}
+		return nil
+	}
+}
+
+func clusterUpdateRunStrategyRemovedActual(strategyName string) func() error {
 	return func() error {
 		if err := hubClient.Get(ctx, types.NamespacedName{Name: strategyName}, &placementv1beta1.ClusterStagedUpdateStrategy{}); !errors.IsNotFound(err) {
 			return fmt.Errorf("ClusterStagedUpdateStrategy still exists or an unexpected error occurred: %w", err)
