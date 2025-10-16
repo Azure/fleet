@@ -19,6 +19,7 @@ package clusteraffinity
 import (
 	"fmt"
 	"math"
+	"net/http"
 	"testing"
 
 	"github.com/google/go-cmp/cmp"
@@ -29,7 +30,12 @@ import (
 
 	clusterv1beta1 "go.goms.io/fleet/apis/cluster/v1beta1"
 	placementv1beta1 "go.goms.io/fleet/apis/placement/v1beta1"
+	"go.goms.io/fleet/pkg/clients/azure/compute"
+	checker "go.goms.io/fleet/pkg/propertychecker/azure"
 	"go.goms.io/fleet/pkg/propertyprovider"
+	azure "go.goms.io/fleet/pkg/propertyprovider/azure"
+	"go.goms.io/fleet/pkg/utils/labels"
+	testcompute "go.goms.io/fleet/test/utils/azure/compute"
 )
 
 const (
@@ -1211,6 +1217,227 @@ func TestInterpolateWeightFor(t *testing.T) {
 
 			if err != nil || weight != tc.want {
 				t.Errorf("interpolateWeightFor() = %d, %v, want %d, nil", weight, err, tc.want)
+			}
+		})
+	}
+}
+
+// TestClusterRequirementMatches_WithPropertyChecker tests the Matches method on clusterRequirement pointers
+// with a property checker.
+func TestClusterRequirementMatches_WithPropertyChecker(t *testing.T) {
+	cluster := &clusterv1beta1.MemberCluster{
+		ObjectMeta: metav1.ObjectMeta{
+			Name: clusterName1,
+			Labels: map[string]string{
+				labels.AzureLocationLabel:       regionLabelValue1,
+				labels.AzureSubscriptionIDLabel: "sub-id-1234",
+			},
+		},
+	}
+
+	validPropertyName := fmt.Sprintf(azure.CapacityPerSKUPropertyTmpl, "Standard_D2s_v3")
+
+	testCases := []struct {
+		name            string
+		matchExpression []placementv1beta1.PropertySelectorRequirement
+		cluster         *clusterv1beta1.MemberCluster
+		sku             string
+		targetCapacity  uint32
+		want            bool
+		wantError       bool
+	}{
+		{
+			name: "invalid property name (not handled)",
+			matchExpression: []placementv1beta1.PropertySelectorRequirement{
+				{
+					Name:     "kubernetes.azure.com/vm-sizes/Standard_D2s_v3/count",
+					Operator: placementv1beta1.PropertySelectorEqualTo,
+					Values: []string{
+						"2",
+					},
+				},
+			},
+			cluster: cluster,
+		},
+		{
+			name: "property not found",
+			matchExpression: []placementv1beta1.PropertySelectorRequirement{
+				{
+					Name:     nonExistentNonResourcePropertyName,
+					Operator: placementv1beta1.PropertySelectorGreaterThan,
+					Values: []string{
+						"0",
+					},
+				},
+			},
+			cluster: cluster,
+		},
+		{
+			name: "multiple value options",
+			matchExpression: []placementv1beta1.PropertySelectorRequirement{
+				{
+					Name:     validPropertyName,
+					Operator: placementv1beta1.PropertySelectorGreaterThan,
+					Values: []string{
+						"1",
+						"2",
+					},
+				},
+			},
+			cluster:   cluster,
+			wantError: true,
+		},
+		{
+			name: "invalid value option",
+			matchExpression: []placementv1beta1.PropertySelectorRequirement{
+				{
+					Name:     validPropertyName,
+					Operator: placementv1beta1.PropertySelectorGreaterThanOrEqualTo,
+					Values: []string{
+						"invalid",
+					},
+				},
+			},
+			cluster:   cluster,
+			wantError: true,
+		},
+		{
+			name: "negative value option",
+			matchExpression: []placementv1beta1.PropertySelectorRequirement{
+				{
+					Name:     validPropertyName,
+					Operator: placementv1beta1.PropertySelectorGreaterThanOrEqualTo,
+					Values: []string{
+						"-1",
+					},
+				},
+			},
+			cluster:   cluster,
+			wantError: true,
+		},
+		{
+			name: "non-integer value option",
+			matchExpression: []placementv1beta1.PropertySelectorRequirement{
+				{
+					Name:     validPropertyName,
+					Operator: placementv1beta1.PropertySelectorGreaterThanOrEqualTo,
+					Values: []string{
+						"2.5",
+					},
+				},
+			},
+			cluster:   cluster,
+			wantError: true,
+		},
+		{
+			name: "invalid operator",
+			matchExpression: []placementv1beta1.PropertySelectorRequirement{
+				{
+					Name:     validPropertyName,
+					Operator: placementv1beta1.PropertySelectorEqualTo,
+					Values: []string{
+						"1",
+					},
+				},
+			},
+			cluster:   cluster,
+			wantError: true,
+		},
+		{
+			name: "op >, matched (min limit)",
+			matchExpression: []placementv1beta1.PropertySelectorRequirement{
+				{
+					Name:     validPropertyName,
+					Operator: placementv1beta1.PropertySelectorGreaterThan,
+					Values: []string{
+						"0",
+					},
+				},
+			},
+			cluster:        cluster,
+			sku:            "Standard_D2s_v3",
+			targetCapacity: 0,
+			want:           true,
+		},
+		{
+			name: "op >, not matched",
+			matchExpression: []placementv1beta1.PropertySelectorRequirement{
+				{
+					Name:     fmt.Sprintf(azure.CapacityPerSKUPropertyTmpl, "Standard_D4s_v3"),
+					Operator: placementv1beta1.PropertySelectorGreaterThan,
+					Values: []string{
+						"8",
+					},
+				},
+			},
+			cluster:        cluster,
+			sku:            "Standard_D4s_v3",
+			targetCapacity: 8,
+		},
+		{
+			name: "op >=, matched (max limit)",
+			matchExpression: []placementv1beta1.PropertySelectorRequirement{
+				{
+					Name:     validPropertyName,
+					Operator: placementv1beta1.PropertySelectorGreaterThanOrEqualTo,
+					Values: []string{
+						"200",
+					},
+				},
+			},
+			cluster:        cluster,
+			sku:            "Standard_D2s_v3",
+			targetCapacity: 199,
+			want:           true,
+		},
+		{
+			name: "op >=, not matched",
+			matchExpression: []placementv1beta1.PropertySelectorRequirement{
+				{
+					Name:     fmt.Sprintf(azure.CapacityPerSKUPropertyTmpl, "Standard_D4s_v3"),
+					Operator: placementv1beta1.PropertySelectorGreaterThanOrEqualTo,
+					Values: []string{
+						"80",
+					},
+				},
+			},
+			cluster:        cluster,
+			sku:            "Standard_D4s_v3",
+			targetCapacity: 79,
+		},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			// Set tenant ID environment variable to create client.
+			t.Setenv("AZURE_TENANT_ID", testcompute.TestTenantID)
+			// Create mock server.
+			mockRequest := testcompute.GenerateAttributeBasedVMSizeRecommenderRequest(tc.cluster.Labels[labels.AzureSubscriptionIDLabel], tc.cluster.Labels[labels.AzureLocationLabel], tc.sku, tc.targetCapacity)
+			server := testcompute.CreateMockAttributeBasedVMSizeRecommenderServer(t, mockRequest, testcompute.TestTenantID, testcompute.MockAttributeBasedVMSizeRecommenderResponse, http.StatusOK)
+			defer server.Close()
+
+			client, err := compute.NewAttributeBasedVMSizeRecommenderClient(server.URL, http.DefaultClient)
+			if err != nil {
+				t.Fatalf("failed to create VM size recommender client: %v", err)
+			}
+
+			req := clusterRequirement{
+				ClusterSelectorTerm: placementv1beta1.ClusterSelectorTerm{
+					PropertySelector: &placementv1beta1.PropertySelector{
+						MatchExpressions: tc.matchExpression,
+					},
+				},
+				PropertyChecker: checker.NewPropertyChecker(*client),
+			}
+			matches, err := req.Matches(tc.cluster)
+			if tc.wantError {
+				if err == nil {
+					t.Fatalf("Matches() (With Property Checker), want error, got nil")
+				}
+			}
+
+			if (!tc.wantError && err != nil) || matches != tc.want {
+				t.Errorf("Matches() (With Property Checker) = %v, %v, want %v, nil", matches, err, tc.want)
 			}
 		})
 	}
