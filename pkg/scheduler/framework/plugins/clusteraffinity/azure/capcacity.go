@@ -82,10 +82,10 @@ func (s *DefaultAzureCapacityService) ValidateCapacityRequirement(
 	}
 
 	var respObj struct {
+		//TODO: add other fields
 		RecommendedVmSizes struct {
 			RegularVmSizes []struct {
 				Name string `json:"name"`
-				// You can add other fields if needed
 			} `json:"regularVmSizes"`
 		} `json:"recommendedVmSizes"`
 	}

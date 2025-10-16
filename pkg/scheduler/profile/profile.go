@@ -48,7 +48,7 @@ func NewDefaultProfile() *framework.Profile {
 func NewDefaultProfileWithOptions(opts ProfileOptions) *framework.Profile {
 	p := framework.NewProfile(defaultProfileName)
 
-	// default plugin list with options
+	// default plugin list
 	clusterAffinityPlugin := clusteraffinity.New(clusteraffinity.WithAzureCapacityService(opts.Endpoint))
 	clusterEligibilityPlugin := clustereligibility.New()
 	samePlacementAffinityPlugin := sameplacementaffinity.New()

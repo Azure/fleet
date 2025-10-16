@@ -25,7 +25,7 @@ import (
 	"go.goms.io/fleet/pkg/scheduler/framework/plugins/clusteraffinity/azure"
 )
 
-// Plugin is the cluster affinity plugin.
+// Plugin is the scheduler plugin that enforces the cluster affinity (if any) defined on a RP/CRP.
 type Plugin struct {
 	// The name of the plugin.
 	name string

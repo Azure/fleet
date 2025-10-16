@@ -142,7 +142,6 @@ func (c *clusterRequirement) Matches(cluster *clusterv1beta1.MemberCluster, azur
 
 	for _, exp := range c.PropertySelector.MatchExpressions {
 		if strings.HasPrefix(exp.Name, azure.SkuCapacityPropertyPrefix) {
-			// Validate the requirement using global Azure service
 			available, err := azureService.ValidateCapacityRequirement(cluster, exp)
 			if err != nil {
 				return false, fmt.Errorf("failed to validate Azure SKU capacity requirement: %w", err)
