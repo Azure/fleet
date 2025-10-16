@@ -54,6 +54,8 @@ enableEvictionAPIs: true
 enablePprof: true
 pprofPort: 6065
 
+computeEndpoint: "http://localhost:9090"
+
 hubAPIQPS: 250
 hubAPIBurst: 1000
 MaxConcurrentClusterPlacement: 100

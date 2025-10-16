@@ -645,7 +645,7 @@ func TestClusterRequirementMatches(t *testing.T) {
 
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
-			matches, err := tc.clusterRequirement.Matches(tc.cluster)
+			matches, err := tc.clusterRequirement.Matches(tc.cluster, p.azureService)
 			if tc.expectedToFail {
 				if err == nil {
 					t.Errorf("clusterRequirement.Matches(), want error, got nil")

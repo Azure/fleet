@@ -104,6 +104,8 @@ type Options struct {
 	EnablePprof bool
 	// PprofPort is the port for pprof profiling.
 	PprofPort int
+	// ComputeEndpoint is the endpoint for the compute service.
+	ComputeEndpoint string
 	// DenyModifyMemberClusterLabels indicates if the member cluster labels cannot be modified by groups (excluding system:masters)
 	DenyModifyMemberClusterLabels bool
 	// ResourceSnapshotCreationMinimumInterval is the minimum interval at which resource snapshots could be created.
@@ -131,6 +133,7 @@ func NewOptions() *Options {
 		EnableResourcePlacement:                 true,
 		EnablePprof:                             false,
 		PprofPort:                               6065,
+		ComputeEndpoint:                         "http://localhost:9090",
 		ResourceSnapshotCreationMinimumInterval: 30 * time.Second,
 		ResourceChangesCollectionDuration:       15 * time.Second,
 	}
@@ -179,6 +182,7 @@ func (o *Options) AddFlags(flags *flag.FlagSet) {
 	flags.BoolVar(&o.EnableResourcePlacement, "enable-resource-placement", true, "If set, the agents will watch for the ResourcePlacement APIs.")
 	flags.BoolVar(&o.EnablePprof, "enable-pprof", false, "If set, the pprof profiling is enabled.")
 	flags.IntVar(&o.PprofPort, "pprof-port", 6065, "The port for pprof profiling.")
+	flags.StringVar(&o.ComputeEndpoint, "compute-endpoint", "http://localhost:9090", "The endpoint for the compute service.")
 	flags.BoolVar(&o.DenyModifyMemberClusterLabels, "deny-modify-member-cluster-labels", false, "If set, users not in the system:masters cannot modify member cluster labels.")
 	flags.DurationVar(&o.ResourceSnapshotCreationMinimumInterval, "resource-snapshot-creation-minimum-interval", 30*time.Second, "The minimum interval at which resource snapshots could be created.")
 	flags.DurationVar(&o.ResourceChangesCollectionDuration, "resource-changes-collection-duration", 15*time.Second,

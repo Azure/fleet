@@ -22,15 +22,19 @@ import (
 	"fmt"
 
 	"go.goms.io/fleet/pkg/scheduler/framework"
+	"go.goms.io/fleet/pkg/scheduler/framework/plugins/clusteraffinity/azure"
 )
 
-// Plugin is the scheduler plugin that enforces the cluster affinity (if any) defined on a CRP.
+// Plugin is the cluster affinity plugin.
 type Plugin struct {
 	// The name of the plugin.
 	name string
 
 	// The framework handle.
 	handle framework.Handle
+
+	// Azure capacity service for validating SKU availability.
+	azureService azure.AzureCapacityService // use the interface
 }
 
 var (
@@ -53,18 +57,27 @@ var (
 type clusterAffinityPluginOptions struct {
 	// The name of the plugin.
 	name string
+	// Azure capacity service for validating SKU availability.
+	azureService azure.AzureCapacityService // use the interface
 }
 
 type Option func(*clusterAffinityPluginOptions)
 
 var defaultPluginOptions = clusterAffinityPluginOptions{
-	name: "ClusterAffinity",
+	name:         "ClusterAffinity",
+	azureService: azure.NewAzureCapacityService("http://localhost:9090"),
 }
 
 // WithName sets the name of the plugin.
 func WithName(name string) Option {
 	return func(o *clusterAffinityPluginOptions) {
 		o.name = name
+	}
+}
+
+func WithAzureCapacityService(endpoint string) Option {
+	return func(o *clusterAffinityPluginOptions) {
+		o.azureService = azure.NewAzureCapacityService(endpoint)
 	}
 }
 
@@ -76,13 +89,18 @@ func New(opts ...Option) Plugin {
 	}
 
 	return Plugin{
-		name: options.name,
+		name:         options.name,
+		azureService: options.azureService,
 	}
 }
 
 // Name returns the name of the plugin.
 func (p *Plugin) Name() string {
 	return p.name
+}
+
+func (p *Plugin) AzureCapacityService() azure.AzureCapacityService {
+	return p.azureService
 }
 
 // SetUpWithFramework sets up this plugin with a scheduler framework.
