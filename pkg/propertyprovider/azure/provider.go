@@ -20,6 +20,7 @@ package azure
 import (
 	"context"
 	"fmt"
+	"regexp"
 
 	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/api/resource"
@@ -53,9 +54,23 @@ const (
 	// a Kubernetes cluster.
 	PerGBMemoryCostProperty = "kubernetes.azure.com/per-gb-memory-cost"
 
-	NodeCountPerSKUPropertyTmpl = "kubernetes.azure.com/vm-sizes/%s/count"
+	// SKUPropertyPrefix is the prefix that identifies the sku properties.
+	skuPropertyPrefix = "kubernetes.azure.com/vm-sizes"
+
+	// NodeCountPerSKUPropertyTmpl is the property template for the node count per SKU in
+	// a Kubernetes cluster.
+	NodeCountPerSKUPropertyTmpl = skuPropertyPrefix + "/%s/count"
+
+	// CapacityPerSKUPropertyTmpl is the property template for capacity per SKU in a Kubernetes cluster.
+	CapacityPerSKUPropertyTmpl = skuPropertyPrefix + "/%s/capacity"
 
 	CostPrecisionTemplate = "%.3f"
+)
+
+var (
+	// CapacityPerSKUPropertyRegex extracts SKU name from capacity property names.
+	// Based on SKUCapacityPropertyTmpl = "kubernetes.azure.com/vm-sizes/%s/capacity"
+	CapacityPerSKUPropertyRegex = regexp.MustCompile(`^` + regexp.QuoteMeta(skuPropertyPrefix) + `/([^/]+)/capacity$`)
 )
 
 const (

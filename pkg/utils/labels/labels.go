@@ -23,6 +23,7 @@ import (
 
 	"sigs.k8s.io/controller-runtime/pkg/client"
 
+	clusterv1beta1 "go.goms.io/fleet/apis/cluster/v1beta1"
 	fleetv1beta1 "go.goms.io/fleet/apis/placement/v1beta1"
 )
 
@@ -60,4 +61,21 @@ func ParsePolicyIndexFromLabel(policySnapshot client.Object) (int, error) {
 		return -1, fmt.Errorf("invalid policy index %q, error: %w", indexLabel, err)
 	}
 	return v, nil
+}
+
+// ExtractLabelFromMemberCluster extracts the value of a label from a MemberCluster using the provided key.
+func ExtractLabelFromMemberCluster(cluster *clusterv1beta1.MemberCluster, key string) (string, error) {
+	if cluster == nil || cluster.GetLabels() == nil {
+		return "", fmt.Errorf("cluster is nil or has no labels")
+	}
+
+	value, exists := cluster.Labels[key]
+	if !exists {
+		return "", fmt.Errorf("label %q not found in cluster %s", key, cluster.Name)
+	}
+
+	if value == "" {
+		return "", fmt.Errorf("label %q is empty in cluster %s", key, cluster.Name)
+	}
+	return value, nil
 }
