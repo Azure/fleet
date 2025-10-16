@@ -29,6 +29,7 @@ import (
 	clusterv1beta1 "go.goms.io/fleet/apis/cluster/v1beta1"
 	placementv1beta1 "go.goms.io/fleet/apis/placement/v1beta1"
 	"go.goms.io/fleet/pkg/propertyprovider"
+	"go.goms.io/fleet/pkg/scheduler/framework/plugins/clusteraffinity/azure"
 )
 
 // clusterRequirement is a type alias for ClusterSelectorTerm in the API, which allows
@@ -119,7 +120,7 @@ func retrievePropertyValueFrom(cluster *clusterv1beta1.MemberCluster, name strin
 // Matches checks if the cluster matches a cluster requirement.
 //
 // This is an extended method for the ClusterSelectorTerm API.
-func (c *clusterRequirement) Matches(cluster *clusterv1beta1.MemberCluster) (bool, error) {
+func (c *clusterRequirement) Matches(cluster *clusterv1beta1.MemberCluster, azureService azure.AzureCapacityService) (bool, error) {
 	// Match the cluster against the label selector.
 	if c.LabelSelector != nil {
 		ls, err := metav1.LabelSelectorAsSelector(c.LabelSelector)
@@ -140,6 +141,17 @@ func (c *clusterRequirement) Matches(cluster *clusterv1beta1.MemberCluster) (boo
 	}
 
 	for _, exp := range c.PropertySelector.MatchExpressions {
+		if strings.HasPrefix(exp.Name, azure.SkuCapacityPropertyPrefix) {
+			available, err := azureService.ValidateCapacityRequirement(cluster, exp)
+			if err != nil {
+				return false, fmt.Errorf("failed to validate Azure SKU capacity requirement: %w", err)
+			}
+			if !available {
+				return false, fmt.Errorf("cluster %s does not have capacity for SKU %s", cluster.Name, exp.Name)
+			}
+			// The cluster has capacity for the SKU specified in the property name.
+			continue
+		}
 		// Compare the observed value with the expected one using the specified operator.
 		q, err := retrievePropertyValueFrom(cluster, exp.Name)
 		if err != nil {

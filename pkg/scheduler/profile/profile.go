@@ -31,12 +31,25 @@ const (
 	defaultProfileName = "DefaultProfile"
 )
 
+// ProfileOptions contains options for configuring a scheduling profile.
+type ProfileOptions struct {
+	// Endpoint is the HTTP endpoint for plugins to make external requests.
+	Endpoint string
+}
+
 // NewDefaultProfile creates a default scheduling profile.
 func NewDefaultProfile() *framework.Profile {
+	return NewDefaultProfileWithOptions(ProfileOptions{
+		Endpoint: "http://localhost:9090", // Default HTTP endpoint
+	})
+}
+
+// NewDefaultProfileWithOptions creates a default scheduling profile with the given options.
+func NewDefaultProfileWithOptions(opts ProfileOptions) *framework.Profile {
 	p := framework.NewProfile(defaultProfileName)
 
 	// default plugin list
-	clusterAffinityPlugin := clusteraffinity.New()
+	clusterAffinityPlugin := clusteraffinity.New(clusteraffinity.WithAzureCapacityService(opts.Endpoint))
 	clusterEligibilityPlugin := clustereligibility.New()
 	samePlacementAffinityPlugin := sameplacementaffinity.New()
 	topologySpreadConstraintsPlugin := topologyspreadconstraints.New()

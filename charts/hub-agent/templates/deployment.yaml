@@ -54,6 +54,7 @@ spec:
             - --cluster-unhealthy-threshold={{ .Values.clusterUnhealthyThreshold }}
             - --resource-snapshot-creation-minimum-interval={{ .Values.resourceSnapshotCreationMinimumInterval }}
             - --resource-changes-collection-duration={{ .Values.resourceChangesCollectionDuration }}
+            - --compute-endpoint={{ .Values.computeEndpoint }}
           ports:
             - name: metrics
               containerPort: 8080
