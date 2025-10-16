@@ -34,10 +34,8 @@ import (
 	"k8s.io/apimachinery/pkg/runtime/schema"
 	"k8s.io/client-go/kubernetes/scheme"
 	"k8s.io/utils/ptr"
-	ctrlmetrics "sigs.k8s.io/controller-runtime/pkg/metrics"
 
 	fleetv1beta1 "github.com/kubefleet-dev/kubefleet/apis/placement/v1beta1"
-	"github.com/kubefleet-dev/kubefleet/pkg/metrics"
 )
 
 const (
@@ -260,12 +258,6 @@ func TestMain(m *testing.M) {
 
 	// Initialize the variables.
 	initializeVariables()
-
-	// Register the metrics.
-	ctrlmetrics.Registry.MustRegister(
-		metrics.FleetWorkProcessingRequestsTotal,
-		metrics.FleetManifestProcessingRequestsTotal,
-	)
 
 	os.Exit(m.Run())
 }

@@ -33,7 +33,7 @@ import (
 	ctrlmetrics "sigs.k8s.io/controller-runtime/pkg/metrics"
 
 	placementv1beta1 "github.com/kubefleet-dev/kubefleet/apis/placement/v1beta1"
-	"github.com/kubefleet-dev/kubefleet/pkg/metrics"
+	hubmetrics "github.com/kubefleet-dev/kubefleet/pkg/metrics/hub"
 	"github.com/kubefleet-dev/kubefleet/pkg/utils/condition"
 	testutilseviction "github.com/kubefleet-dev/kubefleet/test/utils/eviction"
 )
@@ -58,9 +58,9 @@ var _ = Describe("Test ClusterResourcePlacementEviction Controller", func() {
 
 	BeforeEach(func() {
 		// Reset metrics before each test
-		metrics.FleetEvictionStatus.Reset()
+		hubmetrics.FleetEvictionStatus.Reset()
 		// emit incomplete eviction metric to simulate eviction failed once.
-		metrics.FleetEvictionStatus.WithLabelValues(evictionName, "false", "unknown").SetToCurrentTime()
+		hubmetrics.FleetEvictionStatus.WithLabelValues(evictionName, "false", "unknown").SetToCurrentTime()
 	})
 
 	AfterEach(func() {
@@ -68,7 +68,7 @@ var _ = Describe("Test ClusterResourcePlacementEviction Controller", func() {
 		ensureAllBindingsAreRemoved(crpName)
 		ensureEvictionRemoved(evictionName)
 		ensureCRPRemoved(crpName)
-		metrics.FleetEvictionStatus.Reset()
+		hubmetrics.FleetEvictionStatus.Reset()
 	})
 
 	It("Invalid Eviction Blocked - emit complete metric with isValid=false, isComplete=true", func() {

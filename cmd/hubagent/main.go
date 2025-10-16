@@ -35,7 +35,6 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/healthz"
 	"sigs.k8s.io/controller-runtime/pkg/log/zap"
 	"sigs.k8s.io/controller-runtime/pkg/manager"
-	"sigs.k8s.io/controller-runtime/pkg/metrics"
 	metricsserver "sigs.k8s.io/controller-runtime/pkg/metrics/server"
 	ctrlwebhook "sigs.k8s.io/controller-runtime/pkg/webhook"
 	workv1alpha1 "sigs.k8s.io/work-api/pkg/apis/v1alpha1"
@@ -50,7 +49,6 @@ import (
 	"github.com/kubefleet-dev/kubefleet/cmd/hubagent/workload"
 	mcv1alpha1 "github.com/kubefleet-dev/kubefleet/pkg/controllers/membercluster/v1alpha1"
 	mcv1beta1 "github.com/kubefleet-dev/kubefleet/pkg/controllers/membercluster/v1beta1"
-	fleetmetrics "github.com/kubefleet-dev/kubefleet/pkg/metrics"
 	"github.com/kubefleet-dev/kubefleet/pkg/webhook"
 	// +kubebuilder:scaffold:imports
 )
@@ -84,17 +82,6 @@ func init() {
 	utilruntime.Must(clusterinventory.AddToScheme(scheme))
 	// +kubebuilder:scaffold:scheme
 	klog.InitFlags(nil)
-
-	metrics.Registry.MustRegister(
-		fleetmetrics.JoinResultMetrics,
-		fleetmetrics.LeaveResultMetrics,
-		fleetmetrics.PlacementApplyFailedCount,
-		fleetmetrics.PlacementApplySucceedCount,
-		fleetmetrics.SchedulingCycleDurationMilliseconds,
-		fleetmetrics.SchedulerActiveWorkers,
-		fleetmetrics.FleetPlacementStatusLastTimeStampSeconds,
-		fleetmetrics.FleetEvictionStatus,
-	)
 }
 
 func main() {

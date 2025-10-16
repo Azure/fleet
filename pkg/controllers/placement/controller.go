@@ -37,7 +37,7 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/controller/controllerutil"
 
 	fleetv1beta1 "github.com/kubefleet-dev/kubefleet/apis/placement/v1beta1"
-	"github.com/kubefleet-dev/kubefleet/pkg/metrics"
+	hubmetrics "github.com/kubefleet-dev/kubefleet/pkg/metrics/hub"
 	"github.com/kubefleet-dev/kubefleet/pkg/scheduler/queue"
 	"github.com/kubefleet-dev/kubefleet/pkg/utils/annotations"
 	"github.com/kubefleet-dev/kubefleet/pkg/utils/condition"
@@ -112,7 +112,7 @@ func (r *Reconciler) handleDelete(ctx context.Context, placementObj fleetv1beta1
 		return ctrl.Result{}, err
 	}
 	// change the metrics to add nameplace of namespace
-	metrics.FleetPlacementStatusLastTimeStampSeconds.DeletePartialMatch(prometheus.Labels{"namespace": placementObj.GetNamespace(), "name": placementObj.GetName()})
+	hubmetrics.FleetPlacementStatusLastTimeStampSeconds.DeletePartialMatch(prometheus.Labels{"namespace": placementObj.GetNamespace(), "name": placementObj.GetName()})
 	controllerutil.RemoveFinalizer(placementObj, fleetv1beta1.PlacementCleanupFinalizer)
 	if err := r.Client.Update(ctx, placementObj); err != nil {
 		klog.ErrorS(err, "Failed to remove placement finalizer", "placement", placementKObj)
@@ -1266,7 +1266,7 @@ func emitPlacementStatusMetric(placementObj fleetv1beta1.PlacementObj) {
 			status = string(cond.Status)
 			reason = cond.Reason
 		}
-		metrics.FleetPlacementStatusLastTimeStampSeconds.WithLabelValues(placementObj.GetNamespace(), placementObj.GetName(), strconv.FormatInt(placementObj.GetGeneration(), 10), scheduledConditionType, status, reason).SetToCurrentTime()
+		hubmetrics.FleetPlacementStatusLastTimeStampSeconds.WithLabelValues(placementObj.GetNamespace(), placementObj.GetName(), strconv.FormatInt(placementObj.GetGeneration(), 10), scheduledConditionType, status, reason).SetToCurrentTime()
 		return
 	}
 
@@ -1280,12 +1280,12 @@ func emitPlacementStatusMetric(placementObj fleetv1beta1.PlacementObj) {
 				status = string(cond.Status)
 				reason = cond.Reason
 			}
-			metrics.FleetPlacementStatusLastTimeStampSeconds.WithLabelValues(placementObj.GetNamespace(), placementObj.GetName(), strconv.FormatInt(placementObj.GetGeneration(), 10), conditionType, status, reason).SetToCurrentTime()
+			hubmetrics.FleetPlacementStatusLastTimeStampSeconds.WithLabelValues(placementObj.GetNamespace(), placementObj.GetName(), strconv.FormatInt(placementObj.GetGeneration(), 10), conditionType, status, reason).SetToCurrentTime()
 			return
 		}
 	}
 
 	// Emit the "Completed" condition metric to indicate that the placement has completed.
 	// This condition is used solely for metric reporting purposes.
-	metrics.FleetPlacementStatusLastTimeStampSeconds.WithLabelValues(placementObj.GetNamespace(), placementObj.GetName(), strconv.FormatInt(placementObj.GetGeneration(), 10), "Completed", string(metav1.ConditionTrue), "Completed").SetToCurrentTime()
+	hubmetrics.FleetPlacementStatusLastTimeStampSeconds.WithLabelValues(placementObj.GetNamespace(), placementObj.GetName(), strconv.FormatInt(placementObj.GetGeneration(), 10), "Completed", string(metav1.ConditionTrue), "Completed").SetToCurrentTime()
 }

@@ -24,7 +24,7 @@ import (
 	"k8s.io/klog/v2"
 
 	fleetv1beta1 "github.com/kubefleet-dev/kubefleet/apis/placement/v1beta1"
-	"github.com/kubefleet-dev/kubefleet/pkg/metrics"
+	membermetrics "github.com/kubefleet-dev/kubefleet/pkg/metrics/member"
 	"github.com/kubefleet-dev/kubefleet/pkg/utils/controller"
 )
 
@@ -123,7 +123,7 @@ func trackWorkAndManifestProcessingRequestMetrics(work *fleetv1beta1.Work) {
 		return
 	}
 
-	metrics.FleetWorkProcessingRequestsTotal.WithLabelValues(
+	membermetrics.FleetWorkProcessingRequestsTotal.WithLabelValues(
 		workApplyStatus,
 		workAvailabilityStatus,
 		workDiffReportedStatus,
@@ -200,7 +200,7 @@ func trackWorkAndManifestProcessingRequestMetrics(work *fleetv1beta1.Work) {
 			manifestDiffDetectionStatus = manifestDriftOrDiffDetectionStatusFound
 		}
 
-		metrics.FleetManifestProcessingRequestsTotal.WithLabelValues(
+		membermetrics.FleetManifestProcessingRequestsTotal.WithLabelValues(
 			manifestApplyStatus,
 			manifestAvailabilityStatus,
 			manifestDiffReportedStatus,

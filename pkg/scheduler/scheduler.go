@@ -36,7 +36,7 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/controller/controllerutil"
 
 	fleetv1beta1 "github.com/kubefleet-dev/kubefleet/apis/placement/v1beta1"
-	"github.com/kubefleet-dev/kubefleet/pkg/metrics"
+	hubmetrics "github.com/kubefleet-dev/kubefleet/pkg/metrics/hub"
 	"github.com/kubefleet-dev/kubefleet/pkg/scheduler/framework"
 	"github.com/kubefleet-dev/kubefleet/pkg/scheduler/queue"
 	"github.com/kubefleet-dev/kubefleet/pkg/utils/controller"
@@ -120,8 +120,8 @@ func (s *Scheduler) scheduleOnce(ctx context.Context, worker int) {
 	}()
 
 	// keep track of the number of active scheduling loop
-	metrics.SchedulerActiveWorkers.WithLabelValues().Add(1)
-	defer metrics.SchedulerActiveWorkers.WithLabelValues().Add(-1)
+	hubmetrics.SchedulerActiveWorkers.WithLabelValues().Add(1)
+	defer hubmetrics.SchedulerActiveWorkers.WithLabelValues().Add(-1)
 
 	startTime := time.Now()
 	klog.V(2).InfoS("Schedule once started", "placement", placementKey, "worker", worker)
@@ -415,7 +415,7 @@ func (s *Scheduler) addSchedulerCleanUpFinalizer(ctx context.Context, placement 
 
 // observeSchedulingCycleMetrics adds a data point to the scheduling cycle duration metric.
 func observeSchedulingCycleMetrics(startTime time.Time, isFailed, needsRequeue bool) {
-	metrics.SchedulingCycleDurationMilliseconds.
+	hubmetrics.SchedulingCycleDurationMilliseconds.
 		WithLabelValues(fmt.Sprintf("%t", isFailed), fmt.Sprintf("%t", needsRequeue)).
 		Observe(float64(time.Since(startTime).Milliseconds()))
 }

@@ -24,7 +24,7 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 
 	placementv1beta1 "github.com/kubefleet-dev/kubefleet/apis/placement/v1beta1"
-	"github.com/kubefleet-dev/kubefleet/pkg/metrics"
+	membermetrics "github.com/kubefleet-dev/kubefleet/pkg/metrics/member"
 	"github.com/kubefleet-dev/kubefleet/pkg/utils/condition"
 )
 
@@ -522,23 +522,23 @@ func TestTrackWorkAndManifestProcessingRequestMetrics(t *testing.T) {
 			trackWorkAndManifestProcessingRequestMetrics(tc.work)
 
 			// Collect the metrics.
-			if c := testutil.CollectAndCount(metrics.FleetWorkProcessingRequestsTotal); c != tc.wantWorkMetricCount {
+			if c := testutil.CollectAndCount(membermetrics.FleetWorkProcessingRequestsTotal); c != tc.wantWorkMetricCount {
 				t.Fatalf("unexpected work metric count: got %d, want %d", c, tc.wantWorkMetricCount)
 			}
 
 			if err := testutil.CollectAndCompare(
-				metrics.FleetWorkProcessingRequestsTotal,
+				membermetrics.FleetWorkProcessingRequestsTotal,
 				strings.NewReader(workMetricMetadata+tc.wantWorkCounter),
 			); err != nil {
 				t.Fatalf("unexpected work counter value:\n%v", err)
 			}
 
-			if c := testutil.CollectAndCount(metrics.FleetManifestProcessingRequestsTotal); c != tc.wantManifestMetricCount {
+			if c := testutil.CollectAndCount(membermetrics.FleetManifestProcessingRequestsTotal); c != tc.wantManifestMetricCount {
 				t.Fatalf("unexpected manifest metric count: got %d, want %d", c, tc.wantManifestMetricCount)
 			}
 
 			if err := testutil.CollectAndCompare(
-				metrics.FleetManifestProcessingRequestsTotal,
+				membermetrics.FleetManifestProcessingRequestsTotal,
 				strings.NewReader(manifestMetricMetadata+tc.wantManifestCounter),
 			); err != nil {
 				t.Fatalf("unexpected manifest counter value:\n%v", err)

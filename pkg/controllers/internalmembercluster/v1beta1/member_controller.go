@@ -40,7 +40,7 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/predicate"
 
 	clusterv1beta1 "github.com/kubefleet-dev/kubefleet/apis/cluster/v1beta1"
-	"github.com/kubefleet-dev/kubefleet/pkg/metrics"
+	sharedmetrics "github.com/kubefleet-dev/kubefleet/pkg/metrics/shared"
 	"github.com/kubefleet-dev/kubefleet/pkg/propertyprovider"
 	"github.com/kubefleet-dev/kubefleet/pkg/utils/condition"
 	"github.com/kubefleet-dev/kubefleet/pkg/utils/controller"
@@ -627,7 +627,7 @@ func (r *Reconciler) markInternalMemberClusterJoined(imc clusterv1beta1.Conditio
 	if existingCondition == nil || existingCondition.ObservedGeneration != imc.GetGeneration() || existingCondition.Status != newCondition.Status {
 		r.recorder.Event(imc, corev1.EventTypeNormal, EventReasonInternalMemberClusterJoined, "internal member cluster joined")
 		klog.V(2).InfoS("InternalMemberCluster has joined", "internalMemberCluster", klog.KObj(imc))
-		metrics.ReportJoinResultMetric()
+		sharedmetrics.ReportJoinResultMetric()
 	}
 
 	imc.SetConditionsWithType(clusterv1beta1.MemberAgent, newCondition)
@@ -667,7 +667,7 @@ func (r *Reconciler) markInternalMemberClusterLeft(imc clusterv1beta1.Conditione
 	if existingCondition == nil || existingCondition.ObservedGeneration != imc.GetGeneration() || existingCondition.Status != newCondition.Status {
 		r.recorder.Event(imc, corev1.EventTypeNormal, EventReasonInternalMemberClusterLeft, "internal member cluster left")
 		klog.V(2).InfoS("InternalMemberCluster has left", "internalMemberCluster", klog.KObj(imc))
-		metrics.ReportLeaveResultMetric()
+		sharedmetrics.ReportLeaveResultMetric()
 	}
 
 	imc.SetConditionsWithType(clusterv1beta1.MemberAgent, newCondition)

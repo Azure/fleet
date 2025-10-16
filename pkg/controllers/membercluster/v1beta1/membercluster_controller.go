@@ -43,7 +43,7 @@ import (
 	"github.com/kubefleet-dev/kubefleet/apis"
 	clusterv1beta1 "github.com/kubefleet-dev/kubefleet/apis/cluster/v1beta1"
 	placementv1beta1 "github.com/kubefleet-dev/kubefleet/apis/placement/v1beta1"
-	"github.com/kubefleet-dev/kubefleet/pkg/metrics"
+	sharedmetrics "github.com/kubefleet-dev/kubefleet/pkg/metrics/shared"
 	"github.com/kubefleet-dev/kubefleet/pkg/utils"
 	"github.com/kubefleet-dev/kubefleet/pkg/utils/condition"
 	"github.com/kubefleet-dev/kubefleet/pkg/utils/controller"
@@ -635,7 +635,7 @@ func markMemberClusterJoined(recorder record.EventRecorder, mc apis.ConditionedO
 	if existingCondition == nil || existingCondition.Status != newCondition.Status {
 		recorder.Event(mc, corev1.EventTypeNormal, reasonMemberClusterJoined, "member cluster joined")
 		klog.V(2).InfoS("memberCluster joined", "memberCluster", klog.KObj(mc))
-		metrics.ReportJoinResultMetric()
+		sharedmetrics.ReportJoinResultMetric()
 	}
 
 	mc.SetConditions(newCondition)
@@ -664,7 +664,7 @@ func markMemberClusterLeft(recorder record.EventRecorder, mc apis.ConditionedObj
 	if existingCondition == nil || existingCondition.Status != newCondition.Status {
 		recorder.Event(mc, corev1.EventTypeNormal, reasonMemberClusterJoined, "member cluster left")
 		klog.V(2).InfoS("memberCluster left", "memberCluster", klog.KObj(mc))
-		metrics.ReportLeaveResultMetric()
+		sharedmetrics.ReportLeaveResultMetric()
 	}
 
 	mc.SetConditions(newCondition, notReadyCondition)

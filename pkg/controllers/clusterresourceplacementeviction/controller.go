@@ -35,7 +35,7 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/predicate"
 
 	placementv1beta1 "github.com/kubefleet-dev/kubefleet/apis/placement/v1beta1"
-	"github.com/kubefleet-dev/kubefleet/pkg/metrics"
+	hubmetrics "github.com/kubefleet-dev/kubefleet/pkg/metrics/hub"
 	bindingutils "github.com/kubefleet-dev/kubefleet/pkg/utils/binding"
 	"github.com/kubefleet-dev/kubefleet/pkg/utils/condition"
 	"github.com/kubefleet-dev/kubefleet/pkg/utils/controller"
@@ -58,7 +58,7 @@ func (r *Reconciler) Reconcile(ctx context.Context, req runtime.Request) (runtim
 	var internalError bool
 	defer func() {
 		if internalError {
-			metrics.FleetEvictionStatus.WithLabelValues(evictionName, "false", "unknown").SetToCurrentTime()
+			hubmetrics.FleetEvictionStatus.WithLabelValues(evictionName, "false", "unknown").SetToCurrentTime()
 		}
 		latency := time.Since(startTime).Milliseconds()
 		klog.V(2).InfoS("ClusterResourcePlacementEviction reconciliation ends", "clusterResourcePlacementEviction", evictionName, "latency", latency)
@@ -346,12 +346,12 @@ func markEvictionNotExecuted(eviction *placementv1beta1.ClusterResourcePlacement
 }
 
 func emitEvictionCompleteMetric(eviction *placementv1beta1.ClusterResourcePlacementEviction) {
-	metrics.FleetEvictionStatus.DeletePartialMatch(prometheus.Labels{"name": eviction.GetName(), "isCompleted": "false"})
+	hubmetrics.FleetEvictionStatus.DeletePartialMatch(prometheus.Labels{"name": eviction.GetName(), "isCompleted": "false"})
 	// check to see if eviction is valid.
 	if condition.IsConditionStatusTrue(eviction.GetCondition(string(placementv1beta1.PlacementEvictionConditionTypeValid)), eviction.GetGeneration()) {
-		metrics.FleetEvictionStatus.WithLabelValues(eviction.Name, "true", "true").SetToCurrentTime()
+		hubmetrics.FleetEvictionStatus.WithLabelValues(eviction.Name, "true", "true").SetToCurrentTime()
 	} else {
-		metrics.FleetEvictionStatus.WithLabelValues(eviction.Name, "true", "false").SetToCurrentTime()
+		hubmetrics.FleetEvictionStatus.WithLabelValues(eviction.Name, "true", "false").SetToCurrentTime()
 	}
 }
 
@@ -363,7 +363,7 @@ func (r *Reconciler) SetupWithManager(mgr runtime.Manager) error {
 		WithEventFilter(predicate.Funcs{
 			DeleteFunc: func(e event.DeleteEvent) bool {
 				// delete complete status metric for eviction and skip reconciliation.
-				count := metrics.FleetEvictionStatus.DeletePartialMatch(prometheus.Labels{"name": e.Object.GetName()})
+				count := hubmetrics.FleetEvictionStatus.DeletePartialMatch(prometheus.Labels{"name": e.Object.GetName()})
 				klog.V(2).InfoS("ClusterResourcePlacementEviction is being deleted", "clusterResourcePlacementEviction", e.Object.GetName(), "metricCount", count)
 				return false
 			},

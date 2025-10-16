@@ -60,7 +60,7 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/predicate"
 	workv1alpha1 "sigs.k8s.io/work-api/pkg/apis/v1alpha1"
 
-	"github.com/kubefleet-dev/kubefleet/pkg/metrics"
+	membermetrics "github.com/kubefleet-dev/kubefleet/pkg/metrics/member"
 	"github.com/kubefleet-dev/kubefleet/pkg/utils"
 )
 
@@ -171,7 +171,7 @@ func (r *ApplyWorkReconciler) Reconcile(ctx context.Context, req ctrl.Request) (
 			klog.ErrorS(parseErr, "failed to parse the last work update time", "work", logObjRef)
 		} else {
 			latency := time.Since(workUpdateTime)
-			metrics.WorkApplyTime.WithLabelValues(work.GetName()).Observe(latency.Seconds())
+			membermetrics.WorkApplyTime.WithLabelValues(work.GetName()).Observe(latency.Seconds())
 			klog.V(2).InfoS("work is applied", "work", work.GetName(), "latency", latency.Milliseconds())
 		}
 	} else {

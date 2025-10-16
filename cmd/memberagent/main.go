@@ -45,7 +45,6 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/client/apiutil"
 	"sigs.k8s.io/controller-runtime/pkg/healthz"
 	"sigs.k8s.io/controller-runtime/pkg/log/zap"
-	"sigs.k8s.io/controller-runtime/pkg/metrics"
 	metricsserver "sigs.k8s.io/controller-runtime/pkg/metrics/server"
 	"sigs.k8s.io/controller-runtime/pkg/webhook"
 	workv1alpha1 "sigs.k8s.io/work-api/pkg/apis/v1alpha1"
@@ -57,7 +56,6 @@ import (
 	imcv1beta1 "github.com/kubefleet-dev/kubefleet/pkg/controllers/internalmembercluster/v1beta1"
 	"github.com/kubefleet-dev/kubefleet/pkg/controllers/workapplier"
 	workv1alpha1controller "github.com/kubefleet-dev/kubefleet/pkg/controllers/workv1alpha1"
-	fleetmetrics "github.com/kubefleet-dev/kubefleet/pkg/metrics"
 	"github.com/kubefleet-dev/kubefleet/pkg/propertyprovider"
 	"github.com/kubefleet-dev/kubefleet/pkg/propertyprovider/azure"
 	"github.com/kubefleet-dev/kubefleet/pkg/utils"
@@ -121,13 +119,6 @@ func init() {
 	utilruntime.Must(clusterv1beta1.AddToScheme(scheme))
 	utilruntime.Must(placementv1beta1.AddToScheme(scheme))
 	//+kubebuilder:scaffold:scheme
-
-	metrics.Registry.MustRegister(
-		fleetmetrics.JoinResultMetrics,
-		fleetmetrics.LeaveResultMetrics,
-		fleetmetrics.FleetWorkProcessingRequestsTotal,
-		fleetmetrics.FleetManifestProcessingRequestsTotal,
-	)
 }
 
 func main() {

@@ -36,7 +36,7 @@ import (
 
 	fleetv1alpha1 "github.com/kubefleet-dev/kubefleet/apis/v1alpha1"
 	"github.com/kubefleet-dev/kubefleet/pkg/controllers/workv1alpha1"
-	"github.com/kubefleet-dev/kubefleet/pkg/metrics"
+	sharedmetrics "github.com/kubefleet-dev/kubefleet/pkg/metrics/shared"
 )
 
 // Reconciler reconciles a InternalMemberCluster object in the member cluster.
@@ -273,7 +273,7 @@ func (r *Reconciler) markInternalMemberClusterJoined(imc fleetv1alpha1.Condition
 	if existingCondition == nil || existingCondition.ObservedGeneration != imc.GetGeneration() || existingCondition.Status != newCondition.Status {
 		r.recorder.Event(imc, corev1.EventTypeNormal, eventReasonInternalMemberClusterJoined, "internal member cluster joined")
 		klog.V(2).InfoS("joined", "InternalMemberCluster", klog.KObj(imc))
-		metrics.ReportJoinResultMetric()
+		sharedmetrics.ReportJoinResultMetric()
 	}
 
 	imc.SetConditionsWithType(fleetv1alpha1.MemberAgent, newCondition)
@@ -313,7 +313,7 @@ func (r *Reconciler) markInternalMemberClusterLeft(imc fleetv1alpha1.Conditioned
 	if existingCondition == nil || existingCondition.ObservedGeneration != imc.GetGeneration() || existingCondition.Status != newCondition.Status {
 		r.recorder.Event(imc, corev1.EventTypeNormal, eventReasonInternalMemberClusterLeft, "internal member cluster left")
 		klog.V(2).InfoS("left", "InternalMemberCluster", klog.KObj(imc))
-		metrics.ReportLeaveResultMetric()
+		sharedmetrics.ReportLeaveResultMetric()
 	}
 
 	imc.SetConditionsWithType(fleetv1alpha1.MemberAgent, newCondition)

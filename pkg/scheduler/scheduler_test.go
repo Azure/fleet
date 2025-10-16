@@ -33,7 +33,7 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/client/fake"
 
 	fleetv1beta1 "github.com/kubefleet-dev/kubefleet/apis/placement/v1beta1"
-	"github.com/kubefleet-dev/kubefleet/pkg/metrics"
+	hubmetrics "github.com/kubefleet-dev/kubefleet/pkg/metrics/hub"
 )
 
 const (
@@ -627,11 +627,11 @@ func TestObserveSchedulingCycleMetrics(t *testing.T) {
 		t.Run(tc.name, func(t *testing.T) {
 			observeSchedulingCycleMetrics(tc.cycleStartTime, false, false)
 
-			if c := testutil.CollectAndCount(metrics.SchedulingCycleDurationMilliseconds); c != tc.wantMetricCount {
+			if c := testutil.CollectAndCount(hubmetrics.SchedulingCycleDurationMilliseconds); c != tc.wantMetricCount {
 				t.Fatalf("metric counts, got %d, want %d", c, tc.wantMetricCount)
 			}
 
-			if err := testutil.CollectAndCompare(metrics.SchedulingCycleDurationMilliseconds, strings.NewReader(metricMetadata+tc.wantHistogram)); err != nil {
+			if err := testutil.CollectAndCompare(hubmetrics.SchedulingCycleDurationMilliseconds, strings.NewReader(metricMetadata+tc.wantHistogram)); err != nil {
 				t.Errorf("%s", err)
 			}
 		})
