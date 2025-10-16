@@ -83,6 +83,22 @@ ENVTEST_VER = v0.0.0-20240317073005-bd9ea79e8d18
 ENVTEST_BIN := setup-envtest
 ENVTEST := $(abspath $(TOOLS_BIN_DIR)/$(ENVTEST_BIN)-$(ENVTEST_VER))
 
+PROTOC_GEN_GO_VER := v1.36.10
+PROTOC_GEN_GO_BIN := protoc-gen-go
+PROTOC_GEN_GO := $(abspath $(TOOLS_BIN_DIR)/$(PROTOC_GEN_GO_BIN)-$(PROTOC_GEN_GO_VER))
+
+PROTOC_GEN_GO_GRPC_VER := v1.5.1
+PROTOC_GEN_GO_GRPC_BIN := protoc-gen-go-grpc
+PROTOC_GEN_GO_GRPC := $(abspath $(TOOLS_BIN_DIR)/$(PROTOC_GEN_GO_GRPC_BIN)-$(PROTOC_GEN_GO_GRPC_VER))
+
+PROTOC_GEN_GRPC_GATEWAY_VER := v2.27.3
+PROTOC_GEN_GRPC_GATEWAY_BIN := protoc-gen-grpc-gateway
+PROTOC_GEN_GRPC_GATEWAY := $(abspath $(TOOLS_BIN_DIR)/$(PROTOC_GEN_GRPC_GATEWAY_BIN)-$(PROTOC_GEN_GRPC_GATEWAY_VER))
+
+PROTOC_VER := 28.0
+PROTOC_BIN := protoc
+PROTOC := $(abspath $(TOOLS_BIN_DIR)/$(PROTOC_BIN)-$(PROTOC_VER))
+
 # Scripts
 GO_INSTALL := ./hack/go-install.sh
 
@@ -107,6 +123,23 @@ $(GOIMPORTS):
 # ENVTEST
 $(ENVTEST):
 	GOBIN=$(TOOLS_BIN_DIR) $(GO_INSTALL) sigs.k8s.io/controller-runtime/tools/setup-envtest $(ENVTEST_BIN) $(ENVTEST_VER)
+
+# PROTOC_GEN_GO
+$(PROTOC_GEN_GO):
+	GOBIN=$(TOOLS_BIN_DIR) $(GO_INSTALL) google.golang.org/protobuf/cmd/protoc-gen-go $(PROTOC_GEN_GO_BIN) $(PROTOC_GEN_GO_VER)
+
+# PROTOC_GEN_GO_GRPC
+$(PROTOC_GEN_GO_GRPC):
+	GOBIN=$(TOOLS_BIN_DIR) $(GO_INSTALL) google.golang.org/grpc/cmd/protoc-gen-go-grpc $(PROTOC_GEN_GO_GRPC_BIN) $(PROTOC_GEN_GO_GRPC_VER)
+
+# PROTOC_GEN_GRPC_GATEWAY
+$(PROTOC_GEN_GRPC_GATEWAY):
+	GOBIN=$(TOOLS_BIN_DIR) $(GO_INSTALL) github.com/grpc-ecosystem/grpc-gateway/v2/protoc-gen-grpc-gateway $(PROTOC_GEN_GRPC_GATEWAY_BIN) $(PROTOC_GEN_GRPC_GATEWAY_VER)
+
+# PROTOC
+$(PROTOC):
+	curl -L -o $(TOOLS_BIN_DIR)/protoc.zip https://github.com/protocolbuffers/protobuf/releases/download/v$(PROTOC_VER)/protoc-$(PROTOC_VER)-linux-x86_64.zip && \
+	unzip $(TOOLS_BIN_DIR)/protoc.zip -d $(TOOLS_BIN_DIR)/protoc_tmp && mv $(TOOLS_BIN_DIR)/protoc_tmp/bin/protoc $(PROTOC) && rm -rf $(TOOLS_BIN_DIR)/protoc.zip $(TOOLS_BIN_DIR)/protoc_tmp
 
 .PHONY: help
 help: ## Display this help.
@@ -285,8 +318,16 @@ manifests: $(CONTROLLER_GEN)
 	$(CONTROLLER_GEN) \
 		$(CRD_OPTIONS) rbac:roleName=manager-role webhook paths="./apis/..." output:crd:artifacts:config=config/crd/bases
 
+# Generate protobuf code
+.PHONY: protos
+protos: $(PROTOC_GEN_GO) $(PROTOC_GEN_GO_GRPC) $(PROTOC_GEN_GRPC_GATEWAY) $(PROTOC)
+	PATH=$$PATH:$(TOOLS_BIN_DIR) $(PROTOC) --go_out=. --go_opt=paths=source_relative \
+	          --go-grpc_out=. --go-grpc_opt=paths=source_relative \
+			  --grpc-gateway_out=grpc_api_configuration=pkg/protos/azure/compute/v1/vmsizerecommender_http.yaml,logtostderr=true:. --grpc-gateway_opt=paths=source_relative,generate_unbound_methods=true \
+			  pkg/protos/azure/compute/v1/vmsizerecommender.proto
+
 # Generate code
-generate: $(CONTROLLER_GEN)
+generate: $(CONTROLLER_GEN) protos
 	$(CONTROLLER_GEN) \
 		object:headerFile="hack/boilerplate.go.txt" paths="./..."
 
