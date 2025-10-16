@@ -18,6 +18,8 @@ package clusteraffinity
 
 import (
 	"context"
+	"fmt"
+	"net/http"
 	"testing"
 
 	"github.com/google/go-cmp/cmp"
@@ -28,9 +30,12 @@ import (
 
 	clusterv1beta1 "go.goms.io/fleet/apis/cluster/v1beta1"
 	placementv1beta1 "go.goms.io/fleet/apis/placement/v1beta1"
+	"go.goms.io/fleet/pkg/clients/azure/compute"
+	checker "go.goms.io/fleet/pkg/propertychecker/azure"
 	"go.goms.io/fleet/pkg/propertyprovider"
 	"go.goms.io/fleet/pkg/propertyprovider/azure"
 	"go.goms.io/fleet/pkg/scheduler/framework"
+	"go.goms.io/fleet/pkg/utils/labels"
 )
 
 const (
@@ -750,10 +755,111 @@ func TestFilter(t *testing.T) {
 			},
 			wantStatus: framework.NewNonErrorStatus(framework.ClusterUnschedulable, p.Name(), "cluster does not match with any of the required cluster affinity terms"),
 		},
+		{
+			name: "single cluster capacity based term, matched",
+			ps: &placementv1beta1.ClusterSchedulingPolicySnapshot{
+				Spec: placementv1beta1.SchedulingPolicySnapshotSpec{
+					Policy: &placementv1beta1.PlacementPolicy{
+						Affinity: &placementv1beta1.Affinity{
+							ClusterAffinity: &placementv1beta1.ClusterAffinity{
+								RequiredDuringSchedulingIgnoredDuringExecution: &placementv1beta1.ClusterSelector{
+									ClusterSelectorTerms: []placementv1beta1.ClusterSelectorTerm{
+										{
+											LabelSelector: &metav1.LabelSelector{
+												MatchLabels: map[string]string{
+													labels.AzureLocationLabel:       regionLabelValue1,
+													labels.AzureSubscriptionIDLabel: "sub-id-123",
+												},
+											},
+											PropertySelector: &placementv1beta1.PropertySelector{
+												MatchExpressions: []placementv1beta1.PropertySelectorRequirement{
+													{
+														Name:     fmt.Sprintf(azure.CapacityPerSKUPropertyTmpl, "Standard_D2s_v3"),
+														Operator: placementv1beta1.PropertySelectorGreaterThanOrEqualTo,
+														Values: []string{
+															"1",
+														},
+													},
+												},
+											},
+										},
+									},
+								},
+							},
+						},
+					},
+				},
+			},
+			cluster: &clusterv1beta1.MemberCluster{
+				ObjectMeta: metav1.ObjectMeta{
+					Name: clusterName1,
+					Labels: map[string]string{
+						labels.AzureLocationLabel:       regionLabelValue1,
+						labels.AzureSubscriptionIDLabel: "sub-id-123",
+					},
+				},
+			},
+		},
+		{
+			name: "single cluster capacity based term, not matched",
+			ps: &placementv1beta1.ClusterSchedulingPolicySnapshot{
+				Spec: placementv1beta1.SchedulingPolicySnapshotSpec{
+					Policy: &placementv1beta1.PlacementPolicy{
+						Affinity: &placementv1beta1.Affinity{
+							ClusterAffinity: &placementv1beta1.ClusterAffinity{
+								RequiredDuringSchedulingIgnoredDuringExecution: &placementv1beta1.ClusterSelector{
+									ClusterSelectorTerms: []placementv1beta1.ClusterSelectorTerm{
+										{
+											LabelSelector: &metav1.LabelSelector{
+												MatchLabels: map[string]string{
+													labels.AzureLocationLabel:       regionLabelValue1,
+													labels.AzureSubscriptionIDLabel: "sub-id-123",
+												},
+											},
+											PropertySelector: &placementv1beta1.PropertySelector{
+												MatchExpressions: []placementv1beta1.PropertySelectorRequirement{
+													{
+														Name:     fmt.Sprintf(azure.CapacityPerSKUPropertyTmpl, "Standard_B2ms"),
+														Operator: placementv1beta1.PropertySelectorGreaterThan,
+														Values: []string{
+															"4",
+														},
+													},
+												},
+											},
+										},
+									},
+								},
+							},
+						},
+					},
+				},
+			},
+			cluster: &clusterv1beta1.MemberCluster{
+				ObjectMeta: metav1.ObjectMeta{
+					Name: clusterName1,
+					Labels: map[string]string{
+						labels.AzureLocationLabel:       regionLabelValue1,
+						labels.AzureSubscriptionIDLabel: "sub-id-123",
+					},
+				},
+			},
+			wantStatus: framework.NewNonErrorStatus(framework.ClusterUnschedulable, p.Name(), "cluster does not match with any of the required cluster affinity terms"),
+		},
 	}
 
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
+			// Create mock server
+			server := createMockAttributeBasedVMSizeRecommenderServer(t, http.StatusOK)
+			defer server.Close()
+
+			client, err := compute.NewAttributeBasedVMSizeRecommenderClient(server.URL, http.DefaultClient)
+			if err != nil {
+				t.Fatalf("failed to create VM size recommender client: %v", err)
+			}
+			p.propertyChecker = checker.NewPropertyChecker(*client)
+
 			ctx := context.Background()
 			state := framework.NewCycleState(nil, nil, nil)
 			status := p.Filter(ctx, state, tc.ps, tc.cluster)

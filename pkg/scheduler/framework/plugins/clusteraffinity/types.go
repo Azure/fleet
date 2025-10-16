@@ -28,12 +28,15 @@ import (
 
 	clusterv1beta1 "go.goms.io/fleet/apis/cluster/v1beta1"
 	placementv1beta1 "go.goms.io/fleet/apis/placement/v1beta1"
+	"go.goms.io/fleet/pkg/propertychecker/azure"
 	"go.goms.io/fleet/pkg/propertyprovider"
 )
 
-// clusterRequirement is a type alias for ClusterSelectorTerm in the API, which allows
-// easy method extension.
-type clusterRequirement placementv1beta1.ClusterSelectorTerm
+// clusterRequirement is a type alias for ClusterSelectorTerm in the API and property checker.
+type clusterRequirement struct {
+	placementv1beta1.ClusterSelectorTerm
+	*azure.PropertyChecker
+}
 
 // retrieveResourceUsageFrom retrieves a resource property value from a member cluster.
 //
@@ -140,6 +143,22 @@ func (c *clusterRequirement) Matches(cluster *clusterv1beta1.MemberCluster) (boo
 	}
 
 	for _, exp := range c.PropertySelector.MatchExpressions {
+		// Check if we have a property checker and if it can handle the property.
+		if c.PropertyChecker != nil {
+			handled, available, err := c.MatchPropertiesInPropertyChecker(cluster, exp)
+			if err != nil {
+				return false, err
+			}
+			if handled {
+				// Property was handled by the property checker.
+				if !available {
+					return false, nil
+				}
+				// Property check passed, continue to next expression.
+				continue
+			}
+			// Property was not handled by property checker, fall through to standard validation.
+		}
 		// Compare the observed value with the expected one using the specified operator.
 		q, err := retrievePropertyValueFrom(cluster, exp.Name)
 		if err != nil {

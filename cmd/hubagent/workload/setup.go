@@ -354,7 +354,7 @@ func SetupControllers(ctx context.Context, wg *sync.WaitGroup, mgr ctrl.Manager,
 
 		// Set up the scheduler
 		klog.Info("Setting up scheduler")
-		defaultProfile := profile.NewDefaultProfile()
+		defaultProfile := profile.NewDefaultProfile(profile.Options{})
 		defaultFramework := framework.NewFramework(defaultProfile, mgr)
 		defaultSchedulingQueue := queue.NewSimplePlacementSchedulingQueue(
 			queue.WithName(schedulerQueueName),
