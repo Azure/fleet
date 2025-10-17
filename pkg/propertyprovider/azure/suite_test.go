@@ -43,10 +43,10 @@ const (
 
 const (
 	region = "eastus"
-
-	aksNodeSKU1 = "Standard_B4ms"
-	aksNodeSKU2 = "Standard_A4_v2"
-	aksNodeSKU3 = "Standard_F4s"
+	// we need to regularly update the SKUs used in tests as some of them get deprecated over time.
+	aksNodeSKU1 = "Standard_D8s_v5"
+	aksNodeSKU2 = "Standard_E16_v5"
+	aksNodeSKU3 = "Standard_M16ms"
 	// Note (chenyu1): cross-reference between the Azure VM SKU list and the Azure Retail Prices API
 	// for a list of currently known SKUs to be missing from the Azure Retail Prices API.
 	aksNodeKnownMissingSKU1 = "Standard_DS2_v2"

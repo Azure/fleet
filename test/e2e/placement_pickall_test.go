@@ -960,11 +960,16 @@ var _ = Describe("placing resources using a CRP of PickAll placement type", func
 											},
 											PropertySelector: &placementv1beta1.PropertySelector{
 												MatchExpressions: []placementv1beta1.PropertySelectorRequirement{
+													// Important: the test environment has the Azure VM SKUs set up manually,
+													// but the CPU/memory total capacities will always use the actual values,
+													// which are the number of CPU cores/the amount of RAM installed on the
+													// local machine (or remote VM). As a result, there are chances where
+													// the per CPU core/per GB memory costs will become 0.
 													{
 														Name:     azure.PerGBMemoryCostProperty,
-														Operator: placementv1beta1.PropertySelectorEqualTo,
+														Operator: placementv1beta1.PropertySelectorGreaterThanOrEqualTo,
 														Values: []string{
-															"0",
+															"9999",
 														},
 													},
 												},

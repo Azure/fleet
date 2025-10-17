@@ -35,7 +35,6 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/envtest"
 	"sigs.k8s.io/controller-runtime/pkg/manager"
-	ctrlmetrics "sigs.k8s.io/controller-runtime/pkg/metrics"
 	metricsserver "sigs.k8s.io/controller-runtime/pkg/metrics/server"
 
 	placementv1beta1 "go.goms.io/fleet/apis/placement/v1beta1"
@@ -43,7 +42,6 @@ import (
 	"go.goms.io/fleet/pkg/controllers/bindingwatcher"
 	"go.goms.io/fleet/pkg/controllers/placementwatcher"
 	"go.goms.io/fleet/pkg/controllers/schedulingpolicysnapshot"
-	"go.goms.io/fleet/pkg/metrics"
 	"go.goms.io/fleet/pkg/utils"
 	"go.goms.io/fleet/pkg/utils/controller"
 	"go.goms.io/fleet/pkg/utils/informer"
@@ -151,9 +149,6 @@ var _ = BeforeSuite(func() {
 		PlacementController: crpController,
 	}).SetupWithManagerForClusterResourceBinding(mgr)
 	Expect(err).Should(Succeed(), "failed to create clusterResourceBinding watcher")
-
-	// Register metrics.
-	ctrlmetrics.Registry.MustRegister(metrics.FleetPlacementStatusLastTimeStampSeconds)
 
 	ctx, cancel = context.WithCancel(context.TODO())
 	// Run the controller manager

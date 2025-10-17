@@ -152,6 +152,20 @@ var (
 				corev1.ResourceMemory: resource.MustParse("1.8Gi"),
 			},
 		},
+		nodeSetBySKU: map[string]NodeSet{
+			nodeSKU1: {
+				nodeName1: true,
+				nodeName3: true,
+			},
+			nodeSKU2: {
+				nodeName2: true,
+			},
+		},
+		skuByNode: map[string]string{
+			nodeName1: nodeSKU1,
+			nodeName2: nodeSKU2,
+			nodeName3: nodeSKU1,
+		},
 		pricingProvider: &dummyPricingProvider{},
 	}
 
@@ -2208,6 +2222,48 @@ func TestNodeTrackerCosts(t *testing.T) {
 			}
 			if !cmp.Equal(perGBMemoryCost, tc.wantPerGBMemoryCost, cmpopts.EquateApprox(0.0, 0.01)) {
 				t.Fatalf("Costs() perGBMemoryCost = %f, want %f", perGBMemoryCost, tc.wantPerGBMemoryCost)
+			}
+		})
+	}
+}
+
+func TestNodeTrackerNodeCountPerSKU(t *testing.T) {
+	testCases := []struct {
+		name        string
+		nt          *NodeTracker
+		wantCounter map[string]int
+	}{
+		{
+			name: "can return the counter (all nodes have SKUs assigned)",
+			nt:   nodeTrackerWith3Nodes,
+			wantCounter: map[string]int{
+				nodeSKU1: 2,
+				nodeSKU2: 1,
+			},
+		},
+		{
+			name: "can return the counter (with undefined SKUs)",
+			nt: &NodeTracker{
+				nodeSetBySKU: map[string]NodeSet{
+					nodeSKU1: {nodeName1: true},
+					"": {
+						nodeName2: true,
+						nodeName3: true,
+					},
+				},
+			},
+			wantCounter: map[string]int{
+				nodeSKU1:                    1,
+				ReservedNameForUndefinedSKU: 2,
+			},
+		},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			counter := tc.nt.NodeCountPerSKU()
+			if diff := cmp.Diff(counter, tc.wantCounter, cmpopts.EquateEmpty()); diff != "" {
+				t.Fatalf("NodeCountPerSKU() diff (-got, +want):\n%s", diff)
 			}
 		})
 	}

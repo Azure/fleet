@@ -25,7 +25,7 @@ import (
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
 	corev1 "k8s.io/api/core/v1"
-	apierrors "k8s.io/apimachinery/pkg/api/errors"
+	"k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/types"
 	"k8s.io/apimachinery/pkg/util/intstr"
@@ -575,8 +575,31 @@ var _ = Describe("validating resource placement using different apply strategies
 			})
 
 			AfterAll(func() {
+				// Must delete the conflicting CRP first, otherwise it might re-create the resources when we check
+				// if the original CRP has been fully deleted.
+				//
+				// And here the test suite will not use the shared common deletion logic as it will attempt to verify
+				// resources that are not managed by the conflicting CRP.
+				Eventually(func() error {
+					conflictedRP := &placementv1beta1.ResourcePlacement{
+						ObjectMeta: metav1.ObjectMeta{
+							Name:      conflictedRPName,
+							Namespace: workNamespaceName,
+						},
+					}
+
+					if err := hubClient.Delete(ctx, conflictedRP); err != nil && !errors.IsNotFound(err) {
+						return fmt.Errorf("failed to delete RP %s: %w", conflictedRPName, err)
+					}
+
+					// Wait until the RP is fully deleted.
+					if err := hubClient.Get(ctx, types.NamespacedName{Name: conflictedRPName, Namespace: workNamespaceName}, conflictedRP); !errors.IsNotFound(err) {
+						return fmt.Errorf("RP %s is still present or an unexpected error has occurred: %w", conflictedRPName, err)
+					}
+					return nil
+				}, eventuallyDuration, eventuallyInterval).Should(Succeed(), "Failed to delete RP %s", conflictedRPName)
+
 				ensureRPAndRelatedResourcesDeleted(types.NamespacedName{Name: rpName, Namespace: workNamespaceName}, allMemberClusters)
-				ensureRPAndRelatedResourcesDeleted(types.NamespacedName{Name: conflictedRPName, Namespace: workNamespaceName}, allMemberClusters)
 			})
 		})
 	})
@@ -1412,7 +1435,7 @@ func createAnotherConfigMap(name types.NamespacedName) {
 func cleanupAnotherConfigMap(name types.NamespacedName) {
 	cm := &corev1.ConfigMap{}
 	err := hubClient.Get(ctx, name, cm)
-	if err != nil && apierrors.IsNotFound(err) {
+	if err != nil && errors.IsNotFound(err) {
 		return
 	}
 	Expect(err).To(Succeed(), "Failed to get config map %s", name)
@@ -1423,7 +1446,7 @@ func cleanupAnotherConfigMap(name types.NamespacedName) {
 		cm := &corev1.ConfigMap{}
 		err := hubClient.Get(ctx, name, cm)
 		if err != nil {
-			if apierrors.IsNotFound(err) {
+			if errors.IsNotFound(err) {
 				return nil
 			}
 			return err

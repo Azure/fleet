@@ -43,7 +43,7 @@ import (
 
 	clusterv1beta1 "go.goms.io/fleet/apis/cluster/v1beta1"
 	placementv1beta1 "go.goms.io/fleet/apis/placement/v1beta1"
-	"go.goms.io/fleet/pkg/metrics"
+	hubmetrics "go.goms.io/fleet/pkg/metrics/hub"
 	"go.goms.io/fleet/pkg/utils"
 	"go.goms.io/fleet/pkg/utils/condition"
 	metricsutils "go.goms.io/fleet/test/utils/metrics"
@@ -233,7 +233,7 @@ var _ = Describe("Test the clusterStagedUpdateRun controller", func() {
 })
 
 func resetUpdateRunMetrics() {
-	metrics.FleetUpdateRunStatusLastTimestampSeconds.Reset()
+	hubmetrics.FleetUpdateRunStatusLastTimestampSeconds.Reset()
 }
 
 // validateUpdateRunMetricsEmitted validates the update run status metrics are emitted and are emitted in the correct order.
@@ -263,6 +263,7 @@ func generateMetricsLabels(
 	condition, status, reason string,
 ) []*prometheusclientmodel.LabelPair {
 	return []*prometheusclientmodel.LabelPair{
+		{Name: ptr.To("namespace"), Value: &updateRun.Namespace},
 		{Name: ptr.To("name"), Value: &updateRun.Name},
 		{Name: ptr.To("generation"), Value: ptr.To(strconv.FormatInt(updateRun.Generation, 10))},
 		{Name: ptr.To("condition"), Value: ptr.To(condition)},
@@ -336,7 +337,7 @@ func generateTestClusterStagedUpdateRun() *placementv1beta1.ClusterStagedUpdateR
 		ObjectMeta: metav1.ObjectMeta{
 			Name: testUpdateRunName,
 		},
-		Spec: placementv1beta1.StagedUpdateRunSpec{
+		Spec: placementv1beta1.UpdateRunSpec{
 			PlacementName:            testCRPName,
 			ResourceSnapshotIndex:    testResourceSnapshotIndex,
 			StagedUpdateStrategyName: testUpdateStrategyName,
@@ -493,7 +494,7 @@ func generateTestClusterStagedUpdateStrategy() *placementv1beta1.ClusterStagedUp
 		ObjectMeta: metav1.ObjectMeta{
 			Name: testUpdateStrategyName,
 		},
-		Spec: placementv1beta1.StagedUpdateStrategySpec{
+		Spec: placementv1beta1.UpdateStrategySpec{
 			Stages: []placementv1beta1.StageConfig{
 				{
 					Name: "stage1",
@@ -547,7 +548,7 @@ func generateTestClusterStagedUpdateStrategyWithSingleStage(afterStageTasks []pl
 		ObjectMeta: metav1.ObjectMeta{
 			Name: testUpdateStrategyName,
 		},
-		Spec: placementv1beta1.StagedUpdateStrategySpec{
+		Spec: placementv1beta1.UpdateStrategySpec{
 			Stages: []placementv1beta1.StageConfig{
 				{
 					Name:            "stage1",
@@ -662,7 +663,7 @@ func validateUpdateRunHasFinalizer(ctx context.Context, updateRun *placementv1be
 		if err := k8sClient.Get(ctx, namespacedName, updateRun); err != nil {
 			return fmt.Errorf("failed to get clusterStagedUpdateRun %s: %w", namespacedName, err)
 		}
-		if !controllerutil.ContainsFinalizer(updateRun, placementv1beta1.ClusterStagedUpdateRunFinalizer) {
+		if !controllerutil.ContainsFinalizer(updateRun, placementv1beta1.UpdateRunFinalizer) {
 			return fmt.Errorf("finalizer not added to clusterStagedUpdateRun %s", namespacedName)
 		}
 		return nil

@@ -29,53 +29,55 @@ import (
 	"go.goms.io/fleet/pkg/utils/controller"
 )
 
-// validate validates the clusterStagedUpdateRun status and ensures the update can be continued.
+// validate validates the updateRun status and ensures the update can be continued.
 // The function returns the index of the stage that is updating, and the list of clusters that are scheduled to be deleted.
-// If the updating stage index is -1, it means all stages are finished, and the clusterStageUpdateRun should be marked as finished.
+// If the updating stage index is -1, it means all stages are finished, and the updateRun should be marked as finished.
 // If the updating stage index is 0, the next stage to be updated is the first stage.
-// If the updating stage index is len(updateRun.Status.StagesStatus), the next stage to be updated will be the delete stage.
+// If the updating stage index is len(updateRun.GetUpdateRunStatus().StagesStatus), the next stage to be updated will be the delete stage.
 func (r *Reconciler) validate(
 	ctx context.Context,
-	updateRun *placementv1beta1.ClusterStagedUpdateRun,
-) (int, []*placementv1beta1.ClusterResourceBinding, []*placementv1beta1.ClusterResourceBinding, error) {
+	updateRun placementv1beta1.UpdateRunObj,
+) (int, []placementv1beta1.BindingObj, []placementv1beta1.BindingObj, error) {
 	// Some of the validating function changes the object, so we need to make a copy of the object.
 	updateRunRef := klog.KObj(updateRun)
-	updateRunCopy := updateRun.DeepCopy()
-	klog.V(2).InfoS("Start to validate the clusterStagedUpdateRun", "clusterStagedUpdateRun", updateRunRef)
+	updateRunStatus := updateRun.GetUpdateRunStatus()
+	updateRunCopy := updateRun.DeepCopyObject().(placementv1beta1.UpdateRunObj)
+	updateRunCopyStatus := updateRunCopy.GetUpdateRunStatus()
+	klog.V(2).InfoS("Start to validate the updateRun", "updateRun", updateRunRef)
 
-	// Validate the ClusterResourcePlacement object referenced by the ClusterStagedUpdateRun.
-	placementName, err := r.validateCRP(ctx, updateRunCopy)
+	// Validate the Placement object referenced by the UpdateRun.
+	placementNamespacedName, err := r.validatePlacement(ctx, updateRunCopy)
 	if err != nil {
 		return -1, nil, nil, err
 	}
 	// Validate the applyStrategy.
-	if !reflect.DeepEqual(updateRun.Status.ApplyStrategy, updateRunCopy.Status.ApplyStrategy) {
-		mismatchErr := controller.NewUserError(fmt.Errorf("the applyStrategy in the clusterStagedUpdateRun is outdated, latest: %v, recorded: %v", updateRunCopy.Status.ApplyStrategy, updateRun.Status.ApplyStrategy))
-		klog.ErrorS(mismatchErr, "the applyStrategy in the clusterResourcePlacement has changed", "clusterResourcePlacement", placementName, "clusterStagedUpdateRun", updateRunRef)
+	if !reflect.DeepEqual(updateRunStatus.ApplyStrategy, updateRunCopyStatus.ApplyStrategy) {
+		mismatchErr := controller.NewUserError(fmt.Errorf("the applyStrategy in the updateRun is outdated, latest: %v, recorded: %v", updateRunCopyStatus.ApplyStrategy, updateRunStatus.ApplyStrategy))
+		klog.ErrorS(mismatchErr, "the applyStrategy in the placement has changed", "placement", placementNamespacedName, "updateRun", updateRunRef)
 		return -1, nil, nil, fmt.Errorf("%w: %s", errStagedUpdatedAborted, mismatchErr.Error())
 	}
 
 	// Retrieve the latest policy snapshot.
-	latestPolicySnapshot, clusterCount, err := r.determinePolicySnapshot(ctx, placementName, updateRunCopy)
+	latestPolicySnapshot, clusterCount, err := r.determinePolicySnapshot(ctx, placementNamespacedName, updateRunCopy)
 	if err != nil {
 		return -1, nil, nil, err
 	}
 	// Make sure the latestPolicySnapshot has not changed.
-	if updateRun.Status.PolicySnapshotIndexUsed != updateRunCopy.Status.PolicySnapshotIndexUsed {
-		mismatchErr := fmt.Errorf("the policy snapshot index used in the clusterStagedUpdateRun is outdated, latest: %s, recorded: %s", updateRunCopy.Status.PolicySnapshotIndexUsed, updateRun.Status.PolicySnapshotIndexUsed)
-		klog.ErrorS(mismatchErr, "there's a new latest policy snapshot", "clusterResourcePlacement", placementName, "clusterStagedUpdateRun", updateRunRef)
+	if updateRunStatus.PolicySnapshotIndexUsed != updateRunCopyStatus.PolicySnapshotIndexUsed {
+		mismatchErr := fmt.Errorf("the policy snapshot index used in the updateRun is outdated, latest: %s, recorded: %s", updateRunCopyStatus.PolicySnapshotIndexUsed, updateRunStatus.PolicySnapshotIndexUsed)
+		klog.ErrorS(mismatchErr, "there's a new latest policy snapshot", "placement", placementNamespacedName, "updateRun", updateRunRef)
 		return -1, nil, nil, fmt.Errorf("%w: %s", errStagedUpdatedAborted, mismatchErr.Error())
 	}
 	// Make sure the cluster count in the policy snapshot has not changed.
 	// PickAll policy case will be verified in validateStagesStatus.
-	if clusterCount != -1 && updateRun.Status.PolicyObservedClusterCount != clusterCount {
-		mismatchErr := fmt.Errorf("the cluster count initialized in the clusterStagedUpdateRun is outdated, latest: %d, recorded: %d", clusterCount, updateRun.Status.PolicyObservedClusterCount)
-		klog.ErrorS(mismatchErr, "the cluster count in the policy snapshot has changed", "clusterResourcePlacement", placementName, "clusterStagedUpdateRun", updateRunRef)
+	if clusterCount != -1 && updateRunStatus.PolicyObservedClusterCount != clusterCount {
+		mismatchErr := fmt.Errorf("the cluster count initialized in the updateRun is outdated, latest: %d, recorded: %d", clusterCount, updateRunStatus.PolicyObservedClusterCount)
+		klog.ErrorS(mismatchErr, "the cluster count in the policy snapshot has changed", "placement", placementNamespacedName, "updateRun", updateRunRef)
 		return -1, nil, nil, fmt.Errorf("%w: %s", errStagedUpdatedAborted, mismatchErr.Error())
 	}
 
-	// Collect the clusters by the corresponding ClusterResourcePlacement with the latest policy snapshot.
-	scheduledBindings, toBeDeletedBindings, err := r.collectScheduledClusters(ctx, placementName, latestPolicySnapshot, updateRunCopy)
+	// Collect the clusters by the corresponding placement with the latest policy snapshot.
+	scheduledBindings, toBeDeletedBindings, err := r.collectScheduledClusters(ctx, placementNamespacedName, latestPolicySnapshot, updateRunCopy)
 	if err != nil {
 		return -1, nil, nil, err
 	}
@@ -85,27 +87,28 @@ func (r *Reconciler) validate(
 	if err != nil {
 		return -1, nil, nil, err
 	}
+
 	return updatingStageIndex, scheduledBindings, toBeDeletedBindings, nil
 }
 
-// validateStagesStatus validates both the update and delete stages of the ClusterStagedUpdateRun.
+// validateStagesStatus validates both the update and delete stages of the UpdateRun.
 // The function returns the stage index that is updating, or any error encountered.
-// If the updating stage index is -1, it means all stages are finished, and the clusterStageUpdateRun should be marked as finished.
+// If the updating stage index is -1, it means all stages are finished, and the updateRun should be marked as finished.
 // If the updating stage index is 0, the next stage to be updated will be the first stage.
-// If the updating stage index is len(updateRun.Status.StagesStatus), the next stage to be updated will be the delete stage.
+// If the updating stage index is len(updateRun.GetUpdateRunStatus().StagesStatus), the next stage to be updated will be the delete stage.
 func (r *Reconciler) validateStagesStatus(
 	ctx context.Context,
-	scheduledBindings, toBeDeletedBindings []*placementv1beta1.ClusterResourceBinding,
-	updateRun, updateRunCopy *placementv1beta1.ClusterStagedUpdateRun,
+	scheduledBindings, toBeDeletedBindings []placementv1beta1.BindingObj,
+	updateRun, updateRunCopy placementv1beta1.UpdateRunObj,
 ) (int, error) {
 	updateRunRef := klog.KObj(updateRun)
 
 	// Recompute the stage status which does not include the delete stage.
-	// Note that the compute process uses the StagedUpdateStrategySnapshot in status,
+	// Note that the compute process uses the UpdateStrategySnapshot in status,
 	// so it won't affect anything if the actual updateStrategy has changed.
-	if updateRun.Status.StagedUpdateStrategySnapshot == nil {
-		unexpectedErr := controller.NewUnexpectedBehaviorError(fmt.Errorf("the clusterStagedUpdateRun has nil stagedUpdateStrategySnapshot"))
-		klog.ErrorS(unexpectedErr, "Failed to find the stagedUpdateStrategySnapshot in the clusterStagedUpdateRun", "clusterStagedUpdateRun", updateRunRef)
+	if updateRun.GetUpdateRunStatus().UpdateStrategySnapshot == nil {
+		unexpectedErr := controller.NewUnexpectedBehaviorError(fmt.Errorf("the updateRun has nil updateStrategySnapshot"))
+		klog.ErrorS(unexpectedErr, "Failed to find the updateStrategySnapshot in the updateRun", "updateRun", updateRunRef)
 		return -1, fmt.Errorf("%w: %s", errStagedUpdatedAborted, unexpectedErr.Error())
 	}
 	if err := r.computeRunStageStatus(ctx, scheduledBindings, updateRunCopy); err != nil {
@@ -113,10 +116,10 @@ func (r *Reconciler) validateStagesStatus(
 	}
 
 	// Validate the stages in the updateRun and return the updating stage index.
-	existingStageStatus := updateRun.Status.StagesStatus
+	existingStageStatus := updateRun.GetUpdateRunStatus().StagesStatus
 	if existingStageStatus == nil {
-		unexpectedErr := controller.NewUnexpectedBehaviorError(fmt.Errorf("the clusterStagedUpdateRun has nil stagesStatus"))
-		klog.ErrorS(unexpectedErr, "Failed to find the stagesStatus in the clusterStagedUpdateRun", "clusterStagedUpdateRun", updateRunRef)
+		unexpectedErr := controller.NewUnexpectedBehaviorError(fmt.Errorf("the updateRun has nil stagesStatus"))
+		klog.ErrorS(unexpectedErr, "Failed to find the stagesStatus in the updateRun", "updateRun", updateRunRef)
 		return -1, fmt.Errorf("%w: %s", errStagedUpdatedAborted, unexpectedErr.Error())
 	}
 	updatingStageIndex, lastFinishedStageIndex, validateErr := validateUpdateStagesStatus(existingStageStatus, updateRunCopy)
@@ -127,37 +130,37 @@ func (r *Reconciler) validateStagesStatus(
 	return validateDeleteStageStatus(updatingStageIndex, lastFinishedStageIndex, len(existingStageStatus), toBeDeletedBindings, updateRunCopy)
 }
 
-// validateUpdateStagesStatus is a helper function to validate the updating stages in the clusterStagedUpdateRun.
+// validateUpdateStagesStatus is a helper function to validate the updating stages in the updateRun.
 // It compares the existing stage status with the latest list of clusters to be updated.
 // It returns the index of the updating stage, the index of the last finished stage and any error encountered.
-func validateUpdateStagesStatus(existingStageStatus []placementv1beta1.StageUpdatingStatus, updateRun *placementv1beta1.ClusterStagedUpdateRun) (int, int, error) {
+func validateUpdateStagesStatus(existingStageStatus []placementv1beta1.StageUpdatingStatus, updateRun placementv1beta1.UpdateRunObj) (int, int, error) {
 	updatingStageIndex := -1
 	lastFinishedStageIndex := -1
 	// Remember the newly computed stage status.
-	newStageStatus := updateRun.Status.StagesStatus
-	// Make sure the number of stages in the clusterStagedUpdateRun are still the same.
+	newStageStatus := updateRun.GetUpdateRunStatus().StagesStatus
+	// Make sure the number of stages in the updateRun are still the same.
 	if len(existingStageStatus) != len(newStageStatus) {
-		mismatchErr := fmt.Errorf("the number of stages in the clusterStagedUpdateRun has changed, new: %d, existing: %d", len(newStageStatus), len(existingStageStatus))
-		klog.ErrorS(mismatchErr, "The number of stages in the clusterStagedUpdateRun has changed", "clusterStagedUpdateRun", klog.KObj(updateRun))
+		mismatchErr := fmt.Errorf("the number of stages in the updateRun has changed, new: %d, existing: %d", len(newStageStatus), len(existingStageStatus))
+		klog.ErrorS(mismatchErr, "The number of stages in the updateRun has changed", "updateRun", klog.KObj(updateRun))
 		return -1, -1, fmt.Errorf("%w: %s", errStagedUpdatedAborted, mismatchErr.Error())
 	}
 	// Make sure the stages in the updateRun are still the same.
 	for curStage := range existingStageStatus {
 		if existingStageStatus[curStage].StageName != newStageStatus[curStage].StageName {
-			mismatchErr := fmt.Errorf("index `%d` stage name in the clusterStagedUpdateRun has changed, new: %s, existing: %s", curStage, newStageStatus[curStage].StageName, existingStageStatus[curStage].StageName)
-			klog.ErrorS(mismatchErr, "The stage name in the clusterStagedUpdateRun has changed", "clusterStagedUpdateRun", klog.KObj(updateRun))
+			mismatchErr := fmt.Errorf("index `%d` stage name in the updateRun has changed, new: %s, existing: %s", curStage, newStageStatus[curStage].StageName, existingStageStatus[curStage].StageName)
+			klog.ErrorS(mismatchErr, "The stage name in the updateRun has changed", "updateRun", klog.KObj(updateRun))
 			return -1, -1, fmt.Errorf("%w: %s", errStagedUpdatedAborted, mismatchErr.Error())
 		}
 		if len(existingStageStatus[curStage].Clusters) != len(newStageStatus[curStage].Clusters) {
 			mismatchErr := fmt.Errorf("the number of clusters in index `%d` stage has changed, new: %d, existing: %d", curStage, len(newStageStatus[curStage].Clusters), len(existingStageStatus[curStage].Clusters))
-			klog.ErrorS(mismatchErr, "The number of clusters in the stage has changed", "clusterStagedUpdateRun", klog.KObj(updateRun))
+			klog.ErrorS(mismatchErr, "The number of clusters in the stage has changed", "updateRun", klog.KObj(updateRun))
 			return -1, -1, fmt.Errorf("%w: %s", errStagedUpdatedAborted, mismatchErr.Error())
 		}
 		// Check that the clusters in the stage are still the same.
 		for j := range existingStageStatus[curStage].Clusters {
 			if existingStageStatus[curStage].Clusters[j].ClusterName != newStageStatus[curStage].Clusters[j].ClusterName {
 				mismatchErr := fmt.Errorf("the `%d` cluster in the `%d` stage has changed, new: %s, existing: %s", j, curStage, newStageStatus[curStage].Clusters[j].ClusterName, existingStageStatus[curStage].Clusters[j].ClusterName)
-				klog.ErrorS(mismatchErr, "The cluster in the stage has changed", "clusterStagedUpdateRun", klog.KObj(updateRun))
+				klog.ErrorS(mismatchErr, "The cluster in the stage has changed", "updateRun", klog.KObj(updateRun))
 				return -1, -1, fmt.Errorf("%w: %s", errStagedUpdatedAborted, mismatchErr.Error())
 			}
 		}
@@ -178,16 +181,16 @@ func validateUpdateStagesStatus(existingStageStatus []placementv1beta1.StageUpda
 func validateClusterUpdatingStatus(
 	curStage, updatingStageIndex, lastFinishedStageIndex int,
 	stageStatus *placementv1beta1.StageUpdatingStatus,
-	updateRun *placementv1beta1.ClusterStagedUpdateRun,
+	updateRun placementv1beta1.UpdateRunObj,
 ) (int, int, error) {
 	stageSucceedCond := meta.FindStatusCondition(stageStatus.Conditions, string(placementv1beta1.StageUpdatingConditionSucceeded))
 	stageStartedCond := meta.FindStatusCondition(stageStatus.Conditions, string(placementv1beta1.StageUpdatingConditionProgressing))
-	if condition.IsConditionStatusTrue(stageSucceedCond, updateRun.Generation) {
+	if condition.IsConditionStatusTrue(stageSucceedCond, updateRun.GetGeneration()) {
 		// The stage has finished.
 		if updatingStageIndex != -1 && curStage > updatingStageIndex {
 			// The finished stage is after the updating stage.
 			unexpectedErr := controller.NewUnexpectedBehaviorError(fmt.Errorf("the finished stage `%d` is after the updating stage `%d`", curStage, updatingStageIndex))
-			klog.ErrorS(unexpectedErr, "The finished stage is after the updating stage", "clusterStagedUpdateRun", klog.KObj(updateRun))
+			klog.ErrorS(unexpectedErr, "The finished stage is after the updating stage", "updateRun", klog.KObj(updateRun))
 			return -1, -1, fmt.Errorf("%w: %s", errStagedUpdatedAborted, unexpectedErr.Error())
 		}
 		// Make sure that all the clusters are updated.
@@ -196,38 +199,38 @@ func validateClusterUpdatingStatus(
 			if !condition.IsConditionStatusTrue(meta.FindStatusCondition(
 				stageStatus.Clusters[curCluster].Conditions,
 				string(placementv1beta1.ClusterUpdatingConditionSucceeded)),
-				updateRun.Generation) {
+				updateRun.GetGeneration()) {
 				// The clusters in the finished stage should all have finished too.
 				unexpectedErr := controller.NewUnexpectedBehaviorError(fmt.Errorf("cluster `%s` in the finished stage `%s` has not succeeded", stageStatus.Clusters[curCluster].ClusterName, stageStatus.StageName))
-				klog.ErrorS(unexpectedErr, "The cluster in a finished stage is still updating", "clusterStagedUpdateRun", klog.KObj(updateRun))
+				klog.ErrorS(unexpectedErr, "The cluster in a finished stage is still updating", "updateRun", klog.KObj(updateRun))
 				return -1, -1, fmt.Errorf("%w: %s", errStagedUpdatedAborted, unexpectedErr.Error())
 			}
 		}
 		if curStage != lastFinishedStageIndex+1 {
 			// The current finished stage is not right after the last finished stage.
 			unexpectedErr := controller.NewUnexpectedBehaviorError(fmt.Errorf("the finished stage `%s` is not right after the last finished stage with index `%d`", stageStatus.StageName, lastFinishedStageIndex))
-			klog.ErrorS(unexpectedErr, "There's not yet started stage before the finished stage", "clusterStagedUpdateRun", klog.KObj(updateRun))
+			klog.ErrorS(unexpectedErr, "There's not yet started stage before the finished stage", "updateRun", klog.KObj(updateRun))
 			return -1, -1, fmt.Errorf("%w: %s", errStagedUpdatedAborted, unexpectedErr.Error())
 		}
 		// Record the last finished stage so we can continue from the next stage if no stage is updating.
 		lastFinishedStageIndex = curStage
-	} else if condition.IsConditionStatusFalse(stageSucceedCond, updateRun.Generation) {
+	} else if condition.IsConditionStatusFalse(stageSucceedCond, updateRun.GetGeneration()) {
 		// The stage has failed.
 		failedErr := fmt.Errorf("the stage `%s` has failed, err: %s", stageStatus.StageName, stageSucceedCond.Message)
-		klog.ErrorS(failedErr, "The stage has failed", "stageCond", stageSucceedCond, "clusterStagedUpdateRun", klog.KObj(updateRun))
+		klog.ErrorS(failedErr, "The stage has failed", "stageCond", stageSucceedCond, "updateRun", klog.KObj(updateRun))
 		return -1, -1, fmt.Errorf("%w: %s", errStagedUpdatedAborted, failedErr.Error())
 	} else if stageStartedCond != nil {
 		// The stage is still updating.
 		if updatingStageIndex != -1 {
 			// There should be only one stage updating at a time.
 			unexpectedErr := controller.NewUnexpectedBehaviorError(fmt.Errorf("the stage `%s` is updating, but there is already a stage with index `%d` updating", stageStatus.StageName, updatingStageIndex))
-			klog.ErrorS(unexpectedErr, "Detected more than one updating stages", "clusterStagedUpdateRun", klog.KObj(updateRun))
+			klog.ErrorS(unexpectedErr, "Detected more than one updating stages", "updateRun", klog.KObj(updateRun))
 			return -1, -1, fmt.Errorf("%w: %s", errStagedUpdatedAborted, unexpectedErr.Error())
 		}
 		if curStage != lastFinishedStageIndex+1 {
 			// The current updating stage is not right after the last finished stage.
 			unexpectedErr := controller.NewUnexpectedBehaviorError(fmt.Errorf("the updating stage `%s` is not right after the last finished stage with index `%d`", stageStatus.StageName, lastFinishedStageIndex))
-			klog.ErrorS(unexpectedErr, "There's not yet started stage before the updating stage", "clusterStagedUpdateRun", klog.KObj(updateRun))
+			klog.ErrorS(unexpectedErr, "There's not yet started stage before the updating stage", "updateRun", klog.KObj(updateRun))
 			return -1, -1, fmt.Errorf("%w: %s", errStagedUpdatedAborted, unexpectedErr.Error())
 		}
 		updatingStageIndex = curStage
@@ -236,8 +239,8 @@ func validateClusterUpdatingStatus(
 		for j := range stageStatus.Clusters {
 			clusterStartedCond := meta.FindStatusCondition(stageStatus.Clusters[j].Conditions, string(placementv1beta1.ClusterUpdatingConditionStarted))
 			clusterFinishedCond := meta.FindStatusCondition(stageStatus.Clusters[j].Conditions, string(placementv1beta1.ClusterUpdatingConditionSucceeded))
-			if condition.IsConditionStatusTrue(clusterStartedCond, updateRun.Generation) &&
-				!(condition.IsConditionStatusTrue(clusterFinishedCond, updateRun.Generation) || condition.IsConditionStatusFalse(clusterFinishedCond, updateRun.Generation)) {
+			if condition.IsConditionStatusTrue(clusterStartedCond, updateRun.GetGeneration()) &&
+				!(condition.IsConditionStatusTrue(clusterFinishedCond, updateRun.GetGeneration()) || condition.IsConditionStatusFalse(clusterFinishedCond, updateRun.GetGeneration())) {
 				updatingClusters = append(updatingClusters, stageStatus.Clusters[j].ClusterName)
 			}
 		}
@@ -245,39 +248,40 @@ func validateClusterUpdatingStatus(
 		// TODO(wantjian): support multiple clusters updating at the same time.
 		if len(updatingClusters) > 1 {
 			unexpectedErr := controller.NewUnexpectedBehaviorError(fmt.Errorf("more than one cluster is updating in the stage `%s`, clusters: %v", stageStatus.StageName, updatingClusters))
-			klog.ErrorS(unexpectedErr, "Detected more than one updating clusters in the stage", "clusterStagedUpdateRun", klog.KObj(updateRun))
+			klog.ErrorS(unexpectedErr, "Detected more than one updating clusters in the stage", "updateRun", klog.KObj(updateRun))
 			return -1, -1, fmt.Errorf("%w: %s", errStagedUpdatedAborted, unexpectedErr.Error())
 		}
 	}
 	return updatingStageIndex, lastFinishedStageIndex, nil
 }
 
-// validateDeleteStageStatus validates the delete stage in the clusterStagedUpdateRun.
+// validateDeleteStageStatus validates the delete stage in the updateRun.
 // It returns the updating stage index, or any error encountered.
 func validateDeleteStageStatus(
 	updatingStageIndex, lastFinishedStageIndex, totalStages int,
-	toBeDeletedBindings []*placementv1beta1.ClusterResourceBinding,
-	updateRun *placementv1beta1.ClusterStagedUpdateRun,
+	toBeDeletedBindings []placementv1beta1.BindingObj,
+	updateRun placementv1beta1.UpdateRunObj,
 ) (int, error) {
 	updateRunRef := klog.KObj(updateRun)
-	existingDeleteStageStatus := updateRun.Status.DeletionStageStatus
+	existingDeleteStageStatus := updateRun.GetUpdateRunStatus().DeletionStageStatus
 	if existingDeleteStageStatus == nil {
-		unexpectedErr := controller.NewUnexpectedBehaviorError(fmt.Errorf("the clusterStagedUpdateRun has nil deletionStageStatus"))
-		klog.ErrorS(unexpectedErr, "Failed to find the deletionStageStatus in the clusterStagedUpdateRun", "clusterStagedUpdateRun", updateRunRef)
+		unexpectedErr := controller.NewUnexpectedBehaviorError(fmt.Errorf("the updateRun has nil deletionStageStatus"))
+		klog.ErrorS(unexpectedErr, "Failed to find the deletionStageStatus in the updateRun", "updateRun", updateRunRef)
 		return -1, fmt.Errorf("%w: %s", errStagedUpdatedAborted, unexpectedErr.Error())
 	}
 
-	// Validate whether toBeDeletedBindings are a subnet of the clusters in the delete stage status.
-	// We only validate if it's a subnet because we will delete the bindings during the deleteStage execution so they can disappear.
+	// Validate whether toBeDeletedBindings are a subset of the clusters in the delete stage status.
+	// We only validate if it's a subset because we will delete the bindings during the deleteStage execution so they can disappear.
 	// We only need to check the existence, not the order, because clusters are always sorted by name in the delete stage.
 	deletingClusterMap := make(map[string]struct{}, len(existingDeleteStageStatus.Clusters))
 	for _, cluster := range existingDeleteStageStatus.Clusters {
 		deletingClusterMap[cluster.ClusterName] = struct{}{}
 	}
 	for _, binding := range toBeDeletedBindings {
-		if _, ok := deletingClusterMap[binding.Spec.TargetCluster]; !ok {
-			unexpectedErr := controller.NewUnexpectedBehaviorError(fmt.Errorf("the cluster `%s` to be deleted is not in the delete stage", binding.Spec.TargetCluster))
-			klog.ErrorS(unexpectedErr, "Detect new cluster to be unscheduled", "clusterResourceBinding", klog.KObj(binding), "clusterStagedUpdateRun", updateRunRef)
+		bindingSpec := binding.GetBindingSpec()
+		if _, ok := deletingClusterMap[bindingSpec.TargetCluster]; !ok {
+			unexpectedErr := controller.NewUnexpectedBehaviorError(fmt.Errorf("the cluster `%s` to be deleted is not in the delete stage", bindingSpec.TargetCluster))
+			klog.ErrorS(unexpectedErr, "Detect new cluster to be unscheduled", "binding", klog.KObj(binding), "updateRun", updateRunRef)
 			return -1, fmt.Errorf("%w: %s", errStagedUpdatedAborted, unexpectedErr.Error())
 		}
 	}
@@ -287,11 +291,11 @@ func validateDeleteStageStatus(
 	// Check if there is any active updating stage
 	if updatingStageIndex != -1 || lastFinishedStageIndex < totalStages-1 {
 		// There are still stages updating before the delete stage, make sure the delete stage is not active/finished.
-		if condition.IsConditionStatusTrue(deleteStageFinishedCond, updateRun.Generation) ||
-			condition.IsConditionStatusFalse(deleteStageFinishedCond, updateRun.Generation) ||
-			condition.IsConditionStatusTrue(deleteStageProgressingCond, updateRun.Generation) {
+		if condition.IsConditionStatusTrue(deleteStageFinishedCond, updateRun.GetGeneration()) ||
+			condition.IsConditionStatusFalse(deleteStageFinishedCond, updateRun.GetGeneration()) ||
+			condition.IsConditionStatusTrue(deleteStageProgressingCond, updateRun.GetGeneration()) {
 			unexpectedErr := controller.NewUnexpectedBehaviorError(fmt.Errorf("the delete stage is active, but there are still stages updating, updatingStageIndex: %d, lastFinishedStageIndex: %d", updatingStageIndex, lastFinishedStageIndex))
-			klog.ErrorS(unexpectedErr, "the delete stage is active, but there are still stages updating", "clusterStagedUpdateRun", updateRunRef)
+			klog.ErrorS(unexpectedErr, "the delete stage is active, but there are still stages updating", "updateRun", updateRunRef)
 			return -1, fmt.Errorf("%w: %s", errStagedUpdatedAborted, unexpectedErr.Error())
 		}
 
@@ -303,16 +307,16 @@ func validateDeleteStageStatus(
 		return updatingStageIndex, nil
 	}
 
-	klog.InfoS("All stages are finished, continue from the delete stage", "clusterStagedUpdateRun", updateRunRef)
+	klog.InfoS("All stages are finished, continue from the delete stage", "updateRun", updateRunRef)
 	// Check if the delete stage has finished successfully.
-	if condition.IsConditionStatusTrue(deleteStageFinishedCond, updateRun.Generation) {
-		klog.InfoS("The delete stage has finished successfully, no more stages to update", "clusterStagedUpdateRun", updateRunRef)
+	if condition.IsConditionStatusTrue(deleteStageFinishedCond, updateRun.GetGeneration()) {
+		klog.InfoS("The delete stage has finished successfully, no more stages to update", "updateRun", updateRunRef)
 		return -1, nil
 	}
 	// Check if the delete stage has failed.
-	if condition.IsConditionStatusFalse(deleteStageFinishedCond, updateRun.Generation) {
+	if condition.IsConditionStatusFalse(deleteStageFinishedCond, updateRun.GetGeneration()) {
 		failedErr := fmt.Errorf("the delete stage has failed, err: %s", deleteStageFinishedCond.Message)
-		klog.ErrorS(failedErr, "The delete stage has failed", "stageCond", deleteStageFinishedCond, "clusterStagedUpdateRun", updateRunRef)
+		klog.ErrorS(failedErr, "The delete stage has failed", "stageCond", deleteStageFinishedCond, "updateRun", updateRunRef)
 		return -1, fmt.Errorf("%w: %s", errStagedUpdatedAborted, failedErr.Error())
 	}
 	// The delete stage is still updating or just to start.

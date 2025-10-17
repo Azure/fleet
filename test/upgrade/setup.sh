@@ -81,7 +81,7 @@ helm install hub-agent charts/hub-agent/ \
     --set webhookClientConnectionType=service \
     --set forceDeleteWaitTime="1m0s" \
     --set clusterUnhealthyThreshold="3m0s" \
-    --set logFileMaxSize=1000000 \
+    --set logFileMaxSize=100000 \
     --set resourceSnapshotCreationMinimumInterval=0m \
     --set resourceChangesCollectionDuration=0m
 

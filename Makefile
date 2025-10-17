@@ -1,5 +1,5 @@
 REGISTRY ?= ghcr.io
-KIND_IMAGE ?= kindest/node:v1.31.0
+KIND_IMAGE ?= kindest/node:v1.33.4
 ifndef TAG
 	TAG ?= $(shell git rev-parse --short=7 HEAD)
 endif
@@ -16,6 +16,30 @@ ARC_MEMBER_AGENT_HELMCHART_NAME = arc-member-cluster-agents-helm-chart
 
 TARGET_OS ?= linux
 TARGET_ARCH ?= amd64
+# Note (chenyu1): switch to the `plain` progress type to see the full outputs in the docker build
+# progress.
+BUILDKIT_PROGRESS_TYPE ?= auto
+
+TARGET_OS ?= linux
+TARGET_ARCH ?= amd64
+AUTO_DETECT_ARCH ?= TRUE
+
+# Auto-detect system architecture if it is allowed and the necessary commands are available on the system.
+ifeq ($(AUTO_DETECT_ARCH), TRUE)
+ARCH_CMD_INSTALLED := $(shell command -v arch 2>/dev/null)
+ifdef ARCH_CMD_INSTALLED
+TARGET_ARCH := $(shell arch)
+# The arch command may return arch strings that are aliases of expected TARGET_ARCH values;
+# do the mapping here.
+ifeq ($(TARGET_ARCH),$(filter $(TARGET_ARCH),x86_64))
+	TARGET_ARCH := amd64
+else ifeq ($(TARGET_ARCH),$(filter $(TARGET_ARCH),aarch64 arm))
+	TARGET_ARCH := arm64
+endif
+$(info Auto-detected system architecture: $(TARGET_ARCH))
+endif
+endif
+
 # Note (chenyu1): switch to the `plain` progress type to see the full outputs in the docker build
 # progress.
 BUILDKIT_PROGRESS_TYPE ?= auto
@@ -311,6 +335,13 @@ push:
 # On some systems the emulation setup might not work at all (e.g., macOS on Apple Silicon -> Rosetta 2 will be used 
 # by Docker Desktop as the default emulation option for AMD64 on ARM64 container compatibility).
 .PHONY: docker-buildx-builder
+# Note (chenyu1): the step below sets up emulation for building/running non-native binaries on the host. The original
+# setup assumes that the Makefile is always run on an x86_64 platform, and adds support for non-x86_64 hosts. Here
+# we keep the original setup if the build target is x86_64 platforms (default) for compatibility reasons, but will switch to
+# a more general setup for non-x86_64 hosts.
+#
+# On some systems the emulation setup might not work at all (e.g., macOS on Apple Silicon -> Rosetta 2 will be used 
+# by Docker Desktop as the default emulation option for AMD64 on ARM64 container compatibility).
 docker-buildx-builder:
 	@if ! docker buildx ls | grep $(BUILDX_BUILDER_NAME); then \
 		if [ "$(TARGET_ARCH)" = "amd64" ] ; then \
