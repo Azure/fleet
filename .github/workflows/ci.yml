@@ -78,8 +78,7 @@ jobs:
           - customized-settings: custom
             resource-snapshot-creation-minimum-interval: 30s
             resource-changes-collection-duration: 15s
-    runs-on:
-      labels: ubuntu-latest-16-cores
+    runs-on: ubuntu-latest
     needs: [
       detect-noop,
     ]
