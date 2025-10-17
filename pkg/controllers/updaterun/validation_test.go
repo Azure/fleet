@@ -244,7 +244,7 @@ func TestValidateDeleteStageStatus(t *testing.T) {
 		name                   string
 		updatingStageIndex     int
 		lastFinishedStageIndex int
-		toBeDeletedBindings    []*placementv1beta1.ClusterResourceBinding
+		toBeDeletedBindings    []placementv1beta1.BindingObj
 		deleteStageStatus      *placementv1beta1.StageUpdatingStatus
 		wantErr                error
 		wantUpdatingStageIndex int
@@ -252,17 +252,17 @@ func TestValidateDeleteStageStatus(t *testing.T) {
 		{
 			name:                   "validateDeleteStageStatus should return error if delete stage status is nil",
 			deleteStageStatus:      nil,
-			wantErr:                wrapErr(true, fmt.Errorf("the clusterStagedUpdateRun has nil deletionStageStatus")),
+			wantErr:                wrapErr(true, fmt.Errorf("the updateRun has nil deletionStageStatus")),
 			wantUpdatingStageIndex: -1,
 		},
 		{
 			name: "validateDeleteStageStatus should return error if there's new to-be-deleted bindings",
-			toBeDeletedBindings: []*placementv1beta1.ClusterResourceBinding{
-				{
+			toBeDeletedBindings: []placementv1beta1.BindingObj{
+				&placementv1beta1.ClusterResourceBinding{
 					ObjectMeta: metav1.ObjectMeta{Name: "binding-1"},
 					Spec:       placementv1beta1.ResourceBindingSpec{TargetCluster: "cluster-1"},
 				},
-				{
+				&placementv1beta1.ClusterResourceBinding{
 					ObjectMeta: metav1.ObjectMeta{Name: "binding-2"},
 					Spec:       placementv1beta1.ResourceBindingSpec{TargetCluster: "cluster-2"},
 				},
@@ -280,8 +280,8 @@ func TestValidateDeleteStageStatus(t *testing.T) {
 			name:                   "validateDeleteStageStatus should not return error if there's fewer to-be-deleted bindings",
 			updatingStageIndex:     -1,
 			lastFinishedStageIndex: -1,
-			toBeDeletedBindings: []*placementv1beta1.ClusterResourceBinding{
-				{
+			toBeDeletedBindings: []placementv1beta1.BindingObj{
+				&placementv1beta1.ClusterResourceBinding{
 					ObjectMeta: metav1.ObjectMeta{Name: "binding-1"},
 					Spec:       placementv1beta1.ResourceBindingSpec{TargetCluster: "cluster-1"},
 				},
@@ -300,8 +300,8 @@ func TestValidateDeleteStageStatus(t *testing.T) {
 			name:                   "validateDeleteStageStatus should not return error if there are equal to-be-deleted bindings",
 			updatingStageIndex:     -1,
 			lastFinishedStageIndex: -1,
-			toBeDeletedBindings: []*placementv1beta1.ClusterResourceBinding{
-				{
+			toBeDeletedBindings: []placementv1beta1.BindingObj{
+				&placementv1beta1.ClusterResourceBinding{
 					ObjectMeta: metav1.ObjectMeta{Name: "binding-1"},
 					Spec:       placementv1beta1.ResourceBindingSpec{TargetCluster: "cluster-1"},
 				},

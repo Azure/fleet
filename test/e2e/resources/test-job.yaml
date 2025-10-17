@@ -1,13 +1,13 @@
 apiVersion: batch/v1
 kind: Job
 metadata:
-  name: pi
+  name: sleep
 spec:
   template:
     spec:
       containers:
-        - name: pi
-          image: perl:5.34.0
-          command: ["perl",  "-Mbignum=bpi", "-wle", "print bpi(2000)"]
+        - name: sleep
+          image: alpine:3
+          command: ["sh", "-c", "sleep 3"]
       restartPolicy: Never
   backoffLimit: 4

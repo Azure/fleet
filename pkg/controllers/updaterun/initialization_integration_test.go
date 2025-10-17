@@ -138,7 +138,7 @@ var _ = Describe("Updaterun initialization tests", func() {
 			Expect(k8sClient.Create(ctx, updateRun)).To(Succeed())
 
 			By("Validating the initialization failed")
-			validateFailedInitCondition(ctx, updateRun, "parent clusterResourcePlacement not found")
+			validateFailedInitCondition(ctx, updateRun, "parent placement not found")
 		})
 
 		It("Should fail to initialize if CRP does not have external rollout strategy type", func() {
@@ -151,7 +151,7 @@ var _ = Describe("Updaterun initialization tests", func() {
 
 			By("Validating the initialization failed")
 			validateFailedInitCondition(ctx, updateRun,
-				"parent clusterResourcePlacement does not have an external rollout strategy")
+				"parent placement does not have an external rollout strategy")
 		})
 
 		It("Should copy the ApplyStrategy in the CRP to the UpdateRun", func() {
@@ -405,7 +405,7 @@ var _ = Describe("Updaterun initialization tests", func() {
 			Expect(k8sClient.Create(ctx, updateRun)).To(Succeed())
 
 			By("Validating the initialization failed")
-			validateFailedInitCondition(ctx, updateRun, "no scheduled or to-be-deleted clusterResourceBindings found")
+			validateFailedInitCondition(ctx, updateRun, "no scheduled or to-be-deleted bindings found")
 		})
 
 		It("Should fail to initialize if the number of selected bindings does not match the observed cluster count", func() {
@@ -505,7 +505,7 @@ var _ = Describe("Updaterun initialization tests", func() {
 
 			By("Validating the initialization not failed due to no selected cluster")
 			// it should fail due to strategy not found
-			validateFailedInitCondition(ctx, updateRun, "referenced clusterStagedUpdateStrategy not found")
+			validateFailedInitCondition(ctx, updateRun, "referenced updateStrategy not found")
 		})
 
 		It("Should update the ObservedClusterCount to the number of scheduled bindings if it's pickAll policy", func() {
@@ -517,7 +517,7 @@ var _ = Describe("Updaterun initialization tests", func() {
 
 			By("Validating the initialization not failed due to no selected cluster")
 			// it should fail due to strategy not found
-			validateFailedInitCondition(ctx, updateRun, "referenced clusterStagedUpdateStrategy not found")
+			validateFailedInitCondition(ctx, updateRun, "referenced updateStrategy not found")
 
 			By("Validating the ObservedClusterCount is updated")
 			Expect(updateRun.Status.PolicyObservedClusterCount).To(Equal(1), "failed to update the updateRun PolicyObservedClusterCount status")
@@ -565,7 +565,7 @@ var _ = Describe("Updaterun initialization tests", func() {
 			Expect(k8sClient.Create(ctx, updateRun)).To(Succeed())
 
 			By("Validating the initialization failed")
-			validateFailedInitCondition(ctx, updateRun, "referenced clusterStagedUpdateStrategy not found")
+			validateFailedInitCondition(ctx, updateRun, "referenced updateStrategy not found")
 		})
 
 		Context("Test computeRunStageStatus", func() {
@@ -777,7 +777,7 @@ var _ = Describe("Updaterun initialization tests", func() {
 			Expect(k8sClient.Create(ctx, updateRun)).To(Succeed())
 
 			By("Validating the initialization failed")
-			validateFailedInitCondition(ctx, updateRun, "no clusterResourceSnapshots with index `0` found")
+			validateFailedInitCondition(ctx, updateRun, "no resourceSnapshots with index `0` found")
 
 			By("Checking update run status metrics are emitted")
 			validateUpdateRunMetricsEmitted(generateInitializationFailedMetric(updateRun))
@@ -792,7 +792,7 @@ var _ = Describe("Updaterun initialization tests", func() {
 			Expect(k8sClient.Create(ctx, updateRun)).To(Succeed())
 
 			By("Validating the initialization failed")
-			validateFailedInitCondition(ctx, updateRun, "no clusterResourceSnapshots with index `0` found")
+			validateFailedInitCondition(ctx, updateRun, "no resourceSnapshots with index `0` found")
 
 			By("Checking update run status metrics are emitted")
 			validateUpdateRunMetricsEmitted(generateInitializationFailedMetric(updateRun))
@@ -807,7 +807,7 @@ var _ = Describe("Updaterun initialization tests", func() {
 			Expect(k8sClient.Create(ctx, updateRun)).To(Succeed())
 
 			By("Validating the initialization failed")
-			validateFailedInitCondition(ctx, updateRun, "no clusterResourceSnapshots with index `0` found")
+			validateFailedInitCondition(ctx, updateRun, "no resourceSnapshots with index `0` found")
 
 			By("Checking update run status metrics are emitted")
 			validateUpdateRunMetricsEmitted(generateInitializationFailedMetric(updateRun))
@@ -822,7 +822,7 @@ var _ = Describe("Updaterun initialization tests", func() {
 			Expect(k8sClient.Create(ctx, updateRun)).To(Succeed())
 
 			By("Validating the initialization failed")
-			validateFailedInitCondition(ctx, updateRun, "no master clusterResourceSnapshot found for clusterResourcePlacement")
+			validateFailedInitCondition(ctx, updateRun, "no master resourceSnapshot found for placement")
 
 			By("Checking update run status metrics are emitted")
 			validateUpdateRunMetricsEmitted(generateInitializationFailedMetric(updateRun))
@@ -875,12 +875,12 @@ func generateSucceededInitializationStatus(
 	policySnapshot *placementv1beta1.ClusterSchedulingPolicySnapshot,
 	updateStrategy *placementv1beta1.ClusterStagedUpdateStrategy,
 	clusterResourceOverride *placementv1beta1.ClusterResourceOverrideSnapshot,
-) *placementv1beta1.StagedUpdateRunStatus {
-	status := &placementv1beta1.StagedUpdateRunStatus{
-		PolicySnapshotIndexUsed:      policySnapshot.Labels[placementv1beta1.PolicyIndexLabel],
-		PolicyObservedClusterCount:   10,
-		ApplyStrategy:                crp.Spec.Strategy.ApplyStrategy.DeepCopy(),
-		StagedUpdateStrategySnapshot: &updateStrategy.Spec,
+) *placementv1beta1.UpdateRunStatus {
+	status := &placementv1beta1.UpdateRunStatus{
+		PolicySnapshotIndexUsed:    policySnapshot.Labels[placementv1beta1.PolicyIndexLabel],
+		PolicyObservedClusterCount: 10,
+		ApplyStrategy:              crp.Spec.Strategy.ApplyStrategy.DeepCopy(),
+		UpdateStrategySnapshot:     &updateStrategy.Spec,
 		StagesStatus: []placementv1beta1.StageUpdatingStatus{
 			{
 				StageName: "stage1",
@@ -935,12 +935,12 @@ func generateSucceededInitializationStatusForSmallClusters(
 	updateRun *placementv1beta1.ClusterStagedUpdateRun,
 	policySnapshot *placementv1beta1.ClusterSchedulingPolicySnapshot,
 	updateStrategy *placementv1beta1.ClusterStagedUpdateStrategy,
-) *placementv1beta1.StagedUpdateRunStatus {
-	status := &placementv1beta1.StagedUpdateRunStatus{
-		PolicySnapshotIndexUsed:      policySnapshot.Labels[placementv1beta1.PolicyIndexLabel],
-		PolicyObservedClusterCount:   3,
-		ApplyStrategy:                crp.Spec.Strategy.ApplyStrategy.DeepCopy(),
-		StagedUpdateStrategySnapshot: &updateStrategy.Spec,
+) *placementv1beta1.UpdateRunStatus {
+	status := &placementv1beta1.UpdateRunStatus{
+		PolicySnapshotIndexUsed:    policySnapshot.Labels[placementv1beta1.PolicyIndexLabel],
+		PolicyObservedClusterCount: 3,
+		ApplyStrategy:              crp.Spec.Strategy.ApplyStrategy.DeepCopy(),
+		UpdateStrategySnapshot:     &updateStrategy.Spec,
 		StagesStatus: []placementv1beta1.StageUpdatingStatus{
 			{
 				StageName: "stage1",
@@ -976,8 +976,8 @@ func generateSucceededInitializationStatusForSmallClusters(
 
 func generateExecutionStartedStatus(
 	updateRun *placementv1beta1.ClusterStagedUpdateRun,
-	initialized *placementv1beta1.StagedUpdateRunStatus,
-) *placementv1beta1.StagedUpdateRunStatus {
+	initialized *placementv1beta1.UpdateRunStatus,
+) *placementv1beta1.UpdateRunStatus {
 	// Mark updateRun execution has started.
 	initialized.Conditions = append(initialized.Conditions, generateTrueCondition(updateRun, placementv1beta1.StagedUpdateRunConditionProgressing))
 	// Mark updateRun 1st stage has started.

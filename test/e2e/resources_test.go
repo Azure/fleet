@@ -35,22 +35,24 @@ import (
 )
 
 const (
-	workNamespaceNameTemplate         = "application-%d"
-	appConfigMapNameTemplate          = "app-config-%d"
-	appDeploymentNameTemplate         = "app-deploy-%d"
-	appSecretNameTemplate             = "app-secret-%d" // #nosec G101
-	crpNameTemplate                   = "crp-%d"
-	rpNameTemplate                    = "rp-%d"
-	crpNameWithSubIndexTemplate       = "crp-%d-%d"
-	croNameTemplate                   = "cro-%d"
-	roNameTemplate                    = "ro-%d"
-	mcNameTemplate                    = "mc-%d"
-	internalServiceExportNameTemplate = "ise-%d"
-	internalServiceImportNameTemplate = "isi-%d"
-	endpointSliceExportNameTemplate   = "ep-%d"
-	crpEvictionNameTemplate           = "crpe-%d"
-	updateRunStrategyNameTemplate     = "curs-%d"
-	updateRunNameWithSubIndexTemplate = "cur-%d-%d"
+	workNamespaceNameTemplate                      = "application-%d"
+	appConfigMapNameTemplate                       = "app-config-%d"
+	appDeploymentNameTemplate                      = "app-deploy-%d"
+	appSecretNameTemplate                          = "app-secret-%d" // #nosec G101
+	crpNameTemplate                                = "crp-%d"
+	rpNameTemplate                                 = "rp-%d"
+	crpNameWithSubIndexTemplate                    = "crp-%d-%d"
+	croNameTemplate                                = "cro-%d"
+	roNameTemplate                                 = "ro-%d"
+	mcNameTemplate                                 = "mc-%d"
+	internalServiceExportNameTemplate              = "ise-%d"
+	internalServiceImportNameTemplate              = "isi-%d"
+	endpointSliceExportNameTemplate                = "ep-%d"
+	crpEvictionNameTemplate                        = "crpe-%d"
+	clusterStagedUpdateRunStrategyNameTemplate     = "curs-%d"
+	clusterStagedUpdateRunNameWithSubIndexTemplate = "cur-%d-%d"
+	stagedUpdateRunStrategyNameTemplate            = "sus-%d"
+	stagedUpdateRunNameWithSubIndexTemplate        = "sur-%d-%d"
 
 	customDeletionBlockerFinalizer = "kubernetes-fleet.io/custom-deletion-blocker-finalizer"
 	workNamespaceLabelName         = "process"
@@ -172,20 +174,20 @@ func appDeployment() appsv1.Deployment {
 			Replicas: ptr.To(int32(1)),
 			Selector: &metav1.LabelSelector{
 				MatchLabels: map[string]string{
-					"app": "nginx",
+					"app": "pause",
 				},
 			},
 			Template: corev1.PodTemplateSpec{
 				ObjectMeta: metav1.ObjectMeta{
 					Labels: map[string]string{
-						"app": "nginx",
+						"app": "pause",
 					},
 				},
 				Spec: corev1.PodSpec{
 					Containers: []corev1.Container{
 						{
-							Name:  "nginx",
-							Image: "nginx",
+							Name:  "pause",
+							Image: "k8s.gcr.io/pause:3.8",
 						},
 					},
 					TerminationGracePeriodSeconds: ptr.To(int64(60)),

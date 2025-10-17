@@ -17,7 +17,9 @@ limitations under the License.
 package framework
 
 import (
+	"fmt"
 	"sort"
+	"strings"
 	"testing"
 
 	"github.com/google/go-cmp/cmp"
@@ -536,5 +538,119 @@ func TestScoredClustersSort(t *testing.T) {
 				t.Fatalf("Sort() sorted diff (-got, +want): %s", diff)
 			}
 		})
+	}
+}
+
+func TestScoredClustersString(t *testing.T) {
+	clusterA := &clusterv1beta1.MemberCluster{ObjectMeta: metav1.ObjectMeta{Name: "cluster-a"}}
+	clusterB := &clusterv1beta1.MemberCluster{ObjectMeta: metav1.ObjectMeta{Name: "cluster-b"}}
+	clusterC := &clusterv1beta1.MemberCluster{ObjectMeta: metav1.ObjectMeta{Name: "cluster-c"}}
+
+	testCases := []struct {
+		name     string
+		scs      ScoredClusters
+		expected string
+	}{
+		{
+			name:     "empty slice",
+			scs:      ScoredClusters{},
+			expected: "ScoredClusters{}",
+		},
+		{
+			name: "single cluster",
+			scs: ScoredClusters{
+				{
+					Cluster: clusterA,
+					Score: &ClusterScore{
+						TopologySpreadScore:            1,
+						AffinityScore:                  2,
+						ObsoletePlacementAffinityScore: 0,
+					},
+				},
+			},
+			expected: "ScoredClusters{Cluster{Name: cluster-a, Score: &{1 2 0}}}",
+		},
+		{
+			name: "multiple clusters",
+			scs: ScoredClusters{
+				{
+					Cluster: clusterA,
+					Score: &ClusterScore{
+						TopologySpreadScore:            100,
+						AffinityScore:                  50,
+						ObsoletePlacementAffinityScore: 1,
+					},
+				},
+				{
+					Cluster: clusterB,
+					Score: &ClusterScore{
+						TopologySpreadScore:            0,
+						AffinityScore:                  0,
+						ObsoletePlacementAffinityScore: 0,
+					},
+				},
+				{
+					Cluster: clusterC,
+					Score: &ClusterScore{
+						TopologySpreadScore:            -10,
+						AffinityScore:                  -5,
+						ObsoletePlacementAffinityScore: 0,
+					},
+				},
+			},
+			expected: "ScoredClusters{Cluster{Name: cluster-a, Score: &{100 50 1}}, Cluster{Name: cluster-b, Score: &{0 0 0}}, Cluster{Name: cluster-c, Score: &{-10 -5 0}}}",
+		},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			got := tc.scs.String()
+			if got != tc.expected {
+				t.Fatalf("String() = %q, want %q", got, tc.expected)
+			}
+		})
+	}
+}
+
+func TestScoredClustersStringTruncation(t *testing.T) {
+	var scs ScoredClusters
+	var i int32
+	for i = 0; i < maxClusterInfoForDebugging+5; i++ {
+		cluster := &clusterv1beta1.MemberCluster{ObjectMeta: metav1.ObjectMeta{Name: fmt.Sprintf("cluster-%02d", i)}}
+		scs = append(scs, &ScoredCluster{
+			Cluster: cluster,
+			Score: &ClusterScore{
+				TopologySpreadScore:            i,
+				AffinityScore:                  i * 2,
+				ObsoletePlacementAffinityScore: int(i) % 2,
+			},
+		})
+	}
+
+	output := scs.String()
+
+	if got, want := strings.Count(output, "Cluster{Name:"), maxClusterInfoForDebugging; got != want {
+		t.Fatalf("String() truncated cluster count = %d, want %d", got, want)
+	}
+
+	if !strings.HasPrefix(output, "ScoredClusters{") {
+		t.Fatalf("String() prefix mismatch: %q", output)
+	}
+
+	if !strings.HasSuffix(output, "}") {
+		t.Fatalf("String() suffix mismatch: %q", output)
+	}
+
+	if !strings.Contains(output, "cluster-00") {
+		t.Fatalf("String() missing first cluster: %q", output)
+	}
+
+	lastIncluded := fmt.Sprintf("cluster-%02d", maxClusterInfoForDebugging-1)
+	if !strings.Contains(output, lastIncluded) {
+		t.Fatalf("String() missing last retained cluster %q: %q", lastIncluded, output)
+	}
+
+	if strings.Contains(output, fmt.Sprintf("cluster-%02d", maxClusterInfoForDebugging)) {
+		t.Fatalf("String() should not contain overflow cluster: %q", output)
 	}
 }

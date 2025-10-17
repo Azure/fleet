@@ -33,7 +33,7 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/client"
 
 	fleetv1alpha1 "go.goms.io/fleet/apis/v1alpha1"
-	"go.goms.io/fleet/pkg/metrics"
+	hubmetrics "go.goms.io/fleet/pkg/metrics/hub"
 	"go.goms.io/fleet/pkg/utils"
 	"go.goms.io/fleet/pkg/utils/condition"
 	"go.goms.io/fleet/pkg/utils/controller"
@@ -323,7 +323,7 @@ func (r *Reconciler) updatePlacementAppliedCondition(placement *fleetv1alpha1.Cl
 		})
 		if preAppliedCond == nil || preAppliedCond.Status != metav1.ConditionTrue {
 			klog.V(2).InfoS("successfully applied all selected resources", "placement", placementRef)
-			metrics.PlacementApplySucceedCount.WithLabelValues(placement.GetName()).Inc()
+			hubmetrics.PlacementApplySucceedCount.WithLabelValues(placement.GetName()).Inc()
 			r.Recorder.Event(placement, corev1.EventTypeNormal, "ResourceApplied", "successfully applied all selected resources")
 		}
 	case errors.Is(applyErr, ErrStillPendingManifest):
@@ -349,7 +349,7 @@ func (r *Reconciler) updatePlacementAppliedCondition(placement *fleetv1alpha1.Cl
 		})
 		if preAppliedCond == nil || preAppliedCond.Status != metav1.ConditionFalse {
 			klog.V(2).InfoS("failed to apply some selected resources", "placement", placementRef)
-			metrics.PlacementApplyFailedCount.WithLabelValues(placement.GetName()).Inc()
+			hubmetrics.PlacementApplyFailedCount.WithLabelValues(placement.GetName()).Inc()
 			r.Recorder.Event(placement, corev1.EventTypeWarning, "ResourceApplyFailed", "failed to apply some selected resources")
 		}
 	}

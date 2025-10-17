@@ -6,7 +6,7 @@ set -o pipefail
 
 # Before updating the default kind image to use, verify that the version is supported
 # by the current kind release.
-KIND_IMAGE="${KIND_IMAGE:-kindest/node:v1.31.0}"
+KIND_IMAGE="${KIND_IMAGE:-kindest/node:v1.33.4}"
 KUBECONFIG="${KUBECONFIG:-$HOME/.kube/config}"
 MEMBER_CLUSTER_COUNT=$1
 
@@ -46,7 +46,7 @@ AKS_NODE_REGIONS=("westus" "northeurope" "eastasia")
 #
 # Note that this is for information only; kind nodes always use the same fixed setup
 # (total/allocatable capacity = host capacity).
-AKS_NODE_SKUS=("Standard_A4_v2" "Standard_B4ms" "Standard_D8s_v5" "Standard_E16_v5" "Standard_M16ms")
+AKS_NODE_SKUS=("Standard_B2ats_v2" "Standard_B2ts_v2" "Standard_D8s_v5" "Standard_E16_v5" "Standard_M16ms")
 AKS_SKU_COUNT=${#AKS_NODE_SKUS[@]}
 # The number of clusters that has pre-defined configuration for testing purposes.
 RESERVED_CLUSTER_COUNT=${MEMBER_CLUSTER_COUNT}
@@ -134,7 +134,8 @@ helm install hub-agent ../../charts/hub-agent/ \
     --set webhookClientConnectionType=service \
     --set forceDeleteWaitTime="1m0s" \
     --set clusterUnhealthyThreshold="3m0s" \
-    --set logFileMaxSize=1000000 \
+    --set logFileMaxSize=100000 \
+    --set MaxConcurrentClusterPlacement=200 \
     --set resourceSnapshotCreationMinimumInterval=$RESOURCE_SNAPSHOT_CREATION_MINIMUM_INTERVAL \
     --set resourceChangesCollectionDuration=$RESOURCE_CHANGES_COLLECTION_DURATION
 

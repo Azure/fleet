@@ -1,35 +1,28 @@
 apiVersion: apps/v1
 kind: StatefulSet
 metadata:
-  name: web
+  name: test-ss-with-volume
 spec:
   selector:
     matchLabels:
-      app: nginx # has to match .spec.template.metadata.labels
-  serviceName: "nginx"
+      app: test-ss-with-volume # has to match .spec.template.metadata.labels
+  serviceName: "test-ss-with-volume-svc"
   replicas: 3 # by default is 1
-  minReadySeconds: 10 # by default is 0
   template:
     metadata:
       labels:
-        app: nginx # has to match .spec.selector.matchLabels
+        app: test-ss-with-volume # has to match .spec.selector.matchLabels
     spec:
       terminationGracePeriodSeconds: 10
       containers:
-        - name: nginx
-          image: registry.k8s.io/nginx-slim:0.24
-          ports:
-            - containerPort: 80
-              name: web
-          volumeMounts:
-            - name: www
-              mountPath: /usr/share/nginx/html
+      - name: pause
+        image: k8s.gcr.io/pause:3.8
   volumeClaimTemplates:
-    - metadata:
-        name: www
-      spec:
-        accessModes: [ "ReadWriteOnce" ]
-        storageClassName: "my-storage-class"
-        resources:
-          requests:
-            storage: 1Gi
+  - metadata:
+      name: test-ss-with-volume-pvc
+    spec:
+      accessModes: [ "ReadWriteOnce" ]
+      storageClassName: "non-existent-sc"
+      resources:
+        requests:
+          storage: 1Gi

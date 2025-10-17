@@ -187,6 +187,16 @@ var (
 				isPricingDataStale = true
 			}
 
+			nodeCountPerSKU := map[string]int{}
+			for idx := range nodes {
+				node := nodes[idx]
+				sku := node.Labels[trackers.AKSClusterNodeSKULabelName]
+				if sku == "" {
+					sku = trackers.ReservedNameForUndefinedSKU
+				}
+				nodeCountPerSKU[sku]++
+			}
+
 			for idx := range nodes {
 				node := nodes[idx]
 				sku := node.Labels[trackers.AKSClusterNodeSKULabelName]
@@ -229,6 +239,11 @@ var (
 				propertyprovider.NodeCountProperty: {
 					Value: fmt.Sprintf("%d", len(nodes)),
 				},
+			}
+			for sku, count := range nodeCountPerSKU {
+				wantProperties[clusterv1beta1.PropertyName(fmt.Sprintf(NodeCountPerSKUPropertyTmpl, sku))] = clusterv1beta1.PropertyValue{
+					Value: fmt.Sprintf("%d", count),
+				}
 			}
 
 			if costCollectionErr == nil && isCostsEnabled {
@@ -305,11 +320,8 @@ var (
 )
 
 var (
-	// The nodes below use actual capacities of their respective AKS SKUs; for more information,
-	// see:
-	// https://learn.microsoft.com/en-us/azure/virtual-machines/av2-series (for A-series nodes),
-	// https://learn.microsoft.com/en-us/azure/virtual-machines/sizes-b-series-burstable (for B-series nodes), and
-	// https://learn.microsoft.com/en-us/azure/virtual-machines/dv2-dsv2-series (for D/DS v2 series nodes).
+	// The nodes below use actual capacities of their respective AKS SKUs; We need to change them periodically as
+	// they will be deprecated over time.
 	nodes = []corev1.Node{
 		{
 			ObjectMeta: metav1.ObjectMeta{

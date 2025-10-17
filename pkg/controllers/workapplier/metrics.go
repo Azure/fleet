@@ -24,7 +24,7 @@ import (
 	"k8s.io/klog/v2"
 
 	fleetv1beta1 "go.goms.io/fleet/apis/placement/v1beta1"
-	"go.goms.io/fleet/pkg/metrics"
+	membermetrics "go.goms.io/fleet/pkg/metrics/member"
 	"go.goms.io/fleet/pkg/utils/controller"
 )
 
@@ -123,7 +123,7 @@ func trackWorkAndManifestProcessingRequestMetrics(work *fleetv1beta1.Work) {
 		return
 	}
 
-	metrics.FleetWorkProcessingRequestsTotal.WithLabelValues(
+	membermetrics.FleetWorkProcessingRequestsTotal.WithLabelValues(
 		workApplyStatus,
 		workAvailabilityStatus,
 		workDiffReportedStatus,
@@ -200,7 +200,7 @@ func trackWorkAndManifestProcessingRequestMetrics(work *fleetv1beta1.Work) {
 			manifestDiffDetectionStatus = manifestDriftOrDiffDetectionStatusFound
 		}
 
-		metrics.FleetManifestProcessingRequestsTotal.WithLabelValues(
+		membermetrics.FleetManifestProcessingRequestsTotal.WithLabelValues(
 			manifestApplyStatus,
 			manifestAvailabilityStatus,
 			manifestDiffReportedStatus,

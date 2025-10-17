@@ -871,7 +871,7 @@ func TestRunFilterPlugins(t *testing.T) {
 		name           string
 		filterPlugins  []FilterPlugin
 		wantClusters   []*clusterv1beta1.MemberCluster
-		wantFiltered   []*filteredClusterWithStatus
+		wantFiltered   filteredClusterWithStatusList
 		expectedToFail bool
 	}{
 		{
@@ -907,7 +907,7 @@ func TestRunFilterPlugins(t *testing.T) {
 					},
 				},
 			},
-			wantFiltered: []*filteredClusterWithStatus{},
+			wantFiltered: filteredClusterWithStatusList{},
 		},
 		{
 			name: "three clusters, two filter plugins, two filtered",
@@ -938,7 +938,7 @@ func TestRunFilterPlugins(t *testing.T) {
 					},
 				},
 			},
-			wantFiltered: []*filteredClusterWithStatus{
+			wantFiltered: filteredClusterWithStatusList{
 				{
 					cluster: &clusterv1beta1.MemberCluster{
 						ObjectMeta: metav1.ObjectMeta{
@@ -986,7 +986,7 @@ func TestRunFilterPlugins(t *testing.T) {
 					},
 				},
 			},
-			wantFiltered: []*filteredClusterWithStatus{},
+			wantFiltered: filteredClusterWithStatusList{},
 		},
 		{
 			name: "three clusters, two filter plugins, one success, one internal error on specific cluster",

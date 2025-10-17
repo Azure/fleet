@@ -19,8 +19,10 @@ package updaterun
 import (
 	"testing"
 
+	"github.com/google/go-cmp/cmp"
 	"k8s.io/apimachinery/pkg/api/meta"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/apimachinery/pkg/types"
 
 	placementv1beta1 "go.goms.io/fleet/apis/placement/v1beta1"
 	"go.goms.io/fleet/pkg/utils/condition"
@@ -103,7 +105,7 @@ func TestIsBindingSyncedWithClusterStatus(t *testing.T) {
 			name:                 "isBindingSyncedWithClusterStatus should return false if binding and updateRun have different applyStrategy",
 			resourceSnapshotName: "test-1-snapshot",
 			updateRun: &placementv1beta1.ClusterStagedUpdateRun{
-				Status: placementv1beta1.StagedUpdateRunStatus{
+				Status: placementv1beta1.UpdateRunStatus{
 					ApplyStrategy: &placementv1beta1.ApplyStrategy{
 						Type: placementv1beta1.ApplyStrategyTypeClientSideApply,
 					},
@@ -135,7 +137,7 @@ func TestIsBindingSyncedWithClusterStatus(t *testing.T) {
 			name:                 "isBindingSyncedWithClusterStatus should return true if resourceSnapshot, applyStrategy, and override lists are all deep equal",
 			resourceSnapshotName: "test-1-snapshot",
 			updateRun: &placementv1beta1.ClusterStagedUpdateRun{
-				Status: placementv1beta1.StagedUpdateRunStatus{
+				Status: placementv1beta1.UpdateRunStatus{
 					ApplyStrategy: &placementv1beta1.ApplyStrategy{
 						Type: placementv1beta1.ApplyStrategyTypeReportDiff,
 					},
@@ -323,6 +325,75 @@ func TestCheckClusterUpdateResult(t *testing.T) {
 				if !condition.IsConditionStatusTrue(meta.FindStatusCondition(test.clusterStatus.Conditions, string(placementv1beta1.ClusterUpdatingConditionSucceeded)), updateRun.Generation) {
 					t.Fatalf("checkClusterUpdateResult() failed to set ClusterUpdatingConditionSucceeded condition")
 				}
+			}
+		})
+	}
+}
+
+func TestBuildApprovalRequestObject(t *testing.T) {
+	tests := []struct {
+		name           string
+		namespacedName types.NamespacedName
+		stageName      string
+		updateRunName  string
+		want           placementv1beta1.ApprovalRequestObj
+	}{
+		{
+			name: "should create ClusterApprovalRequest when namespace is empty",
+			namespacedName: types.NamespacedName{
+				Name:      "test-approval-request",
+				Namespace: "",
+			},
+			stageName:     "test-stage",
+			updateRunName: "test-update-run",
+			want: &placementv1beta1.ClusterApprovalRequest{
+				ObjectMeta: metav1.ObjectMeta{
+					Name: "test-approval-request",
+					Labels: map[string]string{
+						placementv1beta1.TargetUpdatingStageNameLabel:   "test-stage",
+						placementv1beta1.TargetUpdateRunLabel:           "test-update-run",
+						placementv1beta1.IsLatestUpdateRunApprovalLabel: "true",
+					},
+				},
+				Spec: placementv1beta1.ApprovalRequestSpec{
+					TargetUpdateRun: "test-update-run",
+					TargetStage:     "test-stage",
+				},
+			},
+		},
+		{
+			name: "should create namespaced ApprovalRequest when namespace is provided",
+			namespacedName: types.NamespacedName{
+				Name:      "test-approval-request",
+				Namespace: "test-namespace",
+			},
+			stageName:     "test-stage",
+			updateRunName: "test-update-run",
+			want: &placementv1beta1.ApprovalRequest{
+				ObjectMeta: metav1.ObjectMeta{
+					Name:      "test-approval-request",
+					Namespace: "test-namespace",
+					Labels: map[string]string{
+						placementv1beta1.TargetUpdatingStageNameLabel:   "test-stage",
+						placementv1beta1.TargetUpdateRunLabel:           "test-update-run",
+						placementv1beta1.IsLatestUpdateRunApprovalLabel: "true",
+					},
+				},
+				Spec: placementv1beta1.ApprovalRequestSpec{
+					TargetUpdateRun: "test-update-run",
+					TargetStage:     "test-stage",
+				},
+			},
+		},
+	}
+
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			got := buildApprovalRequestObject(test.namespacedName, test.stageName, test.updateRunName)
+
+			// Compare the whole objects using cmp.Diff with ignore options
+			if diff := cmp.Diff(test.want, got); diff != "" {
+				t.Errorf("buildApprovalRequestObject() mismatch (-want +got):\n%s", diff)
 			}
 		})
 	}

@@ -45,7 +45,6 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/client/apiutil"
 	"sigs.k8s.io/controller-runtime/pkg/healthz"
 	"sigs.k8s.io/controller-runtime/pkg/log/zap"
-	"sigs.k8s.io/controller-runtime/pkg/metrics"
 	metricsserver "sigs.k8s.io/controller-runtime/pkg/metrics/server"
 	"sigs.k8s.io/controller-runtime/pkg/webhook"
 	workv1alpha1 "sigs.k8s.io/work-api/pkg/apis/v1alpha1"
@@ -57,7 +56,6 @@ import (
 	imcv1beta1 "go.goms.io/fleet/pkg/controllers/internalmembercluster/v1beta1"
 	"go.goms.io/fleet/pkg/controllers/workapplier"
 	workv1alpha1controller "go.goms.io/fleet/pkg/controllers/workv1alpha1"
-	fleetmetrics "go.goms.io/fleet/pkg/metrics"
 	"go.goms.io/fleet/pkg/propertyprovider"
 	"go.goms.io/fleet/pkg/propertyprovider/azure"
 	"go.goms.io/fleet/pkg/utils"
@@ -93,6 +91,11 @@ var (
 	enablePprof                  = flag.Bool("enable-pprof", false, "enable pprof profiling")
 	pprofPort                    = flag.Int("pprof-port", 6065, "port for pprof profiling")
 	hubPprofPort                 = flag.Int("hub-pprof-port", 6066, "port for hub pprof profiling")
+	hubQPS                       = flag.Float64("hub-api-qps", 50, "QPS to use while talking with fleet-apiserver. Doesn't cover events and node heartbeat apis which rate limiting is controlled by a different set of flags.")
+	hubBurst                     = flag.Int("hub-api-burst", 500, "Burst to use while talking with fleet-apiserver. Doesn't cover events and node heartbeat apis which rate limiting is controlled by a different set of flags.")
+	memberQPS                    = flag.Float64("member-api-qps", 250, "QPS to use while talking with fleet-apiserver. Doesn't cover events and node heartbeat apis which rate limiting is controlled by a different set of flags.")
+	memberBurst                  = flag.Int("member-api-burst", 1000, "Burst to use while talking with fleet-apiserver. Doesn't cover events and node heartbeat apis which rate limiting is controlled by a different set of flags.")
+
 	// Work applier requeue rate limiter settings.
 	workApplierRequeueRateLimiterAttemptsWithFixedDelay                              = flag.Int("work-applier-requeue-rate-limiter-attempts-with-fixed-delay", 1, "If set, the work applier will requeue work objects with a fixed delay for the specified number of attempts before switching to exponential backoff.")
 	workApplierRequeueRateLimiterFixedDelaySeconds                                   = flag.Float64("work-applier-requeue-rate-limiter-fixed-delay-seconds", 5.0, "If set, the work applier will requeue work objects with this fixed delay in seconds for the specified number of attempts before switching to exponential backoff.")
@@ -116,13 +119,6 @@ func init() {
 	utilruntime.Must(clusterv1beta1.AddToScheme(scheme))
 	utilruntime.Must(placementv1beta1.AddToScheme(scheme))
 	//+kubebuilder:scaffold:scheme
-
-	metrics.Registry.MustRegister(
-		fleetmetrics.JoinResultMetrics,
-		fleetmetrics.LeaveResultMetrics,
-		fleetmetrics.FleetWorkProcessingRequestsTotal,
-		fleetmetrics.FleetManifestProcessingRequestsTotal,
-	)
 }
 
 func main() {
@@ -150,6 +146,8 @@ func main() {
 		klog.FlushAndExit(klog.ExitFlushTimeout, 1)
 	}
 	hubConfig, err := buildHubConfig(hubURL, *useCertificateAuth, *tlsClientInsecure)
+	hubConfig.QPS = float32(*hubQPS)
+	hubConfig.Burst = *hubBurst
 	if err != nil {
 		klog.ErrorS(err, "Failed to build Kubernetes client configuration for the hub cluster")
 		klog.FlushAndExit(klog.ExitFlushTimeout, 1)
@@ -164,6 +162,8 @@ func main() {
 	mcNamespace := fmt.Sprintf(utils.NamespaceNameFormat, mcName)
 
 	memberConfig := ctrl.GetConfigOrDie()
+	memberConfig.QPS = float32(*memberQPS)
+	memberConfig.Burst = *memberBurst
 	// we place the leader election lease on the member cluster to avoid adding load to the hub
 	hubOpts := ctrl.Options{
 		Scheme: scheme,

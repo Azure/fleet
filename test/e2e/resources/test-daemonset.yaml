@@ -1,34 +1,27 @@
 apiVersion: apps/v1
 kind: DaemonSet
 metadata:
-  name: fluentd-elasticsearch
+  name: test-ds
   namespace: test-ns
   labels:
-    k8s-app: fluentd-logging
+    k8s-app: test-ds
 spec:
   selector:
     matchLabels:
-      name: fluentd-elasticsearch
+      name: test-ds
   template:
     metadata:
       labels:
-        name: fluentd-elasticsearch
+        name: test-ds
     spec:
       containers:
-        - name: fluentd-elasticsearch
-          image: quay.io/fluentd_elasticsearch/fluentd:v2.5.2
+        - name: pause
+          image: k8s.gcr.io/pause:3.8
           resources:
             limits:
-              cpu: 250m
-              memory: 200Mi
-            requests:
               cpu: 100m
               memory: 200Mi
-          volumeMounts:
-            - name: varlog
-              mountPath: /var/log
+            requests:
+              cpu: 1m
+              memory: 1Mi
       terminationGracePeriodSeconds: 30
-      volumes:
-        - name: varlog
-          hostPath:
-            path: /var/logask

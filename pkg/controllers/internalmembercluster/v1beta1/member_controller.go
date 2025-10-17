@@ -40,7 +40,7 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/predicate"
 
 	clusterv1beta1 "go.goms.io/fleet/apis/cluster/v1beta1"
-	"go.goms.io/fleet/pkg/metrics"
+	sharedmetrics "go.goms.io/fleet/pkg/metrics/shared"
 	"go.goms.io/fleet/pkg/propertyprovider"
 	"go.goms.io/fleet/pkg/utils/condition"
 	"go.goms.io/fleet/pkg/utils/controller"
@@ -636,7 +636,7 @@ func (r *Reconciler) markInternalMemberClusterJoined(imc clusterv1beta1.Conditio
 	if existingCondition == nil || existingCondition.ObservedGeneration != imc.GetGeneration() || existingCondition.Status != newCondition.Status {
 		r.recorder.Event(imc, corev1.EventTypeNormal, EventReasonInternalMemberClusterJoined, "internal member cluster joined")
 		klog.V(2).InfoS("InternalMemberCluster has joined", "internalMemberCluster", klog.KObj(imc))
-		metrics.ReportJoinResultMetric()
+		sharedmetrics.ReportJoinResultMetric()
 	}
 
 	imc.SetConditionsWithType(clusterv1beta1.MemberAgent, newCondition)
@@ -676,7 +676,7 @@ func (r *Reconciler) markInternalMemberClusterLeft(imc clusterv1beta1.Conditione
 	if existingCondition == nil || existingCondition.ObservedGeneration != imc.GetGeneration() || existingCondition.Status != newCondition.Status {
 		r.recorder.Event(imc, corev1.EventTypeNormal, EventReasonInternalMemberClusterLeft, "internal member cluster left")
 		klog.V(2).InfoS("InternalMemberCluster has left", "internalMemberCluster", klog.KObj(imc))
-		metrics.ReportLeaveResultMetric()
+		sharedmetrics.ReportLeaveResultMetric()
 	}
 
 	imc.SetConditionsWithType(clusterv1beta1.MemberAgent, newCondition)

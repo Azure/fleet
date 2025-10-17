@@ -612,18 +612,22 @@ var _ = Describe("placing wrapped resources using a CRP", Ordered, func() {
 				memberCluster := allMemberClusters[idx].ClusterName
 				namespaceName := fmt.Sprintf(utils.NamespaceNameFormat, memberCluster)
 				workName := fmt.Sprintf(placementv1beta1.FirstWorkNameFmt, crpName)
-				work := placementv1beta1.Work{}
-				Expect(hubClient.Get(ctx, types.NamespacedName{Name: workName, Namespace: namespaceName}, &work)).Should(Succeed(), "Failed to get the work")
-				if work.Status.ManifestConditions != nil {
-					work.Status.ManifestConditions = nil
-				} else {
-					meta.SetStatusCondition(&work.Status.Conditions, metav1.Condition{
-						Type:   placementv1beta1.WorkConditionTypeAvailable,
-						Status: metav1.ConditionFalse,
-						Reason: "WorkNotAvailable",
-					})
-				}
-				Expect(hubClient.Status().Update(ctx, &work)).Should(Succeed(), "Failed to update the work")
+				Eventually(func() error {
+					work := placementv1beta1.Work{}
+					if err := hubClient.Get(ctx, types.NamespacedName{Name: workName, Namespace: namespaceName}, &work); err != nil {
+						return err
+					}
+					if work.Status.ManifestConditions != nil {
+						work.Status.ManifestConditions = nil
+					} else {
+						meta.SetStatusCondition(&work.Status.Conditions, metav1.Condition{
+							Type:   placementv1beta1.WorkConditionTypeAvailable,
+							Status: metav1.ConditionFalse,
+							Reason: "WorkNotAvailable",
+						})
+					}
+					return hubClient.Status().Update(ctx, &work)
+				}, eventuallyDuration, eventuallyInterval).Should(Succeed(), "Failed to update the work")
 			}
 		})
 

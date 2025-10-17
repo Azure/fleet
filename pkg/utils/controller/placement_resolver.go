@@ -42,20 +42,22 @@ func FetchPlacementFromKey(ctx context.Context, c client.Reader, placementKey qu
 	if err != nil {
 		return nil, err
 	}
+	return FetchPlacementFromNamespacedName(ctx, c, types.NamespacedName{Namespace: namespace, Name: name})
+}
+
+// FetchPlacementFromNamespacedName resolves a NamespacedName to a concrete placement object that implements PlacementObj.
+func FetchPlacementFromNamespacedName(ctx context.Context, c client.Reader, nn types.NamespacedName) (fleetv1beta1.PlacementObj, error) {
 	// Check if the key contains a namespace separator
 	var placement fleetv1beta1.PlacementObj
-	if namespace != "" {
+	if nn.Namespace != "" {
 		// This is a namespaced ResourcePlacement
 		placement = &fleetv1beta1.ResourcePlacement{}
 	} else {
 		// This is a cluster-scoped ClusterResourcePlacement
 		placement = &fleetv1beta1.ClusterResourcePlacement{}
 	}
-	key := types.NamespacedName{
-		Namespace: namespace,
-		Name:      name,
-	}
-	if err := c.Get(ctx, key, placement); err != nil {
+
+	if err := c.Get(ctx, nn, placement); err != nil {
 		return nil, err
 	}
 	return placement, nil
@@ -91,6 +93,14 @@ func GetObjectKeyFromNamespaceName(namespace, name string) string {
 	} else {
 		// Namespaced placement
 		return namespace + namespaceSeparator + name
+	}
+}
+
+// GetNamespacedNameFromObject generates a NamespacedName from a meta object.
+func GetNamespacedNameFromObject(obj metav1.Object) types.NamespacedName {
+	return types.NamespacedName{
+		Namespace: obj.GetNamespace(),
+		Name:      obj.GetName(),
 	}
 }
 

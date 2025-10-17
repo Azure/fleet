@@ -38,7 +38,7 @@ import (
 	ctrlmetrics "sigs.k8s.io/controller-runtime/pkg/metrics"
 
 	placementv1beta1 "go.goms.io/fleet/apis/placement/v1beta1"
-	"go.goms.io/fleet/pkg/metrics"
+	hubmetrics "go.goms.io/fleet/pkg/metrics/hub"
 	"go.goms.io/fleet/pkg/utils/condition"
 	"go.goms.io/fleet/pkg/utils/defaulter"
 )
@@ -1493,7 +1493,7 @@ func TestReconcileForIncompleteEvictionMetric(t *testing.T) {
 	isComplete := "false"
 
 	// Reset metrics before each test
-	metrics.FleetEvictionStatus.Reset()
+	hubmetrics.FleetEvictionStatus.Reset()
 
 	scheme := serviceScheme(t)
 	fakeClient := fake.NewClientBuilder().

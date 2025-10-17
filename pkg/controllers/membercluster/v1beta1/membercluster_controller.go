@@ -43,7 +43,7 @@ import (
 	"go.goms.io/fleet/apis"
 	clusterv1beta1 "go.goms.io/fleet/apis/cluster/v1beta1"
 	placementv1beta1 "go.goms.io/fleet/apis/placement/v1beta1"
-	"go.goms.io/fleet/pkg/metrics"
+	sharedmetrics "go.goms.io/fleet/pkg/metrics/shared"
 	"go.goms.io/fleet/pkg/utils"
 	"go.goms.io/fleet/pkg/utils/condition"
 	"go.goms.io/fleet/pkg/utils/controller"
@@ -635,7 +635,7 @@ func markMemberClusterJoined(recorder record.EventRecorder, mc apis.ConditionedO
 	if existingCondition == nil || existingCondition.Status != newCondition.Status {
 		recorder.Event(mc, corev1.EventTypeNormal, reasonMemberClusterJoined, "member cluster joined")
 		klog.V(2).InfoS("memberCluster joined", "memberCluster", klog.KObj(mc))
-		metrics.ReportJoinResultMetric()
+		sharedmetrics.ReportJoinResultMetric()
 	}
 
 	mc.SetConditions(newCondition)
@@ -664,7 +664,7 @@ func markMemberClusterLeft(recorder record.EventRecorder, mc apis.ConditionedObj
 	if existingCondition == nil || existingCondition.Status != newCondition.Status {
 		recorder.Event(mc, corev1.EventTypeNormal, reasonMemberClusterJoined, "member cluster left")
 		klog.V(2).InfoS("memberCluster left", "memberCluster", klog.KObj(mc))
-		metrics.ReportLeaveResultMetric()
+		sharedmetrics.ReportLeaveResultMetric()
 	}
 
 	mc.SetConditions(newCondition, notReadyCondition)
