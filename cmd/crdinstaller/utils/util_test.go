@@ -60,6 +60,7 @@ func runTest(t *testing.T, crdPath string) {
 			wantedCRDNames: []string{
 				"memberclusters.cluster.kubernetes-fleet.io",
 				"internalmemberclusters.cluster.kubernetes-fleet.io",
+				"approvalrequests.placement.kubernetes-fleet.io",
 				"clusterapprovalrequests.placement.kubernetes-fleet.io",
 				"clusterresourcebindings.placement.kubernetes-fleet.io",
 				"clusterresourceenvelopes.placement.kubernetes-fleet.io",
@@ -80,6 +81,8 @@ func runTest(t *testing.T, crdPath string) {
 				"resourceplacements.placement.kubernetes-fleet.io",
 				"resourcesnapshots.placement.kubernetes-fleet.io",
 				"schedulingpolicysnapshots.placement.kubernetes-fleet.io",
+				"stagedupdateruns.placement.kubernetes-fleet.io",
+				"stagedupdatestrategies.placement.kubernetes-fleet.io",
 				"works.placement.kubernetes-fleet.io",
 				"clusterprofiles.multicluster.x-k8s.io",
 			},
