@@ -62,7 +62,7 @@ func NewCluster(name, svcAccountName string, scheme *runtime.Scheme, pp trackers
 func GetClusterClient(cluster *Cluster) {
 	clusterConfig := GetClientConfig(cluster)
 	impersonateClusterConfig := GetImpersonateClientConfig(cluster)
-	systemMastersConfig := GetSystemMastersClientConfig(cluster)
+	systemMastersConfig := GetAKSServiceSystemMastersClientConfig(cluster)
 
 	restConfig, err := clusterConfig.ClientConfig()
 	if err != nil {
@@ -106,13 +106,13 @@ func GetClientConfig(cluster *Cluster) clientcmd.ClientConfig {
 		})
 }
 
-func GetSystemMastersClientConfig(cluster *Cluster) clientcmd.ClientConfig {
+func GetAKSServiceSystemMastersClientConfig(cluster *Cluster) clientcmd.ClientConfig {
 	return clientcmd.NewNonInteractiveDeferredLoadingClientConfig(
 		&clientcmd.ClientConfigLoadingRules{ExplicitPath: kubeconfigPath},
 		&clientcmd.ConfigOverrides{
 			CurrentContext: cluster.ClusterName,
 			AuthInfo: api.AuthInfo{
-				Impersonate:       "system",
+				Impersonate:       "aksService",
 				ImpersonateGroups: []string{"system:masters"},
 			},
 		})
