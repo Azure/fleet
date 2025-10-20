@@ -21,6 +21,17 @@ Use KubeFleet to schedule workloads smartly, roll out changes progressively, and
 
 * [Get started here](https://kubefleet-dev.github.io/website/docs/getting-started/kind/)
 
+## Key benefits and capabilities
+
+### Centralized policy-driven fleet governance
+KubeFleet utilizes a hub-spoke architecture that creates a single control plane for the fleet. It allows fleet administrators to apply uniform cloud native policies on every member cluster, whether they reside in public clouds, private data centers, or edge locations. This greatly simplifies governance across large, geographically distributed fleets spanning hybrid and multi-cloud environments.
+
+### Progressive Rollouts with Safeguards
+KubeFleet provides a cloud native progressive rollout plans sequence updates across the entire fleet with health verification at each step. The application owner can pause or rollback to any previous versions when they observe failures, limiting blast radius. This keeps multi-cluster application deployments reliable and predictable spanning edge, on-premises, and cloud environments.
+
+### Powerful Multi-Cluster Scheduling
+KubeFleet's scheduler evaluates member cluster properties, available capacity, and declarative placement policies to select optimal destinations for workloads. It supports cluster affinity and anti-affinity rules, topology spread constraints to distribute workloads across failure domains, and resource-based placement to ensure sufficient compute, memory, and storage. The scheduler continuously reconciles as fleet conditions change, automatically adapting to cluster additions, removals, or capacity shifts across edge, on-premises, and cloud environments. For more details, please refer to the [KubeFleet website](https://kubefleet.dev/docs/).
+
 ## Documentation
 
 To learn more about KubeFleet go to the [KubeFleet documentation](https://kubefleet-dev.github.io/website/).
