@@ -37,7 +37,6 @@ import (
 	placementv1beta1 "github.com/kubefleet-dev/kubefleet/apis/placement/v1beta1"
 	"github.com/kubefleet-dev/kubefleet/pkg/utils"
 	"github.com/kubefleet-dev/kubefleet/pkg/webhook/validation"
-	testutils "github.com/kubefleet-dev/kubefleet/test/e2e/v1alpha1/utils"
 
 	fleetnetworkingv1alpha1 "go.goms.io/fleet-networking/api/v1alpha1"
 )
@@ -720,7 +719,7 @@ var _ = Describe("fleet guard rail for UPDATE work operations, in fleet prefixed
 				return err
 			}
 			return checkIfStatusErrorWithMessage(err, fmt.Sprintf(validation.ResourceDeniedFormat, testUser, utils.GenerateGroupString(testGroups), admissionv1.Update, &workGVK, "status", types.NamespacedName{Name: w.Name, Namespace: w.Namespace}))
-		}, testutils.PollTimeout, testutils.PollInterval).Should(Succeed())
+		}, eventuallyDuration, eventuallyInterval).Should(Succeed())
 	})
 
 	It("should deny DELETE work operation for user not in MC identity", func() {

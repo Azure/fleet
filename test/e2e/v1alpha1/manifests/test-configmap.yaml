@@ -1,9 +1,0 @@
-apiVersion: v1
-kind: ConfigMap
-metadata:
-  name: test-configmap
-  namespace: default
-data:
-  fielda: one
-  fieldb: two
-  fieldc: three

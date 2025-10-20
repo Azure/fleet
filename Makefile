@@ -133,24 +133,6 @@ vet: ## Run go vet against code.
 	go vet ./...
 
 ## --------------------------------------
-## Kind
-## --------------------------------------
-
-# Note that these targets are only used for E2E tests of the v1alpha1 API.
-
-create-hub-kind-cluster:
-	kind create cluster --name $(HUB_KIND_CLUSTER_NAME) --image=$(KIND_IMAGE) --config=$(CLUSTER_CONFIG) --kubeconfig=$(KUBECONFIG)
-
-create-member-kind-cluster:
-	kind create cluster --name $(MEMBER_KIND_CLUSTER_NAME) --image=$(KIND_IMAGE) --config=$(CLUSTER_CONFIG) --kubeconfig=$(KUBECONFIG)
-
-load-hub-docker-image:
-	kind load docker-image  --name $(HUB_KIND_CLUSTER_NAME) $(REGISTRY)/$(HUB_AGENT_IMAGE_NAME):$(HUB_AGENT_IMAGE_VERSION)
-
-load-member-docker-image:
-	kind load docker-image  --name $(MEMBER_KIND_CLUSTER_NAME) $(REGISTRY)/$(REFRESH_TOKEN_IMAGE_NAME):$(REFRESH_TOKEN_IMAGE_VERSION) $(REGISTRY)/$(MEMBER_AGENT_IMAGE_NAME):$(MEMBER_AGENT_IMAGE_VERSION)
-
-## --------------------------------------
 ## test
 ## --------------------------------------
 
@@ -175,68 +157,9 @@ integration-test: $(ENVTEST) ## Run tests.
 	export CGO_ENABLED=1 && \
 	export KUBEBUILDER_ASSETS="$(shell $(ENVTEST) use $(ENVTEST_K8S_VERSION) -p path)" && \
 	ginkgo -v -p --race --cover --coverpkg=./pkg/scheduler/... ./test/scheduler && \
-	ginkgo -v -p --race --cover --coverpkg=./... ./test/apis/... && \
-	go test ./test/integration/... -coverpkg=./...  -race -coverprofile=it-coverage.xml -v
+	ginkgo -v -p --race --cover --coverpkg=./... ./test/apis/...
 
 ## local tests & e2e tests
-
-install-hub-agent-helm:
-	kind export kubeconfig --name $(HUB_KIND_CLUSTER_NAME)
-	helm install hub-agent ./charts/hub-agent/ \
-    --set image.pullPolicy=Never \
-    --set image.repository=$(REGISTRY)/$(HUB_AGENT_IMAGE_NAME) \
-    --set image.tag=$(HUB_AGENT_IMAGE_VERSION) \
-    --set logVerbosity=5 \
-    --set namespace=fleet-system \
-    --set enableWebhook=true \
-    --set webhookServiceName=fleetwebhook \
-    --set webhookClientConnectionType=service \
-    --set enableV1Alpha1APIs=true \
-    --set enableV1Beta1APIs=false \
-    --set enableClusterInventoryAPI=true \
-    --set logFileMaxSize=1000000
-
-.PHONY: e2e-v1alpha1-hub-kubeconfig-secret
-e2e-v1alpha1-hub-kubeconfig-secret:
-	kind export kubeconfig --name $(HUB_KIND_CLUSTER_NAME)
-	kubectl apply -f test/e2e/v1alpha1/hub-agent-sa-secret.yaml
-	TOKEN=$$(kubectl get secret hub-kubeconfig-secret -n fleet-system -o jsonpath='{.data.token}' | base64 -d) ;\
-	kind export kubeconfig --name $(MEMBER_KIND_CLUSTER_NAME) ;\
-	kubectl delete secret hub-kubeconfig-secret --ignore-not-found ;\
-	kubectl create secret generic hub-kubeconfig-secret --from-literal=token=$$TOKEN
-
-install-member-agent-helm: install-hub-agent-helm e2e-v1alpha1-hub-kubeconfig-secret
-	kind export kubeconfig --name $(HUB_KIND_CLUSTER_NAME)
-	## Get kind cluster IP that docker uses internally so we can talk to the other cluster. the port is the default one.
-	HUB_SERVER_URL="https://$$(docker inspect $(HUB_KIND_CLUSTER_NAME)-control-plane --format='{{range .NetworkSettings.Networks}}{{.IPAddress}}{{end}}'):6443" ;\
-	kind export kubeconfig --name $(MEMBER_KIND_CLUSTER_NAME) ;\
-	helm install member-agent ./charts/member-agent/ \
-	--set config.hubURL=$$HUB_SERVER_URL \
-	--set image.repository=$(REGISTRY)/$(MEMBER_AGENT_IMAGE_NAME) \
-	--set image.tag=$(MEMBER_AGENT_IMAGE_VERSION) \
-    --set refreshtoken.repository=$(REGISTRY)/$(REFRESH_TOKEN_IMAGE_NAME) \
-    --set refreshtoken.tag=$(REFRESH_TOKEN_IMAGE_VERSION) \
-    --set image.pullPolicy=Never --set refreshtoken.pullPolicy=Never \
-    --set config.memberClusterName="kind-$(MEMBER_KIND_CLUSTER_NAME)" \
-    --set logVerbosity=5 \
-    --set namespace=fleet-system
-	# to make sure member-agent reads the token file.
-	kubectl delete pod --all -n fleet-system
-
-build-e2e-v1alpha1:
-	go test -c ./test/e2e/v1alpha1
-
-run-e2e-v1alpha1: build-e2e-v1alpha1
-	KUBECONFIG=$(KUBECONFIG) HUB_SERVER_URL="https://$$(docker inspect $(HUB_KIND_CLUSTER_NAME)-control-plane --format='{{range .NetworkSettings.Networks}}{{.IPAddress}}{{end}}'):6443" ./v1alpha1.test -test.v -ginkgo.v
-
-.PHONY: create-kind-cluster
-create-kind-cluster: create-hub-kind-cluster create-member-kind-cluster install-helm
-
-.PHONY: install-helm
-install-helm:  load-hub-docker-image load-member-docker-image install-member-agent-helm
-
-.PHONY: e2e-tests-v1alpha1
-e2e-tests-v1alpha1: create-kind-cluster run-e2e-v1alpha1
 
 # E2E test label filter (can be overridden)
 LABEL_FILTER ?= !custom
@@ -375,30 +298,6 @@ docker-build-refresh-token: docker-buildx-builder
 clean-bin: ## Remove all generated binaries
 	rm -rf $(TOOLS_BIN_DIR)
 	rm -rf ./bin
-
-# Note that these targets are only used for E2E tests of the v1alpha1 API.
-
-.PHONY: uninstall-helm
-uninstall-helm: clean-testing-resources
-	kind export kubeconfig --name $(HUB_KIND_CLUSTER_NAME)
-	helm uninstall hub-agent
-
-	kind export kubeconfig --name $(MEMBER_KIND_CLUSTER_NAME)
-	helm uninstall member-agent
-
-.PHONY: clean-testing-resources
-clean-testing-resources:
-	kind export kubeconfig --name $(HUB_KIND_CLUSTER_NAME)
-	kubectl delete ns fleet-member-kind-member-testing --ignore-not-found
-	kubectl delete memberclusters.fleet.azure.com kind-$(MEMBER_KIND_CLUSTER_NAME) --ignore-not-found
-
-	kind export kubeconfig --name $(MEMBER_KIND_CLUSTER_NAME)
-	kubectl delete ns fleet-member-kind-member-testing --ignore-not-found
-
-.PHONY: clean-e2e-tests-v1alpha1
-clean-e2e-tests-v1alpha1:
-	kind delete cluster --name $(HUB_KIND_CLUSTER_NAME)
-	kind delete cluster --name $(MEMBER_KIND_CLUSTER_NAME)
 
 .PHONY: clean-e2e-tests
 clean-e2e-tests:

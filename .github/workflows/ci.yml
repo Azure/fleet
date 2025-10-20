@@ -55,7 +55,7 @@ jobs:
            ## Repository upload token - get it from codecov.io. Required only for private repositories
           token: ${{ secrets.CODECOV_TOKEN }}
           ## Comma-separated list of files to upload
-          files: ./it-coverage.xml;./ut-coverage.xml
+          files: ./ut-coverage.xml
   
   e2e-tests:
     strategy:
