@@ -16,8 +16,8 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/controller/controllerutil"
 )
 
-func EnsureNoVAP(ctx context.Context, c client.Client, isHub bool) error {
-	objs := []client.Object{getValidatingAdmissionPolicy(isHub), getValidatingAdmissionPolicyBinding()}
+func EnsureNoVAP(ctx context.Context, c client.Client) error {
+	objs := []client.Object{getValidatingAdmissionPolicy(), getValidatingAdmissionPolicyBinding()}
 	for _, obj := range objs {
 		err := c.Delete(ctx, obj)
 		switch {
@@ -34,13 +34,13 @@ func EnsureNoVAP(ctx context.Context, c client.Client, isHub bool) error {
 	return nil
 }
 
-func EnsureVAP(ctx context.Context, c client.Client, isHub bool) error {
+func EnsureVAP(ctx context.Context, c client.Client) error {
 	type vapObjectAndMutator struct {
 		obj    client.Object
 		mutate func() error
 	}
 	// TODO: this can be simplified by dealing with the specific type rather than using client.Object
-	vap, mutateVAP := getVAPWithMutator(isHub)
+	vap, mutateVAP := getVAPWithMutator()
 	vapb, mutateVAPB := getVAPBindingWithMutator()
 	objsAndMutators := []vapObjectAndMutator{
 		{
@@ -69,10 +69,10 @@ func EnsureVAP(ctx context.Context, c client.Client, isHub bool) error {
 	return nil
 }
 
-func getVAPWithMutator(isHub bool) (*v1.ValidatingAdmissionPolicy, func() error) {
-	vap := getValidatingAdmissionPolicy(isHub)
+func getVAPWithMutator() (*v1.ValidatingAdmissionPolicy, func() error) {
+	vap := getValidatingAdmissionPolicy()
 	return vap, func() error {
-		mutateValidatingAdmissionPolicy(vap, isHub)
+		mutateValidatingAdmissionPolicy(vap)
 		return nil
 	}
 }

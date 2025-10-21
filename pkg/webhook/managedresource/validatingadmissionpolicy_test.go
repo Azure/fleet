@@ -17,16 +17,10 @@ func TestGetValidatingAdmissionPolicy(t *testing.T) {
 	t.Parallel()
 
 	tests := []struct {
-		name  string
-		isHub bool
+		name string
 	}{
 		{
-			name:  "member cluster",
-			isHub: false,
-		},
-		{
-			name:  "hub cluster",
-			isHub: true,
+			name: "validating admission policy",
 		},
 	}
 
@@ -34,9 +28,9 @@ func TestGetValidatingAdmissionPolicy(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			t.Parallel()
 
-			vap := getValidatingAdmissionPolicy(tt.isHub)
+			vap := getValidatingAdmissionPolicy()
 
-			// Both hub and member clusters should have the same single rule that covers all resources
+			// Should have a single rule that covers all resources
 			expectedRule := admv1.NamedRuleWithOperations{
 				RuleWithOperations: admv1.RuleWithOperations{
 					Rule: admv1.Rule{
@@ -69,31 +63,21 @@ func TestMutateValidatingAdmissionPolicy(t *testing.T) {
 
 	tests := []struct {
 		name            string
-		isHub           bool
 		resourceVersion string
 		initialLabels   map[string]string
 	}{
 		{
-			name:            "preserves ResourceVersion and updates labels for member cluster",
-			isHub:           false,
+			name:            "preserves ResourceVersion and updates labels",
 			resourceVersion: "12345",
 			initialLabels:   map[string]string{"existing": "label"},
 		},
 		{
-			name:            "preserves ResourceVersion and updates labels for hub cluster",
-			isHub:           true,
-			resourceVersion: "67890",
-			initialLabels:   map[string]string{"old": "value"},
-		},
-		{
 			name:            "preserves empty ResourceVersion and sets labels",
-			isHub:           false,
 			resourceVersion: "",
 			initialLabels:   nil,
 		},
 		{
 			name:            "overwrites existing managed label while preserving ResourceVersion",
-			isHub:           false,
 			resourceVersion: "54321",
 			initialLabels:   map[string]string{"fleet.azure.com/managed-by": "old-value", "other": "label"},
 		},
@@ -111,7 +95,7 @@ func TestMutateValidatingAdmissionPolicy(t *testing.T) {
 				},
 			}
 
-			mutateValidatingAdmissionPolicy(vap, tt.isHub)
+			mutateValidatingAdmissionPolicy(vap)
 
 			if vap.ResourceVersion != tt.resourceVersion {
 				t.Errorf("mutateValidatingAdmissionPolicy() ResourceVersion = %v, want %v", vap.ResourceVersion, tt.resourceVersion)

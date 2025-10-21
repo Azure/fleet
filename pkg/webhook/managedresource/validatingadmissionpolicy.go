@@ -16,13 +16,13 @@ const resourceName = "aks-fleet-managed-by-arm"
 
 var forbidden = metav1.StatusReasonForbidden
 
-func getValidatingAdmissionPolicy(isHub bool) *admv1.ValidatingAdmissionPolicy {
+func getValidatingAdmissionPolicy() *admv1.ValidatingAdmissionPolicy {
 	vap := &admv1.ValidatingAdmissionPolicy{}
-	mutateValidatingAdmissionPolicy(vap, isHub)
+	mutateValidatingAdmissionPolicy(vap)
 	return vap
 }
 
-func mutateValidatingAdmissionPolicy(vap *admv1.ValidatingAdmissionPolicy, isHub bool) {
+func mutateValidatingAdmissionPolicy(vap *admv1.ValidatingAdmissionPolicy) {
 	ometa := metav1.ObjectMeta{
 		Name: resourceName,
 		Labels: map[string]string{
