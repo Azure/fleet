@@ -476,10 +476,44 @@ func validateName(name string) error {
 		if !supportedResourceCapacityTypesMap[segments[0]] {
 			return fmt.Errorf("invalid capacity type in resource property name %s, supported values are %+v", name, resourceCapacityTypes)
 		}
+
+		if errs := validation.IsQualifiedName(name); errs != nil {
+			return fmt.Errorf("property name %s is not valid: %s", name, strings.Join(errs, "; "))
+		}
+		return nil
 	}
 
-	if err := validation.IsQualifiedName(name); err != nil {
-		return fmt.Errorf("name is not a valid Kubernetes label name: %v", err)
+	// For other properties, they should have a name that is formatted as follows:
+	//
+	// It should be a string of one or more segments, separated by slashes (/) if applicable;
+	// each segment must be 63 characters or less, start and end with an alphanumeric character,
+	// and can include dashes (-), underscores (_), dots (.), and alphanumerics in between.
+	//
+	// Optionally, the property name can have a prefix, which must be a DNS subdomain up to 253 characters,
+	// followed by a slash (/).
+	segs := strings.Split(name, "/")
+	if len(segs) <= 1 {
+		// The property name does not have a slash; it has no prefix.
+		if errs := validation.IsQualifiedName(name); errs != nil {
+			return fmt.Errorf("property name %s is not valid: %s", name, strings.Join(errs, "; "))
+		}
+	} else {
+		// The property name might have a prefix.
+		possiblePrefix := segs[0]
+
+		subDomainErrs := validation.IsDNS1123Subdomain(possiblePrefix)
+		qualifiedNameErrs := validation.IsQualifiedName(possiblePrefix)
+		if len(subDomainErrs) != 0 && len(qualifiedNameErrs) != 0 {
+			return fmt.Errorf("property name first segment %s is not valid: it is neither a valid DNS subdomain (%s) nor a valid qualified name (%s)", possiblePrefix, strings.Join(subDomainErrs, "; "), strings.Join(qualifiedNameErrs, "; "))
+		}
+
+		segsLeft := segs[1:]
+		for idx := range segsLeft {
+			seg := segsLeft[idx]
+			if errs := validation.IsQualifiedName(seg); errs != nil {
+				return fmt.Errorf("property name segment %s is not valid: %s", seg, strings.Join(errs, "; "))
+			}
+		}
 	}
 	return nil
 }

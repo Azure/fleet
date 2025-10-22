@@ -75,7 +75,20 @@ type MemberClusterSpec struct {
 	Taints []Taint `json:"taints,omitempty"`
 }
 
-// PropertyName is the name of a cluster property; it should be a Kubernetes label name.
+// PropertyName is the name of a cluster property.
+//
+// A valid name should be a string of one or more segments, separated by slashes (/) if applicable.
+//
+// Each segment must be 63 characters or less, start and end with an alphanumeric character,
+// and can include dashes (-), underscores (_), dots (.), and alphanumerics in between.
+//
+// Optionally, the property name can have a prefix, which must be a DNS subdomain up to 253 characters,
+// followed by a slash (/).
+//
+// Examples include:
+// - "avg-resource-pressure"
+// - "kubernetes-fleet.io/node-count"
+// - "kubernetes.azure.com/vm-sizes/Standard_D2s_v3/count"
 type PropertyName string
 
 // PropertyValue is the value of a cluster property.

@@ -368,7 +368,7 @@ var _ = Describe("placing resources using a CRP of PickAll placement type", func
 		})
 	})
 
-	Context("with affinities, metric selector only", Ordered, func() {
+	Context("with affinities, property selector only (node count)", Ordered, func() {
 		crpName := fmt.Sprintf(crpNameTemplate, GinkgoParallelProcess())
 
 		BeforeAll(func() {
@@ -442,7 +442,7 @@ var _ = Describe("placing resources using a CRP of PickAll placement type", func
 		})
 	})
 
-	Context("with affinities, metric selector only, updated", Ordered, func() {
+	Context("with affinities, property selector only (node count + CPU/memory capacity), updated", Ordered, func() {
 		crpName := fmt.Sprintf(crpNameTemplate, GinkgoParallelProcess())
 
 		BeforeAll(func() {
@@ -595,7 +595,7 @@ var _ = Describe("placing resources using a CRP of PickAll placement type", func
 		})
 	})
 
-	Context("with affinities, metric selector only, no matching clusters", Ordered, func() {
+	Context("with affinities, property selector only (cost + CPU allocatable), no matching clusters", Ordered, func() {
 		crpName := fmt.Sprintf(crpNameTemplate, GinkgoParallelProcess())
 
 		BeforeAll(func() {
@@ -670,7 +670,7 @@ var _ = Describe("placing resources using a CRP of PickAll placement type", func
 		})
 	})
 
-	Context("with affinities, label and metric selectors", Ordered, func() {
+	Context("with affinities, label and property selectors (node count)", Ordered, func() {
 		crpName := fmt.Sprintf(crpNameTemplate, GinkgoParallelProcess())
 
 		BeforeAll(func() {
@@ -746,7 +746,7 @@ var _ = Describe("placing resources using a CRP of PickAll placement type", func
 		})
 	})
 
-	Context("with affinities, label and metric selectors, updated", Ordered, func() {
+	Context("with affinities, label and property selectors (node count, CPU/memory allocatable, memory capacity), updated", Ordered, func() {
 		crpName := fmt.Sprintf(crpNameTemplate, GinkgoParallelProcess())
 
 		BeforeAll(func() {
@@ -925,7 +925,7 @@ var _ = Describe("placing resources using a CRP of PickAll placement type", func
 		})
 	})
 
-	Context("with affinities, label and metric selectors, no matching clusters", Ordered, func() {
+	Context("with affinities, property selectors only (cost), no matching clusters", Ordered, func() {
 		crpName := fmt.Sprintf(crpNameTemplate, GinkgoParallelProcess())
 
 		BeforeAll(func() {
@@ -970,6 +970,83 @@ var _ = Describe("placing resources using a CRP of PickAll placement type", func
 														Operator: placementv1beta1.PropertySelectorGreaterThanOrEqualTo,
 														Values: []string{
 															"9999",
+														},
+													},
+												},
+											},
+										},
+									},
+								},
+							},
+						},
+					},
+					Strategy: placementv1beta1.RolloutStrategy{
+						Type: placementv1beta1.RollingUpdateRolloutStrategyType,
+						RollingUpdate: &placementv1beta1.RollingUpdateConfig{
+							UnavailablePeriodSeconds: ptr.To(2),
+						},
+					},
+				},
+			}
+			Expect(hubClient.Create(ctx, crp)).To(Succeed(), "Failed to create CRP")
+		})
+
+		It("should update CRP status as expected", func() {
+			statusUpdatedActual := crpStatusUpdatedActual(workResourceIdentifiers(), nil, nil, "0")
+			Eventually(statusUpdatedActual, eventuallyDuration, eventuallyInterval).Should(Succeed(), "Failed to update CRP status as expected")
+		})
+
+		It("should not place resources on any cluster", checkIfRemovedWorkResourcesFromAllMemberClusters)
+
+		AfterAll(func() {
+			ensureCRPAndRelatedResourcesDeleted(crpName, nil)
+		})
+	})
+
+	// TO-DO (chenyu1): modify the E2E setup to allow fixed node SKU assignment, so that the test suite can include
+	// a case where SKU-based scheduling can yield consistent non-empty results.
+	Context("with affinities, property selectors only (VM size), no matching clusters", Ordered, func() {
+		crpName := fmt.Sprintf(crpNameTemplate, GinkgoParallelProcess())
+		// Cross-ref with the setup script to ensure that this VM size is not used at all.
+		absentVMSize := "Standard_D8s_v3"
+
+		BeforeAll(func() {
+			if !isAzurePropertyProviderEnabled {
+				Skip("Skipping this test spec as Azure property provider is not enabled in the test environment")
+			}
+
+			// Create the resources.
+			createWorkResources()
+
+			// Create the CRP.
+			crp := &placementv1beta1.ClusterResourcePlacement{
+				ObjectMeta: metav1.ObjectMeta{
+					Name: crpName,
+					// Add a custom finalizer; this would allow us to better observe
+					// the behavior of the controllers.
+					Finalizers: []string{customDeletionBlockerFinalizer},
+				},
+				Spec: placementv1beta1.PlacementSpec{
+					ResourceSelectors: workResourceSelector(),
+					Policy: &placementv1beta1.PlacementPolicy{
+						PlacementType: placementv1beta1.PickAllPlacementType,
+						Affinity: &placementv1beta1.Affinity{
+							ClusterAffinity: &placementv1beta1.ClusterAffinity{
+								RequiredDuringSchedulingIgnoredDuringExecution: &placementv1beta1.ClusterSelector{
+									ClusterSelectorTerms: []placementv1beta1.ClusterSelectorTerm{
+										{
+											LabelSelector: &metav1.LabelSelector{
+												MatchLabels: map[string]string{
+													regionLabelName: regionEast,
+												},
+											},
+											PropertySelector: &placementv1beta1.PropertySelector{
+												MatchExpressions: []placementv1beta1.PropertySelectorRequirement{
+													{
+														Name:     fmt.Sprintf(azure.NodeCountPerSKUPropertyTmpl, absentVMSize),
+														Operator: placementv1beta1.PropertySelectorGreaterThanOrEqualTo,
+														Values: []string{
+															"1",
 														},
 													},
 												},

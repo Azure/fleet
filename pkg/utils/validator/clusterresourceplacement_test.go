@@ -1225,9 +1225,9 @@ func TestValidateClusterResourcePlacement_PickNPlacementPolicy(t *testing.T) {
 				},
 			},
 			wantErr:    true,
-			wantErrMsg: "name is not a valid Kubernetes label name",
+			wantErrMsg: "property name resources.kubernetes-fleet.io/total-nospecialchars%^=@ is not valid",
 		},
-		"valid placement policy - PickN with valid property selector name": {
+		"valid placement policy - PickN with valid property selector name (non-resource, single segment)": {
 			policy: &placementv1beta1.PlacementPolicy{
 				PlacementType:    placementv1beta1.PickNPlacementType,
 				NumberOfClusters: &positiveNumberOfClusters,
@@ -1242,7 +1242,38 @@ func TestValidateClusterResourcePlacement_PickNPlacementPolicy(t *testing.T) {
 									PropertySelector: &placementv1beta1.PropertySelector{
 										MatchExpressions: []placementv1beta1.PropertySelectorRequirement{
 											{
-												Name:     "resources.kubernetes-fleet.io/total-allocatable-cpu",
+												Name:     "k8s-minor-version",
+												Operator: placementv1beta1.PropertySelectorEqualTo,
+												Values:   []string{"28"},
+											},
+										},
+									},
+								},
+							},
+						},
+					},
+				},
+			},
+			wantErr: false,
+		},
+		"valid placement policy - PickN with valid property selector name (non-resource, multiple segments)": {
+			policy: &placementv1beta1.PlacementPolicy{
+				PlacementType:    placementv1beta1.PickNPlacementType,
+				NumberOfClusters: &positiveNumberOfClusters,
+				Affinity: &placementv1beta1.Affinity{
+					ClusterAffinity: &placementv1beta1.ClusterAffinity{
+						RequiredDuringSchedulingIgnoredDuringExecution: &placementv1beta1.ClusterSelector{
+							ClusterSelectorTerms: []placementv1beta1.ClusterSelectorTerm{
+								{
+									LabelSelector: &metav1.LabelSelector{
+										MatchLabels: map[string]string{"test-key1": "test-value1"},
+									},
+									PropertySelector: &placementv1beta1.PropertySelector{
+										MatchExpressions: []placementv1beta1.PropertySelectorRequirement{
+											{
+												// Note that the first segment is both a valid DNS subdomain name and a qualified
+												// name.
+												Name:     "kubernetes.azure.com/vm-sizes/Standard_D8s_v3/count",
 												Operator: placementv1beta1.PropertySelectorEqualTo,
 												Values:   []string{"2"},
 											},
@@ -1255,6 +1286,128 @@ func TestValidateClusterResourcePlacement_PickNPlacementPolicy(t *testing.T) {
 				},
 			},
 			wantErr: false,
+		},
+		"valid placement policy - PickN with valid property selector name (non-resource, multiple segments with prefix)": {
+			policy: &placementv1beta1.PlacementPolicy{
+				PlacementType:    placementv1beta1.PickNPlacementType,
+				NumberOfClusters: &positiveNumberOfClusters,
+				Affinity: &placementv1beta1.Affinity{
+					ClusterAffinity: &placementv1beta1.ClusterAffinity{
+						RequiredDuringSchedulingIgnoredDuringExecution: &placementv1beta1.ClusterSelector{
+							ClusterSelectorTerms: []placementv1beta1.ClusterSelectorTerm{
+								{
+									LabelSelector: &metav1.LabelSelector{
+										MatchLabels: map[string]string{"test-key1": "test-value1"},
+									},
+									PropertySelector: &placementv1beta1.PropertySelector{
+										MatchExpressions: []placementv1beta1.PropertySelectorRequirement{
+											{
+												// Note that the first segment is longer than 63 characters; it is a valid
+												// DNS subdomain name, but not a qualified name.
+												Name:     "a.very.loooooooong.suuuuuuuub.doooooooomain.kubernetes.azure.com/vm-sizes/Standard_D8s_v3/count",
+												Operator: placementv1beta1.PropertySelectorEqualTo,
+												Values:   []string{"2"},
+											},
+										},
+									},
+								},
+							},
+						},
+					},
+				},
+			},
+			wantErr: false,
+		},
+		"valid placement policy - PickN with valid property selector name (non-resource, multiple segments with no prefix)": {
+			policy: &placementv1beta1.PlacementPolicy{
+				PlacementType:    placementv1beta1.PickNPlacementType,
+				NumberOfClusters: &positiveNumberOfClusters,
+				Affinity: &placementv1beta1.Affinity{
+					ClusterAffinity: &placementv1beta1.ClusterAffinity{
+						RequiredDuringSchedulingIgnoredDuringExecution: &placementv1beta1.ClusterSelector{
+							ClusterSelectorTerms: []placementv1beta1.ClusterSelectorTerm{
+								{
+									LabelSelector: &metav1.LabelSelector{
+										MatchLabels: map[string]string{"test-key1": "test-value1"},
+									},
+									PropertySelector: &placementv1beta1.PropertySelector{
+										MatchExpressions: []placementv1beta1.PropertySelectorRequirement{
+											{
+												// Note that DNS subdomain names do not allow underscores, so the first
+												// segment cannot be a prefix.
+												Name:     "Standard_D8s_v3/count",
+												Operator: placementv1beta1.PropertySelectorEqualTo,
+												Values:   []string{"2"},
+											},
+										},
+									},
+								},
+							},
+						},
+					},
+				},
+			},
+			wantErr: false,
+		},
+		"invalid placement policy - PickN with invalid property selector name (non-resource, invalid prefix)": {
+			policy: &placementv1beta1.PlacementPolicy{
+				PlacementType:    placementv1beta1.PickNPlacementType,
+				NumberOfClusters: &positiveNumberOfClusters,
+				Affinity: &placementv1beta1.Affinity{
+					ClusterAffinity: &placementv1beta1.ClusterAffinity{
+						RequiredDuringSchedulingIgnoredDuringExecution: &placementv1beta1.ClusterSelector{
+							ClusterSelectorTerms: []placementv1beta1.ClusterSelectorTerm{
+								{
+									LabelSelector: &metav1.LabelSelector{
+										MatchLabels: map[string]string{"test-key1": "test-value1"},
+									},
+									PropertySelector: &placementv1beta1.PropertySelector{
+										MatchExpressions: []placementv1beta1.PropertySelectorRequirement{
+											{
+												Name:     "St@ndard_D8s_v3/count",
+												Operator: placementv1beta1.PropertySelectorEqualTo,
+												Values:   []string{"2"},
+											},
+										},
+									},
+								},
+							},
+						},
+					},
+				},
+			},
+			wantErr:    true,
+			wantErrMsg: "property name first segment St@ndard_D8s_v3 is not valid",
+		},
+		"invalid placement policy - PickN with invalid property selector name (non-resource, invalid non-prefix segment)": {
+			policy: &placementv1beta1.PlacementPolicy{
+				PlacementType:    placementv1beta1.PickNPlacementType,
+				NumberOfClusters: &positiveNumberOfClusters,
+				Affinity: &placementv1beta1.Affinity{
+					ClusterAffinity: &placementv1beta1.ClusterAffinity{
+						RequiredDuringSchedulingIgnoredDuringExecution: &placementv1beta1.ClusterSelector{
+							ClusterSelectorTerms: []placementv1beta1.ClusterSelectorTerm{
+								{
+									LabelSelector: &metav1.LabelSelector{
+										MatchLabels: map[string]string{"test-key1": "test-value1"},
+									},
+									PropertySelector: &placementv1beta1.PropertySelector{
+										MatchExpressions: []placementv1beta1.PropertySelectorRequirement{
+											{
+												Name:     "Standard_D8s_v3/count/$",
+												Operator: placementv1beta1.PropertySelectorEqualTo,
+												Values:   []string{"2"},
+											},
+										},
+									},
+								},
+							},
+						},
+					},
+				},
+			},
+			wantErr:    true,
+			wantErrMsg: "property name segment $ is not valid",
 		},
 	}
 

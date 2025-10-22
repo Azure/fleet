@@ -277,7 +277,7 @@ var _ = Describe("placing namespaced scoped resources using a RP with PickAll po
 		It("should not place resources on any cluster", checkIfRemovedConfigMapFromAllMemberClusters)
 	})
 
-	Context("with affinities, metric selector only", Ordered, func() {
+	Context("with affinities, property selector only (node count)", Ordered, func() {
 		It("creating the RP should succeed", func() {
 			if !isAzurePropertyProviderEnabled {
 				Skip("Skipping this test spec as Azure property provider is not enabled in the test environment")
@@ -341,7 +341,7 @@ var _ = Describe("placing namespaced scoped resources using a RP with PickAll po
 		})
 	})
 
-	Context("with affinities, metric selector only, updated", Ordered, func() {
+	Context("with affinities, property selector only (node count + CPU/memory capacity), updated", Ordered, func() {
 		It("creating the RP should succeed", func() {
 			if !isAzurePropertyProviderEnabled {
 				Skip("Skipping this test spec as Azure property provider is not enabled in the test environment")
@@ -484,7 +484,7 @@ var _ = Describe("placing namespaced scoped resources using a RP with PickAll po
 		})
 	})
 
-	Context("with affinities, metric selector only, no matching clusters", Ordered, func() {
+	Context("with affinities, property selector only (cost + CPU allocatable), no matching clusters", Ordered, func() {
 		It("creating the RP should succeed", func() {
 			if !isAzurePropertyProviderEnabled {
 				Skip("Skipping this test spec as Azure property provider is not enabled in the test environment")
@@ -549,7 +549,7 @@ var _ = Describe("placing namespaced scoped resources using a RP with PickAll po
 		It("should not place resources on any cluster", checkIfRemovedConfigMapFromAllMemberClusters)
 	})
 
-	Context("with affinities, label and metric selectors", Ordered, func() {
+	Context("with affinities, label and property selectors (node count)", Ordered, func() {
 		It("creating the RP should succeed", func() {
 			if !isAzurePropertyProviderEnabled {
 				Skip("Skipping this test spec as Azure property provider is not enabled in the test environment")
@@ -615,7 +615,7 @@ var _ = Describe("placing namespaced scoped resources using a RP with PickAll po
 		})
 	})
 
-	Context("with affinities, label and metric selectors, updated", Ordered, func() {
+	Context("with affinities, label and property selectors (node count, CPU/memory allocatable, memory capacity), updated", Ordered, func() {
 		It("creating the RP should succeed", func() {
 			if !isAzurePropertyProviderEnabled {
 				Skip("Skipping this test spec as Azure property provider is not enabled in the test environment")
@@ -782,7 +782,7 @@ var _ = Describe("placing namespaced scoped resources using a RP with PickAll po
 		})
 	})
 
-	Context("with affinities, label and metric selectors, no matching clusters", Ordered, func() {
+	Context("with affinities, label and property selectors (cost), no matching clusters", Ordered, func() {
 		It("creating the RP should succeed", func() {
 			if !isAzurePropertyProviderEnabled {
 				Skip("Skipping this test spec as Azure property provider is not enabled in the test environment")
@@ -821,6 +821,71 @@ var _ = Describe("placing namespaced scoped resources using a RP with PickAll po
 														Operator: placementv1beta1.PropertySelectorGreaterThanOrEqualTo,
 														Values: []string{
 															"9999",
+														},
+													},
+												},
+											},
+										},
+									},
+								},
+							},
+						},
+					},
+					Strategy: placementv1beta1.RolloutStrategy{
+						Type: placementv1beta1.RollingUpdateRolloutStrategyType,
+						RollingUpdate: &placementv1beta1.RollingUpdateConfig{
+							UnavailablePeriodSeconds: ptr.To(2),
+						},
+					},
+				},
+			}
+			Expect(hubClient.Create(ctx, rp)).To(Succeed(), "Failed to create RP")
+		})
+
+		It("should update RP status as expected", func() {
+			statusUpdatedActual := rpStatusUpdatedActual(appConfigMapIdentifiers(), nil, nil, "0")
+			Eventually(statusUpdatedActual, eventuallyDuration, eventuallyInterval).Should(Succeed(), "Failed to update RP status as expected")
+		})
+
+		It("should not place resources on any cluster", checkIfRemovedConfigMapFromAllMemberClusters)
+	})
+
+	Context("with affinities, label and property selectors (VM size), no matching clusters", Ordered, func() {
+		It("creating the RP should succeed", func() {
+			if !isAzurePropertyProviderEnabled {
+				Skip("Skipping this test spec as Azure property provider is not enabled in the test environment")
+			}
+			// Cross-ref with the setup script to ensure that this VM size is not used at all.
+			absentVMSize := "Standard_D8s_v3"
+
+			// Create the RP in the same namespace selecting namespaced resources.
+			rp := &placementv1beta1.ResourcePlacement{
+				ObjectMeta: metav1.ObjectMeta{
+					Name:       rpName,
+					Namespace:  appNamespace().Name,
+					Finalizers: []string{customDeletionBlockerFinalizer},
+				},
+				Spec: placementv1beta1.PlacementSpec{
+					ResourceSelectors: configMapSelector(),
+					Policy: &placementv1beta1.PlacementPolicy{
+						PlacementType: placementv1beta1.PickAllPlacementType,
+						Affinity: &placementv1beta1.Affinity{
+							ClusterAffinity: &placementv1beta1.ClusterAffinity{
+								RequiredDuringSchedulingIgnoredDuringExecution: &placementv1beta1.ClusterSelector{
+									ClusterSelectorTerms: []placementv1beta1.ClusterSelectorTerm{
+										{
+											LabelSelector: &metav1.LabelSelector{
+												MatchLabels: map[string]string{
+													regionLabelName: regionEast,
+												},
+											},
+											PropertySelector: &placementv1beta1.PropertySelector{
+												MatchExpressions: []placementv1beta1.PropertySelectorRequirement{
+													{
+														Name:     fmt.Sprintf(azure.NodeCountPerSKUPropertyTmpl, absentVMSize),
+														Operator: placementv1beta1.PropertySelectorGreaterThanOrEqualTo,
+														Values: []string{
+															"1",
 														},
 													},
 												},
