@@ -63,8 +63,7 @@ func mutateValidatingAdmissionPolicy(vap *admv1.ValidatingAdmissionPolicy) {
 					(
 						"system:masters" in request.userInfo.groups ||
 						"system:serviceaccounts:kube-system" in request.userInfo.groups ||
-						"system:serviceaccounts:fleet-system" in request.userInfo.groups ||
-						"system:serviceaccounts:openshift-kube-controller-manager" in request.userInfo.groups
+						"system:serviceaccounts:fleet-system" in request.userInfo.groups
 					)
 				)
 				  ||

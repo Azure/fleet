@@ -35,7 +35,6 @@ import (
 	"k8s.io/apimachinery/pkg/types"
 	"k8s.io/apimachinery/pkg/util/version"
 	"k8s.io/client-go/discovery"
-
 	"sigs.k8s.io/controller-runtime/pkg/client"
 
 	placementv1beta1 "go.goms.io/fleet/apis/placement/v1beta1"
@@ -51,16 +50,6 @@ const (
 
 var managedByLabelMap = map[string]string{
 	managedByLabel: managedByLabelValue,
-}
-
-// Need this because Entry() evaluates parameters at definition time, not at runtime.
-// Without this, the client value sent to Entry() would always be nil.
-func getUserClient() client.Client {
-	return hubCluster.ImpersonateKubeClient
-}
-
-func getAksServiceClient() client.Client {
-	return hubCluster.SystemMastersClient
 }
 
 var _ = Describe("ValidatingAdmissionPolicy for Managed Resources", Label("managedresource"), Ordered, func() {
@@ -519,4 +508,14 @@ func isAPIServerVersionAtLeast(disco discovery.DiscoveryInterface, targetVersion
 	}
 	server, target := version.MustParseSemantic(serverVersion.GitVersion), version.MustParseSemantic(targetVersion)
 	return server.AtLeast(target), nil
+}
+
+// Need this because Entry() evaluates parameters at definition time, not at runtime.
+// Without this, the client value sent to Entry() would always be nil.
+func getUserClient() client.Client {
+	return hubCluster.ImpersonateKubeClient
+}
+
+func getAksServiceClient() client.Client {
+	return hubCluster.SystemMastersClient
 }

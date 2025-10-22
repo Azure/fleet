@@ -373,11 +373,9 @@ func TestGetVAPBindingWithMutator(t *testing.T) {
 	// Verify initial state
 	if vapb == nil {
 		t.Fatal("getVAPBindingWithMutator() returned nil VAP binding")
-		return
 	}
 	if mutateFunc == nil {
 		t.Fatal("getVAPBindingWithMutator() returned nil mutate function")
-		return
 	}
 
 	// Verify mutate function works
