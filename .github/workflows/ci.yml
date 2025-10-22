@@ -85,13 +85,6 @@ jobs:
     ]
     if: needs.detect-noop.outputs.noop != 'true'
     steps:
-      - name: Remove unnecessary files
-        run: |
-          sudo rm -rf /usr/share/dotnet
-          sudo rm -rf /opt/ghc
-          sudo rm -rf "/usr/local/share/boost"
-          sudo rm -rf "$AGENT_TOOLSDIRECTORY"
-
       - name: Set up Go
         uses: actions/setup-go@v6
         with:
@@ -135,7 +128,10 @@ jobs:
       
       - name: Collect logs
         if: always()
+        # Wait for a bit before log collection; this gives the agent pods some time to shut down
+        # gracefully and flush their logs.
         run: |
+          sleep 30
           make collect-e2e-logs
         env:
           KUBECONFIG: '/home/runner/.kube/config'
