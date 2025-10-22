@@ -18,18 +18,12 @@ package resourcewatcher
 
 import (
 	"fmt"
-	"reflect"
 
 	"k8s.io/apimachinery/pkg/api/meta"
-	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
-	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/client-go/tools/cache"
 	"k8s.io/klog/v2"
 	"sigs.k8s.io/controller-runtime/pkg/client"
-
-	fleetv1alpha1 "github.com/kubefleet-dev/kubefleet/apis/v1alpha1"
-	"github.com/kubefleet-dev/kubefleet/pkg/utils"
 )
 
 // handleTombStoneObj handles the case that the delete object is a tombStone instead of the real object
@@ -48,112 +42,6 @@ func handleTombStoneObj(obj interface{}) (client.Object, error) {
 		return clientObj, nil
 	}
 	return nil, fmt.Errorf("encountered an known tombstone object %+v", tombstone)
-}
-
-// The next three are for the ClusterResourcePlacement informer
-// onClusterResourcePlacementAdded handles object add event and push the placement to the cluster placement queue.
-func (d *ChangeDetector) onClusterResourcePlacementAdded(obj interface{}) {
-	placementMeta, _ := meta.Accessor(obj)
-	klog.V(3).InfoS("ClusterResourcePlacement Added", "placement", klog.KObj(placementMeta))
-	d.ClusterResourcePlacementControllerV1Alpha1.Enqueue(obj)
-}
-
-// onClusterResourcePlacementUpdated handles object update event and push the placement to the cluster placement queue.
-func (d *ChangeDetector) onClusterResourcePlacementUpdated(oldObj, newObj interface{}) {
-	oldPlacementMeta, _ := meta.Accessor(oldObj)
-	newPlacementMeta, _ := meta.Accessor(newObj)
-	if oldPlacementMeta.GetGeneration() == newPlacementMeta.GetGeneration() {
-		klog.V(4).InfoS("ignore a cluster resource placement update event with no spec change",
-			"placement", klog.KObj(oldPlacementMeta))
-		return
-	}
-	klog.V(3).InfoS("ClusterResourcePlacement Updated",
-		"placement", klog.KObj(oldPlacementMeta))
-	d.ClusterResourcePlacementControllerV1Alpha1.Enqueue(newObj)
-}
-
-// onClusterResourcePlacementDeleted handles object delete event and push the placement to the cluster placement queue.
-func (d *ChangeDetector) onClusterResourcePlacementDeleted(obj interface{}) {
-	clientObj, err := handleTombStoneObj(obj)
-	if err != nil {
-		klog.ErrorS(err, "failed to handle a cluster resource placement object delete event")
-	}
-	klog.V(3).InfoS("a clusterResourcePlacement is deleted", "placement", klog.KObj(clientObj))
-	d.ClusterResourcePlacementControllerV1Alpha1.Enqueue(clientObj)
-}
-
-// The next two are for the Work informer, we don't handle add event as placement reconciler creates the work
-// onWorkUpdated handles object update event and push the corresponding placements to the cluster placement queue.
-func (d *ChangeDetector) onWorkUpdated(oldObj, newObj interface{}) {
-	oldWorkMeta, _ := meta.Accessor(oldObj)
-	newWorkMeta, _ := meta.Accessor(newObj)
-	if oldWorkMeta.GetResourceVersion() == newWorkMeta.GetResourceVersion() {
-		return
-	}
-	// we never change the placement label of a work
-	if placementName, exist := oldWorkMeta.GetLabels()[utils.LabelWorkPlacementName]; exist {
-		klog.V(3).InfoS("a work object is updated, will enqueue a placement event", "work", klog.KObj(oldWorkMeta), "placement", placementName)
-		// the meta key function handles string
-		d.ClusterResourcePlacementControllerV1Alpha1.Enqueue(placementName)
-	} else {
-		klog.V(4).InfoS("ignore an updated work object without a placement label", "work", klog.KObj(oldWorkMeta))
-	}
-}
-
-// onWorkDeleted handles object delete event and push the corresponding placements to the cluster placement queue.
-func (d *ChangeDetector) onWorkDeleted(obj interface{}) {
-	clientObj, err := handleTombStoneObj(obj)
-	if err != nil {
-		klog.ErrorS(err, "failed to handle a work object delete event")
-		return
-	}
-	if placementName, exist := clientObj.GetLabels()[utils.LabelWorkPlacementName]; exist {
-		klog.V(3).InfoS("a work object is deleted", "work", klog.KObj(clientObj), "placement", placementName)
-		// the meta key function handles string
-		d.ClusterResourcePlacementControllerV1Alpha1.Enqueue(placementName)
-	} else {
-		klog.V(4).InfoS("ignore a deleted work object without a placement label", "work", klog.KObj(clientObj))
-	}
-}
-
-// The next one is for the memberCluster informer
-// onMemberClusterUpdated handles object update event and push the memberCluster name to the memberCluster controller queue.
-func (d *ChangeDetector) onMemberClusterUpdated(oldObj, newObj interface{}) {
-	var oldMC, newMC fleetv1alpha1.MemberCluster
-	err := runtime.DefaultUnstructuredConverter.FromUnstructured(oldObj.(*unstructured.Unstructured).Object, &oldMC)
-	if err != nil {
-		// should not happen
-		klog.ErrorS(err, "failed to handle a member cluster object update event")
-		return
-	}
-	err = runtime.DefaultUnstructuredConverter.FromUnstructured(newObj.(*unstructured.Unstructured).Object, &newMC)
-	if err != nil {
-		klog.ErrorS(err, "failed to handle a member cluster object update event")
-		return
-	}
-	// Only enqueue if the change can affect placement decisions. i.e. label and spec and work agent condition
-	if oldMC.GetGeneration() == newMC.GetGeneration() &&
-		reflect.DeepEqual(oldMC.GetLabels(), newMC.GetLabels()) {
-		var oldAgentCond, newAgentCond []metav1.Condition
-		for _, agentStatus := range oldMC.Status.AgentStatus {
-			if agentStatus.Type == fleetv1alpha1.MemberAgent {
-				oldAgentCond = agentStatus.Conditions
-			}
-		}
-		for _, agentStatus := range newMC.Status.AgentStatus {
-			if agentStatus.Type == fleetv1alpha1.MemberAgent {
-				newAgentCond = agentStatus.Conditions
-			}
-		}
-		if reflect.DeepEqual(oldAgentCond, newAgentCond) {
-			klog.V(4).InfoS("ignore a memberCluster update event with no real change",
-				"memberCluster", klog.KObj(&oldMC), "generation", oldMC.GetGeneration())
-			return
-		}
-	}
-
-	klog.V(3).InfoS("a memberCluster is updated", "memberCluster", klog.KObj(&oldMC))
-	d.MemberClusterPlacementController.Enqueue(oldObj)
 }
 
 // The next three are for any dynamic resource informer
