@@ -16,60 +16,46 @@ import (
 func TestGetValidatingAdmissionPolicy(t *testing.T) {
 	t.Parallel()
 
-	t.Run("member", func(t *testing.T) {
-		t.Parallel()
+	tests := []struct {
+		name string
+	}{
+		{
+			name: "validating admission policy",
+		},
+	}
 
-		vap := getValidatingAdmissionPolicy(false)
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
 
-		unwantedRule := admv1.NamedRuleWithOperations{
-			RuleWithOperations: admv1.RuleWithOperations{
-				Rule: admv1.Rule{
-					APIGroups:   []string{"placement.kubernetes-fleet.io"},
-					Resources:   []string{"clusterresourceplacements"},
-					APIVersions: []string{"*"},
+			vap := getValidatingAdmissionPolicy()
+
+			// Should have a single rule that covers all resources
+			expectedRule := admv1.NamedRuleWithOperations{
+				RuleWithOperations: admv1.RuleWithOperations{
+					Rule: admv1.Rule{
+						APIGroups:   []string{"*"},
+						Resources:   []string{"*"},
+						APIVersions: []string{"*"},
+					},
+					Operations: []admv1.OperationType{admv1.Create, admv1.Update, admv1.Delete},
 				},
-				Operations: []admv1.OperationType{admv1.Create, admv1.Update, admv1.Delete},
-			},
-		}
-
-		if vap.Spec.MatchConstraints != nil {
-			for _, rule := range vap.Spec.MatchConstraints.ResourceRules {
-				if diff := cmp.Diff(unwantedRule, rule); diff == "" {
-					t.Errorf("getValidatingAdmissionPolicy(false) contains unwanted rule %+v", unwantedRule)
-				}
 			}
-		}
-	})
 
-	t.Run("hub", func(t *testing.T) {
-		t.Parallel()
-
-		vap := getValidatingAdmissionPolicy(true)
-
-		wantedRule := admv1.NamedRuleWithOperations{
-			RuleWithOperations: admv1.RuleWithOperations{
-				Rule: admv1.Rule{
-					APIGroups:   []string{"placement.kubernetes-fleet.io"},
-					Resources:   []string{"*"},
-					APIVersions: []string{"*"},
-				},
-				Operations: []admv1.OperationType{admv1.Create, admv1.Update, admv1.Delete},
-			},
-		}
-
-		found := false
-		if vap.Spec.MatchConstraints != nil {
-			for _, rule := range vap.Spec.MatchConstraints.ResourceRules {
-				if diff := cmp.Diff(wantedRule, rule); diff == "" {
-					found = true
-					break
-				}
+			if vap.Spec.MatchConstraints == nil {
+				t.Fatal("MatchConstraints should not be nil")
 			}
-		}
-		if !found {
-			t.Errorf("getValidatingAdmissionPolicy(true) missing expected rule %+v", wantedRule)
-		}
-	})
+
+			if len(vap.Spec.MatchConstraints.ResourceRules) != 1 {
+				t.Errorf("Expected exactly 1 resource rule, got %d", len(vap.Spec.MatchConstraints.ResourceRules))
+			}
+
+			actualRule := vap.Spec.MatchConstraints.ResourceRules[0]
+			if diff := cmp.Diff(expectedRule, actualRule); diff != "" {
+				t.Errorf("Resource rule mismatch (-want +got):\n%s", diff)
+			}
+		})
+	}
 }
 
 func TestMutateValidatingAdmissionPolicy(t *testing.T) {
@@ -77,31 +63,21 @@ func TestMutateValidatingAdmissionPolicy(t *testing.T) {
 
 	tests := []struct {
 		name            string
-		isHub           bool
 		resourceVersion string
 		initialLabels   map[string]string
 	}{
 		{
-			name:            "preserves ResourceVersion and updates labels for member cluster",
-			isHub:           false,
+			name:            "preserves ResourceVersion and updates labels",
 			resourceVersion: "12345",
 			initialLabels:   map[string]string{"existing": "label"},
 		},
 		{
-			name:            "preserves ResourceVersion and updates labels for hub cluster",
-			isHub:           true,
-			resourceVersion: "67890",
-			initialLabels:   map[string]string{"old": "value"},
-		},
-		{
 			name:            "preserves empty ResourceVersion and sets labels",
-			isHub:           false,
 			resourceVersion: "",
 			initialLabels:   nil,
 		},
 		{
 			name:            "overwrites existing managed label while preserving ResourceVersion",
-			isHub:           false,
 			resourceVersion: "54321",
 			initialLabels:   map[string]string{"fleet.azure.com/managed-by": "old-value", "other": "label"},
 		},
@@ -119,7 +95,7 @@ func TestMutateValidatingAdmissionPolicy(t *testing.T) {
 				},
 			}
 
-			mutateValidatingAdmissionPolicy(vap, tt.isHub)
+			mutateValidatingAdmissionPolicy(vap)
 
 			if vap.ResourceVersion != tt.resourceVersion {
 				t.Errorf("mutateValidatingAdmissionPolicy() ResourceVersion = %v, want %v", vap.ResourceVersion, tt.resourceVersion)

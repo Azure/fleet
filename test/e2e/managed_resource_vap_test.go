@@ -18,7 +18,6 @@ package e2e
 import (
 	"errors"
 	"fmt"
-	"net/http"
 	"reflect"
 
 	. "github.com/onsi/ginkgo/v2"
@@ -26,12 +25,17 @@ import (
 	admissionregistrationv1 "k8s.io/api/admissionregistration/v1"
 	corev1 "k8s.io/api/core/v1"
 	networkingv1 "k8s.io/api/networking/v1"
+	rbacv1 "k8s.io/api/rbac/v1"
+	apiextensionsv1 "k8s.io/apiextensions-apiserver/pkg/apis/apiextensions/v1"
 	k8sErrors "k8s.io/apimachinery/pkg/api/errors"
 	"k8s.io/apimachinery/pkg/api/meta"
+	"k8s.io/apimachinery/pkg/api/resource"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
 	"k8s.io/apimachinery/pkg/types"
 	"k8s.io/apimachinery/pkg/util/version"
 	"k8s.io/client-go/discovery"
+	"sigs.k8s.io/controller-runtime/pkg/client"
 
 	placementv1beta1 "go.goms.io/fleet/apis/placement/v1beta1"
 	"go.goms.io/fleet/test/e2e/framework"
@@ -48,18 +52,121 @@ var managedByLabelMap = map[string]string{
 	managedByLabel: managedByLabelValue,
 }
 
+var _ = Describe("ValidatingAdmissionPolicy for Managed Resources", Label("managedresource"), Ordered, func() {
+	BeforeEach(func() {
+		discoveryClient := framework.GetDiscoveryClient(hubCluster)
+		clusterVersionWithVAP, err := isAPIServerVersionAtLeast(discoveryClient, k8sVersionWithVAP)
+		Expect(err).To(BeNil(), "Error checking API server version")
+		if !clusterVersionWithVAP {
+			Skip(fmt.Sprintf("Skipping VAP tests as the cluster is running Kubernetes version < %s", k8sVersionWithVAP))
+		}
+	})
+
+	Context("Baseline: Unmanaged resources", func() {
+		DescribeTable("should allow all operations on unmanaged resources",
+			func(resourceType string, clientFunc func() client.Client, suffix string) {
+				client := clientFunc() // Call the function to get the client at runtime
+
+				namespace := "default"
+				switch resourceType {
+				case "namespace", "clusterrole", "crp":
+					namespace = ""
+				}
+				resource := createResource(resourceType, "test-unmanaged-"+suffix, namespace, false)
+				testResourceOperations(client, resource, true, resourceType)
+			},
+			Entry("allowed: namespace by non-aksService user", "namespace", getUserClient, "ns-user"),
+			Entry("allowed: namespace by aksService user", "namespace", getAksServiceClient, "ns-aks"),
+			Entry("allowed: configmap by non-aksService user", "configmap", getUserClient, "cm-user"),
+			Entry("allowed: configmap by aksService user", "configmap", getAksServiceClient, "cm-aks"),
+			Entry("allowed: resourcequota by non-aksService user", "resourcequota", getUserClient, "rq-user"),
+			Entry("allowed: resourcequota by aksService user", "resourcequota", getAksServiceClient, "rq-aks"),
+			Entry("allowed: networkpolicy by non-aksService user", "networkpolicy", getUserClient, "np-user"),
+			Entry("allowed: networkpolicy by aksService user", "networkpolicy", getAksServiceClient, "np-aks"),
+			Entry("allowed: clusterrole by non-aksService user", "clusterrole", getUserClient, "cr-user"),
+			Entry("allowed: clusterrole by aksService user", "clusterrole", getAksServiceClient, "cr-aks"),
+			Entry("allowed: crp by non-aksService user", "crp", getUserClient, "crp-user"),
+			Entry("allowed: crp by aksService user", "crp", getAksServiceClient, "crp-aks"),
+		)
+	})
+
+	Context("Core resource validation", func() {
+		describeResourceContexts([]struct{ resourceType, testPrefix, namespace, contextName string }{
+			{"namespace", "test-namespace", "", "Cluster-scoped resources"},
+			{"configmap", "test-configmap", "default", "Namespaced resources"},
+			{"clusterrole", "test-clusterrole", "", "RBAC resources"},
+		})
+	})
+
+	Context("Resources for Fleet managed namespaces", func() {
+		describeResourceContexts([]struct{ resourceType, testPrefix, namespace, contextName string }{
+			{"crp", "test-crp", "", "ClusterResourcePlacement"},
+			{"namespace", "test-fleet-ns", "", "Namespace"},
+			{"resourcequota", "test-quota", "default", "ResourceQuota"},
+			{"networkpolicy", "test-netpol", "default", "NetworkPolicy"},
+		})
+	})
+
+	Context("Dynamic resource types", func() {
+		Context("Custom Resource Definitions", Ordered, func() {
+			var testCRD *apiextensionsv1.CustomResourceDefinition
+
+			BeforeAll(func() {
+				testCRD = createTestCRD()
+				authorizedClient := hubCluster.SystemMastersClient
+				Expect(authorizedClient.Create(ctx, testCRD)).To(Succeed())
+				// Wait for CRD to be established
+				Eventually(func() bool {
+					var crd apiextensionsv1.CustomResourceDefinition
+					err := authorizedClient.Get(ctx, types.NamespacedName{Name: testCRD.Name}, &crd)
+					if err != nil {
+						return false
+					}
+					for _, condition := range crd.Status.Conditions {
+						if condition.Type == apiextensionsv1.Established && condition.Status == apiextensionsv1.ConditionTrue {
+							return true
+						}
+					}
+					return false
+				}, eventuallyDuration, eventuallyInterval).Should(BeTrue())
+			})
+
+			DescribeTable("customresource operations",
+				func(userType string, clientFunc func() client.Client, shouldSucceed bool, suffix string) {
+					client := clientFunc() // Call the function to get the client at runtime
+					resourceName := fmt.Sprintf("test-cr-%s", suffix)
+					resource := createResource("customresource", resourceName, "default", true)
+					testResourceOperations(client, resource, shouldSucceed, "customresource")
+				},
+				Entry("non-aksService user", "unauthorized", getUserClient, false, "deny"),
+				Entry("aksService user", "authorized", getAksServiceClient, true, "allow"),
+			)
+
+			AfterAll(func() {
+				if testCRD != nil {
+					authorizedClient := hubCluster.SystemMastersClient
+					Expect(authorizedClient.Delete(ctx, testCRD)).To(Succeed())
+				}
+			})
+		})
+
+	})
+
+	Context("Policy infrastructure validation", func() {
+		It("should have proper VAP and binding configuration", func() {
+			checkVAPAndBindingExistence(hubCluster)
+		})
+	})
+})
+
 // Helper functions for creating managed resources
-func createUnmanagedNamespace(name string) *corev1.Namespace {
+func createManagedNamespace(name string) *corev1.Namespace {
 	return &corev1.Namespace{
 		ObjectMeta: metav1.ObjectMeta{
-			Name: name,
+			Name:   name,
+			Labels: managedByLabelMap,
 		},
 	}
-}
-func createManagedNamespace(name string) *corev1.Namespace {
-	ns := createUnmanagedNamespace(name)
-	ns.Labels = managedByLabelMap
-	return ns
 }
 
 func createManagedResourceQuota(ns, name string) *corev1.ResourceQuota {
@@ -68,6 +175,11 @@ func createManagedResourceQuota(ns, name string) *corev1.ResourceQuota {
 			Name:      name,
 			Namespace: ns,
 			Labels:    managedByLabelMap,
+		},
+		Spec: corev1.ResourceQuotaSpec{
+			Hard: corev1.ResourceList{
+				"pods": resource.MustParse("10"),
+			},
 		},
 	}
 }
@@ -78,6 +190,10 @@ func createManagedNetworkPolicy(ns, name string) *networkingv1.NetworkPolicy {
 			Name:      name,
 			Namespace: ns,
 			Labels:    managedByLabelMap,
+		},
+		Spec: networkingv1.NetworkPolicySpec{
+			PodSelector: metav1.LabelSelector{},
+			PolicyTypes: []networkingv1.PolicyType{networkingv1.PolicyTypeIngress},
 		},
 	}
 }
@@ -100,35 +216,231 @@ func createManagedCRP(name string) *placementv1beta1.ClusterResourcePlacement {
 	}
 }
 
-func createManagedResourcePlacement(name string) *placementv1beta1.ResourcePlacement {
-	return &placementv1beta1.ResourcePlacement{
+func createManagedConfigMap(ns, name string) *corev1.ConfigMap {
+	return &corev1.ConfigMap{
 		ObjectMeta: metav1.ObjectMeta{
 			Name:      name,
-			Namespace: "default",
+			Namespace: ns,
 			Labels:    managedByLabelMap,
 		},
-		Spec: placementv1beta1.PlacementSpec{
-			ResourceSelectors: []placementv1beta1.ResourceSelectorTerm{
-				{
-					Group:   "",
-					Version: "v1",
-					Kind:    "Pod",
-				},
+		Data: map[string]string{"key": "value"},
+	}
+}
+
+func createManagedClusterRole(name string) *rbacv1.ClusterRole {
+	return &rbacv1.ClusterRole{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:   name,
+			Labels: managedByLabelMap,
+		},
+		Rules: []rbacv1.PolicyRule{
+			{
+				APIGroups: []string{""},
+				Resources: []string{"pods"},
+				Verbs:     []string{"get", "list"},
 			},
 		},
 	}
 }
 
+func createTestCRD() *apiextensionsv1.CustomResourceDefinition {
+	return &apiextensionsv1.CustomResourceDefinition{
+		ObjectMeta: metav1.ObjectMeta{
+			Name: "testresources.example.com",
+		},
+		Spec: apiextensionsv1.CustomResourceDefinitionSpec{
+			Group: "example.com",
+			Versions: []apiextensionsv1.CustomResourceDefinitionVersion{
+				{
+					Name:    "v1",
+					Served:  true,
+					Storage: true,
+					Schema: &apiextensionsv1.CustomResourceValidation{
+						OpenAPIV3Schema: &apiextensionsv1.JSONSchemaProps{
+							Type: "object",
+							Properties: map[string]apiextensionsv1.JSONSchemaProps{
+								"spec": {
+									Type: "object",
+									Properties: map[string]apiextensionsv1.JSONSchemaProps{
+										"field": {Type: "string"},
+									},
+								},
+							},
+						},
+					},
+				},
+			},
+			Scope: apiextensionsv1.NamespaceScoped,
+			Names: apiextensionsv1.CustomResourceDefinitionNames{
+				Plural:   "testresources",
+				Singular: "testresource",
+				Kind:     "TestResource",
+			},
+		},
+	}
+}
+
+func createManagedCustomResource(ns, name string) *unstructured.Unstructured {
+	cr := &unstructured.Unstructured{}
+	cr.SetAPIVersion("example.com/v1")
+	cr.SetKind("TestResource")
+	cr.SetName(name)
+	cr.SetNamespace(ns)
+	cr.SetLabels(managedByLabelMap)
+	cr.Object["spec"] = map[string]interface{}{
+		"field": "test-value",
+	}
+	return cr
+}
+
 func expectDeniedByVAP(err error) {
+	Expect(k8sErrors.IsForbidden(err)).To(BeTrue(), fmt.Sprintf("Expected Forbidden error, got error %s of type %s", err, reflect.TypeOf(err)))
+
 	var statusErr *k8sErrors.StatusError
-	Expect(errors.As(err, &statusErr)).To(BeTrue(), fmt.Sprintf("Expected StatusError, got error %s of type %s", err, reflect.TypeOf(err)))
-	Expect(statusErr.ErrStatus.Code).To(Equal(int32(http.StatusForbidden)), "Expected HTTP 403 Forbidden")
-	// ValidatingAdmissionPolicy denials typically contain these patterns
-	Expect(statusErr.ErrStatus.Message).To(SatisfyAny(
-		ContainSubstring("ValidatingAdmissionPolicy"),
-		ContainSubstring("denied the request"),
-		ContainSubstring("violates policy"),
-	), "Error should indicate policy violation")
+	if errors.As(err, &statusErr) {
+		Expect(statusErr.ErrStatus.Message).To(SatisfyAny(
+			ContainSubstring("ValidatingAdmissionPolicy"),
+			ContainSubstring("denied the request"),
+			ContainSubstring("violates policy"),
+		), "Error should indicate policy violation")
+	}
+}
+
+// Generic test helper for creating resources with optional managed labels
+func createResource(resourceType string, name, namespace string, managed bool) client.Object {
+	var resource client.Object
+
+	// Always create the managed version first
+	switch resourceType {
+	case "namespace":
+		resource = createManagedNamespace(name)
+	case "configmap":
+		resource = createManagedConfigMap(namespace, name)
+	case "clusterrole":
+		resource = createManagedClusterRole(name)
+	case "resourcequota":
+		resource = createManagedResourceQuota(namespace, name)
+	case "networkpolicy":
+		resource = createManagedNetworkPolicy(namespace, name)
+	case "crp":
+		resource = createManagedCRP(name)
+	case "customresource":
+		resource = createManagedCustomResource(namespace, name)
+	default:
+		panic(fmt.Sprintf("Unsupported resource type: %s", resourceType))
+	}
+
+	if !managed {
+		resource.SetLabels(nil)
+	}
+
+	return resource
+}
+
+func describeResourceContexts(resources []struct{ resourceType, testPrefix, namespace, contextName string }) {
+	for _, r := range resources {
+		Context(r.contextName, func() {
+			DescribeTable(fmt.Sprintf("%s operations", r.resourceType),
+				func(userType string, clientFunc func() client.Client, shouldSucceed bool, suffix string) {
+					client := clientFunc() // Call the function to get the client at runtime
+					resourceName := fmt.Sprintf("%s-%s", r.testPrefix, suffix)
+					resource := createResource(r.resourceType, resourceName, r.namespace, true)
+					testResourceOperations(client, resource, shouldSucceed, r.resourceType)
+				},
+				Entry("non-aksService user", "unauthorized", getUserClient, false, "deny"),
+				Entry("aksService user", "authorized", getAksServiceClient, true, "allow"),
+			)
+		})
+	}
+}
+
+func testResourceOperations(client client.Client, resource client.Object, shouldSucceed bool, resourceType string) {
+	resourceKind := resource.GetObjectKind().GroupVersionKind().Kind
+	if resourceKind == "" {
+		// Fallback for resources that don't have GVK set
+		resourceKind = fmt.Sprintf("%T", resource)
+	}
+
+	if shouldSucceed {
+		By(fmt.Sprintf("Creating %s", resourceKind))
+		Expect(client.Create(ctx, resource)).To(Succeed())
+
+		By(fmt.Sprintf("Updating %s", resourceKind))
+		Eventually(func() error {
+			// Get latest version to avoid conflicts
+			key := types.NamespacedName{
+				Name:      resource.GetName(),
+				Namespace: resource.GetNamespace(),
+			}
+			if err := client.Get(ctx, key, resource); err != nil {
+				return err
+			}
+
+			annotations := resource.GetAnnotations()
+			if annotations == nil {
+				annotations = make(map[string]string)
+			}
+			annotations["test"] = "annotation"
+			resource.SetAnnotations(annotations)
+			return client.Update(ctx, resource)
+		}, eventuallyDuration, eventuallyInterval).Should(Succeed())
+
+		By(fmt.Sprintf("Deleting %s", resourceKind))
+		Expect(client.Delete(ctx, resource)).To(Succeed())
+	} else {
+		By(fmt.Sprintf("Expecting denial of CREATE operation on %s", resourceKind))
+		err := client.Create(ctx, resource)
+		expectDeniedByVAP(err)
+
+		// For UPDATE and DELETE tests, we need an existing resource first
+		By(fmt.Sprintf("Creating %s with authorized client for UPDATE/DELETE tests", resourceKind))
+
+		// Use a more unique name to avoid conflicts in parallel test execution
+		resourceName := fmt.Sprintf("%s-for-update-delete-%d", resource.GetName(), GinkgoRandomSeed())
+		existingResource := createResource(resourceType, resourceName, resource.GetNamespace(), true)
+		authorizedClient := hubCluster.SystemMastersClient
+		Expect(authorizedClient.Create(ctx, existingResource)).To(Succeed())
+
+		// Test UPDATE denial
+		By(fmt.Sprintf("Expecting denial of UPDATE operation on %s", resourceKind))
+		Eventually(func() error {
+			// Create a fresh object and get the latest version to have proper resourceVersion
+			updateResource := createResource(resourceType, existingResource.GetName(), existingResource.GetNamespace(), true)
+			key := types.NamespacedName{
+				Name:      existingResource.GetName(),
+				Namespace: existingResource.GetNamespace(),
+			}
+			if err := client.Get(ctx, key, updateResource); err != nil {
+				return err
+			}
+
+			annotations := updateResource.GetAnnotations()
+			if annotations == nil {
+				annotations = make(map[string]string)
+			}
+			annotations["unauthorized-update"] = "should-fail"
+			updateResource.SetAnnotations(annotations)
+
+			err := client.Update(ctx, updateResource)
+
+			// If it's a conflict error (409), retry
+			if k8sErrors.IsConflict(err) {
+				return err
+			}
+
+			// Otherwise, we expect it to be denied by VAP (403)
+			expectDeniedByVAP(err)
+			return nil
+		}, eventuallyDuration, eventuallyInterval).Should(Succeed())
+
+		By(fmt.Sprintf("Expecting denial of DELETE operation on %s", resourceKind))
+		err = client.Delete(ctx, existingResource)
+		expectDeniedByVAP(err)
+
+		// Clean up the test resource using authorized client
+		By(fmt.Sprintf("Cleaning up test %s with authorized client", resourceKind))
+		Expect(authorizedClient.Delete(ctx, existingResource)).To(Succeed())
+	}
 }
 
 func checkVAPAndBindingExistence(c *framework.Cluster) {
@@ -188,184 +500,6 @@ func checkVAPAndBindingAbsence(c *framework.Cluster) {
 		fmt.Sprintf("ValidatingAdmissionPolicyBinding %s should not exist", vapName))
 }
 
-var _ = Describe("ValidatingAdmissionPolicy for Managed Resources", Label("managedresource"), Ordered, func() {
-	Context("Version-agnostic tests", func() {
-		It("should allow operations on unmanaged namespace for non-system:masters user", func() {
-			unmanagedNS := createUnmanagedNamespace("test-unmanaged-ns")
-			By("expecting successful CREATE operation on unmanaged namespace")
-			Expect(notMasterUser.Create(ctx, unmanagedNS)).To(Succeed())
-
-			By("expecting successful UPDATE operation on unmanaged namespace")
-			Eventually(func() error {
-				var ns corev1.Namespace
-				if err := notMasterUser.Get(ctx, types.NamespacedName{Name: unmanagedNS.Name}, &ns); err != nil {
-					return err
-				}
-				ns.Annotations = map[string]string{"test": "annotation"}
-				return notMasterUser.Update(ctx, &ns)
-			}, eventuallyDuration, eventuallyInterval).Should(Succeed())
-
-			By("expecting successful DELETE operation on unmanaged namespace")
-			Expect(notMasterUser.Delete(ctx, unmanagedNS)).To(Succeed())
-		})
-	})
-
-	Context("VAP validations (requires k8s >= v1.30)", func() {
-		BeforeEach(func() {
-			discoveryClient := framework.GetDiscoveryClient(hubCluster)
-			clusterVersionWithVAP, err := isAPIServerVersionAtLeast(discoveryClient, k8sVersionWithVAP)
-			Expect(err).To(BeNil(), "Error checking API server version")
-			if !clusterVersionWithVAP {
-				Skip(fmt.Sprintf("Skipping VAP tests as the cluster is running Kubernetes version < %s", k8sVersionWithVAP))
-			}
-		})
-
-		Context("When the namespace doesn't exist", func() {
-			It("should deny CREATE operation on managed namespace for non-system:masters user", func() {
-				managedNS := createManagedNamespace("test-managed-ns-create")
-				By("expecting denial of CREATE operation on managed namespace")
-				err := notMasterUser.Create(ctx, managedNS)
-				expectDeniedByVAP(err)
-			})
-
-			It("should allow CREATE operation on managed namespace for system:masters user", func() {
-				managedNS := createManagedNamespace("test-managed-ns-masters")
-				By("expecting successful CREATE operation with system:masters user")
-				Expect(sysMastersClient.Create(ctx, managedNS)).To(Succeed())
-
-				Expect(sysMastersClient.Delete(ctx, managedNS)).To(Succeed())
-			})
-		})
-
-		Context("When the namespace exists", Ordered, func() {
-			managedNS := createManagedNamespace("test-managed-ns-update")
-			BeforeAll(func() {
-				err := sysMastersClient.Delete(ctx, managedNS)
-				if err != nil {
-					Expect(k8sErrors.IsNotFound(err)).To(BeTrue())
-				}
-				Expect(sysMastersClient.Create(ctx, managedNS)).To(Succeed())
-				var ns corev1.Namespace
-				err = sysMastersClient.Get(ctx, types.NamespacedName{Name: managedNS.Name}, &ns)
-				Expect(err).To(BeNil())
-				Expect(ns.Labels).To(HaveKeyWithValue(managedByLabel, managedByLabelValue))
-			})
-
-			It("should deny DELETE operation on managed namespace for non-system:masters user", func() {
-				By("expecting denial of DELETE operation on managed namespace")
-				err := notMasterUser.Delete(ctx, managedNS)
-				expectDeniedByVAP(err)
-			})
-
-			It("should deny UPDATE operation on managed namespace for non-system:masters user", func() {
-				var updateErr error
-				Eventually(func() error {
-					var ns corev1.Namespace
-					if err := sysMastersClient.Get(ctx, types.NamespacedName{Name: managedNS.Name}, &ns); err != nil {
-						return err
-					}
-					ns.Annotations = map[string]string{"test": "annotation"}
-					By("expecting denial of UPDATE operation on managed namespace")
-					updateErr = notMasterUser.Update(ctx, &ns)
-					if k8sErrors.IsConflict(updateErr) {
-						return updateErr
-					}
-					return nil
-				}, eventuallyDuration, eventuallyInterval).Should(Succeed())
-
-				expectDeniedByVAP(updateErr)
-			})
-
-			It("should allow UPDATE operation on managed namespace for system:masters user", func() {
-				var updateErr error
-				Eventually(func() error {
-					var ns corev1.Namespace
-					if err := sysMastersClient.Get(ctx, types.NamespacedName{Name: managedNS.Name}, &ns); err != nil {
-						return err
-					}
-					ns.Annotations = map[string]string{"test": "annotation"}
-					updateErr = sysMastersClient.Update(ctx, &ns)
-					if k8sErrors.IsConflict(updateErr) {
-						return updateErr
-					}
-					return nil
-				}, eventuallyDuration, eventuallyInterval).Should(Succeed())
-			})
-
-			Context("For other resources in scope", func() {
-				It("should deny creating managed resource quotas", func() {
-					rq := createManagedResourceQuota("default", "default")
-					err := notMasterUser.Create(ctx, rq)
-					expectDeniedByVAP(err)
-				})
-
-				It("should deny creating managed network policy", func() {
-					np := createManagedNetworkPolicy("default", "default")
-					err := notMasterUser.Create(ctx, np)
-					expectDeniedByVAP(err)
-				})
-
-				It("should deny creating managed CRP", func() {
-					crp := createManagedCRP("test-crp")
-					err := notMasterUser.Create(ctx, crp)
-					expectDeniedByVAP(err)
-				})
-
-				It("general expected behavior of other resources", func() {
-					rq := createManagedResourceQuota("default", "default")
-					np := createManagedNetworkPolicy("default", "default")
-					crp := createManagedCRP("test-crp")
-					err := sysMastersClient.Create(ctx, rq)
-					Expect(err).To(BeNil(), "system:masters user should create managed ResourceQuota")
-					err = sysMastersClient.Create(ctx, np)
-					Expect(err).To(BeNil(), "system:masters user should create managed NetworkPolicy")
-					err = sysMastersClient.Create(ctx, crp)
-					Expect(err).To(BeNil(), "system:masters user should create managed CRP")
-
-					work := createManagedResourcePlacement("test-work")
-					err = notMasterUser.Create(ctx, work)
-					expectDeniedByVAP(err)
-
-					var updateErr error
-					Eventually(func() error {
-						var urq corev1.ResourceQuota
-						if err := sysMastersClient.Get(ctx, types.NamespacedName{Name: "default", Namespace: "default"}, &urq); err != nil {
-							return err
-						}
-						urq.Annotations = map[string]string{"test": "annotation"}
-						By("expecting denial of UPDATE operation on managed resource quota")
-						updateErr = notMasterUser.Update(ctx, &urq)
-						if k8sErrors.IsConflict(updateErr) {
-							return updateErr
-						}
-						return nil
-					}, eventuallyDuration, eventuallyInterval).Should(Succeed())
-					expectDeniedByVAP(updateErr)
-
-					err = notMasterUser.Delete(ctx, np)
-					expectDeniedByVAP(err)
-					err = notMasterUser.Delete(ctx, crp)
-					expectDeniedByVAP(err)
-
-					err = sysMastersClient.Delete(ctx, rq)
-					Expect(err).To(BeNil(), "system:masters user should delete managed ResourceQuota")
-					err = sysMastersClient.Delete(ctx, np)
-					Expect(err).To(BeNil(), "system:masters user should delete managed NetworkPolicy")
-					err = sysMastersClient.Delete(ctx, crp)
-					Expect(err).To(BeNil(), "system:masters user should delete managed CRP")
-				})
-			})
-
-			AfterAll(func() {
-				err := sysMastersClient.Delete(ctx, managedNS)
-				if err != nil {
-					Expect(k8sErrors.IsNotFound(err)).To(BeTrue())
-				}
-			})
-		})
-	})
-})
-
 // isAPIServerVersionAtLeast checks if the API server version is >= targetVersion (e.g., "v1.30.0")
 func isAPIServerVersionAtLeast(disco discovery.DiscoveryInterface, targetVersion string) (bool, error) {
 	serverVersion, err := disco.ServerVersion()
@@ -374,4 +508,14 @@ func isAPIServerVersionAtLeast(disco discovery.DiscoveryInterface, targetVersion
 	}
 	server, target := version.MustParseSemantic(serverVersion.GitVersion), version.MustParseSemantic(targetVersion)
 	return server.AtLeast(target), nil
+}
+
+// Need this because Entry() evaluates parameters at definition time, not at runtime.
+// Without this, the client value sent to Entry() would always be nil.
+func getUserClient() client.Client {
+	return hubCluster.ImpersonateKubeClient
+}
+
+func getAksServiceClient() client.Client {
+	return hubCluster.SystemMastersClient
 }

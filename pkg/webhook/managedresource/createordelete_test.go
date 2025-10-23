@@ -32,13 +32,11 @@ func TestEnsureVAP(t *testing.T) {
 		t.Fatalf("Failed to add admissionregistration scheme: %v", err)
 	}
 
-	vapHub := getValidatingAdmissionPolicy(true)
-	vapMember := getValidatingAdmissionPolicy(false)
+	vap := getValidatingAdmissionPolicy()
 	binding := getValidatingAdmissionPolicyBinding()
 
 	tests := []struct {
 		name                 string
-		isHub                bool
 		existingObjs         []client.Object
 		createOrUpdateErrors map[client.ObjectKey]error
 		wantErr              bool
@@ -46,30 +44,18 @@ func TestEnsureVAP(t *testing.T) {
 		wantObjects          []client.Object
 	}{
 		{
-			name:         "hub cluster - create new objects",
-			isHub:        true,
+			name:         "create new objects",
 			existingObjs: []client.Object{},
 			wantErr:      false,
 			wantObjects: []client.Object{
-				vapHub.DeepCopy(),
+				vap.DeepCopy(),
 				binding.DeepCopy(),
 			},
 		},
 		{
-			name:         "member cluster - create new objects",
-			isHub:        false,
-			existingObjs: []client.Object{},
-			wantErr:      false,
-			wantObjects: []client.Object{
-				vapMember.DeepCopy(),
-				binding.DeepCopy(),
-			},
-		},
-		{
-			name:  "hub cluster - update existing objects",
-			isHub: true,
+			name: "update existing objects",
 			existingObjs: func() []client.Object {
-				existingVAP := vapHub.DeepCopy()
+				existingVAP := vap.DeepCopy()
 				existingBinding := binding.DeepCopy()
 
 				existingVAP.Spec.Validations = nil
@@ -79,32 +65,29 @@ func TestEnsureVAP(t *testing.T) {
 			}(),
 			wantErr: false,
 			wantObjects: []client.Object{
-				vapHub.DeepCopy(),
+				vap.DeepCopy(),
 				binding.DeepCopy(),
 			},
 		},
 		{
-			name:         "hub cluster - skip no match error",
-			isHub:        true,
+			name:         "skip no match error (cluster version < v1.30)",
 			existingObjs: []client.Object{},
 			createOrUpdateErrors: map[client.ObjectKey]error{
-				client.ObjectKeyFromObject(vapHub): &meta.NoKindMatchError{GroupKind: schema.GroupKind{Group: "admissionregistration.k8s.io", Kind: "ValidatingAdmissionPolicy"}},
+				client.ObjectKeyFromObject(vap): &meta.NoKindMatchError{GroupKind: schema.GroupKind{Group: "admissionregistration.k8s.io", Kind: "ValidatingAdmissionPolicy"}},
 			},
 			wantErr: false,
 		},
 		{
-			name:         "hub cluster - create error propagated",
-			isHub:        true,
+			name:         "vap create error",
 			existingObjs: []client.Object{},
 			createOrUpdateErrors: map[client.ObjectKey]error{
-				client.ObjectKeyFromObject(vapHub): apierrors.NewInternalError(errors.New("internal server error")),
+				client.ObjectKeyFromObject(vap): apierrors.NewInternalError(errors.New("internal server error")),
 			},
 			wantErr:        true,
 			wantErrMessage: "internal server error",
 		},
 		{
-			name:         "member cluster - binding creation error",
-			isHub:        false,
+			name:         "binding create error",
 			existingObjs: []client.Object{},
 			createOrUpdateErrors: map[client.ObjectKey]error{
 				client.ObjectKeyFromObject(binding): apierrors.NewForbidden(schema.GroupResource{Group: "admissionregistration.k8s.io", Resource: "validatingadmissionpolicybindings"}, binding.Name, errors.New("forbidden")),
@@ -173,7 +156,7 @@ func TestEnsureVAP(t *testing.T) {
 				WithInterceptorFuncs(interceptorFuncs).
 				Build()
 
-			err := EnsureVAP(context.Background(), fakeClient, tt.isHub)
+			err := EnsureVAP(context.Background(), fakeClient)
 
 			if tt.wantErr {
 				if err == nil {
@@ -219,74 +202,57 @@ func TestEnsureNoVAP(t *testing.T) {
 		t.Fatalf("Failed to add admissionregistration scheme: %v", err)
 	}
 
-	vapHub := getValidatingAdmissionPolicy(true)
-	vapMember := getValidatingAdmissionPolicy(false)
+	vap := getValidatingAdmissionPolicy()
 	binding := getValidatingAdmissionPolicyBinding()
 
 	tests := []struct {
 		name           string
-		isHub          bool
 		existingObjs   []client.Object
 		deleteErrors   map[client.ObjectKey]error
 		wantErr        bool
 		wantErrMessage string
 	}{
 		{
-			name:         "hub cluster - no existing objects",
-			isHub:        true,
+			name:         "no existing objects",
 			existingObjs: []client.Object{},
 			wantErr:      false,
 		},
 		{
-			name:  "hub cluster - existing objects deleted successfully",
-			isHub: true,
+			name: "existing objects deleted successfully",
 			existingObjs: []client.Object{
-				vapHub.DeepCopy(),
+				vap.DeepCopy(),
 				binding.DeepCopy(),
 			},
 			wantErr: false,
 		},
 		{
-			name:  "member cluster - existing objects deleted successfully",
-			isHub: false,
-			existingObjs: []client.Object{
-				vapMember.DeepCopy(),
-				binding.DeepCopy(),
-			},
-			wantErr: false,
-		},
-		{
-			name:         "hub cluster - not found errors ignored",
-			isHub:        true,
+			name:         "not found errors ignored",
 			existingObjs: []client.Object{},
 			deleteErrors: map[client.ObjectKey]error{
-				client.ObjectKeyFromObject(vapHub):  apierrors.NewNotFound(schema.GroupResource{Group: "admissionregistration.k8s.io", Resource: "validatingadmissionpolicies"}, vapHub.Name),
+				client.ObjectKeyFromObject(vap):     apierrors.NewNotFound(schema.GroupResource{Group: "admissionregistration.k8s.io", Resource: "validatingadmissionpolicies"}, vap.Name),
 				client.ObjectKeyFromObject(binding): apierrors.NewNotFound(schema.GroupResource{Group: "admissionregistration.k8s.io", Resource: "validatingadmissionpolicybindings"}, binding.Name),
 			},
 			wantErr: false,
 		},
 		{
-			name:         "hub cluster - no match error handled gracefully",
-			isHub:        true,
+			name:         "no match error handled gracefully",
 			existingObjs: []client.Object{},
 			deleteErrors: map[client.ObjectKey]error{
-				client.ObjectKeyFromObject(vapHub): &meta.NoKindMatchError{GroupKind: schema.GroupKind{Group: "admissionregistration.k8s.io", Kind: "ValidatingAdmissionPolicy"}},
+				client.ObjectKeyFromObject(vap): &meta.NoKindMatchError{GroupKind: schema.GroupKind{Group: "admissionregistration.k8s.io", Kind: "ValidatingAdmissionPolicy"}},
 			},
 			wantErr: false,
 		},
 		{
-			name:         "hub cluster - delete error",
-			isHub:        true,
+			name:         "delete error on vap",
 			existingObjs: []client.Object{},
 			deleteErrors: map[client.ObjectKey]error{
-				client.ObjectKeyFromObject(vapHub): apierrors.NewInternalError(errors.New("internal server error")),
+				client.ObjectKeyFromObject(vap): apierrors.NewInternalError(errors.New("internal server error")),
 			},
 			wantErr:        true,
 			wantErrMessage: "internal server error",
 		},
 		{
-			name:         "member cluster - delete error on binding propagated",
-			isHub:        false,
+			name:         "delete error on vap binding",
 			existingObjs: []client.Object{},
 			deleteErrors: map[client.ObjectKey]error{
 				client.ObjectKeyFromObject(binding): apierrors.NewForbidden(schema.GroupResource{Group: "admissionregistration.k8s.io", Resource: "validatingadmissionpolicybindings"}, binding.Name, errors.New("forbidden")),
@@ -316,7 +282,7 @@ func TestEnsureNoVAP(t *testing.T) {
 				WithInterceptorFuncs(interceptorFuncs).
 				Build()
 
-			err := EnsureNoVAP(context.Background(), fakeClient, tt.isHub)
+			err := EnsureNoVAP(context.Background(), fakeClient)
 
 			if tt.wantErr {
 				if err == nil {
@@ -334,7 +300,7 @@ func TestEnsureNoVAP(t *testing.T) {
 			}
 
 			// Verify objects are deleted (or don't exist)
-			expectedObjs := []client.Object{getValidatingAdmissionPolicy(tt.isHub), getValidatingAdmissionPolicyBinding()}
+			expectedObjs := []client.Object{getValidatingAdmissionPolicy(), getValidatingAdmissionPolicyBinding()}
 			for _, obj := range expectedObjs {
 				err := fakeClient.Get(context.Background(), client.ObjectKeyFromObject(obj), obj)
 				if !apierrors.IsNotFound(err) {
@@ -349,16 +315,10 @@ func TestGetVAPWithMutator(t *testing.T) {
 	t.Parallel()
 
 	tests := []struct {
-		name  string
-		isHub bool
+		name string
 	}{
 		{
-			name:  "hub cluster VAP",
-			isHub: true,
-		},
-		{
-			name:  "member cluster VAP",
-			isHub: false,
+			name: "VAP with mutator",
 		},
 	}
 
@@ -366,19 +326,21 @@ func TestGetVAPWithMutator(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			t.Parallel()
 
-			vap, mutateFunc := getVAPWithMutator(tt.isHub)
+			vap, mutateFunc := getVAPWithMutator()
 
 			// Verify initial state
 			if vap == nil {
 				t.Fatal("getVAPWithMutator() returned nil VAP")
+				return
 			}
 			if mutateFunc == nil {
 				t.Fatal("getVAPWithMutator() returned nil mutate function")
+				return
 			}
 
 			// Verify mutate function works
 			gotVAP := vap.DeepCopy()
-			wantVAP := getValidatingAdmissionPolicy(tt.isHub)
+			wantVAP := getValidatingAdmissionPolicy()
 			ignoreOpts := cmp.Options{
 				cmpopts.IgnoreFields(metav1.ObjectMeta{}, "ResourceVersion", "ManagedFields", "Generation"),
 			}

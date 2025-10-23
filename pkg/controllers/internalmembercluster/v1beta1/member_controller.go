@@ -214,7 +214,7 @@ func (r *Reconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.Resu
 
 	switch imc.Spec.State {
 	case clusterv1beta1.ClusterStateJoin:
-		if err := managedresource.EnsureVAP(ctx, r.memberClient, false); err != nil {
+		if err := managedresource.EnsureVAP(ctx, r.memberClient); err != nil {
 			return ctrl.Result{}, err
 		}
 		klog.V(2).InfoS("Successfully installed managed resource validating admission policy")
@@ -247,7 +247,7 @@ func (r *Reconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.Resu
 		return ctrl.Result{RequeueAfter: time.Millisecond *
 			(time.Duration(hbinterval) + time.Duration(utilrand.Int63nRange(0, jitterRange)-jitterRange/2))}, nil
 	case clusterv1beta1.ClusterStateLeave:
-		if err := managedresource.EnsureNoVAP(ctx, r.memberClient, false); err != nil {
+		if err := managedresource.EnsureNoVAP(ctx, r.memberClient); err != nil {
 			return ctrl.Result{}, err
 		}
 		klog.V(2).InfoS("Successfully uninstalled managed resource validating admission policy")
