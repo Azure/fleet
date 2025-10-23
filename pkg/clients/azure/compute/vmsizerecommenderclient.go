@@ -19,6 +19,7 @@ package compute
 import (
 	"bytes"
 	"context"
+	"errors"
 	"fmt"
 	"io"
 	"net/http"
@@ -29,6 +30,7 @@ import (
 
 	computev1 "go.goms.io/fleet/apis/protos/azure/compute/v1"
 	"go.goms.io/fleet/pkg/clients/consts"
+	"go.goms.io/fleet/pkg/utils/controller"
 )
 
 const (
@@ -82,16 +84,16 @@ func (c *attributeBasedVMSizeRecommenderClient) GenerateAttributeBasedRecommenda
 	req *computev1.GenerateAttributeBasedRecommendationsRequest,
 ) (*computev1.GenerateAttributeBasedRecommendationsResponse, error) {
 	if req == nil {
-		return nil, fmt.Errorf("request cannot be nil")
+		return nil, controller.NewUnexpectedBehaviorError(errors.New("request cannot be nil"))
 	}
 	if req.SubscriptionId == "" {
-		return nil, fmt.Errorf("subscription ID is required")
+		return nil, controller.NewUnexpectedBehaviorError(errors.New("subscription ID is required"))
 	}
 	if req.Location == "" {
-		return nil, fmt.Errorf("location is required")
+		return nil, controller.NewUnexpectedBehaviorError(errors.New("location is required"))
 	}
 	if req.GetRegularPriorityProfile() == nil && req.GetSpotPriorityProfile() == nil {
-		return nil, fmt.Errorf("either regular priority profile or spot priority profile must be provided")
+		return nil, controller.NewUnexpectedBehaviorError(errors.New("either regular priority profile or spot priority profile must be provided"))
 	}
 
 	// Build the URL
