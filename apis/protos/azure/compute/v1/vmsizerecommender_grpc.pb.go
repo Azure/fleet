@@ -17,7 +17,7 @@
 // versions:
 // - protoc-gen-go-grpc v1.5.1
 // - protoc             v5.28.0
-// source: pkg/protos/azure/compute/v1/vmsizerecommender.proto
+// source: apis/protos/azure/compute/v1/vmsizerecommender.proto
 
 package v1
 
@@ -139,5 +139,5 @@ var AttributeBasedVMSizeRecommenderService_ServiceDesc = grpc.ServiceDesc{
 		},
 	},
 	Streams:  []grpc.StreamDesc{},
-	Metadata: "pkg/protos/azure/compute/v1/vmsizerecommender.proto",
+	Metadata: "apis/protos/azure/compute/v1/vmsizerecommender.proto",
 }

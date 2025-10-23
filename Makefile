@@ -323,8 +323,8 @@ manifests: $(CONTROLLER_GEN)
 protos: $(PROTOC_GEN_GO) $(PROTOC_GEN_GO_GRPC) $(PROTOC_GEN_GRPC_GATEWAY) $(PROTOC)
 	PATH=$$PATH:$(TOOLS_BIN_DIR) $(PROTOC) --go_out=. --go_opt=paths=source_relative \
 	          --go-grpc_out=. --go-grpc_opt=paths=source_relative \
-			  --grpc-gateway_out=grpc_api_configuration=pkg/protos/azure/compute/v1/vmsizerecommender_http.yaml,logtostderr=true:. --grpc-gateway_opt=paths=source_relative,generate_unbound_methods=true \
-			  pkg/protos/azure/compute/v1/vmsizerecommender.proto
+			  --grpc-gateway_out=grpc_api_configuration=apis/protos/azure/compute/v1/vmsizerecommender_http.yaml,logtostderr=true:. --grpc-gateway_opt=paths=source_relative,generate_unbound_methods=true \
+			  apis/protos/azure/compute/v1/vmsizerecommender.proto
 
 # Generate code
 generate: $(CONTROLLER_GEN) protos

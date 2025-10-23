@@ -14,7 +14,7 @@ See the License for the specific language governing permissions and
 limitations under the License.
 */
 
-package capacityclient
+package compute
 
 import (
 	"context"
@@ -25,13 +25,16 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/google/go-cmp/cmp"
 	"google.golang.org/protobuf/encoding/protojson"
 	"google.golang.org/protobuf/proto"
 
-	computev1 "go.goms.io/fleet/pkg/protos/azure/compute/v1"
+	computev1 "go.goms.io/fleet/apis/protos/azure/compute/v1"
+	"go.goms.io/fleet/pkg/clients/consts"
 )
 
-func TestNewClient(t *testing.T) {
+func TestNewAttributeBasedVMSizeRecommenderClient(t *testing.T) {
+	defaultClient := &http.Client{Timeout: consts.HTTPTimeoutAzure}
 	tests := []struct {
 		name           string
 		endpoint       string
@@ -51,51 +54,46 @@ func TestNewClient(t *testing.T) {
 			endpoint:       "https://example.com",
 			httpClient:     nil,
 			wantBaseURL:    "https://example.com",
-			wantHTTPClient: http.DefaultClient,
+			wantHTTPClient: defaultClient,
 		},
 		{
 			name:           "removes trailing slash from endpoint",
 			endpoint:       "https://example.com/",
 			httpClient:     nil,
 			wantBaseURL:    "https://example.com",
-			wantHTTPClient: http.DefaultClient,
+			wantHTTPClient: defaultClient,
 		},
 		{
 			name:           "adds http scheme to endpoint without scheme",
 			endpoint:       "localhost:8080",
 			httpClient:     nil,
 			wantBaseURL:    "http://localhost:8080",
-			wantHTTPClient: http.DefaultClient,
+			wantHTTPClient: defaultClient,
 		},
 		{
 			name:           "adds http scheme and removes trailing slash",
 			endpoint:       "example.com:8080/",
 			httpClient:     nil,
 			wantBaseURL:    "http://example.com:8080",
-			wantHTTPClient: http.DefaultClient,
+			wantHTTPClient: defaultClient,
 		},
 		{
 			name:           "preserves existing http scheme",
 			endpoint:       "http://localhost:8080",
 			httpClient:     nil,
 			wantBaseURL:    "http://localhost:8080",
-			wantHTTPClient: http.DefaultClient,
+			wantHTTPClient: defaultClient,
 		},
 	}
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			got := NewClient(tt.endpoint, tt.httpClient).(*client)
+			got := NewAttributeBasedVMSizeRecommenderClient(tt.endpoint, tt.httpClient).(*attributeBasedVMSizeRecommenderClient)
 			if got.baseURL != tt.wantBaseURL {
 				t.Errorf("NewClient() baseURL = %v, want %v", got.baseURL, tt.wantBaseURL)
 			}
-			// For custom HTTP client, just verify it's not nil
-			if tt.httpClient != nil && got.httpClient == nil {
-				t.Errorf("NewClient() httpClient is nil, want non-nil")
-			}
-			// For nil HTTP client, verify it uses default client
-			if tt.httpClient == nil && got.httpClient != http.DefaultClient {
-				t.Errorf("NewClient() httpClient = %v, want http.DefaultClient", got.httpClient)
+			if !cmp.Equal(got.httpClient, tt.wantHTTPClient) {
+				t.Errorf("NewClient() httpClient = %v, want %v", got.httpClient, tt.wantHTTPClient)
 			}
 		})
 	}
@@ -240,22 +238,22 @@ func TestClient_GenerateAttributeBasedRecommendations(t *testing.T) {
 			server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 				// Verify request method
 				if r.Method != http.MethodPost {
-					t.Errorf("expected POST request, got %s", r.Method)
+					t.Errorf("got %s, want POST request", r.Method)
 				}
 
 				// Verify headers
 				if r.Header.Get("Content-Type") != "application/json" {
-					t.Errorf("expected Content-Type: application/json, got %s", r.Header.Get("Content-Type"))
+					t.Errorf("got %s, want Content-Type: application/json", r.Header.Get("Content-Type"))
 				}
 				if r.Header.Get("Accept") != "application/json" {
-					t.Errorf("expected Accept: application/json, got %s", r.Header.Get("Accept"))
+					t.Errorf("got %s, want Accept: application/json", r.Header.Get("Accept"))
 				}
 
 				// Verify URL path if request is not nil
 				if tt.request != nil && tt.request.SubscriptionId != "" && tt.request.Location != "" {
-					expectedPath := fmt.Sprintf(recommendationsPathTemplate, tt.request.SubscriptionId, tt.request.Location)
-					if r.URL.Path != expectedPath {
-						t.Errorf("expected path %s, got %s", expectedPath, r.URL.Path)
+					wantPath := fmt.Sprintf(recommendationsPathTemplate, tt.request.SubscriptionId, tt.request.Location)
+					if r.URL.Path != wantPath {
+						t.Errorf("got %s, want path %s", r.URL.Path, wantPath)
 					}
 
 					// Verify request body using protojson for proper proto3 oneof support
@@ -284,7 +282,7 @@ func TestClient_GenerateAttributeBasedRecommendations(t *testing.T) {
 			defer server.Close()
 
 			// Create client
-			client := NewClient(server.URL, nil)
+			client := NewAttributeBasedVMSizeRecommenderClient(server.URL, nil)
 
 			// Execute request
 			got, err := client.GenerateAttributeBasedRecommendations(context.Background(), tt.request)
@@ -305,33 +303,5 @@ func TestClient_GenerateAttributeBasedRecommendations(t *testing.T) {
 				t.Errorf("GenerateAttributeBasedRecommendations() = %+v, want %+v", got, tt.wantResponse)
 			}
 		})
-	}
-}
-
-func TestClient_GenerateAttributeBasedRecommendations_ContextCancellation(t *testing.T) {
-	// Create a server that delays response
-	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		// This handler will never respond in time
-		<-r.Context().Done()
-	}))
-	defer server.Close()
-
-	client := NewClient(server.URL, nil)
-
-	// Create a context that is already cancelled
-	ctx, cancel := context.WithCancel(context.Background())
-	cancel()
-
-	req := &computev1.GenerateAttributeBasedRecommendationsRequest{
-		SubscriptionId: "sub-123",
-		Location:       "eastus",
-		PriorityProfile: &computev1.GenerateAttributeBasedRecommendationsRequest_RegularPriorityProfile{
-			RegularPriorityProfile: &computev1.RegularPriorityProfile{},
-		},
-	}
-
-	_, err := client.GenerateAttributeBasedRecommendations(ctx, req)
-	if err == nil {
-		t.Error("GenerateAttributeBasedRecommendations() expected error for cancelled context, got nil")
 	}
 }

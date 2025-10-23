@@ -17,7 +17,7 @@
 // versions:
 // 	protoc-gen-go v1.36.10
 // 	protoc        v5.28.0
-// source: pkg/protos/azure/compute/v1/vmsizerecommender.proto
+// source: apis/protos/azure/compute/v1/vmsizerecommender.proto
 
 package v1
 
@@ -67,11 +67,11 @@ func (x CapacityUnitType) String() string {
 }
 
 func (CapacityUnitType) Descriptor() protoreflect.EnumDescriptor {
-	return file_pkg_protos_azure_compute_v1_vmsizerecommender_proto_enumTypes[0].Descriptor()
+	return file_apis_protos_azure_compute_v1_vmsizerecommender_proto_enumTypes[0].Descriptor()
 }
 
 func (CapacityUnitType) Type() protoreflect.EnumType {
-	return &file_pkg_protos_azure_compute_v1_vmsizerecommender_proto_enumTypes[0]
+	return &file_apis_protos_azure_compute_v1_vmsizerecommender_proto_enumTypes[0]
 }
 
 func (x CapacityUnitType) Number() protoreflect.EnumNumber {
@@ -80,7 +80,7 @@ func (x CapacityUnitType) Number() protoreflect.EnumNumber {
 
 // Deprecated: Use CapacityUnitType.Descriptor instead.
 func (CapacityUnitType) EnumDescriptor() ([]byte, []int) {
-	return file_pkg_protos_azure_compute_v1_vmsizerecommender_proto_rawDescGZIP(), []int{0}
+	return file_apis_protos_azure_compute_v1_vmsizerecommender_proto_rawDescGZIP(), []int{0}
 }
 
 // Restrictions filter
@@ -123,11 +123,11 @@ func (x RecommendationProperties_RestrictionsFilter) String() string {
 }
 
 func (RecommendationProperties_RestrictionsFilter) Descriptor() protoreflect.EnumDescriptor {
-	return file_pkg_protos_azure_compute_v1_vmsizerecommender_proto_enumTypes[1].Descriptor()
+	return file_apis_protos_azure_compute_v1_vmsizerecommender_proto_enumTypes[1].Descriptor()
 }
 
 func (RecommendationProperties_RestrictionsFilter) Type() protoreflect.EnumType {
-	return &file_pkg_protos_azure_compute_v1_vmsizerecommender_proto_enumTypes[1]
+	return &file_apis_protos_azure_compute_v1_vmsizerecommender_proto_enumTypes[1]
 }
 
 func (x RecommendationProperties_RestrictionsFilter) Number() protoreflect.EnumNumber {
@@ -136,7 +136,7 @@ func (x RecommendationProperties_RestrictionsFilter) Number() protoreflect.EnumN
 
 // Deprecated: Use RecommendationProperties_RestrictionsFilter.Descriptor instead.
 func (RecommendationProperties_RestrictionsFilter) EnumDescriptor() ([]byte, []int) {
-	return file_pkg_protos_azure_compute_v1_vmsizerecommender_proto_rawDescGZIP(), []int{4, 0}
+	return file_apis_protos_azure_compute_v1_vmsizerecommender_proto_rawDescGZIP(), []int{4, 0}
 }
 
 // VM attributes specification
@@ -151,7 +151,7 @@ type VMAttributes struct {
 
 func (x *VMAttributes) Reset() {
 	*x = VMAttributes{}
-	mi := &file_pkg_protos_azure_compute_v1_vmsizerecommender_proto_msgTypes[0]
+	mi := &file_apis_protos_azure_compute_v1_vmsizerecommender_proto_msgTypes[0]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -163,7 +163,7 @@ func (x *VMAttributes) String() string {
 func (*VMAttributes) ProtoMessage() {}
 
 func (x *VMAttributes) ProtoReflect() protoreflect.Message {
-	mi := &file_pkg_protos_azure_compute_v1_vmsizerecommender_proto_msgTypes[0]
+	mi := &file_apis_protos_azure_compute_v1_vmsizerecommender_proto_msgTypes[0]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -176,7 +176,7 @@ func (x *VMAttributes) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use VMAttributes.ProtoReflect.Descriptor instead.
 func (*VMAttributes) Descriptor() ([]byte, []int) {
-	return file_pkg_protos_azure_compute_v1_vmsizerecommender_proto_rawDescGZIP(), []int{0}
+	return file_apis_protos_azure_compute_v1_vmsizerecommender_proto_rawDescGZIP(), []int{0}
 }
 
 func (x *VMAttributes) GetAllowedVmSizes() []string {
@@ -198,7 +198,7 @@ type ResourceProperties struct {
 
 func (x *ResourceProperties) Reset() {
 	*x = ResourceProperties{}
-	mi := &file_pkg_protos_azure_compute_v1_vmsizerecommender_proto_msgTypes[1]
+	mi := &file_apis_protos_azure_compute_v1_vmsizerecommender_proto_msgTypes[1]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -210,7 +210,7 @@ func (x *ResourceProperties) String() string {
 func (*ResourceProperties) ProtoMessage() {}
 
 func (x *ResourceProperties) ProtoReflect() protoreflect.Message {
-	mi := &file_pkg_protos_azure_compute_v1_vmsizerecommender_proto_msgTypes[1]
+	mi := &file_apis_protos_azure_compute_v1_vmsizerecommender_proto_msgTypes[1]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -223,7 +223,7 @@ func (x *ResourceProperties) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ResourceProperties.ProtoReflect.Descriptor instead.
 func (*ResourceProperties) Descriptor() ([]byte, []int) {
-	return file_pkg_protos_azure_compute_v1_vmsizerecommender_proto_rawDescGZIP(), []int{1}
+	return file_apis_protos_azure_compute_v1_vmsizerecommender_proto_rawDescGZIP(), []int{1}
 }
 
 func (x *ResourceProperties) GetVmAttributes() *VMAttributes {
@@ -247,7 +247,7 @@ type RegularPriorityProfile struct {
 
 func (x *RegularPriorityProfile) Reset() {
 	*x = RegularPriorityProfile{}
-	mi := &file_pkg_protos_azure_compute_v1_vmsizerecommender_proto_msgTypes[2]
+	mi := &file_apis_protos_azure_compute_v1_vmsizerecommender_proto_msgTypes[2]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -259,7 +259,7 @@ func (x *RegularPriorityProfile) String() string {
 func (*RegularPriorityProfile) ProtoMessage() {}
 
 func (x *RegularPriorityProfile) ProtoReflect() protoreflect.Message {
-	mi := &file_pkg_protos_azure_compute_v1_vmsizerecommender_proto_msgTypes[2]
+	mi := &file_apis_protos_azure_compute_v1_vmsizerecommender_proto_msgTypes[2]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -272,7 +272,7 @@ func (x *RegularPriorityProfile) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use RegularPriorityProfile.ProtoReflect.Descriptor instead.
 func (*RegularPriorityProfile) Descriptor() ([]byte, []int) {
-	return file_pkg_protos_azure_compute_v1_vmsizerecommender_proto_rawDescGZIP(), []int{2}
+	return file_apis_protos_azure_compute_v1_vmsizerecommender_proto_rawDescGZIP(), []int{2}
 }
 
 func (x *RegularPriorityProfile) GetCapacityUnitType() CapacityUnitType {
@@ -307,7 +307,7 @@ type SpotPriorityProfile struct {
 
 func (x *SpotPriorityProfile) Reset() {
 	*x = SpotPriorityProfile{}
-	mi := &file_pkg_protos_azure_compute_v1_vmsizerecommender_proto_msgTypes[3]
+	mi := &file_apis_protos_azure_compute_v1_vmsizerecommender_proto_msgTypes[3]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -319,7 +319,7 @@ func (x *SpotPriorityProfile) String() string {
 func (*SpotPriorityProfile) ProtoMessage() {}
 
 func (x *SpotPriorityProfile) ProtoReflect() protoreflect.Message {
-	mi := &file_pkg_protos_azure_compute_v1_vmsizerecommender_proto_msgTypes[3]
+	mi := &file_apis_protos_azure_compute_v1_vmsizerecommender_proto_msgTypes[3]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -332,7 +332,7 @@ func (x *SpotPriorityProfile) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use SpotPriorityProfile.ProtoReflect.Descriptor instead.
 func (*SpotPriorityProfile) Descriptor() ([]byte, []int) {
-	return file_pkg_protos_azure_compute_v1_vmsizerecommender_proto_rawDescGZIP(), []int{3}
+	return file_apis_protos_azure_compute_v1_vmsizerecommender_proto_rawDescGZIP(), []int{3}
 }
 
 func (x *SpotPriorityProfile) GetCapacityUnitType() CapacityUnitType {
@@ -366,7 +366,7 @@ type RecommendationProperties struct {
 
 func (x *RecommendationProperties) Reset() {
 	*x = RecommendationProperties{}
-	mi := &file_pkg_protos_azure_compute_v1_vmsizerecommender_proto_msgTypes[4]
+	mi := &file_apis_protos_azure_compute_v1_vmsizerecommender_proto_msgTypes[4]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -378,7 +378,7 @@ func (x *RecommendationProperties) String() string {
 func (*RecommendationProperties) ProtoMessage() {}
 
 func (x *RecommendationProperties) ProtoReflect() protoreflect.Message {
-	mi := &file_pkg_protos_azure_compute_v1_vmsizerecommender_proto_msgTypes[4]
+	mi := &file_apis_protos_azure_compute_v1_vmsizerecommender_proto_msgTypes[4]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -391,7 +391,7 @@ func (x *RecommendationProperties) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use RecommendationProperties.ProtoReflect.Descriptor instead.
 func (*RecommendationProperties) Descriptor() ([]byte, []int) {
-	return file_pkg_protos_azure_compute_v1_vmsizerecommender_proto_rawDescGZIP(), []int{4}
+	return file_apis_protos_azure_compute_v1_vmsizerecommender_proto_rawDescGZIP(), []int{4}
 }
 
 func (x *RecommendationProperties) GetRestrictionsFilter() RecommendationProperties_RestrictionsFilter {
@@ -417,7 +417,7 @@ type RecommendedVMSizeProperties struct {
 
 func (x *RecommendedVMSizeProperties) Reset() {
 	*x = RecommendedVMSizeProperties{}
-	mi := &file_pkg_protos_azure_compute_v1_vmsizerecommender_proto_msgTypes[5]
+	mi := &file_apis_protos_azure_compute_v1_vmsizerecommender_proto_msgTypes[5]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -429,7 +429,7 @@ func (x *RecommendedVMSizeProperties) String() string {
 func (*RecommendedVMSizeProperties) ProtoMessage() {}
 
 func (x *RecommendedVMSizeProperties) ProtoReflect() protoreflect.Message {
-	mi := &file_pkg_protos_azure_compute_v1_vmsizerecommender_proto_msgTypes[5]
+	mi := &file_apis_protos_azure_compute_v1_vmsizerecommender_proto_msgTypes[5]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -442,7 +442,7 @@ func (x *RecommendedVMSizeProperties) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use RecommendedVMSizeProperties.ProtoReflect.Descriptor instead.
 func (*RecommendedVMSizeProperties) Descriptor() ([]byte, []int) {
-	return file_pkg_protos_azure_compute_v1_vmsizerecommender_proto_rawDescGZIP(), []int{5}
+	return file_apis_protos_azure_compute_v1_vmsizerecommender_proto_rawDescGZIP(), []int{5}
 }
 
 func (x *RecommendedVMSizeProperties) GetFamily() string {
@@ -479,7 +479,7 @@ type RecommendedVMSizes struct {
 
 func (x *RecommendedVMSizes) Reset() {
 	*x = RecommendedVMSizes{}
-	mi := &file_pkg_protos_azure_compute_v1_vmsizerecommender_proto_msgTypes[6]
+	mi := &file_apis_protos_azure_compute_v1_vmsizerecommender_proto_msgTypes[6]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -491,7 +491,7 @@ func (x *RecommendedVMSizes) String() string {
 func (*RecommendedVMSizes) ProtoMessage() {}
 
 func (x *RecommendedVMSizes) ProtoReflect() protoreflect.Message {
-	mi := &file_pkg_protos_azure_compute_v1_vmsizerecommender_proto_msgTypes[6]
+	mi := &file_apis_protos_azure_compute_v1_vmsizerecommender_proto_msgTypes[6]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -504,7 +504,7 @@ func (x *RecommendedVMSizes) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use RecommendedVMSizes.ProtoReflect.Descriptor instead.
 func (*RecommendedVMSizes) Descriptor() ([]byte, []int) {
-	return file_pkg_protos_azure_compute_v1_vmsizerecommender_proto_rawDescGZIP(), []int{6}
+	return file_apis_protos_azure_compute_v1_vmsizerecommender_proto_rawDescGZIP(), []int{6}
 }
 
 func (x *RecommendedVMSizes) GetRegularVmSizes() []*RecommendedVMSizeProperties {
@@ -547,7 +547,7 @@ type GenerateAttributeBasedRecommendationsRequest struct {
 
 func (x *GenerateAttributeBasedRecommendationsRequest) Reset() {
 	*x = GenerateAttributeBasedRecommendationsRequest{}
-	mi := &file_pkg_protos_azure_compute_v1_vmsizerecommender_proto_msgTypes[7]
+	mi := &file_apis_protos_azure_compute_v1_vmsizerecommender_proto_msgTypes[7]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -559,7 +559,7 @@ func (x *GenerateAttributeBasedRecommendationsRequest) String() string {
 func (*GenerateAttributeBasedRecommendationsRequest) ProtoMessage() {}
 
 func (x *GenerateAttributeBasedRecommendationsRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_pkg_protos_azure_compute_v1_vmsizerecommender_proto_msgTypes[7]
+	mi := &file_apis_protos_azure_compute_v1_vmsizerecommender_proto_msgTypes[7]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -572,7 +572,7 @@ func (x *GenerateAttributeBasedRecommendationsRequest) ProtoReflect() protorefle
 
 // Deprecated: Use GenerateAttributeBasedRecommendationsRequest.ProtoReflect.Descriptor instead.
 func (*GenerateAttributeBasedRecommendationsRequest) Descriptor() ([]byte, []int) {
-	return file_pkg_protos_azure_compute_v1_vmsizerecommender_proto_rawDescGZIP(), []int{7}
+	return file_apis_protos_azure_compute_v1_vmsizerecommender_proto_rawDescGZIP(), []int{7}
 }
 
 func (x *GenerateAttributeBasedRecommendationsRequest) GetSubscriptionId() string {
@@ -658,7 +658,7 @@ type GenerateAttributeBasedRecommendationsResponse struct {
 
 func (x *GenerateAttributeBasedRecommendationsResponse) Reset() {
 	*x = GenerateAttributeBasedRecommendationsResponse{}
-	mi := &file_pkg_protos_azure_compute_v1_vmsizerecommender_proto_msgTypes[8]
+	mi := &file_apis_protos_azure_compute_v1_vmsizerecommender_proto_msgTypes[8]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -670,7 +670,7 @@ func (x *GenerateAttributeBasedRecommendationsResponse) String() string {
 func (*GenerateAttributeBasedRecommendationsResponse) ProtoMessage() {}
 
 func (x *GenerateAttributeBasedRecommendationsResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_pkg_protos_azure_compute_v1_vmsizerecommender_proto_msgTypes[8]
+	mi := &file_apis_protos_azure_compute_v1_vmsizerecommender_proto_msgTypes[8]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -683,7 +683,7 @@ func (x *GenerateAttributeBasedRecommendationsResponse) ProtoReflect() protorefl
 
 // Deprecated: Use GenerateAttributeBasedRecommendationsResponse.ProtoReflect.Descriptor instead.
 func (*GenerateAttributeBasedRecommendationsResponse) Descriptor() ([]byte, []int) {
-	return file_pkg_protos_azure_compute_v1_vmsizerecommender_proto_rawDescGZIP(), []int{8}
+	return file_apis_protos_azure_compute_v1_vmsizerecommender_proto_rawDescGZIP(), []int{8}
 }
 
 func (x *GenerateAttributeBasedRecommendationsResponse) GetRecommendedVmSizes() *RecommendedVMSizes {
@@ -693,11 +693,11 @@ func (x *GenerateAttributeBasedRecommendationsResponse) GetRecommendedVmSizes() 
 	return nil
 }
 
-var File_pkg_protos_azure_compute_v1_vmsizerecommender_proto protoreflect.FileDescriptor
+var File_apis_protos_azure_compute_v1_vmsizerecommender_proto protoreflect.FileDescriptor
 
-const file_pkg_protos_azure_compute_v1_vmsizerecommender_proto_rawDesc = "" +
+const file_apis_protos_azure_compute_v1_vmsizerecommender_proto_rawDesc = "" +
 	"\n" +
-	"3pkg/protos/azure/compute/v1/vmsizerecommender.proto\x12\x10azure.compute.v1\"8\n" +
+	"4apis/protos/azure/compute/v1/vmsizerecommender.proto\x12\x10azure.compute.v1\"8\n" +
 	"\fVMAttributes\x12(\n" +
 	"\x10allowed_vm_sizes\x18\x01 \x03(\tR\x0eallowedVmSizes\"Y\n" +
 	"\x12ResourceProperties\x12C\n" +
@@ -741,20 +741,20 @@ const file_pkg_protos_azure_compute_v1_vmsizerecommender_proto_rawDesc = "" +
 	"%GenerateAttributeBasedRecommendations\x12>.azure.compute.v1.GenerateAttributeBasedRecommendationsRequest\x1a?.azure.compute.v1.GenerateAttributeBasedRecommendationsResponseB.Z,go.goms.io/fleet/pkg/protos/azure/compute/v1b\x06proto3"
 
 var (
-	file_pkg_protos_azure_compute_v1_vmsizerecommender_proto_rawDescOnce sync.Once
-	file_pkg_protos_azure_compute_v1_vmsizerecommender_proto_rawDescData []byte
+	file_apis_protos_azure_compute_v1_vmsizerecommender_proto_rawDescOnce sync.Once
+	file_apis_protos_azure_compute_v1_vmsizerecommender_proto_rawDescData []byte
 )
 
-func file_pkg_protos_azure_compute_v1_vmsizerecommender_proto_rawDescGZIP() []byte {
-	file_pkg_protos_azure_compute_v1_vmsizerecommender_proto_rawDescOnce.Do(func() {
-		file_pkg_protos_azure_compute_v1_vmsizerecommender_proto_rawDescData = protoimpl.X.CompressGZIP(unsafe.Slice(unsafe.StringData(file_pkg_protos_azure_compute_v1_vmsizerecommender_proto_rawDesc), len(file_pkg_protos_azure_compute_v1_vmsizerecommender_proto_rawDesc)))
+func file_apis_protos_azure_compute_v1_vmsizerecommender_proto_rawDescGZIP() []byte {
+	file_apis_protos_azure_compute_v1_vmsizerecommender_proto_rawDescOnce.Do(func() {
+		file_apis_protos_azure_compute_v1_vmsizerecommender_proto_rawDescData = protoimpl.X.CompressGZIP(unsafe.Slice(unsafe.StringData(file_apis_protos_azure_compute_v1_vmsizerecommender_proto_rawDesc), len(file_apis_protos_azure_compute_v1_vmsizerecommender_proto_rawDesc)))
 	})
-	return file_pkg_protos_azure_compute_v1_vmsizerecommender_proto_rawDescData
+	return file_apis_protos_azure_compute_v1_vmsizerecommender_proto_rawDescData
 }
 
-var file_pkg_protos_azure_compute_v1_vmsizerecommender_proto_enumTypes = make([]protoimpl.EnumInfo, 2)
-var file_pkg_protos_azure_compute_v1_vmsizerecommender_proto_msgTypes = make([]protoimpl.MessageInfo, 9)
-var file_pkg_protos_azure_compute_v1_vmsizerecommender_proto_goTypes = []any{
+var file_apis_protos_azure_compute_v1_vmsizerecommender_proto_enumTypes = make([]protoimpl.EnumInfo, 2)
+var file_apis_protos_azure_compute_v1_vmsizerecommender_proto_msgTypes = make([]protoimpl.MessageInfo, 9)
+var file_apis_protos_azure_compute_v1_vmsizerecommender_proto_goTypes = []any{
 	(CapacityUnitType)(0),                                 // 0: azure.compute.v1.CapacityUnitType
 	(RecommendationProperties_RestrictionsFilter)(0),      // 1: azure.compute.v1.RecommendationProperties.RestrictionsFilter
 	(*VMAttributes)(nil),                                  // 2: azure.compute.v1.VMAttributes
@@ -767,7 +767,7 @@ var file_pkg_protos_azure_compute_v1_vmsizerecommender_proto_goTypes = []any{
 	(*GenerateAttributeBasedRecommendationsRequest)(nil),  // 9: azure.compute.v1.GenerateAttributeBasedRecommendationsRequest
 	(*GenerateAttributeBasedRecommendationsResponse)(nil), // 10: azure.compute.v1.GenerateAttributeBasedRecommendationsResponse
 }
-var file_pkg_protos_azure_compute_v1_vmsizerecommender_proto_depIdxs = []int32{
+var file_apis_protos_azure_compute_v1_vmsizerecommender_proto_depIdxs = []int32{
 	2,  // 0: azure.compute.v1.ResourceProperties.vm_attributes:type_name -> azure.compute.v1.VMAttributes
 	0,  // 1: azure.compute.v1.RegularPriorityProfile.capacity_unit_type:type_name -> azure.compute.v1.CapacityUnitType
 	0,  // 2: azure.compute.v1.SpotPriorityProfile.capacity_unit_type:type_name -> azure.compute.v1.CapacityUnitType
@@ -788,12 +788,12 @@ var file_pkg_protos_azure_compute_v1_vmsizerecommender_proto_depIdxs = []int32{
 	0,  // [0:11] is the sub-list for field type_name
 }
 
-func init() { file_pkg_protos_azure_compute_v1_vmsizerecommender_proto_init() }
-func file_pkg_protos_azure_compute_v1_vmsizerecommender_proto_init() {
-	if File_pkg_protos_azure_compute_v1_vmsizerecommender_proto != nil {
+func init() { file_apis_protos_azure_compute_v1_vmsizerecommender_proto_init() }
+func file_apis_protos_azure_compute_v1_vmsizerecommender_proto_init() {
+	if File_apis_protos_azure_compute_v1_vmsizerecommender_proto != nil {
 		return
 	}
-	file_pkg_protos_azure_compute_v1_vmsizerecommender_proto_msgTypes[7].OneofWrappers = []any{
+	file_apis_protos_azure_compute_v1_vmsizerecommender_proto_msgTypes[7].OneofWrappers = []any{
 		(*GenerateAttributeBasedRecommendationsRequest_RegularPriorityProfile)(nil),
 		(*GenerateAttributeBasedRecommendationsRequest_SpotPriorityProfile)(nil),
 	}
@@ -801,18 +801,18 @@ func file_pkg_protos_azure_compute_v1_vmsizerecommender_proto_init() {
 	out := protoimpl.TypeBuilder{
 		File: protoimpl.DescBuilder{
 			GoPackagePath: reflect.TypeOf(x{}).PkgPath(),
-			RawDescriptor: unsafe.Slice(unsafe.StringData(file_pkg_protos_azure_compute_v1_vmsizerecommender_proto_rawDesc), len(file_pkg_protos_azure_compute_v1_vmsizerecommender_proto_rawDesc)),
+			RawDescriptor: unsafe.Slice(unsafe.StringData(file_apis_protos_azure_compute_v1_vmsizerecommender_proto_rawDesc), len(file_apis_protos_azure_compute_v1_vmsizerecommender_proto_rawDesc)),
 			NumEnums:      2,
 			NumMessages:   9,
 			NumExtensions: 0,
 			NumServices:   1,
 		},
-		GoTypes:           file_pkg_protos_azure_compute_v1_vmsizerecommender_proto_goTypes,
-		DependencyIndexes: file_pkg_protos_azure_compute_v1_vmsizerecommender_proto_depIdxs,
-		EnumInfos:         file_pkg_protos_azure_compute_v1_vmsizerecommender_proto_enumTypes,
-		MessageInfos:      file_pkg_protos_azure_compute_v1_vmsizerecommender_proto_msgTypes,
+		GoTypes:           file_apis_protos_azure_compute_v1_vmsizerecommender_proto_goTypes,
+		DependencyIndexes: file_apis_protos_azure_compute_v1_vmsizerecommender_proto_depIdxs,
+		EnumInfos:         file_apis_protos_azure_compute_v1_vmsizerecommender_proto_enumTypes,
+		MessageInfos:      file_apis_protos_azure_compute_v1_vmsizerecommender_proto_msgTypes,
 	}.Build()
-	File_pkg_protos_azure_compute_v1_vmsizerecommender_proto = out.File
-	file_pkg_protos_azure_compute_v1_vmsizerecommender_proto_goTypes = nil
-	file_pkg_protos_azure_compute_v1_vmsizerecommender_proto_depIdxs = nil
+	File_apis_protos_azure_compute_v1_vmsizerecommender_proto = out.File
+	file_apis_protos_azure_compute_v1_vmsizerecommender_proto_goTypes = nil
+	file_apis_protos_azure_compute_v1_vmsizerecommender_proto_depIdxs = nil
 }

@@ -14,7 +14,7 @@ See the License for the specific language governing permissions and
 limitations under the License.
 */
 
-package capacityclient
+package compute
 
 import (
 	"bytes"
@@ -24,9 +24,11 @@ import (
 	"net/http"
 	"strings"
 
+	"github.com/Azure/azure-sdk-for-go/sdk/azcore/runtime"
 	"google.golang.org/protobuf/encoding/protojson"
 
-	computev1 "go.goms.io/fleet/pkg/protos/azure/compute/v1"
+	computev1 "go.goms.io/fleet/apis/protos/azure/compute/v1"
+	"go.goms.io/fleet/pkg/clients/consts"
 )
 
 const (
@@ -34,46 +36,51 @@ const (
 	recommendationsPathTemplate = "/subscriptions/%s/providers/Microsoft.Compute/locations/%s/vmSizeRecommendations/vmAttributeBased/generate"
 )
 
-// CapacityClientFactory is a function type for creating CapacityClient instances.
-type CapacityClientFactory func(endpoint string, httpClient *http.Client) CapacityClient
+// AttributeBasedVMSizeRecommenderClientFactory is a function type for creating AttributeBasedVMSizeRecommenderClient instances.
+type AttributeBasedVMSizeRecommenderClientFactory func(endpoint string, httpClient *http.Client) AttributeBasedVMSizeRecommenderClient
 
-// CapacityClient is an interface for interacting with the Azure Capacity API.
-type CapacityClient interface {
+// AttributeBasedVMSizeRecommenderClient is an interface for interacting with the Azure Attribute-Based VM Size Recommender API.
+type AttributeBasedVMSizeRecommenderClient interface {
 	// GenerateAttributeBasedRecommendations generates VM size recommendations based on attributes.
 	GenerateAttributeBasedRecommendations(ctx context.Context, req *computev1.GenerateAttributeBasedRecommendationsRequest) (*computev1.GenerateAttributeBasedRecommendationsResponse, error)
 }
 
-var _ CapacityClient = &client{}
+var _ AttributeBasedVMSizeRecommenderClient = &attributeBasedVMSizeRecommenderClient{}
 
-// client implements the CapacityClient interface for interacting with Azure Capacity API.
-type client struct {
-	// baseURL is the base URL of the capacity service endpoint.
+// attributeBasedVMSizeRecommenderClient implements the AttributeBasedVMSizeRecommenderClient interface
+// for interacting with Azure Attribute-Based VM Size Recommender API.
+type attributeBasedVMSizeRecommenderClient struct {
+	// baseURL is the base URL of the http(s) requests to the attribute-based VM size recommender service endpoint.
 	baseURL string
 	// httpClient is the HTTP client used for making requests.
 	httpClient *http.Client
 }
 
-// NewClient creates a new capacity client with the given endpoint and HTTP client.
-// If httpClient is nil, http.DefaultClient will be used.
-// If the endpoint does not have a scheme (http:// or https://), like localhost:8080, http:// will be added.
-func NewClient(endpoint string, httpClient *http.Client) CapacityClient {
+// NewAttributeBasedVMSizeRecommenderClient creates a new attribute-based VM size recommender client.
+// The serverAddress is the remote Azure Attribute-Based VM Size Recommender service endpoint.
+// If httpClient is nil, a default client with 60s timeout will be used.
+// If the serverAddress does not have a scheme (http:// or https://), like localhost:8080, http:// will be added.
+func NewAttributeBasedVMSizeRecommenderClient(serverAddress string, httpClient *http.Client) AttributeBasedVMSizeRecommenderClient {
 	if httpClient == nil {
-		httpClient = http.DefaultClient
+		httpClient = &http.Client{Timeout: consts.HTTPTimeoutAzure} // Client with default transport and 60s timeout.
 	}
 	// Add http:// scheme if no scheme is present
-	if !strings.HasPrefix(endpoint, "http://") && !strings.HasPrefix(endpoint, "https://") {
-		endpoint = "http://" + endpoint
+	if !strings.HasPrefix(serverAddress, "http://") && !strings.HasPrefix(serverAddress, "https://") {
+		serverAddress = "http://" + serverAddress
 	}
-	// Ensure endpoint doesn't have trailing slash
-	endpoint = strings.TrimSuffix(endpoint, "/")
-	return &client{
-		baseURL:    endpoint,
+	// Ensure serverAddress doesn't have trailing slash
+	serverAddress = strings.TrimSuffix(serverAddress, "/")
+	return &attributeBasedVMSizeRecommenderClient{
+		baseURL:    serverAddress,
 		httpClient: httpClient,
 	}
 }
 
 // GenerateAttributeBasedRecommendations generates VM size recommendations based on attributes.
-func (c *client) GenerateAttributeBasedRecommendations(ctx context.Context, req *computev1.GenerateAttributeBasedRecommendationsRequest) (*computev1.GenerateAttributeBasedRecommendationsResponse, error) {
+func (c *attributeBasedVMSizeRecommenderClient) GenerateAttributeBasedRecommendations(
+	ctx context.Context,
+	req *computev1.GenerateAttributeBasedRecommendationsRequest,
+) (*computev1.GenerateAttributeBasedRecommendationsResponse, error) {
 	if req == nil {
 		return nil, fmt.Errorf("request cannot be nil")
 	}
@@ -108,8 +115,8 @@ func (c *client) GenerateAttributeBasedRecommendations(ctx context.Context, req 
 	}
 
 	// Set headers
-	httpReq.Header.Set("Content-Type", "application/json")
-	httpReq.Header.Set("Accept", "application/json")
+	httpReq.Header.Set(consts.HeaderContentTypeKey, consts.HeaderContentTypeJSON)
+	httpReq.Header.Set(consts.HeaderAcceptKey, consts.HeaderContentTypeJSON)
 
 	// Execute the request
 	resp, err := c.httpClient.Do(httpReq)
@@ -126,7 +133,7 @@ func (c *client) GenerateAttributeBasedRecommendations(ctx context.Context, req 
 
 	// Check status code
 	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
-		return nil, fmt.Errorf("request failed with status %d: %s", resp.StatusCode, string(respBody))
+		return nil, fmt.Errorf("request failed with status %d: %w", resp.StatusCode, runtime.NewResponseError(resp))
 	}
 
 	// Unmarshal response using protojson for proper proto3 support
