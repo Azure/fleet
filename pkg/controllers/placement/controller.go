@@ -1214,7 +1214,7 @@ func (r *Reconciler) determineRolloutStateForPlacementWithExternalRolloutStrateg
 			})
 			// As placement status will refresh even if the spec has not changed, we reset any unused conditions to avoid confusion.
 			for i := condition.RolloutStartedCondition + 1; i < condition.TotalCondition; i++ {
-				meta.RemoveStatusCondition(&placementStatus.Conditions, string(i.ClusterResourcePlacementConditionType()))
+				meta.RemoveStatusCondition(&placementStatus.Conditions, getPlacementConditionType(placementObj, i))
 			}
 			return true, nil
 		}
