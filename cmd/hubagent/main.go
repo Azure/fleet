@@ -47,7 +47,6 @@ import (
 	fleetv1alpha1 "github.com/kubefleet-dev/kubefleet/apis/v1alpha1"
 	"github.com/kubefleet-dev/kubefleet/cmd/hubagent/options"
 	"github.com/kubefleet-dev/kubefleet/cmd/hubagent/workload"
-	mcv1alpha1 "github.com/kubefleet-dev/kubefleet/pkg/controllers/membercluster/v1alpha1"
 	mcv1beta1 "github.com/kubefleet-dev/kubefleet/pkg/controllers/membercluster/v1beta1"
 	"github.com/kubefleet-dev/kubefleet/pkg/webhook"
 	// +kubebuilder:scaffold:imports
@@ -137,16 +136,6 @@ func main() {
 	}
 
 	klog.V(2).InfoS("starting hubagent")
-	if opts.EnableV1Alpha1APIs {
-		klog.Info("Setting up memberCluster v1alpha1 controller")
-		if err = (&mcv1alpha1.Reconciler{
-			Client:                  mgr.GetClient(),
-			NetworkingAgentsEnabled: opts.NetworkingAgentsEnabled,
-		}).SetupWithManager(mgr, "memberclusterv1alpha1-controller"); err != nil {
-			klog.ErrorS(err, "unable to create v1alpha1 controller", "controller", "MemberCluster")
-			exitWithErrorFunc()
-		}
-	}
 	if opts.EnableV1Beta1APIs {
 		klog.Info("Setting up memberCluster v1beta1 controller")
 		if err = (&mcv1beta1.Reconciler{

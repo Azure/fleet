@@ -25,7 +25,7 @@ import (
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/client-go/tools/clientcmd/api"
 
-	fleetv1alpha1 "github.com/kubefleet-dev/kubefleet/apis/v1alpha1"
+	placementv1beta1 "github.com/kubefleet-dev/kubefleet/apis/placement/v1beta1"
 )
 
 var (
@@ -34,7 +34,7 @@ var (
 		APIVersion:     "v1/secret",
 		CurrentContext: "federal-context",
 	}
-	crp = &fleetv1alpha1.ClusterResourcePlacement{
+	crp = &placementv1beta1.ClusterResourcePlacement{
 		TypeMeta: metav1.TypeMeta{
 			Kind:       "ClusterResourcePlacement",
 			APIVersion: "fleet.azure.com/v1alpha1",
@@ -170,7 +170,7 @@ func TestNamespaceKeyFunc(t *testing.T) {
 		},
 		{
 			name: "none runtime object should be error",
-			object: ClusterWideKey{fleetv1alpha1.ResourceIdentifier{
+			object: ClusterWideKey{placementv1beta1.ResourceIdentifier{
 				Name:      "foo",
 				Namespace: "bar",
 			}},

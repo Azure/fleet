@@ -52,7 +52,6 @@ import (
 	clusterv1beta1 "github.com/kubefleet-dev/kubefleet/apis/cluster/v1beta1"
 	placementv1beta1 "github.com/kubefleet-dev/kubefleet/apis/placement/v1beta1"
 	fleetv1alpha1 "github.com/kubefleet-dev/kubefleet/apis/v1alpha1"
-	imcv1alpha1 "github.com/kubefleet-dev/kubefleet/pkg/controllers/internalmembercluster/v1alpha1"
 	imcv1beta1 "github.com/kubefleet-dev/kubefleet/pkg/controllers/internalmembercluster/v1beta1"
 	"github.com/kubefleet-dev/kubefleet/pkg/controllers/workapplier"
 	workv1alpha1controller "github.com/kubefleet-dev/kubefleet/pkg/controllers/workv1alpha1"
@@ -376,12 +375,6 @@ func Start(ctx context.Context, hubCfg, memberConfig *rest.Config, hubOpts, memb
 		if err = workController.SetupWithManager(hubMgr); err != nil {
 			klog.ErrorS(err, "Failed to create v1alpha1 controller", "controller", "work")
 			return err
-		}
-
-		klog.Info("Setting up the internalMemberCluster v1alpha1 controller")
-		if err = imcv1alpha1.NewReconciler(hubMgr.GetClient(), memberMgr.GetClient(), workController).SetupWithManager(hubMgr, "internalmemberclusterv1alpha1-controller"); err != nil {
-			klog.ErrorS(err, "Failed to create v1alpha1 controller", "controller", "internalMemberCluster")
-			return fmt.Errorf("unable to create internalMemberCluster v1alpha1 controller: %w", err)
 		}
 	}
 

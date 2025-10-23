@@ -23,12 +23,12 @@ import (
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/runtime/schema"
 
-	fleetv1alpha1 "github.com/kubefleet-dev/kubefleet/apis/v1alpha1"
+	placementv1beta1 "github.com/kubefleet-dev/kubefleet/apis/placement/v1beta1"
 )
 
 // ClusterWideKey is the object key which is a unique identifier under a cluster, across all resources.
 type ClusterWideKey struct {
-	fleetv1alpha1.ResourceIdentifier
+	placementv1beta1.ResourceIdentifier
 }
 
 // String returns the key's printable info with format:
