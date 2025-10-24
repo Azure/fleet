@@ -23,6 +23,7 @@ import (
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
 	corev1 "k8s.io/api/core/v1"
+	apiextensionsv1 "k8s.io/apiextensions-apiserver/pkg/apis/apiextensions/v1"
 	"k8s.io/apimachinery/pkg/api/meta"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/types"
@@ -630,6 +631,246 @@ var _ = Describe("test RP rollout with staged update run", Label("resourceplacem
 			rpStatusUpdatedActual := rpStatusWithExternalStrategyActual(appConfigMapIdentifiers(), resourceSnapshotIndex1st, true, allMemberClusterNames[1:], []string{resourceSnapshotIndex1st, resourceSnapshotIndex1st}, []bool{true, true}, nil, nil)
 			Eventually(rpStatusUpdatedActual, eventuallyDuration, eventuallyInterval).Should(Succeed(), "Failed to keep RP %s/%s status as expected", testNamespace, rpName)
 		})
+	})
+
+	Context("Test staged update run with overrides", Ordered, func() {
+		var strategy *placementv1beta1.StagedUpdateStrategy
+		updateRunName := fmt.Sprintf(stagedUpdateRunNameWithSubIndexTemplate, GinkgoParallelProcess(), 0)
+		roName := fmt.Sprintf(roNameTemplate, GinkgoParallelProcess())
+		roNamespace := fmt.Sprintf(workNamespaceNameTemplate, GinkgoParallelProcess())
+		var wantROs map[string][]placementv1beta1.NamespacedName
+		var wantROAnnotations map[string]string
+
+		BeforeAll(func() {
+			// Create the ro before rp so that the observed resource index is predictable.
+			ro := &placementv1beta1.ResourceOverride{
+				ObjectMeta: metav1.ObjectMeta{
+					Name:      roName,
+					Namespace: roNamespace,
+				},
+				Spec: placementv1beta1.ResourceOverrideSpec{
+					ResourceSelectors: configMapOverrideSelector(),
+					Policy: &placementv1beta1.OverridePolicy{
+						OverrideRules: []placementv1beta1.OverrideRule{
+							{
+								ClusterSelector: &placementv1beta1.ClusterSelector{
+									ClusterSelectorTerms: []placementv1beta1.ClusterSelectorTerm{
+										{
+											LabelSelector: &metav1.LabelSelector{
+												MatchLabels: map[string]string{
+													regionLabelName: regionEast, envLabelName: envProd, // member-cluster-1.
+												},
+											},
+										},
+										{
+											LabelSelector: &metav1.LabelSelector{
+												MatchLabels: map[string]string{
+													regionLabelName: regionEast, envLabelName: envCanary, // member-cluster-2.
+												},
+											},
+										},
+									},
+								},
+								JSONPatchOverrides: []placementv1beta1.JSONPatchOverride{
+									{
+										Operator: placementv1beta1.JSONPatchOverrideOpAdd,
+										Path:     "/metadata/annotations",
+										Value:    apiextensionsv1.JSON{Raw: []byte(fmt.Sprintf(`{"%s": "%s-1"}`, roTestAnnotationKey, roTestAnnotationValue))},
+									},
+								},
+							},
+						},
+					},
+				},
+			}
+			Expect(hubClient.Create(ctx, ro)).To(Succeed(), "Failed to create resourceOverride %s", roName)
+
+			// Set the wanted overrides.
+			wantROs = map[string][]placementv1beta1.NamespacedName{
+				allMemberClusterNames[0]: {placementv1beta1.NamespacedName{Namespace: roNamespace, Name: roName + "-0"}}, // with override snapshot index 0.
+				allMemberClusterNames[1]: {placementv1beta1.NamespacedName{Namespace: roNamespace, Name: roName + "-0"}}, // with override snapshot index 0.
+			}
+
+			// Set the wanted annotations after override.
+			wantROAnnotations = map[string]string{roTestAnnotationKey: fmt.Sprintf("%s-%d", roTestAnnotationValue, 1)}
+
+			// Create the RP with external rollout strategy and pickAll policy.
+			rp := &placementv1beta1.ResourcePlacement{
+				ObjectMeta: metav1.ObjectMeta{
+					Name:      rpName,
+					Namespace: testNamespace,
+					// Add a custom finalizer; this would allow us to better observe
+					// the behavior of the controllers.
+					Finalizers: []string{customDeletionBlockerFinalizer},
+				},
+				Spec: placementv1beta1.PlacementSpec{
+					ResourceSelectors: configMapSelector(),
+					Policy: &placementv1beta1.PlacementPolicy{
+						PlacementType: placementv1beta1.PickAllPlacementType,
+					},
+					Strategy: placementv1beta1.RolloutStrategy{
+						Type: placementv1beta1.ExternalRolloutStrategyType,
+					},
+				},
+			}
+			Expect(hubClient.Create(ctx, rp)).To(Succeed(), "Failed to create RP")
+
+			// Create the stagedUpdateStrategy.
+			strategy = createStagedUpdateStrategySucceed(strategyName, testNamespace)
+		})
+
+		AfterAll(func() {
+			// Remove the custom deletion blocker finalizer from the RP.
+			ensureRPAndRelatedResourcesDeleted(types.NamespacedName{Name: rpName, Namespace: testNamespace}, allMemberClusters)
+
+			// Delete the stagedUpdateRun.
+			ensureStagedUpdateRunDeletion(updateRunName, testNamespace)
+
+			// Delete the stagedUpdateStrategy.
+			ensureStagedUpdateRunStrategyDeletion(strategyName, testNamespace)
+
+			// Delete the resourceOverride.
+			cleanupResourceOverride(roName, roNamespace)
+		})
+
+		It("Should not rollout any resources to member clusters as there's no update run yet", checkIfRemovedConfigMapFromAllMemberClustersConsistently)
+
+		It("Should have the latest resource snapshot", func() {
+			validateLatestResourceSnapshot(rpName, testNamespace, resourceSnapshotIndex1st)
+		})
+
+		It("Should successfully schedule the rp", func() {
+			validateLatestSchedulingPolicySnapshot(rpName, testNamespace, policySnapshotIndex1st, 3)
+		})
+
+		It("Should update rp status as pending rollout", func() {
+			rpStatusUpdatedActual := rpStatusWithExternalStrategyActual(nil, "", false, allMemberClusterNames, []string{"", "", ""}, []bool{false, false, false}, nil, nil)
+			Eventually(rpStatusUpdatedActual, eventuallyDuration, eventuallyInterval).Should(Succeed(), "Failed to update RP %s/%s status as expected", testNamespace, rpName)
+		})
+
+		It("Should create a staged update run successfully", func() {
+			createStagedUpdateRunSucceed(updateRunName, testNamespace, rpName, resourceSnapshotIndex1st, strategyName)
+		})
+
+		It("Should rollout resources to member-cluster-2 only and complete stage canary", func() {
+			checkIfPlacedWorkResourcesOnMemberClustersInUpdateRun([]*framework.Cluster{allMemberClusters[1]})
+			// Validate the override annotation on configmap on member-cluster-2.
+			Expect(validateAnnotationOfConfigMapOnCluster(allMemberClusters[1], wantROAnnotations)).Should(Succeed(), "Failed to override the annotation of configmap on %s", allMemberClusters[1].ClusterName)
+			checkIfRemovedConfigMapFromMemberClustersConsistently([]*framework.Cluster{allMemberClusters[0], allMemberClusters[2]})
+
+			By("Validating rp status as member-cluster-2 updated")
+			rpStatusUpdatedActual := rpStatusWithExternalStrategyActual(nil, "", false, allMemberClusterNames, []string{"", resourceSnapshotIndex1st, ""}, []bool{false, true, false}, nil, wantROs)
+			Eventually(rpStatusUpdatedActual, eventuallyDuration, eventuallyInterval).Should(Succeed(), "Failed to update RP %s/%s status as expected", testNamespace, rpName)
+
+			validateAndApproveNamespacedApprovalRequests(updateRunName, testNamespace, envCanary)
+		})
+
+		It("Should rollout resources to member-cluster-1 and member-cluster-3 too and complete the staged update run successfully", func() {
+			surSucceededActual := stagedUpdateRunStatusSucceededActual(updateRunName, testNamespace, policySnapshotIndex1st, len(allMemberClusters), defaultApplyStrategy, &strategy.Spec, [][]string{{allMemberClusterNames[1]}, {allMemberClusterNames[0], allMemberClusterNames[2]}}, nil, nil, wantROs)
+			Eventually(surSucceededActual, updateRunEventuallyDuration, eventuallyInterval).Should(Succeed(), "Failed to validate updateRun %s/%s succeeded", testNamespace, updateRunName)
+			checkIfPlacedWorkResourcesOnMemberClustersInUpdateRun(allMemberClusters)
+		})
+
+		It("Should update rp status as completed", func() {
+			rpStatusUpdatedActual := rpStatusWithExternalStrategyActual(appConfigMapIdentifiers(), resourceSnapshotIndex1st, true, allMemberClusterNames,
+				[]string{resourceSnapshotIndex1st, resourceSnapshotIndex1st, resourceSnapshotIndex1st}, []bool{true, true, true}, nil, wantROs)
+			Eventually(rpStatusUpdatedActual, eventuallyDuration, eventuallyInterval).Should(Succeed(), "Failed to update RP %s/%s status as expected", testNamespace, rpName)
+		})
+
+		It("should have override annotations on the member cluster 1 and member cluster 2", func() {
+			Expect(validateAnnotationOfConfigMapOnCluster(allMemberClusters[0], wantROAnnotations)).Should(Succeed(), "Failed to override the annotation of configmap on %s", allMemberClusters[0].ClusterName)
+			Expect(validateAnnotationOfConfigMapOnCluster(allMemberClusters[1], wantROAnnotations)).Should(Succeed(), "Failed to override the annotation of configmap on %s", allMemberClusters[1].ClusterName)
+			Expect(validateConfigMapNoAnnotationKeyOnCluster(allMemberClusters[2], roTestAnnotationKey)).Should(Succeed(), "Unexpected annotation found on configmap on %s", allMemberClusters[2].ClusterName)
+		})
+	})
+
+	Context("Test staged update run with reportDiff mode", Ordered, func() {
+		var strategy *placementv1beta1.StagedUpdateStrategy
+		var applyStrategy *placementv1beta1.ApplyStrategy
+		updateRunName := fmt.Sprintf(stagedUpdateRunNameWithSubIndexTemplate, GinkgoParallelProcess(), 0)
+
+		BeforeAll(func() {
+			// Create the RP with external rollout strategy, pickAll policy and reportDiff apply strategy.
+			applyStrategy = &placementv1beta1.ApplyStrategy{
+				Type:             placementv1beta1.ApplyStrategyTypeReportDiff,
+				ComparisonOption: placementv1beta1.ComparisonOptionTypePartialComparison,
+				WhenToApply:      placementv1beta1.WhenToApplyTypeAlways,
+				WhenToTakeOver:   placementv1beta1.WhenToTakeOverTypeAlways,
+			}
+			rp := &placementv1beta1.ResourcePlacement{
+				ObjectMeta: metav1.ObjectMeta{
+					Name:       rpName,
+					Namespace:  testNamespace,
+					Finalizers: []string{customDeletionBlockerFinalizer},
+				},
+				Spec: placementv1beta1.PlacementSpec{
+					ResourceSelectors: configMapSelector(),
+					Policy: &placementv1beta1.PlacementPolicy{
+						PlacementType: placementv1beta1.PickAllPlacementType,
+					},
+					Strategy: placementv1beta1.RolloutStrategy{
+						Type:          placementv1beta1.ExternalRolloutStrategyType,
+						ApplyStrategy: applyStrategy,
+					},
+				},
+			}
+			Expect(hubClient.Create(ctx, rp)).To(Succeed(), "Failed to create RP")
+
+			// Create the stagedUpdateStrategy.
+			strategy = createStagedUpdateStrategySucceed(strategyName, testNamespace)
+		})
+
+		AfterAll(func() {
+			// Remove the custom deletion blocker finalizer from the RP.
+			ensureRPAndRelatedResourcesDeleted(types.NamespacedName{Name: rpName, Namespace: testNamespace}, allMemberClusters)
+
+			// Delete the stagedUpdateRun.
+			ensureStagedUpdateRunDeletion(updateRunName, testNamespace)
+
+			// Delete the stagedUpdateStrategy.
+			ensureStagedUpdateRunStrategyDeletion(strategyName, testNamespace)
+		})
+
+		It("Should not rollout any resources to member clusters as there's no update run yet", checkIfRemovedConfigMapFromAllMemberClustersConsistently)
+
+		It("Should have the latest resource snapshot", func() {
+			validateLatestResourceSnapshot(rpName, testNamespace, resourceSnapshotIndex1st)
+		})
+
+		It("Should successfully schedule the rp", func() {
+			validateLatestSchedulingPolicySnapshot(rpName, testNamespace, policySnapshotIndex1st, 3)
+		})
+
+		It("Should update rp status as pending rollout", func() {
+			rpStatusUpdatedActual := rpStatusWithExternalStrategyActual(nil, "", false, allMemberClusterNames, []string{"", "", ""}, []bool{false, false, false}, nil, nil)
+			Eventually(rpStatusUpdatedActual, eventuallyDuration, eventuallyInterval).Should(Succeed(), "Failed to update RP %s/%s status as expected", testNamespace, rpName)
+		})
+
+		It("Should create a staged update run successfully", func() {
+			createStagedUpdateRunSucceed(updateRunName, testNamespace, rpName, resourceSnapshotIndex1st, strategyName)
+		})
+
+		It("Should report diff for member-cluster-2 only and completes stage canary", func() {
+			By("Validating rp status as member-cluster-2 diff reported")
+			rpStatusUpdatedActual := rpStatusWithExternalStrategyActual(nil, "", false, allMemberClusterNames,
+				[]string{"", resourceSnapshotIndex1st, ""}, []bool{false, true, false}, nil, nil)
+			Eventually(rpStatusUpdatedActual, eventuallyDuration, eventuallyInterval).Should(Succeed(), "Failed to update RP %s/%s status as expected", testNamespace, rpName)
+
+			validateAndApproveNamespacedApprovalRequests(updateRunName, testNamespace, envCanary)
+		})
+
+		It("Should report diff for member-cluster-1 and member-cluster-3 too and complete the staged update run successfully", func() {
+			surSucceededActual := stagedUpdateRunStatusSucceededActual(updateRunName, testNamespace, policySnapshotIndex1st, len(allMemberClusters), applyStrategy, &strategy.Spec, [][]string{{allMemberClusterNames[1]}, {allMemberClusterNames[0], allMemberClusterNames[2]}}, nil, nil, nil)
+			Eventually(surSucceededActual, updateRunEventuallyDuration, eventuallyInterval).Should(Succeed(), "Failed to validate updateRun %s/%s succeeded", testNamespace, updateRunName)
+		})
+
+		It("Should update rp status as diff reported", func() {
+			rpStatusUpdatedActual := rpStatusWithExternalStrategyActual(appConfigMapIdentifiers(), resourceSnapshotIndex1st, true, allMemberClusterNames,
+				[]string{resourceSnapshotIndex1st, resourceSnapshotIndex1st, resourceSnapshotIndex1st}, []bool{true, true, true}, nil, nil)
+			Eventually(rpStatusUpdatedActual, eventuallyDuration, eventuallyInterval).Should(Succeed(), "Failed to update RP %s/%s status as expected", testNamespace, rpName)
+		})
+
+		It("Should not rollout any resources to member clusters as it's reportDiff mode", checkIfRemovedConfigMapFromAllMemberClustersConsistently)
 	})
 })
 

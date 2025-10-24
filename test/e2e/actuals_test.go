@@ -1439,7 +1439,7 @@ func crpStatusWithExternalStrategyActual(
 		reportDiff := crp.Spec.Strategy.ApplyStrategy != nil && crp.Spec.Strategy.ApplyStrategy.Type == placementv1beta1.ApplyStrategyTypeReportDiff
 
 		wantPlacementStatus, crpHasOverrides := buildPerClusterPlacementStatusesAndHasOverrides(
-			crp.Generation, reportDiff, wantSelectedClusters, wantObservedResourceIndexPerCluster, wantRolloutCompletedPerCluster, wantClusterResourceOverrides, wantResourceOverrides)
+			crp.Generation, reportDiff, true, wantSelectedClusters, wantObservedResourceIndexPerCluster, wantRolloutCompletedPerCluster, wantClusterResourceOverrides, wantResourceOverrides)
 
 		wantStatus := placementv1beta1.PlacementStatus{
 			PerClusterPlacementStatuses: wantPlacementStatus,
@@ -1484,7 +1484,7 @@ func rpStatusWithExternalStrategyActual(
 		reportDiff := rp.Spec.Strategy.ApplyStrategy != nil && rp.Spec.Strategy.ApplyStrategy.Type == placementv1beta1.ApplyStrategyTypeReportDiff
 
 		wantPlacementStatus, rpHasOverrides := buildPerClusterPlacementStatusesAndHasOverrides(
-			rp.Generation, reportDiff, wantSelectedClusters, wantObservedResourceIndexPerCluster, wantRolloutCompletedPerCluster, wantClusterResourceOverrides, wantResourceOverrides)
+			rp.Generation, reportDiff, false, wantSelectedClusters, wantObservedResourceIndexPerCluster, wantRolloutCompletedPerCluster, wantClusterResourceOverrides, wantResourceOverrides)
 
 		wantStatus := placementv1beta1.PlacementStatus{
 			PerClusterPlacementStatuses: wantPlacementStatus,
@@ -1511,6 +1511,7 @@ func rpStatusWithExternalStrategyActual(
 func buildPerClusterPlacementStatusesAndHasOverrides(
 	generation int64,
 	reportDiff bool,
+	isClusterScoped bool,
 	wantSelectedClusters []string,
 	wantObservedResourceIndexPerCluster []string,
 	wantRolloutCompletedPerCluster []bool,
@@ -1537,42 +1538,44 @@ func buildPerClusterPlacementStatusesAndHasOverrides(
 				placementHasOverrides = true
 			}
 			if reportDiff {
+				diffedPlacements := []placementv1beta1.DiffedResourcePlacement{
+					{
+						ResourceIdentifier: placementv1beta1.ResourceIdentifier{
+							Version:   "v1",
+							Kind:      "ConfigMap",
+							Name:      cmName,
+							Namespace: nsName,
+						},
+						ObservedDiffs: []placementv1beta1.PatchDetail{
+							{
+								Path:       "/",
+								ValueInHub: "(the whole object)",
+							},
+						},
+					},
+				}
+				if isClusterScoped {
+					diffedPlacements = append(diffedPlacements, placementv1beta1.DiffedResourcePlacement{
+						ResourceIdentifier: placementv1beta1.ResourceIdentifier{
+							Version: "v1",
+							Kind:    "Namespace",
+							Name:    nsName,
+						},
+						ObservedDiffs: []placementv1beta1.PatchDetail{
+							{
+								Path:       "/",
+								ValueInHub: "(the whole object)",
+							},
+						},
+					})
+				}
 				wantPlacementStatuses = append(wantPlacementStatuses, placementv1beta1.PerClusterPlacementStatus{
 					ClusterName:                        name,
 					Conditions:                         perClusterDiffReportedConditions(generation),
 					ApplicableResourceOverrides:        wantResourceOverrides,
 					ApplicableClusterResourceOverrides: wantClusterResourceOverrides,
 					ObservedResourceIndex:              wantObservedResourceIndexPerCluster[i],
-					// TODO(arvindth): Need to update this when we have more test cases for staged UpdateRun.
-					DiffedPlacements: []placementv1beta1.DiffedResourcePlacement{
-						{
-							ResourceIdentifier: placementv1beta1.ResourceIdentifier{
-								Version: "v1",
-								Kind:    "Namespace",
-								Name:    nsName,
-							},
-							ObservedDiffs: []placementv1beta1.PatchDetail{
-								{
-									Path:       "/",
-									ValueInHub: "(the whole object)",
-								},
-							},
-						},
-						{
-							ResourceIdentifier: placementv1beta1.ResourceIdentifier{
-								Version:   "v1",
-								Kind:      "ConfigMap",
-								Name:      cmName,
-								Namespace: nsName,
-							},
-							ObservedDiffs: []placementv1beta1.PatchDetail{
-								{
-									Path:       "/",
-									ValueInHub: "(the whole object)",
-								},
-							},
-						},
-					},
+					DiffedPlacements:                   diffedPlacements,
 				})
 			} else {
 				wantPlacementStatuses = append(wantPlacementStatuses, placementv1beta1.PerClusterPlacementStatus{

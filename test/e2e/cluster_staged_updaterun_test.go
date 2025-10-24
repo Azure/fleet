@@ -644,7 +644,7 @@ var _ = Describe("test CRP rollout with staged update run", func() {
 		})
 	})
 
-	Context("Test staged update run with overrides", Ordered, func() {
+	Context("Test cluster staged update run with overrides", Ordered, func() {
 		var strategy *placementv1beta1.ClusterStagedUpdateStrategy
 		updateRunName := fmt.Sprintf(clusterStagedUpdateRunNameWithSubIndexTemplate, GinkgoParallelProcess(), 0)
 		croName := fmt.Sprintf(croNameTemplate, GinkgoParallelProcess())
@@ -778,13 +778,13 @@ var _ = Describe("test CRP rollout with staged update run", func() {
 			validateLatestClusterResourceSnapshot(crpName, resourceSnapshotIndex1st)
 		})
 
+		It("Should successfully schedule the crp", func() {
+			validateLatestClusterSchedulingPolicySnapshot(crpName, policySnapshotIndex1st, 3)
+		})
+
 		It("Should update crp status as pending rollout", func() {
 			crpStatusUpdatedActual := crpStatusWithExternalStrategyActual(nil, "", false, allMemberClusterNames, []string{"", "", ""}, []bool{false, false, false}, nil, nil)
 			Eventually(crpStatusUpdatedActual, eventuallyDuration, eventuallyInterval).Should(Succeed(), "Failed to update CRP %s status as expected", crpName)
-		})
-
-		It("Should successfully schedule the crp", func() {
-			validateLatestClusterSchedulingPolicySnapshot(crpName, policySnapshotIndex1st, 3)
 		})
 
 		It("Should create a cluster staged update run successfully", func() {
@@ -824,7 +824,7 @@ var _ = Describe("test CRP rollout with staged update run", func() {
 		})
 	})
 
-	Context("Test staged update run with reportDiff mode", Ordered, func() {
+	Context("Test cluster staged update run with reportDiff mode", Ordered, func() {
 		var strategy *placementv1beta1.ClusterStagedUpdateStrategy
 		var applyStrategy *placementv1beta1.ApplyStrategy
 		updateRunName := fmt.Sprintf(clusterStagedUpdateRunNameWithSubIndexTemplate, GinkgoParallelProcess(), 0)
@@ -881,13 +881,13 @@ var _ = Describe("test CRP rollout with staged update run", func() {
 			validateLatestClusterResourceSnapshot(crpName, resourceSnapshotIndex1st)
 		})
 
+		It("Should successfully schedule the crp", func() {
+			validateLatestClusterSchedulingPolicySnapshot(crpName, policySnapshotIndex1st, 3)
+		})
+
 		It("Should update crp status as pending rollout", func() {
 			crpStatusUpdatedActual := crpStatusWithExternalStrategyActual(nil, "", false, allMemberClusterNames, []string{"", "", ""}, []bool{false, false, false}, nil, nil)
 			Eventually(crpStatusUpdatedActual, eventuallyDuration, eventuallyInterval).Should(Succeed(), "Failed to update CRP %s status as expected", crpName)
-		})
-
-		It("Should successfully schedule the crp", func() {
-			validateLatestClusterSchedulingPolicySnapshot(crpName, policySnapshotIndex1st, 3)
 		})
 
 		It("Should create a cluster staged update run successfully", func() {
