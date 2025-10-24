@@ -1,19 +1,9 @@
 /*
-Copyright 2025 The KubeFleet Authors.
-
-Licensed under the Apache License, Version 2.0 (the "License");
-you may not use this file except in compliance with the License.
-You may obtain a copy of the License at
-
-    http://www.apache.org/licenses/LICENSE-2.0
-
-Unless required by applicable law or agreed to in writing, software
-distributed under the License is distributed on an "AS IS" BASIS,
-WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
-See the License for the specific language governing permissions and
-limitations under the License.
+Copyright (c) Microsoft Corporation.
+Licensed under the MIT license.
 */
 
+// Package compute provides clients for interacting with Azure Compute services.
 package compute
 
 import (
@@ -23,13 +13,12 @@ import (
 	"fmt"
 	"io"
 	"net/http"
-	"strings"
 
 	"github.com/Azure/azure-sdk-for-go/sdk/azcore/runtime"
 	"google.golang.org/protobuf/encoding/protojson"
 
 	computev1 "go.goms.io/fleet/apis/protos/azure/compute/v1"
-	"go.goms.io/fleet/pkg/clients/consts"
+	"go.goms.io/fleet/pkg/clients/httputil"
 	"go.goms.io/fleet/pkg/utils/controller"
 )
 
@@ -37,9 +26,6 @@ const (
 	// recommendationsPathTemplate is the URL path template for VM size recommendations API.
 	recommendationsPathTemplate = "/subscriptions/%s/providers/Microsoft.Compute/locations/%s/vmSizeRecommendations/vmAttributeBased/generate"
 )
-
-// AttributeBasedVMSizeRecommenderClientFactory is a function type for creating AttributeBasedVMSizeRecommenderClient instances.
-type AttributeBasedVMSizeRecommenderClientFactory func(endpoint string, httpClient *http.Client) AttributeBasedVMSizeRecommenderClient
 
 // AttributeBasedVMSizeRecommenderClient is an interface for interacting with the Azure Attribute-Based VM Size Recommender API.
 type AttributeBasedVMSizeRecommenderClient interface {
@@ -60,22 +46,18 @@ type attributeBasedVMSizeRecommenderClient struct {
 
 // NewAttributeBasedVMSizeRecommenderClient creates a new attribute-based VM size recommender client.
 // The serverAddress is the remote Azure Attribute-Based VM Size Recommender service endpoint.
-// If httpClient is nil, a default client with 60s timeout will be used.
-// If the serverAddress does not have a scheme (http:// or https://), like localhost:8080, http:// will be added.
-func NewAttributeBasedVMSizeRecommenderClient(serverAddress string, httpClient *http.Client) AttributeBasedVMSizeRecommenderClient {
+// Both serverAddress and httpClient must be provided.
+func NewAttributeBasedVMSizeRecommenderClient(serverAddress string, httpClient *http.Client) (AttributeBasedVMSizeRecommenderClient, error) {
+	if len(serverAddress) == 0 {
+		return nil, fmt.Errorf("serverAddress cannot be empty")
+	}
 	if httpClient == nil {
-		httpClient = &http.Client{Timeout: consts.HTTPTimeoutAzure} // Client with default transport and 60s timeout.
+		return nil, fmt.Errorf("httpClient cannot be nil")
 	}
-	// Add http:// scheme if no scheme is present
-	if !strings.HasPrefix(serverAddress, "http://") && !strings.HasPrefix(serverAddress, "https://") {
-		serverAddress = "http://" + serverAddress
-	}
-	// Ensure serverAddress doesn't have trailing slash
-	serverAddress = strings.TrimSuffix(serverAddress, "/")
 	return &attributeBasedVMSizeRecommenderClient{
 		baseURL:    serverAddress,
 		httpClient: httpClient,
-	}
+	}, nil
 }
 
 // GenerateAttributeBasedRecommendations generates VM size recommendations based on attributes.
@@ -117,8 +99,8 @@ func (c *attributeBasedVMSizeRecommenderClient) GenerateAttributeBasedRecommenda
 	}
 
 	// Set headers
-	httpReq.Header.Set(consts.HeaderContentTypeKey, consts.HeaderContentTypeJSON)
-	httpReq.Header.Set(consts.HeaderAcceptKey, consts.HeaderContentTypeJSON)
+	httpReq.Header.Set(httputil.HeaderContentTypeKey, httputil.HeaderContentTypeJSON)
+	httpReq.Header.Set(httputil.HeaderAcceptKey, httputil.HeaderContentTypeJSON)
 
 	// Execute the request
 	resp, err := c.httpClient.Do(httpReq)

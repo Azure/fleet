@@ -1,17 +1,6 @@
 /*
-Copyright 2025 The KubeFleet Authors.
-
-Licensed under the Apache License, Version 2.0 (the "License");
-you may not use this file except in compliance with the License.
-You may obtain a copy of the License at
-
-    http://www.apache.org/licenses/LICENSE-2.0
-
-Unless required by applicable law or agreed to in writing, software
-distributed under the License is distributed on an "AS IS" BASIS,
-WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
-See the License for the specific language governing permissions and
-limitations under the License.
+Copyright (c) Microsoft Corporation.
+Licensed under the MIT license.
 */
 
 syntax = "proto3";
@@ -101,13 +90,10 @@ message GenerateAttributeBasedRecommendationsRequest {
   string subscription_id = 1;
   // location - target managed cluster location
   string location = 2;
-  // One of the regularPriorityProfile or spotPriorityProfile must be provided.
-  oneof priority_profile {
-    // Object of VMPriorityProfile for regular vms.
-    RegularPriorityProfile regular_priority_profile = 3;
-    // Object of VMPriorityProfile for spot vms.
-    SpotPriorityProfile spot_priority_profile = 4;
-  }
+  // Object of VMPriorityProfile for regular vms.
+  RegularPriorityProfile regular_priority_profile = 3;
+  // Object of VMPriorityProfile for spot vms.
+  SpotPriorityProfile spot_priority_profile = 4;
   // optional
   // Object of different recommendationProperties
   RecommendationProperties recommendation_properties = 5;

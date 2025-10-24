@@ -1,17 +1,6 @@
 /*
-Copyright 2025 The KubeFleet Authors.
-
-Licensed under the Apache License, Version 2.0 (the "License");
-you may not use this file except in compliance with the License.
-You may obtain a copy of the License at
-
-    http://www.apache.org/licenses/LICENSE-2.0
-
-Unless required by applicable law or agreed to in writing, software
-distributed under the License is distributed on an "AS IS" BASIS,
-WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
-See the License for the specific language governing permissions and
-limitations under the License.
+Copyright (c) Microsoft Corporation.
+Licensed under the MIT license.
 */
 
 package compute
@@ -30,70 +19,56 @@ import (
 	"google.golang.org/protobuf/proto"
 
 	computev1 "go.goms.io/fleet/apis/protos/azure/compute/v1"
-	"go.goms.io/fleet/pkg/clients/consts"
 )
 
 func TestNewAttributeBasedVMSizeRecommenderClient(t *testing.T) {
-	defaultClient := &http.Client{Timeout: consts.HTTPTimeoutAzure}
 	tests := []struct {
-		name           string
-		endpoint       string
-		httpClient     *http.Client
-		wantBaseURL    string
-		wantHTTPClient *http.Client
+		name          string
+		serverAddress string
+		httpClient    *http.Client
+		wantClient    *attributeBasedVMSizeRecommenderClient
+		wantErr       bool
 	}{
 		{
-			name:           "with custom HTTP client",
-			endpoint:       "https://example.com",
-			httpClient:     &http.Client{},
-			wantBaseURL:    "https://example.com",
-			wantHTTPClient: &http.Client{},
+			name:          "with empty server address",
+			serverAddress: "",
+			httpClient:    http.DefaultClient,
+			wantClient:    nil,
+			wantErr:       true,
 		},
 		{
-			name:           "with nil HTTP client uses default",
-			endpoint:       "https://example.com",
-			httpClient:     nil,
-			wantBaseURL:    "https://example.com",
-			wantHTTPClient: defaultClient,
+			name:          "with nil HTTP client",
+			serverAddress: "http://localhost:8080",
+			httpClient:    nil,
+			wantClient:    nil,
+			wantErr:       true,
 		},
 		{
-			name:           "removes trailing slash from endpoint",
-			endpoint:       "https://example.com/",
-			httpClient:     nil,
-			wantBaseURL:    "https://example.com",
-			wantHTTPClient: defaultClient,
-		},
-		{
-			name:           "adds http scheme to endpoint without scheme",
-			endpoint:       "localhost:8080",
-			httpClient:     nil,
-			wantBaseURL:    "http://localhost:8080",
-			wantHTTPClient: defaultClient,
-		},
-		{
-			name:           "adds http scheme and removes trailing slash",
-			endpoint:       "example.com:8080/",
-			httpClient:     nil,
-			wantBaseURL:    "http://example.com:8080",
-			wantHTTPClient: defaultClient,
-		},
-		{
-			name:           "preserves existing http scheme",
-			endpoint:       "http://localhost:8080",
-			httpClient:     nil,
-			wantBaseURL:    "http://localhost:8080",
-			wantHTTPClient: defaultClient,
+			name:          "with both server address and HTTP client",
+			serverAddress: "https://example.com",
+			httpClient:    http.DefaultClient,
+			wantClient: &attributeBasedVMSizeRecommenderClient{
+				baseURL:    "https://example.com",
+				httpClient: http.DefaultClient,
+			},
+			wantErr: false,
 		},
 	}
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			got := NewAttributeBasedVMSizeRecommenderClient(tt.endpoint, tt.httpClient).(*attributeBasedVMSizeRecommenderClient)
-			if got.baseURL != tt.wantBaseURL {
-				t.Errorf("NewClient() baseURL = %v, want %v", got.baseURL, tt.wantBaseURL)
+			got, gotErr := NewAttributeBasedVMSizeRecommenderClient(tt.serverAddress, tt.httpClient)
+			if (gotErr != nil) != tt.wantErr {
+				t.Errorf("NewClient() error = %v, wantErr %v", gotErr, tt.wantErr)
 			}
-			if !cmp.Equal(got.httpClient, tt.wantHTTPClient) {
-				t.Errorf("NewClient() httpClient = %v, want %v", got.httpClient, tt.wantHTTPClient)
+			gotClient, ok := got.(*attributeBasedVMSizeRecommenderClient)
+			if !ok && tt.wantClient != nil {
+				t.Errorf("NewClient() got type %T, want *attributeBasedVMSizeRecommenderClient", got)
+				return
+			}
+			if diff := cmp.Diff(tt.wantClient, gotClient,
+				cmp.AllowUnexported(attributeBasedVMSizeRecommenderClient{})); diff != "" {
+				t.Errorf("NewClient() mismatch (-want +got):\n%s", diff)
 			}
 		})
 	}
@@ -114,8 +89,8 @@ func TestClient_GenerateAttributeBasedRecommendations(t *testing.T) {
 			request: &computev1.GenerateAttributeBasedRecommendationsRequest{
 				SubscriptionId: "sub-123",
 				Location:       "eastus",
-				PriorityProfile: &computev1.GenerateAttributeBasedRecommendationsRequest_RegularPriorityProfile{
-					RegularPriorityProfile: &computev1.RegularPriorityProfile{},
+				RegularPriorityProfile: &computev1.RegularPriorityProfile{
+					TargetCapacity: 5,
 				},
 				ResourceProperties: &computev1.ResourceProperties{},
 			},
@@ -135,8 +110,8 @@ func TestClient_GenerateAttributeBasedRecommendations(t *testing.T) {
 			request: &computev1.GenerateAttributeBasedRecommendationsRequest{
 				SubscriptionId: "sub-123",
 				Location:       "westus2",
-				PriorityProfile: &computev1.GenerateAttributeBasedRecommendationsRequest_SpotPriorityProfile{
-					SpotPriorityProfile: &computev1.SpotPriorityProfile{},
+				RegularPriorityProfile: &computev1.RegularPriorityProfile{
+					TargetCapacity: 5,
 				},
 				ResourceProperties: &computev1.ResourceProperties{},
 			},
@@ -161,8 +136,8 @@ func TestClient_GenerateAttributeBasedRecommendations(t *testing.T) {
 			name: "missing subscription ID",
 			request: &computev1.GenerateAttributeBasedRecommendationsRequest{
 				Location: "eastus",
-				PriorityProfile: &computev1.GenerateAttributeBasedRecommendationsRequest_RegularPriorityProfile{
-					RegularPriorityProfile: &computev1.RegularPriorityProfile{},
+				RegularPriorityProfile: &computev1.RegularPriorityProfile{
+					TargetCapacity: 5,
 				},
 			},
 			wantErr:    true,
@@ -172,8 +147,8 @@ func TestClient_GenerateAttributeBasedRecommendations(t *testing.T) {
 			name: "missing location",
 			request: &computev1.GenerateAttributeBasedRecommendationsRequest{
 				SubscriptionId: "sub-123",
-				PriorityProfile: &computev1.GenerateAttributeBasedRecommendationsRequest_RegularPriorityProfile{
-					RegularPriorityProfile: &computev1.RegularPriorityProfile{},
+				RegularPriorityProfile: &computev1.RegularPriorityProfile{
+					TargetCapacity: 5,
 				},
 			},
 			wantErr:    true,
@@ -193,8 +168,8 @@ func TestClient_GenerateAttributeBasedRecommendations(t *testing.T) {
 			request: &computev1.GenerateAttributeBasedRecommendationsRequest{
 				SubscriptionId: "sub-123",
 				Location:       "eastus",
-				PriorityProfile: &computev1.GenerateAttributeBasedRecommendationsRequest_RegularPriorityProfile{
-					RegularPriorityProfile: &computev1.RegularPriorityProfile{},
+				RegularPriorityProfile: &computev1.RegularPriorityProfile{
+					TargetCapacity: 5,
 				},
 			},
 			mockStatusCode: http.StatusBadRequest,
@@ -207,8 +182,8 @@ func TestClient_GenerateAttributeBasedRecommendations(t *testing.T) {
 			request: &computev1.GenerateAttributeBasedRecommendationsRequest{
 				SubscriptionId: "sub-123",
 				Location:       "eastus",
-				PriorityProfile: &computev1.GenerateAttributeBasedRecommendationsRequest_RegularPriorityProfile{
-					RegularPriorityProfile: &computev1.RegularPriorityProfile{},
+				RegularPriorityProfile: &computev1.RegularPriorityProfile{
+					TargetCapacity: 5,
 				},
 			},
 			mockStatusCode: http.StatusInternalServerError,
@@ -221,8 +196,8 @@ func TestClient_GenerateAttributeBasedRecommendations(t *testing.T) {
 			request: &computev1.GenerateAttributeBasedRecommendationsRequest{
 				SubscriptionId: "sub-123",
 				Location:       "eastus",
-				PriorityProfile: &computev1.GenerateAttributeBasedRecommendationsRequest_RegularPriorityProfile{
-					RegularPriorityProfile: &computev1.RegularPriorityProfile{},
+				RegularPriorityProfile: &computev1.RegularPriorityProfile{
+					TargetCapacity: 5,
 				},
 			},
 			mockStatusCode: http.StatusOK,
@@ -282,7 +257,10 @@ func TestClient_GenerateAttributeBasedRecommendations(t *testing.T) {
 			defer server.Close()
 
 			// Create client
-			client := NewAttributeBasedVMSizeRecommenderClient(server.URL, nil)
+			client, err := NewAttributeBasedVMSizeRecommenderClient(server.URL, http.DefaultClient)
+			if err != nil {
+				t.Errorf("failed to create client: %v", err)
+			}
 
 			// Execute request
 			got, err := client.GenerateAttributeBasedRecommendations(context.Background(), tt.request)
