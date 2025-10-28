@@ -43,7 +43,6 @@ import (
 	"k8s.io/client-go/discovery"
 	"k8s.io/client-go/util/retry"
 	"k8s.io/klog/v2"
-	workv1alpha1 "sigs.k8s.io/work-api/pkg/apis/v1alpha1"
 
 	fleetnetworkingv1alpha1 "go.goms.io/fleet-networking/api/v1alpha1"
 
@@ -126,11 +125,6 @@ var (
 		Verbs:     []string{"get", "list", "update", "patch", "watch", "create"},
 		APIGroups: []string{""},
 		Resources: []string{"events"},
-	}
-	WorkRule = rbacv1.PolicyRule{
-		Verbs:     []string{"*"},
-		APIGroups: []string{workv1alpha1.GroupName},
-		Resources: []string{"*"},
 	}
 	FleetNetworkRule = rbacv1.PolicyRule{
 		Verbs:     []string{"*"},
@@ -343,25 +337,6 @@ var (
 		Group:    storagev1.SchemeGroupVersion.Group,
 		Version:  storagev1.SchemeGroupVersion.Version,
 		Resource: "storageclasses",
-	}
-
-	// TODO (weiweng): remove workv1alpha1 in next PR
-	WorkV1Alpha1MetaGVK = metav1.GroupVersionKind{
-		Group:   workv1alpha1.GroupVersion.Group,
-		Version: workv1alpha1.GroupVersion.Version,
-		Kind:    "Work",
-	}
-
-	WorkV1Alpha1GVK = schema.GroupVersionKind{
-		Group:   workv1alpha1.GroupVersion.Group,
-		Version: workv1alpha1.GroupVersion.Version,
-		Kind:    workv1alpha1.WorkKind,
-	}
-
-	WorkV1Alpha1GVR = schema.GroupVersionResource{
-		Group:    workv1alpha1.GroupVersion.Group,
-		Version:  workv1alpha1.GroupVersion.Version,
-		Resource: workv1alpha1.WorkResource,
 	}
 
 	WorkMetaGVK = metav1.GroupVersionKind{

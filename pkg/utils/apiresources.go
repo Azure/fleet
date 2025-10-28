@@ -186,8 +186,6 @@ func NewResourceConfig(isAllowList bool) *ResourceConfig {
 	if r.isAllowList {
 		return r
 	}
-	// TODO (weiweng): remove workv1alpha1 in next PR
-	r.AddGroupVersionKind(WorkV1Alpha1GVK)
 
 	// disable cluster group by default
 	r.AddGroup(clusterv1beta1.GroupVersion.Group)

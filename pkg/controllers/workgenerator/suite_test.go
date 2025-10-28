@@ -41,7 +41,6 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/envtest"
 	"sigs.k8s.io/controller-runtime/pkg/manager"
 	metricsserver "sigs.k8s.io/controller-runtime/pkg/metrics/server"
-	workv1alpha1 "sigs.k8s.io/work-api/pkg/apis/v1alpha1"
 
 	clusterv1beta1 "github.com/kubefleet-dev/kubefleet/apis/cluster/v1beta1"
 	placementv1beta1 "github.com/kubefleet-dev/kubefleet/apis/placement/v1beta1"
@@ -95,7 +94,6 @@ var _ = BeforeSuite(func() {
 	//+kubebuilder:scaffold:scheme
 	By("Set all the customized scheme")
 	Expect(placementv1beta1.AddToScheme(scheme.Scheme)).Should(Succeed())
-	Expect(workv1alpha1.AddToScheme(scheme.Scheme)).Should(Succeed())
 	Expect(clusterv1beta1.AddToScheme(scheme.Scheme)).Should(Succeed())
 
 	By("starting the controller manager")

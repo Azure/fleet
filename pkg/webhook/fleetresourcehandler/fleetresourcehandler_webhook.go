@@ -72,8 +72,7 @@ func (v *fleetResourceValidator) Handle(ctx context.Context, req admission.Reque
 		case req.Kind == utils.NamespaceMetaGVK:
 			klog.V(2).InfoS("handling namespace resource", "name", req.Name, "operation", req.Operation, "subResource", req.SubResource)
 			response = v.handleNamespace(req)
-		// TODO (weiweng): remove workv1alpha1 in next PR
-		case req.Kind == utils.WorkV1Alpha1MetaGVK || req.Kind == utils.IMCMetaGVK || req.Kind == utils.WorkMetaGVK || req.Kind == utils.EndpointSliceExportMetaGVK || req.Kind == utils.EndpointSliceImportMetaGVK || req.Kind == utils.InternalServiceExportMetaGVK || req.Kind == utils.InternalServiceImportMetaGVK:
+		case req.Kind == utils.IMCMetaGVK || req.Kind == utils.WorkMetaGVK || req.Kind == utils.EndpointSliceExportMetaGVK || req.Kind == utils.EndpointSliceImportMetaGVK || req.Kind == utils.InternalServiceExportMetaGVK || req.Kind == utils.InternalServiceImportMetaGVK:
 			klog.V(2).InfoS("handling fleet owned namespaced resource in fleet reserved namespaces", "GVK", req.RequestKind, "namespacedName", namespacedName, "operation", req.Operation, "subResource", req.SubResource)
 			response = v.handleFleetReservedNamespacedResource(ctx, req)
 		case req.Kind == utils.EventMetaGVK:

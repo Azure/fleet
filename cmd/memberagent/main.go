@@ -47,13 +47,11 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/log/zap"
 	metricsserver "sigs.k8s.io/controller-runtime/pkg/metrics/server"
 	"sigs.k8s.io/controller-runtime/pkg/webhook"
-	workv1alpha1 "sigs.k8s.io/work-api/pkg/apis/v1alpha1"
 
 	clusterv1beta1 "github.com/kubefleet-dev/kubefleet/apis/cluster/v1beta1"
 	placementv1beta1 "github.com/kubefleet-dev/kubefleet/apis/placement/v1beta1"
 	imcv1beta1 "github.com/kubefleet-dev/kubefleet/pkg/controllers/internalmembercluster/v1beta1"
 	"github.com/kubefleet-dev/kubefleet/pkg/controllers/workapplier"
-	workv1alpha1controller "github.com/kubefleet-dev/kubefleet/pkg/controllers/workv1alpha1"
 	"github.com/kubefleet-dev/kubefleet/pkg/propertyprovider"
 	"github.com/kubefleet-dev/kubefleet/pkg/propertyprovider/azure"
 	"github.com/kubefleet-dev/kubefleet/pkg/utils"
@@ -77,9 +75,10 @@ var (
 	metricsAddr          = flag.String("metrics-bind-address", ":8090", "The address the metric endpoint binds to.")
 	enableLeaderElection = flag.Bool("leader-elect", false,
 		"Enable leader election for controller manager. Enabling this will ensure there is only one active controller manager.")
-	leaderElectionNamespace      = flag.String("leader-election-namespace", "kube-system", "The namespace in which the leader election resource will be created.")
-	enableV1Alpha1APIs           = flag.Bool("enable-v1alpha1-apis", true, "If set, the agents will watch for the v1alpha1 APIs.")
-	enableV1Beta1APIs            = flag.Bool("enable-v1beta1-apis", false, "If set, the agents will watch for the v1beta1 APIs.")
+	leaderElectionNamespace = flag.String("leader-election-namespace", "kube-system", "The namespace in which the leader election resource will be created.")
+	// TODO(weiweng): only keep enableV1Alpha1APIs for backward compatibility with helm charts. Remove soon.
+	enableV1Alpha1APIs           = flag.Bool("enable-v1alpha1-apis", false, "If set, the agents will watch for the v1alpha1 APIs. This is deprecated and will be removed soon.")
+	enableV1Beta1APIs            = flag.Bool("enable-v1beta1-apis", true, "If set, the agents will watch for the v1beta1 APIs.")
 	propertyProvider             = flag.String("property-provider", "none", "The property provider to use for the agent.")
 	region                       = flag.String("region", "", "The region where the member cluster resides.")
 	cloudConfigFile              = flag.String("cloud-config", "/etc/kubernetes/provider/config.json", "The path to the cloud cloudconfig file.")
@@ -112,7 +111,6 @@ func init() {
 	klog.InitFlags(nil)
 
 	utilruntime.Must(clientgoscheme.AddToScheme(scheme))
-	utilruntime.Must(workv1alpha1.AddToScheme(scheme))
 	utilruntime.Must(clusterv1beta1.AddToScheme(scheme))
 	utilruntime.Must(placementv1beta1.AddToScheme(scheme))
 	//+kubebuilder:scaffold:scheme
@@ -358,22 +356,9 @@ func Start(ctx context.Context, hubCfg, memberConfig *rest.Config, hubOpts, memb
 	discoverClient := discovery.NewDiscoveryClientForConfigOrDie(memberConfig)
 
 	if *enableV1Alpha1APIs {
-		gvk := workv1alpha1.SchemeGroupVersion.WithKind(workv1alpha1.AppliedWorkKind)
-		if err = utils.CheckCRDInstalled(discoverClient, gvk); err != nil {
-			klog.ErrorS(err, "unable to find the required CRD", "GVK", gvk)
-			return err
-		}
-		// create the work controller, so we can pass it to the internal member cluster reconciler
-		workController := workv1alpha1controller.NewApplyWorkReconciler(
-			hubMgr.GetClient(),
-			spokeDynamicClient,
-			memberMgr.GetClient(),
-			restMapper, hubMgr.GetEventRecorderFor("work_controller"), 5, targetNS)
-
-		if err = workController.SetupWithManager(hubMgr); err != nil {
-			klog.ErrorS(err, "Failed to create v1alpha1 controller", "controller", "work")
-			return err
-		}
+		// TODO(weiweng): keeping v1alpha1 APIs for backward compatibility with helm charts. Remove soon.
+		klog.Error("v1alpha1 APIs are no longer supported. Please switch to v1beta1 APIs")
+		return errors.New("v1alpha1 APIs are no longer supported. Please switch to v1beta1 APIs")
 	}
 
 	if *enableV1Beta1APIs {

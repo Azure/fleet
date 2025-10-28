@@ -32,7 +32,6 @@ import (
 	"k8s.io/apimachinery/pkg/types"
 	"k8s.io/klog/v2"
 	"sigs.k8s.io/controller-runtime/pkg/client"
-	workv1alpha1 "sigs.k8s.io/work-api/pkg/apis/v1alpha1"
 
 	fleetv1beta1 "github.com/kubefleet-dev/kubefleet/apis/placement/v1beta1"
 	"github.com/kubefleet-dev/kubefleet/pkg/utils"
@@ -495,17 +494,6 @@ func generateRawContent(object *unstructured.Unstructured) ([]byte, error) {
 		return nil, fmt.Errorf("failed to marshal the unstructured object gvk = %s, name =%s: %w", object.GroupVersionKind(), object.GetName(), err)
 	}
 	return rawContent, nil
-}
-
-// generateManifest creates a manifest from the unstructured obj.
-func generateManifest(object *unstructured.Unstructured) (*workv1alpha1.Manifest, error) {
-	rawContent, err := generateRawContent(object)
-	if err != nil {
-		return nil, err
-	}
-	return &workv1alpha1.Manifest{
-		RawExtension: runtime.RawExtension{Raw: rawContent},
-	}, nil
 }
 
 // generateResourceContent creates a resource content from the unstructured obj.

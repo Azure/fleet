@@ -87,6 +87,7 @@ type Options struct {
 	// RateLimiterOpts is the ratelimit parameters for the work queue
 	RateLimiterOpts RateLimitOptions
 	// EnableV1Alpha1APIs enables the agents to watch the v1alpha1 CRs.
+	// TODO(weiweng): remove this field soon. Only kept for backward compatibility.
 	EnableV1Alpha1APIs bool
 	// EnableV1Beta1APIs enables the agents to watch the v1beta1 CRs.
 	EnableV1Beta1APIs bool
