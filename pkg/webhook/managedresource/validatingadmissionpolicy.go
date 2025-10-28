@@ -57,6 +57,7 @@ func mutateValidatingAdmissionPolicy(vap *admv1.ValidatingAdmissionPolicy) {
 				(
 					(
 						request.userInfo.username == "aksService" ||
+						request.userInfo.username == "acsService" ||
 						request.userInfo.username == "fleet-member-agent-sa"
 					)
 				    &&
