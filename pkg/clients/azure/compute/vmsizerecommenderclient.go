@@ -27,41 +27,36 @@ const (
 	recommendationsPathTemplate = "/subscriptions/%s/providers/Microsoft.Compute/locations/%s/vmSizeRecommendations/vmAttributeBased/generate"
 )
 
-// AttributeBasedVMSizeRecommenderClient is an interface for interacting with the Azure Attribute-Based VM Size Recommender API.
-type AttributeBasedVMSizeRecommenderClient interface {
-	// GenerateAttributeBasedRecommendations generates VM size recommendations based on attributes.
-	GenerateAttributeBasedRecommendations(ctx context.Context, req *computev1.GenerateAttributeBasedRecommendationsRequest) (*computev1.GenerateAttributeBasedRecommendationsResponse, error)
-}
-
-var _ AttributeBasedVMSizeRecommenderClient = &attributeBasedVMSizeRecommenderClient{}
-
-// attributeBasedVMSizeRecommenderClient implements the AttributeBasedVMSizeRecommenderClient interface
-// for interacting with Azure Attribute-Based VM Size Recommender API.
-type attributeBasedVMSizeRecommenderClient struct {
+// AttributeBasedVMSizeRecommenderClient accesses Azure Attribute-Based VM Size Recommender API
+// to provide VM size recommendations based on specified attributes.
+type AttributeBasedVMSizeRecommenderClient struct {
 	// baseURL is the base URL of the http(s) requests to the attribute-based VM size recommender service endpoint.
 	baseURL string
 	// httpClient is the HTTP client used for making requests.
 	httpClient *http.Client
 }
 
-// NewAttributeBasedVMSizeRecommenderClient creates a new attribute-based VM size recommender client.
+// NewAttributeBasedVMSizeRecommenderClient creates a new AttributeBasedVMSizeRecommenderClient.
 // The serverAddress is the remote Azure Attribute-Based VM Size Recommender service endpoint.
 // Both serverAddress and httpClient must be provided.
-func NewAttributeBasedVMSizeRecommenderClient(serverAddress string, httpClient *http.Client) (AttributeBasedVMSizeRecommenderClient, error) {
+func NewAttributeBasedVMSizeRecommenderClient(
+	serverAddress string,
+	httpClient *http.Client,
+) (*AttributeBasedVMSizeRecommenderClient, error) {
 	if len(serverAddress) == 0 {
 		return nil, fmt.Errorf("serverAddress cannot be empty")
 	}
 	if httpClient == nil {
 		return nil, fmt.Errorf("httpClient cannot be nil")
 	}
-	return &attributeBasedVMSizeRecommenderClient{
+	return &AttributeBasedVMSizeRecommenderClient{
 		baseURL:    serverAddress,
 		httpClient: httpClient,
 	}, nil
 }
 
 // GenerateAttributeBasedRecommendations generates VM size recommendations based on attributes.
-func (c *attributeBasedVMSizeRecommenderClient) GenerateAttributeBasedRecommendations(
+func (c *AttributeBasedVMSizeRecommenderClient) GenerateAttributeBasedRecommendations(
 	ctx context.Context,
 	req *computev1.GenerateAttributeBasedRecommendationsRequest,
 ) (*computev1.GenerateAttributeBasedRecommendationsResponse, error) {

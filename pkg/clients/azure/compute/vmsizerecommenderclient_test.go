@@ -26,7 +26,7 @@ func TestNewAttributeBasedVMSizeRecommenderClient(t *testing.T) {
 		name          string
 		serverAddress string
 		httpClient    *http.Client
-		wantClient    *attributeBasedVMSizeRecommenderClient
+		wantClient    *AttributeBasedVMSizeRecommenderClient
 		wantErr       bool
 	}{
 		{
@@ -47,7 +47,7 @@ func TestNewAttributeBasedVMSizeRecommenderClient(t *testing.T) {
 			name:          "with both server address and HTTP client",
 			serverAddress: "https://example.com",
 			httpClient:    http.DefaultClient,
-			wantClient: &attributeBasedVMSizeRecommenderClient{
+			wantClient: &AttributeBasedVMSizeRecommenderClient{
 				baseURL:    "https://example.com",
 				httpClient: http.DefaultClient,
 			},
@@ -59,16 +59,11 @@ func TestNewAttributeBasedVMSizeRecommenderClient(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			got, gotErr := NewAttributeBasedVMSizeRecommenderClient(tt.serverAddress, tt.httpClient)
 			if (gotErr != nil) != tt.wantErr {
-				t.Errorf("NewClient() error = %v, wantErr %v", gotErr, tt.wantErr)
+				t.Errorf("NewAttributeBasedVMSizeRecommenderClient() error = %v, wantErr %v", gotErr, tt.wantErr)
 			}
-			gotClient, ok := got.(*attributeBasedVMSizeRecommenderClient)
-			if !ok && tt.wantClient != nil {
-				t.Errorf("NewClient() got type %T, want *attributeBasedVMSizeRecommenderClient", got)
-				return
-			}
-			if diff := cmp.Diff(tt.wantClient, gotClient,
-				cmp.AllowUnexported(attributeBasedVMSizeRecommenderClient{})); diff != "" {
-				t.Errorf("NewClient() mismatch (-want +got):\n%s", diff)
+			if diff := cmp.Diff(tt.wantClient, got,
+				cmp.AllowUnexported(AttributeBasedVMSizeRecommenderClient{})); diff != "" {
+				t.Errorf("NewAttributeBasedVMSizeRecommenderClient() mismatch (-want +got):\n%s", diff)
 			}
 		})
 	}
