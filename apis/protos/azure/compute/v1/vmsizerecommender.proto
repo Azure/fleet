@@ -1,0 +1,114 @@
+/*
+Copyright (c) Microsoft Corporation.
+Licensed under the MIT license.
+*/
+
+syntax = "proto3";
+
+package azure.compute.v1;
+
+option go_package = "go.goms.io/fleet/pkg/protos/azure/compute/v1";
+
+// Capacity unit types
+enum CapacityUnitType {
+  CAPACITY_UNIT_TYPE_UNSPECIFIED = 0;
+  CAPACITY_UNIT_TYPE_VM_INSTANCE_COUNT = 1;
+}
+
+// VM attributes specification
+message VMAttributes {
+  // optional
+  // List of Azure Vm Sizes only to filter based on above attributes provided
+  repeated string allowed_vm_sizes = 1;
+}
+
+// Resource properties
+message ResourceProperties {
+  // optional
+  // Object contains specific requirements for Vm sizes attributes to filter.
+  VMAttributes vm_attributes = 1;
+}
+
+// Priority profile for regular VMs
+message RegularPriorityProfile {
+  // optional
+  CapacityUnitType capacity_unit_type = 1;
+  // optional
+  // Expected values: >0
+  uint32 target_capacity = 2;
+}
+
+// Priority profile for spot VMs
+message SpotPriorityProfile {
+  // optional
+  CapacityUnitType capacity_unit_type = 1;
+  // optional
+  // Note: SDK is using float32 while internal doc is using double.
+  // maxPricePerVM for spot instance in USD 
+  float max_price_per_vm = 2;
+  // optional
+  // Expected values: >0
+  uint32 target_capacity = 3;
+}
+
+// Recommendation properties
+message RecommendationProperties {
+  // Restrictions filter
+  enum RestrictionsFilter {
+    RESTRICTIONS_FILTER_UNSPECIFIED = 0;
+    RESTRICTIONS_FILTER_NONE = 1;
+    RESTRICTIONS_FILTER_OFFER_RESTRICTIONS = 2;
+    RESTRICTIONS_FILTER_QUOTA_RESTRICTIONS = 3;
+    RESTRICTIONS_FILTER_QUOTA_AND_OFFER_RESTRICTIONS = 4;
+  }
+
+  RestrictionsFilter restrictions_filter = 1;
+}
+
+// Properties of a recommended VM size
+// Note: it only exposes whatever fields we need for now.
+message RecommendedVMSizeProperties {
+  // Family of the VM size
+  string family = 1;
+  // Name of the VM size
+  string name = 2;
+  // Size of the VM
+  string size = 3;
+}
+
+// Collection of recommended VM sizes
+message RecommendedVMSizes {
+  // List of recommended regular VM sizes
+  repeated RecommendedVMSizeProperties regular_vm_sizes = 1;
+  // List of recommended spot VM sizes
+  repeated RecommendedVMSizeProperties spot_vm_sizes = 2;
+}
+
+// Request to generate attribute-based VM size recommendations
+message GenerateAttributeBasedRecommendationsRequest {
+  // subscription_id - target managed cluster subscription id
+  string subscription_id = 1;
+  // location - target managed cluster location
+  string location = 2;
+  // Object of VMPriorityProfile for regular vms.
+  RegularPriorityProfile regular_priority_profile = 3;
+  // Object of VMPriorityProfile for spot vms.
+  SpotPriorityProfile spot_priority_profile = 4;
+  // optional
+  // Object of different recommendationProperties
+  RecommendationProperties recommendation_properties = 5;
+  // Object of resourceProperties
+  // Note: it only exposes whatever fields are required for now.
+  ResourceProperties resource_properties = 6;
+}
+
+// Response from generating attribute-based VM size recommendations
+message GenerateAttributeBasedRecommendationsResponse {
+  RecommendedVMSizes recommended_vm_sizes = 1;
+}
+
+// Service for generating attribute-based VM size recommendations
+service AttributeBasedVMSizeRecommenderService {
+  // Generate VM size recommendations based on specified attributes and requirements.
+  rpc GenerateAttributeBasedRecommendations(GenerateAttributeBasedRecommendationsRequest) returns (GenerateAttributeBasedRecommendationsResponse);
+}

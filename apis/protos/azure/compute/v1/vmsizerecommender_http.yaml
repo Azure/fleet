@@ -1,0 +1,8 @@
+type: google.api.Service
+config_version: 3
+
+http:
+  rules:
+    - selector: azure.compute.v1.AttributeBasedVMSizeRecommenderService.GenerateAttributeBasedRecommendations
+      post: "/subscriptions/{subscription_id}/providers/Microsoft.Compute/locations/{location}/vmSizeRecommendations/vmAttributeBased/generate"
+      body: "*"
