@@ -54,7 +54,6 @@ import (
 
 	clusterv1beta1 "github.com/kubefleet-dev/kubefleet/apis/cluster/v1beta1"
 	placementv1beta1 "github.com/kubefleet-dev/kubefleet/apis/placement/v1beta1"
-	fleetv1alpha1 "github.com/kubefleet-dev/kubefleet/apis/v1alpha1"
 	"github.com/kubefleet-dev/kubefleet/cmd/hubagent/options"
 	"github.com/kubefleet-dev/kubefleet/pkg/webhook/clusterresourceoverride"
 	"github.com/kubefleet-dev/kubefleet/pkg/webhook/clusterresourceplacement"
@@ -132,16 +131,16 @@ var (
 )
 
 var AddToManagerFuncs []func(manager.Manager) error
-var AddToManagerFleetResourceValidator func(manager.Manager, []string, bool, bool) error
+var AddToManagerFleetResourceValidator func(manager.Manager, []string, bool) error
 
 // AddToManager adds all Controllers to the Manager
-func AddToManager(m manager.Manager, whiteListedUsers []string, isFleetV1Beta1API bool, denyModifyMemberClusterLabels bool) error {
+func AddToManager(m manager.Manager, whiteListedUsers []string, denyModifyMemberClusterLabels bool) error {
 	for _, f := range AddToManagerFuncs {
 		if err := f(m); err != nil {
 			return err
 		}
 	}
-	return AddToManagerFleetResourceValidator(m, whiteListedUsers, isFleetV1Beta1API, denyModifyMemberClusterLabels)
+	return AddToManagerFleetResourceValidator(m, whiteListedUsers, denyModifyMemberClusterLabels)
 }
 
 type Config struct {
@@ -317,23 +316,6 @@ func (w *Config) buildFleetValidatingWebhooks() []admv1.ValidatingWebhook {
 						admv1.Create,
 					},
 					Rule: createRule([]string{corev1.SchemeGroupVersion.Group}, []string{corev1.SchemeGroupVersion.Version}, []string{podResourceName}, &namespacedScope),
-				},
-			},
-			TimeoutSeconds: longWebhookTimeout,
-		},
-		{
-			Name:                    "fleet.clusterresourceplacementv1alpha1.validating",
-			ClientConfig:            w.createClientConfig(clusterresourceplacement.V1Alpha1CRPValidationPath),
-			FailurePolicy:           &failFailurePolicy,
-			SideEffects:             &sideEffortsNone,
-			AdmissionReviewVersions: admissionReviewVersions,
-			Rules: []admv1.RuleWithOperations{
-				{
-					Operations: []admv1.OperationType{
-						admv1.Create,
-						admv1.Update,
-					},
-					Rule: createRule([]string{fleetv1alpha1.GroupVersion.Group}, []string{fleetv1alpha1.GroupVersion.Version}, []string{fleetv1alpha1.ClusterResourcePlacementResource}, &clusterScope),
 				},
 			},
 			TimeoutSeconds: longWebhookTimeout,
@@ -554,10 +536,6 @@ func (w *Config) buildFleetGuardRailValidatingWebhooks() []admv1.ValidatingWebho
 		},
 		{
 			Operations: cuOperations,
-			Rule:       createRule([]string{fleetv1alpha1.GroupVersion.Group}, []string{fleetv1alpha1.GroupVersion.Version}, []string{internalMemberClusterResourceName, internalMemberClusterResourceName + "/status"}, &namespacedScope),
-		},
-		{
-			Operations: cuOperations,
 			Rule:       createRule([]string{clusterv1beta1.GroupVersion.Group}, []string{clusterv1beta1.GroupVersion.Version}, []string{internalMemberClusterResourceName, internalMemberClusterResourceName + "/status"}, &namespacedScope),
 		},
 		{
@@ -598,20 +576,6 @@ func (w *Config) buildFleetGuardRailValidatingWebhooks() []admv1.ValidatingWebho
 				{
 					Operations: cudOperations,
 					Rule:       createRule([]string{clusterv1beta1.GroupVersion.Group}, []string{clusterv1beta1.GroupVersion.Version}, []string{memberClusterResourceName, memberClusterResourceName + "/status"}, &clusterScope),
-				},
-			},
-			TimeoutSeconds: shortWebhookTimeout,
-		},
-		{
-			Name:                    "fleet.v1alpha1.membercluster.guardrail.validating",
-			ClientConfig:            w.createClientConfig(fleetresourcehandler.ValidationPath),
-			FailurePolicy:           &ignoreFailurePolicy,
-			SideEffects:             &sideEffortsNone,
-			AdmissionReviewVersions: admissionReviewVersions,
-			Rules: []admv1.RuleWithOperations{
-				{
-					Operations: cudOperations,
-					Rule:       createRule([]string{fleetv1alpha1.GroupVersion.Group}, []string{fleetv1alpha1.GroupVersion.Version}, []string{memberClusterResourceName, memberClusterResourceName + "/status"}, &clusterScope),
 				},
 			},
 			TimeoutSeconds: shortWebhookTimeout,

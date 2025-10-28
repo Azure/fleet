@@ -49,7 +49,6 @@ import (
 
 	clusterv1beta1 "github.com/kubefleet-dev/kubefleet/apis/cluster/v1beta1"
 	placementv1beta1 "github.com/kubefleet-dev/kubefleet/apis/placement/v1beta1"
-	fleetv1alpha1 "github.com/kubefleet-dev/kubefleet/apis/v1alpha1"
 	"github.com/kubefleet-dev/kubefleet/pkg/utils/condition"
 	"github.com/kubefleet-dev/kubefleet/pkg/utils/controller"
 	"github.com/kubefleet-dev/kubefleet/pkg/utils/informer"
@@ -113,11 +112,6 @@ const (
 )
 
 var (
-	FleetRule = rbacv1.PolicyRule{
-		Verbs:     []string{"*"},
-		APIGroups: []string{fleetv1alpha1.GroupVersion.Group},
-		Resources: []string{"*"},
-	}
 	FleetClusterRule = rbacv1.PolicyRule{
 		Verbs:     []string{"*"},
 		APIGroups: []string{clusterv1beta1.GroupVersion.Group},
@@ -147,18 +141,6 @@ var (
 
 // Those are the GVR/GVKs in use by Fleet source code.
 var (
-	ClusterResourcePlacementV1Alpha1GVK = schema.GroupVersionKind{
-		Group:   fleetv1alpha1.GroupVersion.Group,
-		Version: fleetv1alpha1.GroupVersion.Version,
-		Kind:    "ClusterResourcePlacement",
-	}
-
-	ClusterResourcePlacementV1Alpha1GVR = schema.GroupVersionResource{
-		Group:    fleetv1alpha1.GroupVersion.Group,
-		Version:  fleetv1alpha1.GroupVersion.Version,
-		Resource: fleetv1alpha1.ClusterResourcePlacementResource,
-	}
-
 	ClusterResourcePlacementGVR = schema.GroupVersionResource{
 		Group:    placementv1beta1.GroupVersion.Group,
 		Version:  placementv1beta1.GroupVersion.Version,
@@ -249,12 +231,6 @@ var (
 		Kind:    "Event",
 	}
 
-	IMCV1Alpha1MetaGVK = metav1.GroupVersionKind{
-		Group:   fleetv1alpha1.GroupVersion.Group,
-		Version: fleetv1alpha1.GroupVersion.Version,
-		Kind:    "InternalMemberCluster",
-	}
-
 	IngressClassGVR = schema.GroupVersionResource{
 		Group:    networkingv1.SchemeGroupVersion.Group,
 		Version:  networkingv1.SchemeGroupVersion.Version,
@@ -283,24 +259,6 @@ var (
 		Group:    corev1.SchemeGroupVersion.Group,
 		Version:  corev1.SchemeGroupVersion.Version,
 		Resource: "limitranges",
-	}
-
-	MCV1Alpha1MetaGVK = metav1.GroupVersionKind{
-		Group:   fleetv1alpha1.GroupVersion.Group,
-		Version: fleetv1alpha1.GroupVersion.Version,
-		Kind:    "MemberCluster",
-	}
-
-	MCV1Alpha1GVK = schema.GroupVersionKind{
-		Group:   fleetv1alpha1.GroupVersion.Group,
-		Version: fleetv1alpha1.GroupVersion.Version,
-		Kind:    fleetv1alpha1.MemberClusterKind,
-	}
-
-	MCV1Alpha1GVR = schema.GroupVersionResource{
-		Group:    fleetv1alpha1.GroupVersion.Group,
-		Version:  fleetv1alpha1.GroupVersion.Version,
-		Resource: fleetv1alpha1.MemberClusterResource,
 	}
 
 	MCMetaGVK = metav1.GroupVersionKind{
@@ -387,6 +345,7 @@ var (
 		Resource: "storageclasses",
 	}
 
+	// TODO (weiweng): remove workv1alpha1 in next PR
 	WorkV1Alpha1MetaGVK = metav1.GroupVersionKind{
 		Group:   workv1alpha1.GroupVersion.Group,
 		Version: workv1alpha1.GroupVersion.Version,

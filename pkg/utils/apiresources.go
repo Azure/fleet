@@ -28,7 +28,6 @@ import (
 
 	clusterv1beta1 "github.com/kubefleet-dev/kubefleet/apis/cluster/v1beta1"
 	placementv1beta1 "github.com/kubefleet-dev/kubefleet/apis/placement/v1beta1"
-	fleetv1alpha1 "github.com/kubefleet-dev/kubefleet/apis/v1alpha1"
 )
 
 var (
@@ -187,9 +186,7 @@ func NewResourceConfig(isAllowList bool) *ResourceConfig {
 	if r.isAllowList {
 		return r
 	}
-	// TODO: remove after we remove v1alpha1 support
-	// disable v1alpha1 related resources by default
-	r.AddGroup(fleetv1alpha1.GroupVersion.Group)
+	// TODO (weiweng): remove workv1alpha1 in next PR
 	r.AddGroupVersionKind(WorkV1Alpha1GVK)
 
 	// disable cluster group by default

@@ -34,7 +34,6 @@ import (
 	"k8s.io/klog/v2"
 
 	placementv1beta1 "github.com/kubefleet-dev/kubefleet/apis/placement/v1beta1"
-	fleetv1alpha1 "github.com/kubefleet-dev/kubefleet/apis/v1alpha1"
 	"github.com/kubefleet-dev/kubefleet/pkg/propertyprovider"
 	"github.com/kubefleet-dev/kubefleet/pkg/utils/controller"
 	"github.com/kubefleet-dev/kubefleet/pkg/utils/informer"
@@ -53,49 +52,6 @@ var (
 	supportedResourceCapacityTypesMap = map[string]bool{propertyprovider.AllocatableCapacityName: true, propertyprovider.AvailableCapacityName: true, propertyprovider.TotalCapacityName: true}
 	resourceCapacityTypes             = supportedResourceCapacityTypes()
 )
-
-// ValidateClusterResourcePlacementAlpha validates a ClusterResourcePlacement v1alpha1 object.
-func ValidateClusterResourcePlacementAlpha(clusterResourcePlacement *fleetv1alpha1.ClusterResourcePlacement) error {
-	allErr := make([]error, 0)
-
-	// we leverage the informer manager to do the resource scope validation
-	if ResourceInformer == nil {
-		allErr = append(allErr, fmt.Errorf("cannot perform resource scope check for now, please retry"))
-	}
-
-	for _, selector := range clusterResourcePlacement.Spec.ResourceSelectors {
-		if selector.LabelSelector != nil {
-			if len(selector.Name) != 0 {
-				allErr = append(allErr, fmt.Errorf("the labelSelector and name fields are mutually exclusive in selector %+v", selector))
-			}
-			if _, err := metav1.LabelSelectorAsSelector(selector.LabelSelector); err != nil {
-				allErr = append(allErr, fmt.Errorf("the labelSelector in resource selector %+v is invalid: %w", selector, err))
-			}
-		}
-		if ResourceInformer != nil {
-			gvk := schema.GroupVersionKind{
-				Group:   selector.Group,
-				Version: selector.Version,
-				Kind:    selector.Kind,
-			}
-			// TODO: Ensure gvk created from resource selector is valid.
-			if !ResourceInformer.IsClusterScopedResources(gvk) {
-				allErr = append(allErr, fmt.Errorf("the resource is not found in schema (please retry) or it is not a cluster scoped resource: %v", gvk))
-			}
-		}
-	}
-
-	if clusterResourcePlacement.Spec.Policy != nil && clusterResourcePlacement.Spec.Policy.Affinity != nil &&
-		clusterResourcePlacement.Spec.Policy.Affinity.ClusterAffinity != nil {
-		for _, selector := range clusterResourcePlacement.Spec.Policy.Affinity.ClusterAffinity.ClusterSelectorTerms {
-			if _, err := metav1.LabelSelectorAsSelector(&selector.LabelSelector); err != nil {
-				allErr = append(allErr, fmt.Errorf("the labelSelector in cluster selector %+v is invalid: %w", selector, err))
-			}
-		}
-	}
-
-	return apiErrors.NewAggregate(allErr)
-}
 
 // ValidateClusterResourcePlacement validates a ClusterResourcePlacement object.
 func ValidateClusterResourcePlacement(clusterResourcePlacement *placementv1beta1.ClusterResourcePlacement) error {
