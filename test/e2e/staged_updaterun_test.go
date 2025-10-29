@@ -872,6 +872,235 @@ var _ = Describe("test RP rollout with staged update run", Label("resourceplacem
 
 		It("Should not rollout any resources to member clusters as it's reportDiff mode", checkIfRemovedConfigMapFromAllMemberClustersConsistently)
 	})
+
+	Context("Test RP rollout strategy transition from rollingUpdate to external", Ordered, func() {
+		var strategy *placementv1beta1.StagedUpdateStrategy
+		updateRunName := fmt.Sprintf(stagedUpdateRunNameWithSubIndexTemplate, GinkgoParallelProcess(), 0)
+		var oldConfigMap, newConfigMap corev1.ConfigMap
+
+		BeforeAll(func() {
+			// Create the RP with rollingUpdate strategy initially.
+			rp := &placementv1beta1.ResourcePlacement{
+				ObjectMeta: metav1.ObjectMeta{
+					Name:      rpName,
+					Namespace: testNamespace,
+					// Add a custom finalizer; this would allow us to better observe
+					// the behavior of the controllers.
+					Finalizers: []string{customDeletionBlockerFinalizer},
+				},
+				Spec: placementv1beta1.PlacementSpec{
+					ResourceSelectors: configMapSelector(),
+					Strategy: placementv1beta1.RolloutStrategy{
+						Type: placementv1beta1.RollingUpdateRolloutStrategyType,
+					},
+				},
+			}
+			Expect(hubClient.Create(ctx, rp)).To(Succeed(), "Failed to create RP")
+
+			// Create the stagedUpdateStrategy for later use.
+			strategy = createStagedUpdateStrategySucceed(strategyName, testNamespace)
+
+			oldConfigMap = appConfigMap()
+			newConfigMap = appConfigMap()
+			newConfigMap.Data["data"] = testConfigMapDataValue
+		})
+
+		AfterAll(func() {
+			// Remove the custom deletion blocker finalizer from the RP.
+			ensureRPAndRelatedResourcesDeleted(types.NamespacedName{Name: rpName, Namespace: testNamespace}, allMemberClusters)
+
+			// Delete the stagedUpdateRun.
+			ensureStagedUpdateRunDeletion(updateRunName, testNamespace)
+
+			// Delete the stagedUpdateStrategy.
+			ensureStagedUpdateRunStrategyDeletion(strategyName, testNamespace)
+		})
+
+		It("Should rollout resources to all member clusters with rollingUpdate strategy", func() {
+			rpStatusUpdatedActual := rpStatusUpdatedActual(appConfigMapIdentifiers(), allMemberClusterNames, nil, resourceSnapshotIndex1st)
+			Eventually(rpStatusUpdatedActual, eventuallyDuration, eventuallyInterval).Should(Succeed(), "Failed to update RP %s/%s status as expected", testNamespace, rpName)
+			checkIfPlacedWorkResourcesOnMemberClustersInUpdateRun(allMemberClusters)
+		})
+
+		It("Update RP to use external rollout strategy", func() {
+			Eventually(func() error {
+				rp := &placementv1beta1.ResourcePlacement{}
+				if err := hubClient.Get(ctx, client.ObjectKey{Name: rpName, Namespace: testNamespace}, rp); err != nil {
+					return fmt.Errorf("failed to get the rp: %w", err)
+				}
+				rp.Spec.Strategy = placementv1beta1.RolloutStrategy{
+					Type: placementv1beta1.ExternalRolloutStrategyType,
+				}
+				return hubClient.Update(ctx, rp)
+			}, eventuallyDuration, eventuallyInterval).Should(Succeed(), "Failed to update RP strategy to external rollout")
+		})
+
+		It("Should update rp status to reflect external rollout strategy with new observed generation and no other change", func() {
+			rpStatusUpdatedActual := rpStatusUpdatedActual(appConfigMapIdentifiers(), allMemberClusterNames, nil, resourceSnapshotIndex1st)
+			Eventually(rpStatusUpdatedActual, eventuallyDuration, eventuallyInterval).Should(Succeed(), "Failed to update RP %s/%s status as expected", testNamespace, rpName)
+		})
+
+		It("Update the configmap on hub but should not rollout to member clusters", func() {
+			updateConfigMapSucceed(&newConfigMap)
+
+			// Verify old configmap is still on all member clusters.
+			for _, cluster := range allMemberClusters {
+				configMapActual := configMapPlacedOnClusterActual(cluster, &oldConfigMap)
+				Consistently(configMapActual, consistentlyDuration, consistentlyInterval).Should(Succeed(), "Failed to keep old configmap %s data on cluster %s", oldConfigMap.Name, cluster.ClusterName)
+			}
+		})
+
+		It("Should have the new resource snapshot but RP status should remain completed with old snapshot", func() {
+			validateLatestResourceSnapshot(rpName, testNamespace, resourceSnapshotIndex2nd)
+
+			// RP status should still show completed with old snapshot.
+			rpStatusUpdatedActual := rpStatusUpdatedActual(appConfigMapIdentifiers(), allMemberClusterNames, nil, resourceSnapshotIndex1st)
+			Consistently(rpStatusUpdatedActual, consistentlyDuration, consistentlyInterval).Should(Succeed(), "Failed to keep RP %s/%s status as expected", testNamespace, rpName)
+		})
+
+		It("Create a staged update run with new resourceSnapshotIndex and verify rollout happens", func() {
+			createStagedUpdateRunSucceed(updateRunName, testNamespace, rpName, resourceSnapshotIndex2nd, strategyName)
+
+			// Verify rollout to canary cluster first.
+			By("Verify that the new configmap is updated on member-cluster-2 during canary stage")
+			configMapActual := configMapPlacedOnClusterActual(allMemberClusters[1], &newConfigMap)
+			Eventually(configMapActual, eventuallyDuration, eventuallyInterval).Should(Succeed(), "Failed to update to the new configmap %s on cluster %s", newConfigMap.Name, allMemberClusterNames[1])
+
+			validateAndApproveNamespacedApprovalRequests(updateRunName, testNamespace, envCanary)
+
+			// Verify complete rollout.
+			surSucceededActual := stagedUpdateRunStatusSucceededActual(updateRunName, testNamespace, policySnapshotIndex1st, len(allMemberClusters), defaultApplyStrategy, &strategy.Spec, [][]string{{allMemberClusterNames[1]}, {allMemberClusterNames[0], allMemberClusterNames[2]}}, nil, nil, nil)
+			Eventually(surSucceededActual, updateRunEventuallyDuration, eventuallyInterval).Should(Succeed(), "Failed to validate updateRun %s/%s succeeded", testNamespace, updateRunName)
+
+			// Verify new configmap is on all member clusters.
+			for _, cluster := range allMemberClusters {
+				configMapActual := configMapPlacedOnClusterActual(cluster, &newConfigMap)
+				Eventually(configMapActual, eventuallyDuration, eventuallyInterval).Should(Succeed(), "Failed to update to the new configmap %s on cluster %s", newConfigMap.Name, cluster.ClusterName)
+			}
+		})
+
+		It("Should update rp status as completed with new snapshot", func() {
+			rpStatusUpdatedActual := rpStatusWithExternalStrategyActual(appConfigMapIdentifiers(), resourceSnapshotIndex2nd, true, allMemberClusterNames,
+				[]string{resourceSnapshotIndex2nd, resourceSnapshotIndex2nd, resourceSnapshotIndex2nd}, []bool{true, true, true}, nil, nil)
+			Eventually(rpStatusUpdatedActual, eventuallyDuration, eventuallyInterval).Should(Succeed(), "Failed to update RP %s/%s status as expected", testNamespace, rpName)
+		})
+	})
+
+	Context("Test RP rollout strategy transition from external to rollingUpdate", Ordered, func() {
+		var strategy *placementv1beta1.StagedUpdateStrategy
+		updateRunName := fmt.Sprintf(stagedUpdateRunNameWithSubIndexTemplate, GinkgoParallelProcess(), 0)
+		var oldConfigMap, newConfigMap corev1.ConfigMap
+
+		BeforeAll(func() {
+			// Create the RP with external rollout strategy initially.
+			rp := &placementv1beta1.ResourcePlacement{
+				ObjectMeta: metav1.ObjectMeta{
+					Name:      rpName,
+					Namespace: testNamespace,
+					// Add a custom finalizer; this would allow us to better observe
+					// the behavior of the controllers.
+					Finalizers: []string{customDeletionBlockerFinalizer},
+				},
+				Spec: placementv1beta1.PlacementSpec{
+					ResourceSelectors: configMapSelector(),
+					Strategy: placementv1beta1.RolloutStrategy{
+						Type: placementv1beta1.ExternalRolloutStrategyType,
+					},
+				},
+			}
+			Expect(hubClient.Create(ctx, rp)).To(Succeed(), "Failed to create RP")
+
+			// Create the stagedUpdateStrategy.
+			strategy = createStagedUpdateStrategySucceed(strategyName, testNamespace)
+
+			oldConfigMap = appConfigMap()
+			newConfigMap = appConfigMap()
+			newConfigMap.Data["data"] = testConfigMapDataValue
+		})
+
+		AfterAll(func() {
+			// Remove the custom deletion blocker finalizer from the RP.
+			ensureRPAndRelatedResourcesDeleted(types.NamespacedName{Name: rpName, Namespace: testNamespace}, allMemberClusters)
+
+			// Delete the stagedUpdateRun.
+			ensureStagedUpdateRunDeletion(updateRunName, testNamespace)
+
+			// Delete the stagedUpdateStrategy.
+			ensureStagedUpdateRunStrategyDeletion(strategyName, testNamespace)
+		})
+
+		It("Should not rollout any resources to member clusters with external strategy", checkIfRemovedConfigMapFromAllMemberClustersConsistently)
+
+		It("Should have the latest resource snapshot", func() {
+			validateLatestResourceSnapshot(rpName, testNamespace, resourceSnapshotIndex1st)
+		})
+
+		It("Should update rp status as pending rollout", func() {
+			rpStatusUpdatedActual := rpStatusWithExternalStrategyActual(nil, "", false, allMemberClusterNames, []string{"", "", ""}, []bool{false, false, false}, nil, nil)
+			Eventually(rpStatusUpdatedActual, eventuallyDuration, eventuallyInterval).Should(Succeed(), "Failed to update RP %s/%s status as expected", testNamespace, rpName)
+		})
+
+		It("Create updateRun and verify resources are rolled out", func() {
+			createStagedUpdateRunSucceed(updateRunName, testNamespace, rpName, resourceSnapshotIndex1st, strategyName)
+
+			validateAndApproveNamespacedApprovalRequests(updateRunName, testNamespace, envCanary)
+
+			surSucceededActual := stagedUpdateRunStatusSucceededActual(updateRunName, testNamespace, policySnapshotIndex1st, len(allMemberClusters), defaultApplyStrategy, &strategy.Spec, [][]string{{allMemberClusterNames[1]}, {allMemberClusterNames[0], allMemberClusterNames[2]}}, nil, nil, nil)
+			Eventually(surSucceededActual, updateRunEventuallyDuration, eventuallyInterval).Should(Succeed(), "Failed to validate updateRun %s/%s succeeded", testNamespace, updateRunName)
+
+			checkIfPlacedWorkResourcesOnMemberClustersInUpdateRun(allMemberClusters)
+		})
+
+		It("Should update rp status as completed", func() {
+			rpStatusUpdatedActual := rpStatusWithExternalStrategyActual(appConfigMapIdentifiers(), resourceSnapshotIndex1st, true, allMemberClusterNames,
+				[]string{resourceSnapshotIndex1st, resourceSnapshotIndex1st, resourceSnapshotIndex1st}, []bool{true, true, true}, nil, nil)
+			Eventually(rpStatusUpdatedActual, eventuallyDuration, eventuallyInterval).Should(Succeed(), "Failed to update RP %s/%s status as expected", testNamespace, rpName)
+		})
+
+		It("Update the configmap on hub but should not rollout to member clusters with external strategy", func() {
+			updateConfigMapSucceed(&newConfigMap)
+
+			// Verify old configmap is still on all member clusters.
+			for _, cluster := range allMemberClusters {
+				configMapActual := configMapPlacedOnClusterActual(cluster, &oldConfigMap)
+				Consistently(configMapActual, consistentlyDuration, consistentlyInterval).Should(Succeed(), "Failed to keep old configmap %s data on cluster %s", oldConfigMap.Name, cluster.ClusterName)
+			}
+		})
+
+		It("Should have new resource snapshot but RP status should remain completed with old snapshot", func() {
+			validateLatestResourceSnapshot(rpName, testNamespace, resourceSnapshotIndex2nd)
+
+			// RP status should still show completed with old snapshot.
+			rpStatusUpdatedActual := rpStatusWithExternalStrategyActual(appConfigMapIdentifiers(), resourceSnapshotIndex1st, true, allMemberClusterNames,
+				[]string{resourceSnapshotIndex1st, resourceSnapshotIndex1st, resourceSnapshotIndex1st}, []bool{true, true, true}, nil, nil)
+			Consistently(rpStatusUpdatedActual, consistentlyDuration, consistentlyInterval).Should(Succeed(), "Failed to keep RP %s/%s status as expected", testNamespace, rpName)
+		})
+
+		It("Update RP to use rollingUpdate strategy", func() {
+			Eventually(func() error {
+				rp := &placementv1beta1.ResourcePlacement{}
+				if err := hubClient.Get(ctx, client.ObjectKey{Name: rpName, Namespace: testNamespace}, rp); err != nil {
+					return fmt.Errorf("failed to get the rp: %w", err)
+				}
+				rp.Spec.Strategy = placementv1beta1.RolloutStrategy{
+					Type: placementv1beta1.RollingUpdateRolloutStrategyType,
+				}
+				return hubClient.Update(ctx, rp)
+			}, eventuallyDuration, eventuallyInterval).Should(Succeed(), "Failed to update RP strategy to rollingUpdate")
+		})
+
+		It("Should automatically rollout new resources to all member clusters with rollingUpdate strategy", func() {
+			// Verify RP status shows all clusters with new resource snapshot.
+			rpStatusUpdatedActual := rpStatusUpdatedActual(appConfigMapIdentifiers(), allMemberClusterNames, nil, resourceSnapshotIndex2nd)
+			Eventually(rpStatusUpdatedActual, eventuallyDuration, eventuallyInterval).Should(Succeed(), "Failed to update RP %s/%s status with rollingUpdate strategy", testNamespace, rpName)
+
+			// Verify new configmap is on all member clusters.
+			for _, cluster := range allMemberClusters {
+				configMapActual := configMapPlacedOnClusterActual(cluster, &newConfigMap)
+				Eventually(configMapActual, eventuallyDuration, eventuallyInterval).Should(Succeed(), "Failed to update to the new configmap %s on cluster %s", newConfigMap.Name, cluster.ClusterName)
+			}
+		})
+	})
 })
 
 func createStagedUpdateStrategySucceed(strategyName, namespace string) *placementv1beta1.StagedUpdateStrategy {
