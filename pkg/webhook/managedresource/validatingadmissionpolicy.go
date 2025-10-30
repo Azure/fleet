@@ -54,23 +54,9 @@ func mutateValidatingAdmissionPolicy(vap *admv1.ValidatingAdmissionPolicy) {
 		Validations: []admv1.Validation{
 			{
 				Expression: `
-				(
-					(
-						request.userInfo.username == "aksService" ||
-						request.userInfo.username == "acsService" ||
-						request.userInfo.username == "fleet-member-agent-sa"
-					)
-				    &&
-					(
-						"system:masters" in request.userInfo.groups ||
-						"system:serviceaccounts:kube-system" in request.userInfo.groups ||
-						"system:serviceaccounts:fleet-system" in request.userInfo.groups
-					)
-				)
-				  ||
-				(
-					"system:serviceaccounts:openshift-infra" in request.userInfo.groups
-				)`,
+				"system:masters" in request.userInfo.groups || "system:serviceaccounts:kube-system" in request.userInfo.groups || 
+				"system:serviceaccounts:fleet-system" in request.userInfo.groups || 
+				"system:serviceaccounts:openshift-infra" in request.userInfo.groups`,
 				Message: "Create, Update, or Delete operations on ARM managed resources is forbidden",
 				Reason:  &forbidden,
 			},
