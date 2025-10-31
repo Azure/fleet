@@ -167,6 +167,29 @@ func TestValidateClusterResourcePlacement(t *testing.T) {
 			wantErr:          true,
 			wantErrMsg:       "cannot perform resource scope check for now, please retry",
 		},
+		"CRP with namespaced resource should fail": {
+			crp: &placementv1beta1.ClusterResourcePlacement{
+				ObjectMeta: metav1.ObjectMeta{
+					Name: "test-crp",
+				},
+				Spec: placementv1beta1.PlacementSpec{
+					ResourceSelectors: []placementv1beta1.ResourceSelectorTerm{
+						{
+							Group:   "apps",
+							Version: "v1",
+							Kind:    "Deployment",
+							Name:    "test-deployment",
+						},
+					},
+				},
+			},
+			resourceInformer: &testinformer.FakeManager{
+				APIResources:            map[schema.GroupVersionKind]bool{utils.DeploymentGVK: true},
+				IsClusterScopedResource: false, // Deployment is namespaced
+			},
+			wantErr:    true,
+			wantErrMsg: "resource is not found in schema (please retry) or it is not a cluster scoped resource",
+		},
 	}
 	for testName, testCase := range tests {
 		t.Run(testName, func(t *testing.T) {
@@ -1715,6 +1738,133 @@ func TestIsTolerationsUpdatedOrDeleted(t *testing.T) {
 		t.Run(testName, func(t *testing.T) {
 			if got := IsTolerationsUpdatedOrDeleted(testCase.oldTolerations, testCase.newTolerations); got != testCase.want {
 				t.Errorf("IsTolerationsUpdatedOrDeleted() got = %v, want = %v", got, testCase.want)
+			}
+		})
+	}
+}
+
+func TestValidateResourcePlacement(t *testing.T) {
+	tests := map[string]struct {
+		rp               *placementv1beta1.ResourcePlacement
+		resourceInformer informer.Manager
+		wantErr          bool
+		wantErrMsg       string
+	}{
+		"RP with invalid placement policy": {
+			rp: &placementv1beta1.ResourcePlacement{
+				ObjectMeta: metav1.ObjectMeta{
+					Name: "test-rp",
+				},
+				Spec: placementv1beta1.PlacementSpec{
+					ResourceSelectors: []placementv1beta1.ResourceSelectorTerm{
+						{
+							Group:   "apps",
+							Version: "v1",
+							Kind:    "Deployment",
+							Name:    "test-deployment",
+						},
+					},
+					Policy: &placementv1beta1.PlacementPolicy{
+						PlacementType: placementv1beta1.PickFixedPlacementType,
+						ClusterNames:  []string{}, // Empty cluster names for PickFixed type
+					},
+				},
+			},
+			resourceInformer: &testinformer.FakeManager{
+				APIResources:            map[schema.GroupVersionKind]bool{utils.DeploymentGVK: true},
+				IsClusterScopedResource: false,
+			},
+			wantErr:    true,
+			wantErrMsg: "cluster names cannot be empty for policy type PickFixed",
+		},
+		"RP with invalid rollout strategy": {
+			rp: &placementv1beta1.ResourcePlacement{
+				ObjectMeta: metav1.ObjectMeta{
+					Name: "test-rp",
+				},
+				Spec: placementv1beta1.PlacementSpec{
+					ResourceSelectors: []placementv1beta1.ResourceSelectorTerm{
+						{
+							Group:   "apps",
+							Version: "v1",
+							Kind:    "Deployment",
+							Name:    "test-deployment",
+						},
+					},
+					Strategy: placementv1beta1.RolloutStrategy{
+						Type: placementv1beta1.RollingUpdateRolloutStrategyType,
+						RollingUpdate: &placementv1beta1.RollingUpdateConfig{
+							MaxUnavailable: &intstr.IntOrString{Type: intstr.Int, IntVal: -1}, // Negative value
+						},
+					},
+				},
+			},
+			resourceInformer: &testinformer.FakeManager{
+				APIResources:            map[schema.GroupVersionKind]bool{utils.DeploymentGVK: true},
+				IsClusterScopedResource: false,
+			},
+			wantErr:    true,
+			wantErrMsg: "maxUnavailable must be greater than or equal to 0",
+		},
+		"RP with cluster scoped resource should fail": {
+			rp: &placementv1beta1.ResourcePlacement{
+				ObjectMeta: metav1.ObjectMeta{
+					Name:      "test-rp",
+					Namespace: "test-namespace",
+				},
+				Spec: placementv1beta1.PlacementSpec{
+					ResourceSelectors: []placementv1beta1.ResourceSelectorTerm{
+						{
+							Group:   "rbac.authorization.k8s.io",
+							Version: "v1",
+							Kind:    "ClusterRole",
+							Name:    "test-cluster-role",
+						},
+					},
+				},
+			},
+			resourceInformer: &testinformer.FakeManager{
+				APIResources:            map[schema.GroupVersionKind]bool{utils.ClusterRoleGVK: true},
+				IsClusterScopedResource: true, // ClusterRole is cluster-scoped
+			},
+			wantErr:    true,
+			wantErrMsg: "resource is not found in schema (please retry) or it is a cluster scoped resource",
+		},
+		"RP with namespaced resource should succeed": {
+			rp: &placementv1beta1.ResourcePlacement{
+				ObjectMeta: metav1.ObjectMeta{
+					Name:      "test-rp",
+					Namespace: "test-namespace",
+				},
+				Spec: placementv1beta1.PlacementSpec{
+					ResourceSelectors: []placementv1beta1.ResourceSelectorTerm{
+						{
+							Group:   "apps",
+							Version: "v1",
+							Kind:    "Deployment",
+							Name:    "test-deployment",
+						},
+					},
+				},
+			},
+			resourceInformer: &testinformer.FakeManager{
+				APIResources:            map[schema.GroupVersionKind]bool{utils.DeploymentGVK: true},
+				IsClusterScopedResource: false, // Deployment is namespaced
+			},
+			wantErr: false,
+		},
+	}
+
+	for testName, testCase := range tests {
+		t.Run(testName, func(t *testing.T) {
+			RestMapper = utils.TestMapper{}
+			ResourceInformer = testCase.resourceInformer
+			gotErr := ValidateResourcePlacement(testCase.rp)
+			if (gotErr != nil) != testCase.wantErr {
+				t.Errorf("ValidateResourcePlacement() error = %v, wantErr %v", gotErr, testCase.wantErr)
+			}
+			if testCase.wantErr && !strings.Contains(gotErr.Error(), testCase.wantErrMsg) {
+				t.Errorf("ValidateResourcePlacement() got %v, should contain want %s", gotErr, testCase.wantErrMsg)
 			}
 		})
 	}

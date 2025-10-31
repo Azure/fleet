@@ -279,7 +279,7 @@ func TestHandle(t *testing.T) {
 			resourceValidator: clusterResourcePlacementValidator{
 				decoder: decoder,
 			},
-			wantResponse: admission.Allowed("any user is allowed to modify v1beta1 CRP"),
+			wantResponse: admission.Allowed(fmt.Sprintf(validator.AllowModifyFmt, "CRP")),
 		},
 		"deny CRP create - invalid CRP object": {
 			req: admission.Request{
@@ -304,7 +304,7 @@ func TestHandle(t *testing.T) {
 			resourceValidator: clusterResourcePlacementValidator{
 				decoder: decoder,
 			},
-			wantResponse: admission.Denied(fmt.Sprintf(denyCreateUpdateInvalidCRPFmt, errString)),
+			wantResponse: admission.Denied(fmt.Sprintf(validator.DenyCreateUpdateInvalidFmt, "CRP", errString)),
 		},
 		"allow CRP update - valid update": {
 			req: admission.Request{
@@ -333,7 +333,7 @@ func TestHandle(t *testing.T) {
 			resourceValidator: clusterResourcePlacementValidator{
 				decoder: decoder,
 			},
-			wantResponse: admission.Allowed("any user is allowed to modify v1beta1 CRP"),
+			wantResponse: admission.Allowed(fmt.Sprintf(validator.AllowModifyFmt, "CRP")),
 		},
 		"allow CRP update - invalid old CRP object, invalid new CRP is deleting, finalizer removed": {
 			req: admission.Request{
@@ -362,7 +362,7 @@ func TestHandle(t *testing.T) {
 			resourceValidator: clusterResourcePlacementValidator{
 				decoder: decoder,
 			},
-			wantResponse: admission.Allowed(allowUpdateOldInvalidCRPFmt),
+			wantResponse: admission.Allowed(fmt.Sprintf(validator.AllowUpdateOldInvalidFmt, "CRP")),
 		},
 		"allow CRP update - invalid old CRP object, valid new CRP is deleting, finalizer removed, spec updated": {
 			req: admission.Request{
@@ -391,7 +391,7 @@ func TestHandle(t *testing.T) {
 			resourceValidator: clusterResourcePlacementValidator{
 				decoder: decoder,
 			},
-			wantResponse: admission.Allowed(allowUpdateOldInvalidCRPFmt),
+			wantResponse: admission.Allowed(fmt.Sprintf(validator.AllowUpdateOldInvalidFmt, "CRP")),
 		},
 		"deny CRP update - invalid old CRP, invalid new CRP is not deleting, finalizer removed": {
 			req: admission.Request{
@@ -420,7 +420,7 @@ func TestHandle(t *testing.T) {
 			resourceValidator: clusterResourcePlacementValidator{
 				decoder: decoder,
 			},
-			wantResponse: admission.Denied(fmt.Sprintf(denyUpdateOldInvalidCRPFmt, errString)),
+			wantResponse: admission.Denied(fmt.Sprintf(validator.DenyUpdateOldInvalidFmt, "CRP", errString)),
 		},
 		"allow CRP update - invalid old CRP, invalid new CRP is deleting, finalizer not removed": {
 			req: admission.Request{
@@ -449,7 +449,7 @@ func TestHandle(t *testing.T) {
 			resourceValidator: clusterResourcePlacementValidator{
 				decoder: decoder,
 			},
-			wantResponse: admission.Allowed(allowUpdateOldInvalidCRPFmt),
+			wantResponse: admission.Allowed(fmt.Sprintf(validator.AllowUpdateOldInvalidFmt, "CRP")),
 		},
 		"deny CRP update - invalid old CRP, invalid new CRP, label is updated": {
 			req: admission.Request{
@@ -478,7 +478,7 @@ func TestHandle(t *testing.T) {
 			resourceValidator: clusterResourcePlacementValidator{
 				decoder: decoder,
 			},
-			wantResponse: admission.Denied(fmt.Sprintf(denyUpdateOldInvalidCRPFmt, errString)),
+			wantResponse: admission.Denied(fmt.Sprintf(validator.DenyUpdateOldInvalidFmt, "CRP", errString)),
 		},
 		"deny CRP update - invalid old CRP, valid new CRP, spec updated": {
 			req: admission.Request{
@@ -507,7 +507,7 @@ func TestHandle(t *testing.T) {
 			resourceValidator: clusterResourcePlacementValidator{
 				decoder: decoder,
 			},
-			wantResponse: admission.Denied(fmt.Sprintf(denyUpdateOldInvalidCRPFmt, errString)),
+			wantResponse: admission.Denied(fmt.Sprintf(validator.DenyUpdateOldInvalidFmt, "CRP", errString)),
 		},
 		"deny CRP update - valid old CRP, invalid new CRP, spec updated": {
 			req: admission.Request{
@@ -536,7 +536,7 @@ func TestHandle(t *testing.T) {
 			resourceValidator: clusterResourcePlacementValidator{
 				decoder: decoder,
 			},
-			wantResponse: admission.Denied(fmt.Sprintf(denyCreateUpdateInvalidCRPFmt, errString)),
+			wantResponse: admission.Denied(fmt.Sprintf(validator.DenyCreateUpdateInvalidFmt, "CRP", errString)),
 		},
 		"deny CRP update - new CRP immutable placement type": {
 			req: admission.Request{

@@ -10,6 +10,7 @@ import (
 	"github.com/kubefleet-dev/kubefleet/pkg/webhook/pod"
 	"github.com/kubefleet-dev/kubefleet/pkg/webhook/replicaset"
 	"github.com/kubefleet-dev/kubefleet/pkg/webhook/resourceoverride"
+	"github.com/kubefleet-dev/kubefleet/pkg/webhook/resourceplacement"
 )
 
 func init() {
@@ -18,6 +19,7 @@ func init() {
 	// AddToManagerFuncs is a list of functions to register webhook validators and mutators to the webhook server
 	AddToManagerFuncs = append(AddToManagerFuncs, clusterresourceplacement.AddMutating)
 	AddToManagerFuncs = append(AddToManagerFuncs, clusterresourceplacement.Add)
+	AddToManagerFuncs = append(AddToManagerFuncs, resourceplacement.Add)
 	AddToManagerFuncs = append(AddToManagerFuncs, pod.Add)
 	AddToManagerFuncs = append(AddToManagerFuncs, replicaset.Add)
 	AddToManagerFuncs = append(AddToManagerFuncs, membercluster.Add)
