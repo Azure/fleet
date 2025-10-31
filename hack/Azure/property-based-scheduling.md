@@ -123,7 +123,6 @@ helm install hub-agent charts/hub-agent/ \
     --set namespace=fleet-system \
     --set enableWebhook=true \
     --set webhookClientConnectionType=service \
-    --set enableV1Alpha1APIs=false \
     --set enableV1Beta1APIs=true
 ```
 
@@ -186,7 +185,6 @@ do
         --set config.memberClusterName="${MEMBER_CLUSTERS[$i]}" \
         --set logVerbosity=5 \
         --set namespace=fleet-system \
-        --set enableV1Alpha1APIs=false \
         --set enableV1Beta1APIs=true \
         --set propertyProvider=$PROPERTY_PROVIDER
 done

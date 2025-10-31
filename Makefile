@@ -46,7 +46,6 @@ MEMBER_CLUSTER_COUNT ?= 3
 ROOT_DIR := $(shell dirname $(realpath $(firstword $(MAKEFILE_LIST))))
 TOOLS_DIR := hack/tools
 TOOLS_BIN_DIR := $(abspath $(TOOLS_DIR)/bin)
-CLUSTER_CONFIG := $(abspath test/e2e/v1alpha1/kind-config.yaml)
 
 # Binaries
 # Note: Need to use abspath so we can invoke these from subdirectories

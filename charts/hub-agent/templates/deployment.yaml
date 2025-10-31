@@ -28,7 +28,6 @@ spec:
             - --webhook-client-connection-type={{.Values.webhookClientConnectionType}}
             - --v={{ .Values.logVerbosity }}
             - -add_dir_header
-            - --enable-v1alpha1-apis={{ .Values.enableV1Alpha1APIs }}
             - --enable-v1beta1-apis={{ .Values.enableV1Beta1APIs }}
             - --enable-cluster-inventory-apis={{ .Values.enableClusterInventoryAPI }}
             - --enable-staged-update-run-apis={{ .Values.enableStagedUpdateRunAPIs }}

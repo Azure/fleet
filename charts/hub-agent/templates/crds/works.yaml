@@ -1,8 +1,4 @@
 {{ $files := .Files }}
-{{ if .Values.enableV1Alpha1APIs }}
-    {{ $files.Get "crdbases/multicluster.x-k8s.io_works.yaml" }}
-{{ end }}
----
 {{ if .Values.enableV1Beta1APIs }}
     {{ $files.Get "crdbases/placement.kubernetes-fleet.io_works.yaml" }}
 {{ end }}

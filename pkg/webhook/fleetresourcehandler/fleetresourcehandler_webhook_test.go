@@ -56,7 +56,7 @@ func TestHandleCRD(t *testing.T) {
 		"allow user in system:masters group to modify fleet CRD": {
 			req: admission.Request{
 				AdmissionRequest: admissionv1.AdmissionRequest{
-					Name: "memberclusters.fleet.azure.com",
+					Name: "memberclusters.cluster.kubernetes-fleet.io",
 					UserInfo: authenticationv1.UserInfo{
 						Username: "test-user",
 						Groups:   []string{"system:masters"},
@@ -66,12 +66,12 @@ func TestHandleCRD(t *testing.T) {
 				},
 			},
 			resourceValidator: fleetResourceValidator{},
-			wantResponse:      admission.Allowed(fmt.Sprintf(validation.ResourceAllowedFormat, "test-user", utils.GenerateGroupString([]string{"system:masters"}), admissionv1.Update, &utils.CRDMetaGVK, "", types.NamespacedName{Name: "memberclusters.fleet.azure.com"})),
+			wantResponse:      admission.Allowed(fmt.Sprintf(validation.ResourceAllowedFormat, "test-user", utils.GenerateGroupString([]string{"system:masters"}), admissionv1.Update, &utils.CRDMetaGVK, "", types.NamespacedName{Name: "memberclusters.cluster.kubernetes-fleet.io"})),
 		},
 		"allow white listed user to modify fleet CRD": {
 			req: admission.Request{
 				AdmissionRequest: admissionv1.AdmissionRequest{
-					Name: "memberclusters.fleet.azure.com",
+					Name: "memberclusters.cluster.kubernetes-fleet.io",
 					UserInfo: authenticationv1.UserInfo{
 						Username: "test-user",
 						Groups:   []string{"test-group"},
@@ -83,12 +83,12 @@ func TestHandleCRD(t *testing.T) {
 			resourceValidator: fleetResourceValidator{
 				whiteListedUsers: []string{"test-user"},
 			},
-			wantResponse: admission.Allowed(fmt.Sprintf(validation.ResourceAllowedFormat, "test-user", utils.GenerateGroupString([]string{"test-group"}), admissionv1.Delete, &utils.CRDMetaGVK, "", types.NamespacedName{Name: "memberclusters.fleet.azure.com"})),
+			wantResponse: admission.Allowed(fmt.Sprintf(validation.ResourceAllowedFormat, "test-user", utils.GenerateGroupString([]string{"test-group"}), admissionv1.Delete, &utils.CRDMetaGVK, "", types.NamespacedName{Name: "memberclusters.cluster.kubernetes-fleet.io"})),
 		},
 		"deny non system user to modify fleet CRD": {
 			req: admission.Request{
 				AdmissionRequest: admissionv1.AdmissionRequest{
-					Name: "memberclusters.fleet.azure.com",
+					Name: "memberclusters.cluster.kubernetes-fleet.io",
 					UserInfo: authenticationv1.UserInfo{
 						Username: "test-user",
 						Groups:   []string{"test-group"},
@@ -97,7 +97,7 @@ func TestHandleCRD(t *testing.T) {
 					Operation:   admissionv1.Create,
 				},
 			},
-			wantResponse: admission.Denied(fmt.Sprintf(validation.ResourceDeniedFormat, "test-user", utils.GenerateGroupString([]string{"test-group"}), admissionv1.Create, &utils.CRDMetaGVK, "", types.NamespacedName{Name: "memberclusters.fleet.azure.com"})),
+			wantResponse: admission.Denied(fmt.Sprintf(validation.ResourceDeniedFormat, "test-user", utils.GenerateGroupString([]string{"test-group"}), admissionv1.Create, &utils.CRDMetaGVK, "", types.NamespacedName{Name: "memberclusters.cluster.kubernetes-fleet.io"})),
 		},
 	}
 

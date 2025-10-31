@@ -189,7 +189,6 @@ do
             --set config.memberClusterName="kind-${MEMBER_CLUSTERS[$i]}" \
             --set logVerbosity=5 \
             --set namespace=fleet-system \
-            --set enableV1Alpha1APIs=false \
             --set enableV1Beta1APIs=true \
             --set propertyProvider=$PROPERTY_PROVIDER \
             --set region=${REGIONS[$i]} \
@@ -206,7 +205,6 @@ do
             --set config.memberClusterName="kind-${MEMBER_CLUSTERS[$i]}" \
             --set logVerbosity=5 \
             --set namespace=fleet-system \
-            --set enableV1Alpha1APIs=false \
             --set enableV1Beta1APIs=true \
             --set propertyProvider=$PROPERTY_PROVIDER \
             $( [ "$PROPERTY_PROVIDER" = "azure" ] && echo "-f azure_valid_config.yaml" )

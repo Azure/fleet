@@ -44,7 +44,7 @@ const (
 )
 
 var (
-	fleetCRDGroups = []string{"networking.fleet.azure.com", "fleet.azure.com", "multicluster.x-k8s.io", "cluster.kubernetes-fleet.io", "placement.kubernetes-fleet.io"}
+	fleetCRDGroups = []string{"networking.fleet.azure.com", "cluster.kubernetes-fleet.io", "placement.kubernetes-fleet.io"}
 )
 
 // ValidateUserForFleetCRD checks to see if user is not allowed to modify fleet CRDs.

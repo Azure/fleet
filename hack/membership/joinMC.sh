@@ -136,7 +136,6 @@ helm install member-agent charts/member-agent/ \
         --set config.memberClusterName=$MEMBER_CLUSTER \
         --set logVerbosity=8 \
         --set namespace=fleet-system \
-        --set enableV1Alpha1APIs=false \
         --set enableV1Beta1APIs=true
 
 kubectl get pods -A
