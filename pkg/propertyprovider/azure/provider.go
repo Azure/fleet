@@ -53,7 +53,13 @@ const (
 	// a Kubernetes cluster.
 	PerGBMemoryCostProperty = "kubernetes.azure.com/per-gb-memory-cost"
 
-	NodeCountPerSKUPropertyTmpl = "kubernetes.azure.com/vm-size/%s/count"
+	// SkuPropertyPrefix is the prefix that identifies the sku properties
+	SkuPropertyPrefix = "kubernetes.azure.com/vm-sizes"
+
+	NodeCountPerSKUPropertyTmpl = SkuPropertyPrefix + "/%s/count"
+
+	// SKUCapacityPropertyTmpl is the property template for SKU capacity properties.
+	SKUCapacityPropertyTmpl = SkuPropertyPrefix + "/%s/capacity"
 
 	CostPrecisionTemplate = "%.3f"
 )

@@ -21,6 +21,7 @@ import (
 
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 
+	clusterv1beta1 "go.goms.io/fleet/apis/cluster/v1beta1"
 	fleetv1beta1 "go.goms.io/fleet/apis/placement/v1beta1"
 )
 
@@ -165,6 +166,95 @@ func TestExtractResourceSnapshotIndexFromWork(t *testing.T) {
 
 			if gotIndex != tc.wantIndex {
 				t.Fatalf("ExtractResourceSnapshotIndexFromWork() = %v, want %v", gotIndex, tc.wantIndex)
+			}
+		})
+	}
+}
+
+func TestExtractLabelFromMemberCluster(t *testing.T) {
+	tests := []struct {
+		name           string
+		cluster        *clusterv1beta1.MemberCluster
+		labelKey       string
+		wantValue      string
+		wantError      bool
+		errorSubstring string
+	}{
+		{
+			name: "cluster has subscription ID label",
+			cluster: &clusterv1beta1.MemberCluster{
+				ObjectMeta: metav1.ObjectMeta{
+					Name: "test-cluster",
+					Labels: map[string]string{
+						"subID":       "12345678-1234-1234-1234-123456789012",
+						"other-label": "other-value",
+					},
+				},
+			},
+			labelKey:  "subID",
+			wantValue: "12345678-1234-1234-1234-123456789012",
+		},
+		{
+			name: "cluster with has location label",
+			cluster: &clusterv1beta1.MemberCluster{
+				ObjectMeta: metav1.ObjectMeta{
+					Name: "test-cluster",
+					Labels: map[string]string{
+						"location":    "westus",
+						"other-label": "other-value",
+					},
+				},
+			},
+			labelKey:  "location",
+			wantValue: "westus",
+		},
+		{
+			name: "cluster does not have expected label",
+			cluster: &clusterv1beta1.MemberCluster{
+				ObjectMeta: metav1.ObjectMeta{
+					Name: "test-cluster",
+					Labels: map[string]string{
+						"other-label": "other-value",
+					},
+				},
+			},
+			labelKey:       "label-not-exist",
+			wantValue:      "",
+			wantError:      true,
+			errorSubstring: "label \"label-not-exist\" not found in cluster test-cluster",
+		},
+		{
+			name: "cluster with no labels",
+			cluster: &clusterv1beta1.MemberCluster{
+				ObjectMeta: metav1.ObjectMeta{
+					Name: "test-cluster",
+				},
+			},
+			labelKey:       "label-key",
+			wantValue:      "",
+			wantError:      true,
+			errorSubstring: "cluster is nil or has no labels",
+		},
+		{
+			name:           "nil cluster",
+			cluster:        nil,
+			labelKey:       "label-key",
+			wantValue:      "",
+			wantError:      true,
+			errorSubstring: "cluster is nil or has no labels",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			value, err := ExtractLabelFromMemberCluster(tt.cluster, tt.labelKey)
+
+			if value != tt.wantValue {
+				t.Errorf("ExtractLabelFromMemberCluster() = %v, want %v", value, tt.wantValue)
+			}
+
+			if (err != nil) != tt.wantError {
+				t.Errorf("ExtractLabelFromMemberCluster() error = %v, wantError %v", err, tt.wantError)
 			}
 		})
 	}

@@ -110,6 +110,12 @@ const (
 
 	// FleetAnnotationPrefix is the prefix used to annotate fleet member cluster resources.
 	FleetAnnotationPrefix = "fleet.azure.com"
+
+	// AzureLocationLabelKey is the label key for Azure location
+	AzureLocationLabelKey = FleetAnnotationPrefix + "/location"
+
+	// AzureSubscriptionIDLabelKey is the label key for Azure subscription ID
+	AzureSubscriptionIDLabelKey = FleetAnnotationPrefix + "/subscription-id"
 )
 
 var (
