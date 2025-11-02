@@ -49,7 +49,7 @@ import (
 	"github.com/kubefleet-dev/kubefleet/pkg/utils/condition"
 	"github.com/kubefleet-dev/kubefleet/pkg/utils/controller"
 	"github.com/kubefleet-dev/kubefleet/pkg/utils/defaulter"
-	"github.com/kubefleet-dev/kubefleet/pkg/utils/parallelizer"
+	parallelizerutil "github.com/kubefleet-dev/kubefleet/pkg/utils/parallelizer"
 )
 
 const (
@@ -227,7 +227,7 @@ type Reconciler struct {
 	watchWorkReconcileAgeMinutes int
 	deletionWaitTime             time.Duration
 	joined                       *atomic.Bool
-	parallelizer                 *parallelizer.Parallerlizer
+	parallelizer                 parallelizerutil.Parallelizer
 	requeueRateLimiter           *RequeueMultiStageWithExponentialBackoffRateLimiter
 }
 
@@ -237,14 +237,19 @@ func NewReconciler(
 	spokeDynamicClient dynamic.Interface, spokeClient client.Client, restMapper meta.RESTMapper,
 	recorder record.EventRecorder,
 	concurrentReconciles int,
-	workerCount int,
+	parallelizer parallelizerutil.Parallelizer,
 	deletionWaitTime time.Duration,
 	watchWorkWithPriorityQueue bool,
 	watchWorkReconcileAgeMinutes int,
 	requeueRateLimiter *RequeueMultiStageWithExponentialBackoffRateLimiter,
 ) *Reconciler {
 	if requeueRateLimiter == nil {
+		klog.V(2).InfoS("requeue rate limiter is not set; using the default rate limiter")
 		requeueRateLimiter = defaultRequeueRateLimiter
+	}
+	if parallelizer == nil {
+		klog.V(2).InfoS("parallelizer is not set; using the default parallelizer with a worker count of 1")
+		parallelizer = parallelizerutil.NewParallelizer(1)
 	}
 
 	return &Reconciler{
@@ -254,7 +259,7 @@ func NewReconciler(
 		restMapper:                   restMapper,
 		recorder:                     recorder,
 		concurrentReconciles:         concurrentReconciles,
-		parallelizer:                 parallelizer.NewParallelizer(workerCount),
+		parallelizer:                 parallelizer,
 		watchWorkWithPriorityQueue:   watchWorkWithPriorityQueue,
 		watchWorkReconcileAgeMinutes: watchWorkReconcileAgeMinutes,
 		workNameSpace:                workNameSpace,

@@ -82,7 +82,7 @@ func (r *Reconciler) processManifests(
 			klog.V(2).InfoS("Processed a manifest", "manifestObj", klog.KObj(bundlesInWave[piece].manifestObj), "work", klog.KObj(work))
 		}
 
-		r.parallelizer.ParallelizeUntil(ctx, len(bundlesInWave), doWork, "processingManifests")
+		r.parallelizer.ParallelizeUntil(ctx, len(bundlesInWave), doWork, fmt.Sprintf("processingManifestsInWave%d", idx))
 	}
 }
 

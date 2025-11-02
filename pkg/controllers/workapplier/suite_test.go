@@ -20,6 +20,7 @@ import (
 	"context"
 	"flag"
 	"path/filepath"
+	"strings"
 	"sync"
 	"testing"
 	"time"
@@ -32,6 +33,7 @@ import (
 	"k8s.io/client-go/dynamic"
 	"k8s.io/client-go/kubernetes/scheme"
 	"k8s.io/client-go/rest"
+	"k8s.io/client-go/util/workqueue"
 	"k8s.io/klog/v2"
 	"k8s.io/klog/v2/textlogger"
 	ctrl "sigs.k8s.io/controller-runtime"
@@ -46,6 +48,7 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/predicate"
 
 	fleetv1beta1 "github.com/kubefleet-dev/kubefleet/apis/placement/v1beta1"
+	"github.com/kubefleet-dev/kubefleet/pkg/utils/parallelizer"
 	testv1alpha1 "github.com/kubefleet-dev/kubefleet/test/apis/v1alpha1"
 )
 
@@ -70,6 +73,13 @@ var (
 	memberDynamicClient2 dynamic.Interface
 	workApplier2         *Reconciler
 
+	memberCfg3           *rest.Config
+	memberEnv3           *envtest.Environment
+	hubMgr3              manager.Manager
+	memberClient3        client.Client
+	memberDynamicClient3 dynamic.Interface
+	workApplier3         *Reconciler
+
 	ctx    context.Context
 	cancel context.CancelFunc
 	wg     sync.WaitGroup
@@ -83,7 +93,32 @@ const (
 
 	memberReservedNSName1 = "fleet-member-experimental-1"
 	memberReservedNSName2 = "fleet-member-experimental-2"
+	memberReservedNSName3 = "fleet-member-experimental-3"
+
+	parallelizerFixedDelay = time.Second * 5
 )
+
+// tasks in parallel with a fixed delay after completing each task group.
+//
+// This is added to help verify the behavior of waved parallel processing in the work applier.
+type parallelizerWithFixedDelay struct {
+	regularParallelizer parallelizer.Parallelizer
+	delay               time.Duration
+}
+
+func (p *parallelizerWithFixedDelay) ParallelizeUntil(ctx context.Context, pieces int, doWork workqueue.DoWorkPieceFunc, operation string) {
+	p.regularParallelizer.ParallelizeUntil(ctx, pieces, doWork, operation)
+	klog.V(2).InfoS("Parallelization completed, start to wait with a fixed delay", "operation", operation, "delay", p.delay)
+	// No need to add delay for non-waved operations.
+	if strings.HasPrefix(operation, "processingManifestsInWave") {
+		// Only log the delay for operations that are actually related to waves.
+		klog.V(2).InfoS("Waiting with a fixed delay after processing a wave", "operation", operation, "delay", p.delay)
+		time.Sleep(p.delay)
+	}
+}
+
+// Verify that parallelizerWithFixedDelay implements the parallelizer.Parallelizer interface.
+var _ parallelizer.Parallelizer = &parallelizerWithFixedDelay{}
 
 func TestAPIs(t *testing.T) {
 	RegisterFailHandler(Fail)
@@ -105,6 +140,13 @@ func setupResources() {
 		},
 	}
 	Expect(hubClient.Create(ctx, ns2)).To(Succeed())
+
+	ns3 := &corev1.Namespace{
+		ObjectMeta: metav1.ObjectMeta{
+			Name: memberReservedNSName3,
+		},
+	}
+	Expect(hubClient.Create(ctx, ns3)).To(Succeed())
 }
 
 var _ = BeforeSuite(func() {
@@ -143,6 +185,14 @@ var _ = BeforeSuite(func() {
 			filepath.Join("../../../", "test", "manifests"),
 		},
 	}
+	// memberEnv3 is the test environment for verifying the behavior of waved parallel processing in
+	// the work applier.
+	memberEnv3 = &envtest.Environment{
+		CRDDirectoryPaths: []string{
+			filepath.Join("../../../", "config", "crd", "bases"),
+			filepath.Join("../../../", "test", "manifests"),
+		},
+	}
 
 	var err error
 	hubCfg, err = hubEnv.Start()
@@ -152,6 +202,14 @@ var _ = BeforeSuite(func() {
 	memberCfg1, err = memberEnv1.Start()
 	Expect(err).ToNot(HaveOccurred())
 	Expect(memberCfg1).ToNot(BeNil())
+
+	memberCfg2, err = memberEnv2.Start()
+	Expect(err).ToNot(HaveOccurred())
+	Expect(memberCfg2).ToNot(BeNil())
+
+	memberCfg3, err = memberEnv3.Start()
+	Expect(err).ToNot(HaveOccurred())
+	Expect(memberCfg3).ToNot(BeNil())
 
 	memberCfg2, err = memberEnv2.Start()
 	Expect(err).ToNot(HaveOccurred())
@@ -177,11 +235,18 @@ var _ = BeforeSuite(func() {
 	Expect(err).ToNot(HaveOccurred())
 	Expect(memberClient2).ToNot(BeNil())
 
+	memberClient3, err = client.New(memberCfg3, client.Options{Scheme: scheme.Scheme})
+	Expect(err).ToNot(HaveOccurred())
+	Expect(memberClient3).ToNot(BeNil())
+
 	// This setup also requires a client-go dynamic client for the member cluster.
 	memberDynamicClient1, err = dynamic.NewForConfig(memberCfg1)
 	Expect(err).ToNot(HaveOccurred())
 
 	memberDynamicClient2, err = dynamic.NewForConfig(memberCfg2)
+	Expect(err).ToNot(HaveOccurred())
+
+	memberDynamicClient3, err = dynamic.NewForConfig(memberCfg3)
 	Expect(err).ToNot(HaveOccurred())
 
 	By("Setting up the resources")
@@ -210,7 +275,7 @@ var _ = BeforeSuite(func() {
 		memberClient1.RESTMapper(),
 		hubMgr1.GetEventRecorderFor("work-applier"),
 		maxConcurrentReconciles,
-		workerCount,
+		parallelizer.NewParallelizer(workerCount),
 		30*time.Second,
 		true,
 		60,
@@ -259,7 +324,7 @@ var _ = BeforeSuite(func() {
 		memberClient2.RESTMapper(),
 		hubMgr2.GetEventRecorderFor("work-applier"),
 		maxConcurrentReconciles,
-		workerCount,
+		parallelizer.NewParallelizer(workerCount),
 		30*time.Second,
 		true,
 		60,
@@ -274,8 +339,52 @@ var _ = BeforeSuite(func() {
 		Complete(workApplier2)
 	Expect(err).NotTo(HaveOccurred())
 
+	By("Setting up the controller and the controller manager for member cluster 3")
+	hubMgr3, err = ctrl.NewManager(hubCfg, ctrl.Options{
+		Scheme: scheme.Scheme,
+		Metrics: server.Options{
+			BindAddress: "0",
+		},
+		Cache: cache.Options{
+			DefaultNamespaces: map[string]cache.Config{
+				memberReservedNSName3: {},
+			},
+		},
+		Logger: textlogger.NewLogger(textlogger.NewConfig(textlogger.Verbosity(4))),
+	})
+	Expect(err).ToNot(HaveOccurred())
+
+	pWithDelay := &parallelizerWithFixedDelay{
+		regularParallelizer: parallelizer.NewParallelizer(parallelizer.DefaultNumOfWorkers),
+		// To avoid flakiness, use a fixed delay of 5 seconds so that we could reliably verify
+		// if manifests are actually being processed in waves.
+		delay: parallelizerFixedDelay,
+	}
+	workApplier3 = NewReconciler(
+		hubClient,
+		memberReservedNSName3,
+		memberDynamicClient3,
+		memberClient3,
+		memberClient3.RESTMapper(),
+		hubMgr3.GetEventRecorderFor("work-applier"),
+		maxConcurrentReconciles,
+		pWithDelay,
+		30*time.Second,
+		true,
+		60,
+		nil, // Use the default backoff rate limiter.
+	)
+	// Due to name conflicts, the third work applier must be set up manually.
+	err = ctrl.NewControllerManagedBy(hubMgr3).Named("work-applier-controller-waved-parallel-processing").
+		WithOptions(ctrloption.Options{
+			MaxConcurrentReconciles: workApplier3.concurrentReconciles,
+		}).
+		For(&fleetv1beta1.Work{}, builder.WithPredicates(predicate.GenerationChangedPredicate{})).
+		Complete(workApplier3)
+	Expect(err).NotTo(HaveOccurred())
+
 	wg = sync.WaitGroup{}
-	wg.Add(2)
+	wg.Add(3)
 	go func() {
 		defer GinkgoRecover()
 		defer wg.Done()
@@ -289,6 +398,13 @@ var _ = BeforeSuite(func() {
 		Expect(workApplier2.Join(ctx)).To(Succeed())
 		Expect(hubMgr2.Start(ctx)).To(Succeed())
 	}()
+
+	go func() {
+		defer GinkgoRecover()
+		defer wg.Done()
+		Expect(workApplier3.Join(ctx)).To(Succeed())
+		Expect(hubMgr3.Start(ctx)).To(Succeed())
+	}()
 })
 
 var _ = AfterSuite(func() {
@@ -300,4 +416,5 @@ var _ = AfterSuite(func() {
 	Expect(hubEnv.Stop()).To(Succeed())
 	Expect(memberEnv1.Stop()).To(Succeed())
 	Expect(memberEnv2.Stop()).To(Succeed())
+	Expect(memberEnv3.Stop()).To(Succeed())
 })

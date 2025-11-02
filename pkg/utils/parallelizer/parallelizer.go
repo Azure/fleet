@@ -30,19 +30,25 @@ const (
 )
 
 // Parallelizer helps run tasks in parallel.
-type Parallerlizer struct {
+type Parallelizer interface {
+	// ParallelizeUntil runs tasks in parallel, wrapping workqueue.ParallelizeUntil.
+	ParallelizeUntil(ctx context.Context, pieces int, doWork workqueue.DoWorkPieceFunc, operation string)
+}
+
+// Parallelizer helps run tasks in parallel.
+type parallelizer struct {
 	numOfWorkers int
 }
 
-// NewParallelizer returns a Parallelizer for running tasks in parallel.
-func NewParallelizer(workers int) *Parallerlizer {
-	return &Parallerlizer{
+// NewParallelizer returns a parallelizer for running tasks in parallel.
+func NewParallelizer(workers int) *parallelizer {
+	return &parallelizer{
 		numOfWorkers: workers,
 	}
 }
 
 // ParallelizeUntil wraps workqueue.ParallelizeUntil for running tasks in parallel.
-func (p *Parallerlizer) ParallelizeUntil(ctx context.Context, pieces int, doWork workqueue.DoWorkPieceFunc, operation string) {
+func (p *parallelizer) ParallelizeUntil(ctx context.Context, pieces int, doWork workqueue.DoWorkPieceFunc, operation string) {
 	doWorkWithLogs := func(piece int) {
 		klog.V(4).Infof("run piece %d for operation %s", piece, operation)
 		doWork(piece)
