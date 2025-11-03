@@ -156,7 +156,7 @@ var _ = Describe("Test placement v1beta1 API validation", func() {
 			err := hubClient.Update(ctx, &crp)
 			var statusErr *k8sErrors.StatusError
 			Expect(errors.As(err, &statusErr)).To(BeTrue(), fmt.Sprintf("Update CRP call produced error %s. Error type wanted is %s.", reflect.TypeOf(err), reflect.TypeOf(&k8sErrors.StatusError{})))
-			Expect(statusErr.ErrStatus.Message).Should(MatchRegexp("placement type is immutable"))
+			Expect(statusErr.ErrStatus.Message).Should(MatchRegexp("policy cannot be removed once set"))
 		})
 
 		It("should deny update of ClusterResourcePlacement with different placement type", func() {
@@ -610,6 +610,55 @@ var _ = Describe("Test placement v1beta1 API validation", func() {
 			var statusErr *k8sErrors.StatusError
 			Expect(errors.As(err, &statusErr)).To(BeTrue(), fmt.Sprintf("Update CRP call produced error %s. Error type wanted is %s.", reflect.TypeOf(err), reflect.TypeOf(&k8sErrors.StatusError{})))
 			Expect(statusErr.ErrStatus.Message).Should(MatchRegexp("supported values: \"ClusterScopeOnly\", \"NamespaceAccessible\""))
+		})
+	})
+
+	Context("Test ResourcePlacement API validation - invalid cases", func() {
+		var rp placementv1beta1.ResourcePlacement
+		rpName := fmt.Sprintf(rpNameTemplate, GinkgoParallelProcess())
+
+		BeforeEach(func() {
+			rp = placementv1beta1.ResourcePlacement{
+				ObjectMeta: metav1.ObjectMeta{
+					Name:      rpName,
+					Namespace: testNamespace,
+				},
+				Spec: placementv1beta1.PlacementSpec{
+					ResourceSelectors: []placementv1beta1.ResourceSelectorTerm{
+						{
+							Group:   "",
+							Version: "v1",
+							Kind:    "ConfigMap",
+							Name:    "test-cm",
+						},
+					},
+					Policy: &placementv1beta1.PlacementPolicy{
+						PlacementType: placementv1beta1.PickFixedPlacementType,
+						ClusterNames:  []string{"cluster1", "cluster2"},
+					},
+				},
+			}
+			Expect(hubClient.Create(ctx, &rp)).Should(Succeed())
+		})
+
+		AfterEach(func() {
+			Expect(hubClient.Delete(ctx, &rp)).Should(Succeed())
+		})
+
+		It("should deny update of ResourcePlacement with nil policy", func() {
+			rp.Spec.Policy = nil
+			err := hubClient.Update(ctx, &rp)
+			var statusErr *k8sErrors.StatusError
+			Expect(errors.As(err, &statusErr)).To(BeTrue(), fmt.Sprintf("Update RP call produced error %s. Error type wanted is %s.", reflect.TypeOf(err), reflect.TypeOf(&k8sErrors.StatusError{})))
+			Expect(statusErr.ErrStatus.Message).Should(MatchRegexp("policy cannot be removed once set"))
+		})
+
+		It("should deny update of ResourcePlacement with different placement type", func() {
+			rp.Spec.Policy.PlacementType = placementv1beta1.PickAllPlacementType
+			err := hubClient.Update(ctx, &rp)
+			var statusErr *k8sErrors.StatusError
+			Expect(errors.As(err, &statusErr)).To(BeTrue(), fmt.Sprintf("Update RP call produced error %s. Error type wanted is %s.", reflect.TypeOf(err), reflect.TypeOf(&k8sErrors.StatusError{})))
+			Expect(statusErr.ErrStatus.Message).Should(MatchRegexp("placement type is immutable"))
 		})
 	})
 
