@@ -29,6 +29,7 @@ import (
 	"k8s.io/apimachinery/pkg/api/meta"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/types"
+	"k8s.io/apimachinery/pkg/util/intstr"
 
 	clusterv1beta1 "github.com/kubefleet-dev/kubefleet/apis/cluster/v1beta1"
 	placementv1beta1 "github.com/kubefleet-dev/kubefleet/apis/placement/v1beta1"
@@ -303,6 +304,10 @@ var _ = Describe("UpdateRun validation tests", func() {
 							"region": "no-exist",
 						},
 					},
+					MaxConcurrency: &intstr.IntOrString{
+						Type:   intstr.Int,
+						IntVal: 1,
+					},
 				})
 				Expect(k8sClient.Status().Update(ctx, updateRun)).Should(Succeed())
 
@@ -315,6 +320,10 @@ var _ = Describe("UpdateRun validation tests", func() {
 							"group":  "dummy",
 							"region": "no-exist",
 						},
+					},
+					MaxConcurrency: &intstr.IntOrString{
+						Type:   intstr.Int,
+						IntVal: 1,
 					},
 				})
 				validateClusterStagedUpdateRunStatus(ctx, updateRun, wantStatus, "the number of stages in the updateRun has changed")

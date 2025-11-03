@@ -19,6 +19,7 @@ package v1beta1
 import (
 	"k8s.io/apimachinery/pkg/api/meta"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/apimachinery/pkg/util/intstr"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 
 	"github.com/kubefleet-dev/kubefleet/apis"
@@ -274,6 +275,17 @@ type StageConfig struct {
 	//   - secondary: Ascending order based on the name of the cluster if the label key is absent or the label value is the same.
 	// +kubebuilder:validation:Optional
 	SortingLabelKey *string `json:"sortingLabelKey,omitempty"`
+
+	// MaxConcurrency specifies the maximum number of clusters that can be updated concurrently within this stage.
+	// Value can be an absolute number (ex: 5) or a percentage of the total clusters in the stage (ex: 50%).
+	// Fractional results are rounded down. A minimum of 1 update is enforced.
+	// If not specified, all clusters in the stage are updated sequentially (effectively maxConcurrency = 1).
+	// Defaults to 1.
+	// +kubebuilder:default=1
+	// +kubebuilder:validation:XIntOrString
+	// +kubebuilder:validation:Pattern="^((100|[0-9]{1,2})%|[0-9]+)$"
+	// +kubebuilder:validation:Optional
+	MaxConcurrency *intstr.IntOrString `json:"maxConcurrency,omitempty"`
 
 	// The collection of tasks that each stage needs to complete successfully before moving to the next stage.
 	// Each task is executed in parallel and there cannot be more than one task of the same type.

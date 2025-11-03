@@ -21,7 +21,7 @@ limitations under the License.
 package v1beta1
 
 import (
-	v1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/util/intstr"
 )
@@ -2739,6 +2739,11 @@ func (in *StageConfig) DeepCopyInto(out *StageConfig) {
 	if in.SortingLabelKey != nil {
 		in, out := &in.SortingLabelKey, &out.SortingLabelKey
 		*out = new(string)
+		**out = **in
+	}
+	if in.MaxConcurrency != nil {
+		in, out := &in.MaxConcurrency, &out.MaxConcurrency
+		*out = new(intstr.IntOrString)
 		**out = **in
 	}
 	if in.AfterStageTasks != nil {
