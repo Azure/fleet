@@ -572,9 +572,9 @@ var _ = Describe("Updaterun initialization tests", func() {
 			Context("Test validateAfterStageTask", func() {
 				It("Should fail to initialize if any after stage task has 2 same tasks", func() {
 					By("Creating a clusterStagedUpdateStrategy with 2 same after stage tasks")
-					updateStrategy.Spec.Stages[0].AfterStageTasks = []placementv1beta1.AfterStageTask{
-						{Type: placementv1beta1.AfterStageTaskTypeTimedWait, WaitTime: &metav1.Duration{Duration: time.Second * 1}},
-						{Type: placementv1beta1.AfterStageTaskTypeTimedWait, WaitTime: &metav1.Duration{Duration: time.Second * 1}},
+					updateStrategy.Spec.Stages[0].AfterStageTasks = []placementv1beta1.StageTask{
+						{Type: placementv1beta1.StageTaskTypeTimedWait, WaitTime: &metav1.Duration{Duration: time.Second * 1}},
+						{Type: placementv1beta1.StageTaskTypeTimedWait, WaitTime: &metav1.Duration{Duration: time.Second * 1}},
 					}
 					Expect(k8sClient.Create(ctx, updateStrategy)).To(Succeed())
 
@@ -587,8 +587,8 @@ var _ = Describe("Updaterun initialization tests", func() {
 
 				It("Should fail to initialize if the wait time is not valid", func() {
 					By("Creating a clusterStagedUpdateStrategy with invalid wait time duration")
-					updateStrategy.Spec.Stages[0].AfterStageTasks = []placementv1beta1.AfterStageTask{
-						{Type: placementv1beta1.AfterStageTaskTypeTimedWait, WaitTime: &metav1.Duration{Duration: time.Second * 0}},
+					updateStrategy.Spec.Stages[0].AfterStageTasks = []placementv1beta1.StageTask{
+						{Type: placementv1beta1.StageTaskTypeTimedWait, WaitTime: &metav1.Duration{Duration: time.Second * 0}},
 					}
 					Expect(k8sClient.Create(ctx, updateStrategy)).To(Succeed())
 
@@ -917,10 +917,10 @@ func generateSucceededInitializationStatus(
 		},
 	}
 	for i := range status.StagesStatus {
-		var tasks []placementv1beta1.AfterStageTaskStatus
+		var tasks []placementv1beta1.StageTaskStatus
 		for _, task := range updateStrategy.Spec.Stages[i].AfterStageTasks {
-			taskStatus := placementv1beta1.AfterStageTaskStatus{Type: task.Type}
-			if task.Type == placementv1beta1.AfterStageTaskTypeApproval {
+			taskStatus := placementv1beta1.StageTaskStatus{Type: task.Type}
+			if task.Type == placementv1beta1.StageTaskTypeApproval {
 				taskStatus.ApprovalRequestName = updateRun.Name + "-" + status.StagesStatus[i].StageName
 			}
 			tasks = append(tasks, taskStatus)
@@ -961,10 +961,10 @@ func generateSucceededInitializationStatusForSmallClusters(
 		},
 	}
 	for i := range status.StagesStatus {
-		var tasks []placementv1beta1.AfterStageTaskStatus
+		var tasks []placementv1beta1.StageTaskStatus
 		for _, task := range updateStrategy.Spec.Stages[i].AfterStageTasks {
-			taskStatus := placementv1beta1.AfterStageTaskStatus{Type: task.Type}
-			if task.Type == placementv1beta1.AfterStageTaskTypeApproval {
+			taskStatus := placementv1beta1.StageTaskStatus{Type: task.Type}
+			if task.Type == placementv1beta1.StageTaskTypeApproval {
 				taskStatus.ApprovalRequestName = updateRun.Name + "-" + status.StagesStatus[i].StageName
 			}
 			tasks = append(tasks, taskStatus)

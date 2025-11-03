@@ -13,18 +13,18 @@ import (
 func TestValidateAfterStageTask(t *testing.T) {
 	tests := []struct {
 		name    string
-		task    []v1beta1.AfterStageTask
+		task    []v1beta1.StageTask
 		wantErr bool
 		errMsg  string
 	}{
 		{
 			name: "valid AfterTasks",
-			task: []v1beta1.AfterStageTask{
+			task: []v1beta1.StageTask{
 				{
-					Type: v1beta1.AfterStageTaskTypeApproval,
+					Type: v1beta1.StageTaskTypeApproval,
 				},
 				{
-					Type:     v1beta1.AfterStageTaskTypeTimedWait,
+					Type:     v1beta1.StageTaskTypeTimedWait,
 					WaitTime: ptr.To(metav1.Duration{Duration: 5 * time.Minute}),
 				},
 			},
@@ -32,13 +32,13 @@ func TestValidateAfterStageTask(t *testing.T) {
 		},
 		{
 			name: "invalid AfterTasks, same type of tasks",
-			task: []v1beta1.AfterStageTask{
+			task: []v1beta1.StageTask{
 				{
-					Type:     v1beta1.AfterStageTaskTypeTimedWait,
+					Type:     v1beta1.StageTaskTypeTimedWait,
 					WaitTime: ptr.To(metav1.Duration{Duration: 1 * time.Minute}),
 				},
 				{
-					Type:     v1beta1.AfterStageTaskTypeTimedWait,
+					Type:     v1beta1.StageTaskTypeTimedWait,
 					WaitTime: ptr.To(metav1.Duration{Duration: 5 * time.Minute}),
 				},
 			},
@@ -47,9 +47,9 @@ func TestValidateAfterStageTask(t *testing.T) {
 		},
 		{
 			name: "invalid AfterTasks, with nil duration for TimedWait",
-			task: []v1beta1.AfterStageTask{
+			task: []v1beta1.StageTask{
 				{
-					Type: v1beta1.AfterStageTaskTypeTimedWait,
+					Type: v1beta1.StageTaskTypeTimedWait,
 				},
 			},
 			wantErr: true,
@@ -57,9 +57,9 @@ func TestValidateAfterStageTask(t *testing.T) {
 		},
 		{
 			name: "invalid AfterTasks, with zero duration for TimedWait",
-			task: []v1beta1.AfterStageTask{
+			task: []v1beta1.StageTask{
 				{
-					Type:     v1beta1.AfterStageTaskTypeTimedWait,
+					Type:     v1beta1.StageTaskTypeTimedWait,
 					WaitTime: ptr.To(metav1.Duration{Duration: 0 * time.Minute}),
 				},
 			},

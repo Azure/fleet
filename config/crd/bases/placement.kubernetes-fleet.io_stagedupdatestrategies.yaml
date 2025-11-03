@@ -59,12 +59,12 @@ spec:
                         The collection of tasks that each stage needs to complete successfully before moving to the next stage.
                         Each task is executed in parallel and there cannot be more than one task of the same type.
                       items:
-                        description: AfterStageTask is the collection of post-stage
-                          tasks that ALL need to be completed before moving to the
-                          next stage.
+                        description: StageTask is the pre or post stage task that
+                          needs to be completed before starting or moving to the next
+                          stage.
                         properties:
                           type:
-                            description: The type of the after-stage task.
+                            description: The type of the before or after stage task.
                             enum:
                             - TimedWait
                             - Approval
@@ -85,6 +85,37 @@ spec:
                         rule: '!self.exists(e, e.type == ''Approval'' && has(e.waitTime))'
                       - message: AfterStageTaskType is TimedWait, waitTime is required
                         rule: '!self.exists(e, e.type == ''TimedWait'' && !has(e.waitTime))'
+                    beforeStageTasks:
+                      description: |-
+                        The collection of tasks that needs to completed successfully by each stage before starting the stage.
+                        Each task is executed in parallel and there cannot be more than one task of the same type.
+                      items:
+                        description: StageTask is the pre or post stage task that
+                          needs to be completed before starting or moving to the next
+                          stage.
+                        properties:
+                          type:
+                            description: The type of the before or after stage task.
+                            enum:
+                            - TimedWait
+                            - Approval
+                            type: string
+                          waitTime:
+                            description: The time to wait after all the clusters in
+                              the current stage complete the update before moving
+                              to the next stage.
+                            pattern: ^0|([0-9]+(\.[0-9]+)?(s|m|h))+$
+                            type: string
+                        required:
+                        - type
+                        type: object
+                      maxItems: 1
+                      type: array
+                      x-kubernetes-validations:
+                      - message: AfterStageTaskType is Approval, waitTime is not allowed
+                        rule: '!self.exists(e, e.type == ''Approval'' && has(e.waitTime))'
+                      - message: BeforeStageTaskType cannot be TimedWait
+                        rule: '!self.exists(e, e.type == ''TimedWait'')'
                     labelSelector:
                       description: |-
                         LabelSelector is a label query over all the joined member clusters. Clusters matching the query are selected

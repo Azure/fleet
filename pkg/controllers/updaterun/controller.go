@@ -460,7 +460,7 @@ func removeWaitTimeFromUpdateRunStatus(updateRun placementv1beta1.UpdateRunObj) 
 	if updateRunStatus.UpdateStrategySnapshot != nil {
 		for i := range updateRunStatus.UpdateStrategySnapshot.Stages {
 			for j := range updateRunStatus.UpdateStrategySnapshot.Stages[i].AfterStageTasks {
-				if updateRunStatus.UpdateStrategySnapshot.Stages[i].AfterStageTasks[j].Type == placementv1beta1.AfterStageTaskTypeApproval {
+				if updateRunStatus.UpdateStrategySnapshot.Stages[i].AfterStageTasks[j].Type == placementv1beta1.StageTaskTypeApproval {
 					updateRunStatus.UpdateStrategySnapshot.Stages[i].AfterStageTasks[j].WaitTime = nil
 				}
 			}

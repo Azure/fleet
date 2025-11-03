@@ -2040,17 +2040,17 @@ func updateRunStageRolloutSucceedConditions(generation int64) []metav1.Condition
 	}
 }
 
-func updateRunAfterStageTaskSucceedConditions(generation int64, taskType placementv1beta1.AfterStageTaskType) []metav1.Condition {
-	if taskType == placementv1beta1.AfterStageTaskTypeApproval {
+func updateRunAfterStageTaskSucceedConditions(generation int64, taskType placementv1beta1.StageTaskType) []metav1.Condition {
+	if taskType == placementv1beta1.StageTaskTypeApproval {
 		return []metav1.Condition{
 			{
-				Type:               string(placementv1beta1.AfterStageTaskConditionApprovalRequestCreated),
+				Type:               string(placementv1beta1.StageTaskConditionApprovalRequestCreated),
 				Status:             metav1.ConditionTrue,
 				Reason:             condition.AfterStageTaskApprovalRequestCreatedReason,
 				ObservedGeneration: generation,
 			},
 			{
-				Type:               string(placementv1beta1.AfterStageTaskConditionApprovalRequestApproved),
+				Type:               string(placementv1beta1.StageTaskConditionApprovalRequestApproved),
 				Status:             metav1.ConditionTrue,
 				Reason:             condition.AfterStageTaskApprovalRequestApprovedReason,
 				ObservedGeneration: generation,
@@ -2059,7 +2059,7 @@ func updateRunAfterStageTaskSucceedConditions(generation int64, taskType placeme
 	}
 	return []metav1.Condition{
 		{
-			Type:               string(placementv1beta1.AfterStageTaskConditionWaitTimeElapsed),
+			Type:               string(placementv1beta1.StageTaskConditionWaitTimeElapsed),
 			Status:             metav1.ConditionTrue,
 			Reason:             condition.AfterStageTaskWaitTimeElapsedReason,
 			ObservedGeneration: generation,
@@ -2175,10 +2175,10 @@ func buildStageUpdatingStatuses(
 			stagesStatus[i].Clusters[j].ResourceOverrideSnapshots = wantROs[wantSelectedClusters[i][j]]
 			stagesStatus[i].Clusters[j].Conditions = updateRunClusterRolloutSucceedConditions(updateRun.GetGeneration())
 		}
-		stagesStatus[i].AfterStageTaskStatus = make([]placementv1beta1.AfterStageTaskStatus, len(stage.AfterStageTasks))
+		stagesStatus[i].AfterStageTaskStatus = make([]placementv1beta1.StageTaskStatus, len(stage.AfterStageTasks))
 		for j, task := range stage.AfterStageTasks {
 			stagesStatus[i].AfterStageTaskStatus[j].Type = task.Type
-			if task.Type == placementv1beta1.AfterStageTaskTypeApproval {
+			if task.Type == placementv1beta1.StageTaskTypeApproval {
 				stagesStatus[i].AfterStageTaskStatus[j].ApprovalRequestName = fmt.Sprintf(placementv1beta1.ApprovalTaskNameFmt, updateRun.GetName(), stage.Name)
 			}
 			stagesStatus[i].AfterStageTaskStatus[j].Conditions = updateRunAfterStageTaskSucceedConditions(updateRun.GetGeneration(), task.Type)

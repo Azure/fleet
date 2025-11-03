@@ -419,10 +419,10 @@ func (r *Reconciler) computeRunStageStatus(
 		}
 
 		// Create the after stage tasks.
-		curStageUpdatingStatus.AfterStageTaskStatus = make([]placementv1beta1.AfterStageTaskStatus, len(stage.AfterStageTasks))
+		curStageUpdatingStatus.AfterStageTaskStatus = make([]placementv1beta1.StageTaskStatus, len(stage.AfterStageTasks))
 		for i, task := range stage.AfterStageTasks {
 			curStageUpdatingStatus.AfterStageTaskStatus[i].Type = task.Type
-			if task.Type == placementv1beta1.AfterStageTaskTypeApproval {
+			if task.Type == placementv1beta1.StageTaskTypeApproval {
 				curStageUpdatingStatus.AfterStageTaskStatus[i].ApprovalRequestName = fmt.Sprintf(placementv1beta1.ApprovalTaskNameFmt, updateRun.GetName(), stage.Name)
 			}
 		}
@@ -450,12 +450,12 @@ func (r *Reconciler) computeRunStageStatus(
 
 // validateAfterStageTask valides the afterStageTasks in the stage defined in the UpdateStrategy.
 // The error returned from this function is not retryable.
-func validateAfterStageTask(tasks []placementv1beta1.AfterStageTask) error {
+func validateAfterStageTask(tasks []placementv1beta1.StageTask) error {
 	if len(tasks) == 2 && tasks[0].Type == tasks[1].Type {
 		return fmt.Errorf("afterStageTasks cannot have two tasks of the same type: %s", tasks[0].Type)
 	}
 	for i, task := range tasks {
-		if task.Type == placementv1beta1.AfterStageTaskTypeTimedWait {
+		if task.Type == placementv1beta1.StageTaskTypeTimedWait {
 			if task.WaitTime == nil {
 				return fmt.Errorf("task %d of type TimedWait has wait duration set to nil", i)
 			}
