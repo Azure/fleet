@@ -14,8 +14,8 @@ See the License for the specific language governing permissions and
 limitations under the License.
 */
 
-// Package clusterresourceplacement implements the webhook for v1beta1 ClusterResourcePlacement.
-package clusterresourceplacement
+// Package resourceplacement implements the webhook for v1beta1 ResourcePlacement.
+package resourceplacement
 
 import (
 	"context"
@@ -31,39 +31,43 @@ import (
 )
 
 var (
-	// ValidationPath is the webhook service path which admission requests are routed to for validating v1beta1 CRP resources.
-	ValidationPath = fmt.Sprintf(utils.ValidationPathFmt, placementv1beta1.GroupVersion.Group, placementv1beta1.GroupVersion.Version, "clusterresourceplacement")
+	// ValidationPath is the webhook service path which admission requests are routed to for validating v1beta1 RP resources.
+	ValidationPath = fmt.Sprintf(utils.ValidationPathFmt, placementv1beta1.GroupVersion.Group, placementv1beta1.GroupVersion.Version, "resourceplacement")
 )
 
-type clusterResourcePlacementValidator struct {
+type resourcePlacementValidator struct {
 	decoder webhook.AdmissionDecoder
 }
 
 // Add registers the webhook for K8s bulit-in object types.
 func Add(mgr manager.Manager) error {
 	hookServer := mgr.GetWebhookServer()
-	hookServer.Register(ValidationPath, &webhook.Admission{Handler: &clusterResourcePlacementValidator{admission.NewDecoder(mgr.GetScheme())}})
+	hookServer.Register(ValidationPath, &webhook.Admission{Handler: &resourcePlacementValidator{admission.NewDecoder(mgr.GetScheme())}})
 	return nil
 }
 
-// Handle clusterResourcePlacementValidator handles create, update CRP requests.
-func (v *clusterResourcePlacementValidator) Handle(ctx context.Context, req admission.Request) admission.Response {
-	return validator.HandlePlacementValidation(ctx, req, v.decoder,
-		"CRP",
+// Handle resourcePlacementValidator handles create, update RP requests.
+func (v *resourcePlacementValidator) Handle(ctx context.Context, req admission.Request) admission.Response {
+	return validator.HandlePlacementValidation(
+		ctx,
+		req,
+		v.decoder,
+		"RP",
 		// decodeFunc
 		func(req admission.Request, decoder webhook.AdmissionDecoder) (placementv1beta1.PlacementObj, error) {
-			var crp placementv1beta1.ClusterResourcePlacement
-			err := decoder.Decode(req, &crp)
-			return &crp, err
+			var rp placementv1beta1.ResourcePlacement
+			err := decoder.Decode(req, &rp)
+			return &rp, err
 		},
 		// decodeOldFunc
 		func(req admission.Request, decoder webhook.AdmissionDecoder) (placementv1beta1.PlacementObj, error) {
-			var oldCRP placementv1beta1.ClusterResourcePlacement
-			err := decoder.DecodeRaw(req.OldObject, &oldCRP)
-			return &oldCRP, err
+			var oldRP placementv1beta1.ResourcePlacement
+			err := decoder.DecodeRaw(req.OldObject, &oldRP)
+			return &oldRP, err
 		},
 		// validateFunc
 		func(obj placementv1beta1.PlacementObj) error {
-			return validator.ValidateClusterResourcePlacement(obj.(*placementv1beta1.ClusterResourcePlacement))
-		})
+			return validator.ValidateResourcePlacement(obj.(*placementv1beta1.ResourcePlacement))
+		},
+	)
 }

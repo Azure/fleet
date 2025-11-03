@@ -49,7 +49,6 @@ The main idea is that we are creating a multi-cluster application management sol
   - `test/apis` - The tests for the CRDs.
   - `test/upgrade` - The tests for the upgrade tests to test compatibility between versions.
   - `test/e2e` - The end to end tests for the member and hub agent.
-  - `test/integration` - The integration tests for the v1alpha1 member and hub agent.
   - `test/scheduler` - The integration tests for the scheduler.
   - `test/utils` - folder contains the utils code which is used to provide common functions for tests
 - The `tools/` folder contains client-side tools for helping manage the fleet.

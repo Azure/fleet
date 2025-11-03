@@ -53,7 +53,7 @@ const (
 	// a Kubernetes cluster.
 	PerGBMemoryCostProperty = "kubernetes.azure.com/per-gb-memory-cost"
 
-	NodeCountPerSKUPropertyTmpl = "kubernetes.azure.com/vm-size/%s/count"
+	NodeCountPerSKUPropertyTmpl = "kubernetes.azure.com/vm-sizes/%s/count"
 
 	CostPrecisionTemplate = "%.3f"
 )

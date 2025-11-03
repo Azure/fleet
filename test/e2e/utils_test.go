@@ -1003,6 +1003,20 @@ func checkIfRemovedWorkResourcesFromMemberClustersConsistently(clusters []*frame
 		Consistently(workResourcesRemovedActual, consistentlyDuration, consistentlyInterval).Should(Succeed(), "Failed to remove work resources from member cluster %s consistently", memberCluster.ClusterName)
 	}
 }
+
+func checkIfRemovedConfigMapFromAllMemberClustersConsistently() {
+	checkIfRemovedConfigMapFromMemberClustersConsistently(allMemberClusters)
+}
+
+func checkIfRemovedConfigMapFromMemberClustersConsistently(clusters []*framework.Cluster) {
+	for idx := range clusters {
+		memberCluster := clusters[idx]
+
+		configMapRemovedActual := namespacedResourcesRemovedFromClusterActual(memberCluster)
+		Consistently(configMapRemovedActual, consistentlyDuration, consistentlyInterval).Should(Succeed(), "Failed to remove config map from member cluster %s consistently", memberCluster.ClusterName)
+	}
+}
+
 func checkNamespaceExistsWithOwnerRefOnMemberCluster(nsName, crpName string) {
 	Consistently(func() error {
 		ns := &corev1.Namespace{}

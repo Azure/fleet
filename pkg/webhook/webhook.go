@@ -50,11 +50,9 @@ import (
 	"k8s.io/utils/ptr"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/manager"
-	workv1alpha1 "sigs.k8s.io/work-api/pkg/apis/v1alpha1"
 
 	clusterv1beta1 "go.goms.io/fleet/apis/cluster/v1beta1"
 	placementv1beta1 "go.goms.io/fleet/apis/placement/v1beta1"
-	fleetv1alpha1 "go.goms.io/fleet/apis/v1alpha1"
 	"go.goms.io/fleet/cmd/hubagent/options"
 	"go.goms.io/fleet/pkg/webhook/clusterresourceoverride"
 	"go.goms.io/fleet/pkg/webhook/clusterresourceplacement"
@@ -132,16 +130,16 @@ var (
 )
 
 var AddToManagerFuncs []func(manager.Manager) error
-var AddToManagerFleetResourceValidator func(manager.Manager, []string, bool, bool) error
+var AddToManagerFleetResourceValidator func(manager.Manager, []string, bool) error
 
 // AddToManager adds all Controllers to the Manager
-func AddToManager(m manager.Manager, whiteListedUsers []string, isFleetV1Beta1API bool, denyModifyMemberClusterLabels bool) error {
+func AddToManager(m manager.Manager, whiteListedUsers []string, denyModifyMemberClusterLabels bool) error {
 	for _, f := range AddToManagerFuncs {
 		if err := f(m); err != nil {
 			return err
 		}
 	}
-	return AddToManagerFleetResourceValidator(m, whiteListedUsers, isFleetV1Beta1API, denyModifyMemberClusterLabels)
+	return AddToManagerFleetResourceValidator(m, whiteListedUsers, denyModifyMemberClusterLabels)
 }
 
 type Config struct {
@@ -317,23 +315,6 @@ func (w *Config) buildFleetValidatingWebhooks() []admv1.ValidatingWebhook {
 						admv1.Create,
 					},
 					Rule: createRule([]string{corev1.SchemeGroupVersion.Group}, []string{corev1.SchemeGroupVersion.Version}, []string{podResourceName}, &namespacedScope),
-				},
-			},
-			TimeoutSeconds: longWebhookTimeout,
-		},
-		{
-			Name:                    "fleet.clusterresourceplacementv1alpha1.validating",
-			ClientConfig:            w.createClientConfig(clusterresourceplacement.V1Alpha1CRPValidationPath),
-			FailurePolicy:           &failFailurePolicy,
-			SideEffects:             &sideEffortsNone,
-			AdmissionReviewVersions: admissionReviewVersions,
-			Rules: []admv1.RuleWithOperations{
-				{
-					Operations: []admv1.OperationType{
-						admv1.Create,
-						admv1.Update,
-					},
-					Rule: createRule([]string{fleetv1alpha1.GroupVersion.Group}, []string{fleetv1alpha1.GroupVersion.Version}, []string{fleetv1alpha1.ClusterResourcePlacementResource}, &clusterScope),
 				},
 			},
 			TimeoutSeconds: longWebhookTimeout,
@@ -554,19 +535,11 @@ func (w *Config) buildFleetGuardRailValidatingWebhooks() []admv1.ValidatingWebho
 		},
 		{
 			Operations: cuOperations,
-			Rule:       createRule([]string{fleetv1alpha1.GroupVersion.Group}, []string{fleetv1alpha1.GroupVersion.Version}, []string{internalMemberClusterResourceName, internalMemberClusterResourceName + "/status"}, &namespacedScope),
-		},
-		{
-			Operations: cuOperations,
 			Rule:       createRule([]string{clusterv1beta1.GroupVersion.Group}, []string{clusterv1beta1.GroupVersion.Version}, []string{internalMemberClusterResourceName, internalMemberClusterResourceName + "/status"}, &namespacedScope),
 		},
 		{
 			Operations: cuOperations,
 			Rule:       createRule([]string{placementv1beta1.GroupVersion.Group}, []string{placementv1beta1.GroupVersion.Version}, []string{workResourceName, workResourceName + "/status"}, &namespacedScope),
-		},
-		{
-			Operations: cuOperations,
-			Rule:       createRule([]string{workv1alpha1.GroupVersion.Group}, []string{workv1alpha1.GroupVersion.Version}, []string{workResourceName, workResourceName + "/status"}, &namespacedScope),
 		},
 		{
 			Operations: cuOperations,
@@ -598,20 +571,6 @@ func (w *Config) buildFleetGuardRailValidatingWebhooks() []admv1.ValidatingWebho
 				{
 					Operations: cudOperations,
 					Rule:       createRule([]string{clusterv1beta1.GroupVersion.Group}, []string{clusterv1beta1.GroupVersion.Version}, []string{memberClusterResourceName, memberClusterResourceName + "/status"}, &clusterScope),
-				},
-			},
-			TimeoutSeconds: shortWebhookTimeout,
-		},
-		{
-			Name:                    "fleet.v1alpha1.membercluster.guardrail.validating",
-			ClientConfig:            w.createClientConfig(fleetresourcehandler.ValidationPath),
-			FailurePolicy:           &ignoreFailurePolicy,
-			SideEffects:             &sideEffortsNone,
-			AdmissionReviewVersions: admissionReviewVersions,
-			Rules: []admv1.RuleWithOperations{
-				{
-					Operations: cudOperations,
-					Rule:       createRule([]string{fleetv1alpha1.GroupVersion.Group}, []string{fleetv1alpha1.GroupVersion.Version}, []string{memberClusterResourceName, memberClusterResourceName + "/status"}, &clusterScope),
 				},
 			},
 			TimeoutSeconds: shortWebhookTimeout,
