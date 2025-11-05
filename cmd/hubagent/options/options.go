@@ -112,6 +112,8 @@ type Options struct {
 	ResourceSnapshotCreationMinimumInterval time.Duration
 	// ResourceChangesCollectionDuration is the duration for collecting resource changes into one snapshot.
 	ResourceChangesCollectionDuration time.Duration
+	// AzurePropertyCheckerOpts contains options for Azure property checker
+	AzurePropertyCheckerOpts AzurePropertyCheckerOptions
 }
 
 // NewOptions builds an empty options.
@@ -134,6 +136,7 @@ func NewOptions() *Options {
 		PprofPort:                               6065,
 		ResourceSnapshotCreationMinimumInterval: 30 * time.Second,
 		ResourceChangesCollectionDuration:       15 * time.Second,
+		AzurePropertyCheckerOpts:                NewAzurePropertyCheckerOptions(),
 	}
 }
 
@@ -185,4 +188,5 @@ func (o *Options) AddFlags(flags *flag.FlagSet) {
 	flags.DurationVar(&o.ResourceChangesCollectionDuration, "resource-changes-collection-duration", 15*time.Second,
 		"The duration for collecting resource changes into one snapshot. The default is 15 seconds, which means that the controller will collect resource changes for 15 seconds before creating a resource snapshot.")
 	o.RateLimiterOpts.AddFlags(flags)
+	o.AzurePropertyCheckerOpts.AddFlags(flags)
 }
