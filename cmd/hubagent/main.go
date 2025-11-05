@@ -92,6 +92,9 @@ func main() {
 	opts := options.NewOptions()
 	opts.AddFlags(flag.CommandLine)
 
+	azureOpts := options.NewAzurePropertyCheckerOptions()
+	azureOpts.AddFlags(flag.CommandLine)
+
 	flag.Parse()
 	defer handleExitFunc()
 
@@ -179,7 +182,7 @@ func main() {
 	}
 
 	ctx := ctrl.SetupSignalHandler()
-	if err := workload.SetupControllers(ctx, &wg, mgr, config, opts); err != nil {
+	if err := workload.SetupControllers(ctx, &wg, mgr, config, opts, azureOpts); err != nil {
 		klog.ErrorS(err, "unable to set up ready check")
 		exitWithErrorFunc()
 	}

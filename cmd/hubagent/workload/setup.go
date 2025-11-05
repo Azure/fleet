@@ -35,6 +35,8 @@ import (
 	placementv1beta1 "go.goms.io/fleet/apis/placement/v1beta1"
 	fleetv1alpha1 "go.goms.io/fleet/apis/v1alpha1"
 	"go.goms.io/fleet/cmd/hubagent/options"
+	"go.goms.io/fleet/pkg/clients/azure/compute"
+	"go.goms.io/fleet/pkg/clients/httputil"
 	"go.goms.io/fleet/pkg/controllers/bindingwatcher"
 	"go.goms.io/fleet/pkg/controllers/clusterinventory/clusterprofile"
 	"go.goms.io/fleet/pkg/controllers/clusterresourceplacementeviction"
@@ -48,6 +50,7 @@ import (
 	"go.goms.io/fleet/pkg/controllers/schedulingpolicysnapshot"
 	"go.goms.io/fleet/pkg/controllers/updaterun"
 	"go.goms.io/fleet/pkg/controllers/workgenerator"
+	"go.goms.io/fleet/pkg/propertychecker/azure"
 	"go.goms.io/fleet/pkg/resourcewatcher"
 	"go.goms.io/fleet/pkg/scheduler"
 	"go.goms.io/fleet/pkg/scheduler/clustereligibilitychecker"
@@ -131,7 +134,7 @@ var (
 )
 
 // SetupControllers set up the customized controllers we developed
-func SetupControllers(ctx context.Context, wg *sync.WaitGroup, mgr ctrl.Manager, config *rest.Config, opts *options.Options) error { //nolint:gocyclo
+func SetupControllers(ctx context.Context, wg *sync.WaitGroup, mgr ctrl.Manager, config *rest.Config, opts *options.Options, azureOpts *options.AzurePropertyCheckerOptions) error { //nolint:gocyclo
 	// TODO: Try to reduce the complexity of this last measured at 33 (failing at > 30) and remove the // nolint:gocyclo
 	dynamicClient, err := dynamic.NewForConfig(config)
 	if err != nil {
@@ -384,7 +387,22 @@ func SetupControllers(ctx context.Context, wg *sync.WaitGroup, mgr ctrl.Manager,
 
 		// Set up the scheduler
 		klog.Info("Setting up scheduler")
-		defaultProfile := profile.NewDefaultProfile()
+		profileOpts := profile.Options{}
+		if azureOpts.IsEnabled() {
+			klog.Info("Azure property checker is enabled for cluster property validation")
+			propertyChckerConfig, err := azure.NewPropertyCheckerConfigFromFile(azureOpts.ConfigFilePath())
+			if err != nil {
+				klog.ErrorS(err, "unable to load azure property checker config")
+				return err
+			}
+			client, err := compute.NewAttributeBasedVMSizeRecommenderClient(propertyChckerConfig.ComputeServiceAddressWithBasePath, httputil.DefaultClientForAzure)
+			if err != nil {
+				klog.ErrorS(err, "unable to create azure vm size recommender client")
+				return err
+			}
+			profileOpts.PropertyChecker = azure.NewPropertyChecker(*client)
+		}
+		defaultProfile := profile.NewDefaultProfile(profileOpts)
 		defaultFramework := framework.NewFramework(defaultProfile, mgr)
 		defaultSchedulingQueue := queue.NewSimplePlacementSchedulingQueue(
 			queue.WithName(schedulerQueueName),

@@ -112,10 +112,11 @@ var _ = BeforeSuite(func() {
 
 	By("Setup custom controllers")
 	opts := options.NewOptions()
+	azureOpts := options.NewAzurePropertyCheckerOptions()
 	opts.LeaderElection.LeaderElect = false
 	opts.EnableV1Alpha1APIs = true
 	opts.EnableV1Beta1APIs = false
-	err = workload.SetupControllers(ctx, nil, mgr, cfg, opts)
+	err = workload.SetupControllers(ctx, nil, mgr, cfg, opts, azureOpts)
 	Expect(err).Should(Succeed())
 
 	By("Start the controller manager")
