@@ -58,3 +58,7 @@ hubAPIBurst: 1000
 MaxConcurrentClusterPlacement: 100
 ConcurrentResourceChangeSyncs: 20
 MaxFleetSizeSupported: 100
+
+azurePropertyChecker:
+  isEnabled: false
+  computeServiceAddressWithBasePath: "http://localhost:8421/compute"
