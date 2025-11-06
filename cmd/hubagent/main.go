@@ -91,7 +91,6 @@ func main() {
 
 	opts := options.NewOptions()
 	opts.AddFlags(flag.CommandLine)
-	opts.AzurePropertyCheckerOptions.AddFlags(flag.CommandLine)
 
 	flag.Parse()
 	defer handleExitFunc()

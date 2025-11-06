@@ -187,4 +187,5 @@ func (o *Options) AddFlags(flags *flag.FlagSet) {
 	flags.DurationVar(&o.ResourceChangesCollectionDuration, "resource-changes-collection-duration", 15*time.Second,
 		"The duration for collecting resource changes into one snapshot. The default is 15 seconds, which means that the controller will collect resource changes for 15 seconds before creating a resource snapshot.")
 	o.RateLimiterOpts.AddFlags(flags)
+	o.AzurePropertyCheckerOptions.AddFlags(flags)
 }
