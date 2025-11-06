@@ -97,10 +97,49 @@ fi
 # Build the Fleet agent images
 echo "Building and the Fleet agent images..."
 
+echo "=== Disk usage BEFORE docker builds ==="
+df -h
+echo "=== Docker system usage BEFORE builds ==="
+docker system df
+echo "========================================="
+
+echo "Building hub-agent..."
 make -C "../.." docker-build-hub-agent
+echo "=== Disk usage after hub-agent build ==="
+df -h
+echo "=== Docker system usage after hub-agent ==="
+docker system df
+echo "========================================="
+
+echo "Building member-agent..."
 make -C "../.." docker-build-member-agent
+echo "=== Disk usage after member-agent build ==="
+df -h
+echo "=== Docker system usage after member-agent ==="
+docker system df
+echo "============================================="
+
+echo "Building refresh-token..."
 make -C "../.." docker-build-refresh-token
+echo "=== Disk usage after refresh-token build ==="
+df -h
+echo "=== Docker system usage after refresh-token ==="
+docker system df
+echo "============================================="
+
+echo "Building crd-installer..."
 make -C "../.." docker-build-crd-installer
+echo "=== Disk usage after crd-installer build ==="
+df -h
+echo "=== Docker system usage after crd-installer ==="
+docker system df
+echo "=== FINAL Docker system usage breakdown ==="
+docker system df -v
+echo "=== Built Fleet images sizes ==="
+docker images | grep -E "(hub-agent|member-agent|refresh-token|crd-installer)" | grep "$TAG"
+echo "=== All images (for debugging) ==="
+docker images --format "table {{.Repository}}\t{{.Tag}}\t{{.Size}}" | head -20
+echo "============================================="
 
 # Load the Fleet agent images into the kind clusters
 
@@ -115,6 +154,10 @@ do
     kind load docker-image --name "$i" $REGISTRY/$CRD_INSTALLER_IMAGE:$TAG
     kind load docker-image --name "$i" $REGISTRY/$REFRESH_TOKEN_IMAGE:$TAG
 done
+
+echo "=== FINAL disk usage after all Docker builds and image loading ==="
+df -h
+echo "=================================================================="
 
 # Install the helm charts
 
