@@ -101,6 +101,10 @@ echo "=== Disk usage BEFORE docker builds ==="
 df -h
 echo "=== Docker system usage BEFORE builds ==="
 docker system df
+echo "=== Docker volumes BEFORE builds ==="
+docker volume ls
+echo "=== Docker volumes sizes BEFORE builds ==="
+docker system df -v | grep -A 20 "Local Volumes"
 echo "========================================="
 
 echo "Building hub-agent..."
@@ -109,6 +113,10 @@ echo "=== Disk usage after hub-agent build ==="
 df -h
 echo "=== Docker system usage after hub-agent ==="
 docker system df
+echo "=== Docker volumes after hub-agent ==="
+docker volume ls
+echo "=== New volumes since last check ==="
+docker system df -v | grep -A 20 "Local Volumes"
 echo "========================================="
 
 echo "Building member-agent..."
@@ -117,7 +125,11 @@ echo "=== Disk usage after member-agent build ==="
 df -h
 echo "=== Docker system usage after member-agent ==="
 docker system df
-echo "============================================="
+echo "=== Docker volumes after member-agent ==="
+docker volume ls
+echo "=== Volume details after member-agent ==="
+docker system df -v | grep -A 20 "Local Volumes"
+echo "========================================="
 
 echo "Building refresh-token..."
 make -C "../.." docker-build-refresh-token
@@ -125,7 +137,11 @@ echo "=== Disk usage after refresh-token build ==="
 df -h
 echo "=== Docker system usage after refresh-token ==="
 docker system df
-echo "============================================="
+echo "=== Docker volumes after refresh-token ==="
+docker volume ls
+echo "=== Volume details after refresh-token ==="
+docker system df -v | grep -A 20 "Local Volumes"
+echo "========================================="
 
 echo "Building crd-installer..."
 make -C "../.." docker-build-crd-installer
@@ -133,8 +149,19 @@ echo "=== Disk usage after crd-installer build ==="
 df -h
 echo "=== Docker system usage after crd-installer ==="
 docker system df
+echo "=== Docker volumes after crd-installer ==="
+docker volume ls
 echo "=== FINAL Docker system usage breakdown ==="
 docker system df -v
+echo "=== Detailed volume analysis ==="
+echo "Volume names and their mount points:"
+docker volume ls --format "table {{.Name}}\t{{.Driver}}\t{{.Size}}"
+echo "=== Inspect largest volumes ==="
+for vol in $(docker volume ls -q | head -10); do
+    echo "Volume: $vol"
+    docker volume inspect "$vol" | grep -E "(Mountpoint|CreatedAt|Name)" | head -3
+    echo "---"
+done
 echo "=== Built Fleet images sizes ==="
 docker images | grep -E "(hub-agent|member-agent|refresh-token|crd-installer)" | grep "$TAG"
 echo "=== All images (for debugging) ==="
