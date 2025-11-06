@@ -18,7 +18,6 @@ limitations under the License.
 package profile
 
 import (
-	"go.goms.io/fleet/pkg/propertychecker/azure"
 	"go.goms.io/fleet/pkg/scheduler/framework"
 	"go.goms.io/fleet/pkg/scheduler/framework/plugins/clusteraffinity"
 	"go.goms.io/fleet/pkg/scheduler/framework/plugins/clustereligibility"
@@ -32,16 +31,12 @@ const (
 	defaultProfileName = "DefaultProfile"
 )
 
-type Options struct {
-	PropertyChecker *azure.PropertyChecker
-}
-
 // NewDefaultProfile creates a default scheduling profile.
-func NewDefaultProfile(opts Options) *framework.Profile {
+func NewDefaultProfile() *framework.Profile {
 	p := framework.NewProfile(defaultProfileName)
 
 	// default plugin list
-	clusterAffinityPlugin := clusteraffinity.New(clusteraffinity.WithPropertyChecker(opts.PropertyChecker))
+	clusterAffinityPlugin := clusteraffinity.New()
 	clusterEligibilityPlugin := clustereligibility.New()
 	samePlacementAffinityPlugin := sameplacementaffinity.New()
 	topologySpreadConstraintsPlugin := topologyspreadconstraints.New()

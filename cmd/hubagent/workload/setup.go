@@ -50,7 +50,6 @@ import (
 	"go.goms.io/fleet/pkg/controllers/schedulingpolicysnapshot"
 	"go.goms.io/fleet/pkg/controllers/updaterun"
 	"go.goms.io/fleet/pkg/controllers/workgenerator"
-	"go.goms.io/fleet/pkg/propertychecker/azure"
 	"go.goms.io/fleet/pkg/resourcewatcher"
 	"go.goms.io/fleet/pkg/scheduler"
 	"go.goms.io/fleet/pkg/scheduler/clustereligibilitychecker"
@@ -387,17 +386,17 @@ func SetupControllers(ctx context.Context, wg *sync.WaitGroup, mgr ctrl.Manager,
 
 		// Set up the scheduler
 		klog.Info("Setting up scheduler")
-		profileOpts := profile.Options{}
 		if opts.AzurePropertyCheckerOptions.IsEnabled() {
 			klog.Info("Azure property checker is enabled for cluster property validation")
-			client, err := compute.NewAttributeBasedVMSizeRecommenderClient(opts.AzurePropertyCheckerOptions.ComputeServiceAddressWithBasePath(), httputil.DefaultClientForAzure)
+			_, err := compute.NewAttributeBasedVMSizeRecommenderClient(opts.AzurePropertyCheckerOptions.ComputeServiceAddressWithBasePath(), httputil.DefaultClientForAzure)
 			if err != nil {
 				klog.ErrorS(err, "unable to create azure vm size recommender client")
 				return err
 			}
-			profileOpts.PropertyChecker = azure.NewPropertyChecker(*client)
+			// TODO: add back the property checker after changes have been merged
+			//profileOpts.PropertyChecker = azure.NewPropertyChecker(*client)
 		}
-		defaultProfile := profile.NewDefaultProfile(profileOpts)
+		defaultProfile := profile.NewDefaultProfile()
 		defaultFramework := framework.NewFramework(defaultProfile, mgr)
 		defaultSchedulingQueue := queue.NewSimplePlacementSchedulingQueue(
 			queue.WithName(schedulerQueueName),
