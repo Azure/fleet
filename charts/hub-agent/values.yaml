@@ -62,6 +62,4 @@ MaxFleetSizeSupported: 100
 
 azurePropertyChecker:
   isEnabled: false
-  configFilePath: /etc/kubernetes/checker/config.json
-  config:
-    computeServiceAddressWithBasePath: "http://localhost:8421/compute"
+  computeServiceAddressWithBasePath: "http://localhost:8421/compute"

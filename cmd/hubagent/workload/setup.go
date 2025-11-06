@@ -134,7 +134,7 @@ var (
 )
 
 // SetupControllers set up the customized controllers we developed
-func SetupControllers(ctx context.Context, wg *sync.WaitGroup, mgr ctrl.Manager, config *rest.Config, opts *options.Options, azureOpts *options.AzurePropertyCheckerOptions) error { //nolint:gocyclo
+func SetupControllers(ctx context.Context, wg *sync.WaitGroup, mgr ctrl.Manager, config *rest.Config, opts *options.Options) error { //nolint:gocyclo
 	// TODO: Try to reduce the complexity of this last measured at 33 (failing at > 30) and remove the // nolint:gocyclo
 	dynamicClient, err := dynamic.NewForConfig(config)
 	if err != nil {
@@ -388,14 +388,9 @@ func SetupControllers(ctx context.Context, wg *sync.WaitGroup, mgr ctrl.Manager,
 		// Set up the scheduler
 		klog.Info("Setting up scheduler")
 		profileOpts := profile.Options{}
-		if azureOpts.IsEnabled() {
+		if opts.AzurePropertyCheckerOptions.IsEnabled() {
 			klog.Info("Azure property checker is enabled for cluster property validation")
-			propertyChckerConfig, err := azure.NewPropertyCheckerConfigFromFile(azureOpts.ConfigFilePath())
-			if err != nil {
-				klog.ErrorS(err, "unable to load azure property checker config")
-				return err
-			}
-			client, err := compute.NewAttributeBasedVMSizeRecommenderClient(propertyChckerConfig.ComputeServiceAddressWithBasePath, httputil.DefaultClientForAzure)
+			client, err := compute.NewAttributeBasedVMSizeRecommenderClient(opts.AzurePropertyCheckerOptions.ComputeServiceAddressWithBasePath(), httputil.DefaultClientForAzure)
 			if err != nil {
 				klog.ErrorS(err, "unable to create azure vm size recommender client")
 				return err

@@ -56,7 +56,7 @@ spec:
             - --resource-changes-collection-duration={{ .Values.resourceChangesCollectionDuration }}
             {{- if .Values.azurePropertyChecker.isEnabled }}
             - --azure-property-checker-enabled={{ .Values.azurePropertyChecker.isEnabled }}
-            - --azure-property-checker-config-file={{ .Values.azurePropertyChecker.configFilePath }}
+            - --azure-property-checker-config-file={{ .Values.azurePropertyChecker.computeServiceAddressWithBasePath }}
             {{- end }}
           ports:
             - name: metrics
@@ -86,18 +86,6 @@ spec:
                 fieldPath: metadata.namespace
           resources:
             {{- toYaml .Values.resources | nindent 12 }}
-          {{- if .Values.azurePropertyChecker.isEnabled }}
-          volumeMounts:
-            - name: property-checker-config
-              mountPath: /etc/kubernetes/checker
-              readOnly: true
-          {{- end }}
-      {{- if .Values.azurePropertyChecker.isEnabled }}
-      volumes:
-        - name: property-checker-config
-          secret:
-            secretName: property-config
-      {{- end }}
       {{- with .Values.affinity }}
       affinity:
         {{- toYaml . | nindent 8 }}

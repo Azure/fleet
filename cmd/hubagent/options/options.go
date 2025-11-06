@@ -111,6 +111,8 @@ type Options struct {
 	ResourceSnapshotCreationMinimumInterval time.Duration
 	// ResourceChangesCollectionDuration is the duration for collecting resource changes into one snapshot.
 	ResourceChangesCollectionDuration time.Duration
+	// AzurePropertyCheckerOptions contains options for Azure property checker
+	AzurePropertyCheckerOptions *AzurePropertyCheckerOptions
 }
 
 // NewOptions builds an empty options.
@@ -133,6 +135,7 @@ func NewOptions() *Options {
 		PprofPort:                               6065,
 		ResourceSnapshotCreationMinimumInterval: 30 * time.Second,
 		ResourceChangesCollectionDuration:       15 * time.Second,
+		AzurePropertyCheckerOptions:             NewAzurePropertyCheckerOptions(),
 	}
 }
 
