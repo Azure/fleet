@@ -1,6 +1,3 @@
-/* THIS FILE IS CREATED IN ANOTHER PROJECT AND COPIED HERE */
-/* JUST FOR THE PURPOSE OF SEEDING THE COMPLETE FUNCTIONALITY OF THE SYSTEM */
-
 //
 //Copyright (c) Microsoft Corporation.
 //Licensed under the MIT license.
@@ -29,6 +26,3 @@ func NewPropertyChecker(vmSizeRecommenderClient compute.AttributeBasedVMSizeReco
 		vmSizeRecommenderClient: vmSizeRecommenderClient,
 	}
 }
-
-/* MORE CODE HERE BUT NOT RELEVANT TO THIS PR */
-/* WILL FIX ONCE THE OTHER PR IS MERGED AND THIS IS REBASED */
