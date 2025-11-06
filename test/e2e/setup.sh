@@ -97,6 +97,8 @@ fi
 # Build the Fleet agent images
 echo "Building and the Fleet agent images..."
 
+echo "=== Cleaning any existing BuildKit cache ==="
+docker buildx prune -f || true
 echo "=== Disk usage BEFORE docker builds ==="
 df -h
 echo "=== Docker system usage BEFORE builds ==="
@@ -109,6 +111,8 @@ echo "========================================="
 
 echo "Building hub-agent..."
 make -C "../.." docker-build-hub-agent
+echo "=== Cleaning BuildKit cache after hub-agent ==="
+docker buildx prune -f
 echo "=== Disk usage after hub-agent build ==="
 df -h
 echo "=== Docker system usage after hub-agent ==="
@@ -121,6 +125,8 @@ echo "========================================="
 
 echo "Building member-agent..."
 make -C "../.." docker-build-member-agent
+echo "=== Cleaning BuildKit cache after member-agent ==="
+docker buildx prune -f
 echo "=== Disk usage after member-agent build ==="
 df -h
 echo "=== Docker system usage after member-agent ==="
@@ -133,6 +139,8 @@ echo "========================================="
 
 echo "Building refresh-token..."
 make -C "../.." docker-build-refresh-token
+echo "=== Cleaning BuildKit cache after refresh-token ==="
+docker buildx prune -f
 echo "=== Disk usage after refresh-token build ==="
 df -h
 echo "=== Docker system usage after refresh-token ==="
@@ -145,6 +153,8 @@ echo "========================================="
 
 echo "Building crd-installer..."
 make -C "../.." docker-build-crd-installer
+echo "=== Cleaning BuildKit cache after crd-installer ==="
+docker buildx prune -f
 echo "=== Disk usage after crd-installer build ==="
 df -h
 echo "=== Docker system usage after crd-installer ==="
