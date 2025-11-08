@@ -285,16 +285,6 @@ func TestDefaultResourceConfigGroupVersionKindParse(t *testing.T) {
 	resourcesInDefaultDisabledList := []schema.GroupVersionKind{
 		corev1PodGVK, corev1NodeGVK,
 		{
-			Group:   "fleet.azure.com",
-			Version: "v1beta1",
-			Kind:    "MemberCluster",
-		},
-		{
-			Group:   "fleet.azure.com",
-			Version: "v1alpha1",
-			Kind:    "MemberCluster",
-		},
-		{
 			Group:   "events.k8s.io",
 			Version: "v1beta1",
 			Kind:    "Event",

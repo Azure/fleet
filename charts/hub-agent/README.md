@@ -32,7 +32,6 @@ _See [helm install](https://helm.sh/docs/helm/helm_install/) for command documen
 | `affinity`                                | Node affinity for hub-agent pods                                                           | `{}`                                             |
 | `tolerations`                             | Tolerations for hub-agent pods                                                             | `[]`                                             |
 | `logVerbosity`                            | Log level (klog V logs)                                                                    | `5`                                              |
-| `enableV1Alpha1APIs`                      | Watch for v1alpha1 APIs                                                                    | `false`                                          |
 | `enableV1Beta1APIs`                       | Watch for v1beta1 APIs                                                                     | `true`                                           |
 | `hubAPIQPS`                               | QPS for fleet-apiserver (not including events/node heartbeat)                              | `250`                                            |
 | `hubAPIBurst`                             | Burst for fleet-apiserver (not including events/node heartbeat)                            | `1000`                                           |

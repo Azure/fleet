@@ -28,7 +28,6 @@ import (
 
 	clusterv1beta1 "go.goms.io/fleet/apis/cluster/v1beta1"
 	placementv1beta1 "go.goms.io/fleet/apis/placement/v1beta1"
-	fleetv1alpha1 "go.goms.io/fleet/apis/v1alpha1"
 )
 
 var (
@@ -187,10 +186,6 @@ func NewResourceConfig(isAllowList bool) *ResourceConfig {
 	if r.isAllowList {
 		return r
 	}
-	// TODO: remove after we remove v1alpha1 support
-	// disable v1alpha1 related resources by default
-	r.AddGroup(fleetv1alpha1.GroupVersion.Group)
-	r.AddGroupVersionKind(WorkV1Alpha1GVK)
 
 	// disable cluster group by default
 	r.AddGroup(clusterv1beta1.GroupVersion.Group)

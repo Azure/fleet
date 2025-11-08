@@ -8,7 +8,6 @@ require (
 	github.com/Azure/karpenter-provider-azure v1.5.1
 	github.com/crossplane/crossplane-runtime v1.17.0
 	github.com/evanphx/json-patch/v5 v5.9.11
-	github.com/go-logr/logr v1.4.3
 	github.com/google/go-cmp v0.7.0
 	github.com/grpc-ecosystem/grpc-gateway/v2 v2.20.0
 	github.com/onsi/ginkgo/v2 v2.23.4
@@ -23,7 +22,6 @@ require (
 	go.goms.io/fleet-networking v0.3.3
 	go.uber.org/atomic v1.11.0
 	go.uber.org/zap v1.27.0
-	golang.org/x/exp v0.0.0-20250305212735-054e65f0b394
 	golang.org/x/sync v0.15.0
 	golang.org/x/time v0.11.0
 	gomodules.xyz/jsonpatch/v2 v2.4.0
@@ -42,7 +40,6 @@ require (
 	sigs.k8s.io/cloud-provider-azure/pkg/azclient v0.5.20
 	sigs.k8s.io/cluster-inventory-api v0.0.0-20240730014211-ef0154379848
 	sigs.k8s.io/controller-runtime v0.20.4
-	sigs.k8s.io/work-api v0.0.0-20220407021756-586d707fdb2c
 )
 
 require (
@@ -69,6 +66,7 @@ require (
 	github.com/emicklei/go-restful/v3 v3.12.1 // indirect
 	github.com/fsnotify/fsnotify v1.9.0 // indirect
 	github.com/fxamacker/cbor/v2 v2.7.0 // indirect
+	github.com/go-logr/logr v1.4.3 // indirect
 	github.com/go-logr/zapr v1.3.0 // indirect
 	github.com/go-openapi/jsonpointer v0.21.0 // indirect
 	github.com/go-openapi/jsonreference v0.21.0 // indirect
@@ -109,6 +107,7 @@ require (
 	go.uber.org/mock v0.5.1 // indirect
 	go.uber.org/multierr v1.11.0 // indirect
 	golang.org/x/crypto v0.38.0 // indirect
+	golang.org/x/exp v0.0.0-20250305212735-054e65f0b394 // indirect
 	golang.org/x/net v0.40.0 // indirect
 	golang.org/x/oauth2 v0.27.0 // indirect
 	golang.org/x/sys v0.33.0 // indirect

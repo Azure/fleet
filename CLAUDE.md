@@ -209,7 +209,6 @@ All controllers follow standard Kubernetes controller patterns:
 - Custom properties supported for scheduling decisions
 
 ### Multi-API Version Support
-- v1alpha1 APIs maintained for backward compatibility  
 - v1beta1 APIs are current stable version
 - Feature flags control API version enablement
 

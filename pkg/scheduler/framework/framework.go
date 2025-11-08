@@ -121,7 +121,7 @@ type framework struct {
 	eventRecorder record.EventRecorder
 
 	// parallelizer is a utility which helps run tasks in parallel.
-	parallelizer *parallelizer.Parallerlizer
+	parallelizer parallelizer.Parallelizer
 
 	// eligibilityChecker is a utility which helps determine if a cluster is eligible for resource placement.
 	clusterEligibilityChecker *clustereligibilitychecker.ClusterEligibilityChecker

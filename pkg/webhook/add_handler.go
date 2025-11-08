@@ -10,6 +10,7 @@ import (
 	"go.goms.io/fleet/pkg/webhook/pod"
 	"go.goms.io/fleet/pkg/webhook/replicaset"
 	"go.goms.io/fleet/pkg/webhook/resourceoverride"
+	"go.goms.io/fleet/pkg/webhook/resourceplacement"
 )
 
 func init() {
@@ -17,8 +18,8 @@ func init() {
 	AddToManagerFleetResourceValidator = fleetresourcehandler.Add
 	// AddToManagerFuncs is a list of functions to register webhook validators and mutators to the webhook server
 	AddToManagerFuncs = append(AddToManagerFuncs, clusterresourceplacement.AddMutating)
-	AddToManagerFuncs = append(AddToManagerFuncs, clusterresourceplacement.AddV1Alpha1)
 	AddToManagerFuncs = append(AddToManagerFuncs, clusterresourceplacement.Add)
+	AddToManagerFuncs = append(AddToManagerFuncs, resourceplacement.Add)
 	AddToManagerFuncs = append(AddToManagerFuncs, pod.Add)
 	AddToManagerFuncs = append(AddToManagerFuncs, replicaset.Add)
 	AddToManagerFuncs = append(AddToManagerFuncs, membercluster.Add)

@@ -112,7 +112,7 @@ var _ = Describe("placing namespaced scoped resources using an RP with PickFixed
 	})
 
 	Context("refreshing target clusters", Ordered, func() {
-		It("should should create an RP with pickFixed policy successfully", func() {
+		It("should create an RP with pickFixed policy successfully", func() {
 			// Create the RP in the same namespace selecting namespaced resources.
 			rp := &placementv1beta1.ResourcePlacement{
 				ObjectMeta: metav1.ObjectMeta{

@@ -14,27 +14,32 @@ See the License for the specific language governing permissions and
 limitations under the License.
 */
 
-// Package validator provides utils to validate cluster resource placement resource.
+// Package validator provides utils to validate all fleet custom resources.
 package validator
 
 import (
+	"context"
 	"errors"
 	"fmt"
+	"net/http"
 	"sort"
 	"strings"
 
+	admissionv1 "k8s.io/api/admission/v1"
 	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/api/meta"
 	"k8s.io/apimachinery/pkg/api/resource"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime/schema"
+	"k8s.io/apimachinery/pkg/types"
 	apiErrors "k8s.io/apimachinery/pkg/util/errors"
 	"k8s.io/apimachinery/pkg/util/intstr"
 	"k8s.io/apimachinery/pkg/util/validation"
 	"k8s.io/klog/v2"
+	"sigs.k8s.io/controller-runtime/pkg/webhook"
+	"sigs.k8s.io/controller-runtime/pkg/webhook/admission"
 
 	placementv1beta1 "go.goms.io/fleet/apis/placement/v1beta1"
-	fleetv1alpha1 "go.goms.io/fleet/apis/v1alpha1"
 	"go.goms.io/fleet/pkg/propertyprovider"
 	"go.goms.io/fleet/pkg/utils/controller"
 	"go.goms.io/fleet/pkg/utils/informer"
@@ -49,63 +54,26 @@ var (
 	invalidTolerationValueErrFmt = "invalid toleration value %+v: %s"
 	uniqueTolerationErrFmt       = "toleration %+v already exists, tolerations must be unique"
 
+	// Webhook validation message format strings
+	AllowUpdateOldInvalidFmt   = "allow update on old invalid v1beta1 %s with DeletionTimestamp set"
+	DenyUpdateOldInvalidFmt    = "deny update on old invalid v1beta1 %s with DeletionTimestamp not set %s"
+	DenyCreateUpdateInvalidFmt = "deny create/update v1beta1 %s has invalid fields %s"
+	AllowModifyFmt             = "any user is allowed to modify v1beta1 %s"
+
 	// Below is the map of supported capacity types.
 	supportedResourceCapacityTypesMap = map[string]bool{propertyprovider.AllocatableCapacityName: true, propertyprovider.AvailableCapacityName: true, propertyprovider.TotalCapacityName: true}
 	resourceCapacityTypes             = supportedResourceCapacityTypes()
 )
 
-// ValidateClusterResourcePlacementAlpha validates a ClusterResourcePlacement v1alpha1 object.
-func ValidateClusterResourcePlacementAlpha(clusterResourcePlacement *fleetv1alpha1.ClusterResourcePlacement) error {
+// validatePlacement validates a placement object (either ClusterResourcePlacement or ResourcePlacement).
+func validatePlacement(name string, resourceSelectors []placementv1beta1.ResourceSelectorTerm, policy *placementv1beta1.PlacementPolicy, strategy placementv1beta1.RolloutStrategy, isClusterScoped bool) error {
 	allErr := make([]error, 0)
 
-	// we leverage the informer manager to do the resource scope validation
-	if ResourceInformer == nil {
-		allErr = append(allErr, fmt.Errorf("cannot perform resource scope check for now, please retry"))
-	}
-
-	for _, selector := range clusterResourcePlacement.Spec.ResourceSelectors {
-		if selector.LabelSelector != nil {
-			if len(selector.Name) != 0 {
-				allErr = append(allErr, fmt.Errorf("the labelSelector and name fields are mutually exclusive in selector %+v", selector))
-			}
-			if _, err := metav1.LabelSelectorAsSelector(selector.LabelSelector); err != nil {
-				allErr = append(allErr, fmt.Errorf("the labelSelector in resource selector %+v is invalid: %w", selector, err))
-			}
-		}
-		if ResourceInformer != nil {
-			gvk := schema.GroupVersionKind{
-				Group:   selector.Group,
-				Version: selector.Version,
-				Kind:    selector.Kind,
-			}
-			// TODO: Ensure gvk created from resource selector is valid.
-			if !ResourceInformer.IsClusterScopedResources(gvk) {
-				allErr = append(allErr, fmt.Errorf("the resource is not found in schema (please retry) or it is not a cluster scoped resource: %v", gvk))
-			}
-		}
-	}
-
-	if clusterResourcePlacement.Spec.Policy != nil && clusterResourcePlacement.Spec.Policy.Affinity != nil &&
-		clusterResourcePlacement.Spec.Policy.Affinity.ClusterAffinity != nil {
-		for _, selector := range clusterResourcePlacement.Spec.Policy.Affinity.ClusterAffinity.ClusterSelectorTerms {
-			if _, err := metav1.LabelSelectorAsSelector(&selector.LabelSelector); err != nil {
-				allErr = append(allErr, fmt.Errorf("the labelSelector in cluster selector %+v is invalid: %w", selector, err))
-			}
-		}
-	}
-
-	return apiErrors.NewAggregate(allErr)
-}
-
-// ValidateClusterResourcePlacement validates a ClusterResourcePlacement object.
-func ValidateClusterResourcePlacement(clusterResourcePlacement *placementv1beta1.ClusterResourcePlacement) error {
-	allErr := make([]error, 0)
-
-	if len(clusterResourcePlacement.Name) > validation.DNS1035LabelMaxLength {
+	if len(name) > validation.DNS1035LabelMaxLength {
 		allErr = append(allErr, fmt.Errorf("the name field cannot have length exceeding %d", validation.DNS1035LabelMaxLength))
 	}
 
-	for _, selector := range clusterResourcePlacement.Spec.ResourceSelectors {
+	for _, selector := range resourceSelectors {
 		if selector.LabelSelector != nil {
 			if len(selector.Name) != 0 {
 				allErr = append(allErr, fmt.Errorf("the labelSelector and name fields are mutually exclusive in selector %+v", selector))
@@ -128,8 +96,14 @@ func ValidateClusterResourcePlacement(clusterResourcePlacement *placementv1beta1
 				Version: selector.Version,
 				Kind:    selector.Kind,
 			}
-			if !ResourceInformer.IsClusterScopedResources(gvk) {
+			// Only check cluster scope for ClusterResourcePlacement
+			if isClusterScoped && !ResourceInformer.IsClusterScopedResources(gvk) {
 				allErr = append(allErr, fmt.Errorf("the resource is not found in schema (please retry) or it is not a cluster scoped resource: %v", gvk))
+			}
+
+			// Only check namespace scope for ResourcePlacement
+			if !isClusterScoped && ResourceInformer.IsClusterScopedResources(gvk) {
+				allErr = append(allErr, fmt.Errorf("the resource is not found in schema (please retry) or it is a cluster scoped resource: %v", gvk))
 			}
 		} else {
 			err := fmt.Errorf("cannot perform resource scope check for now, please retry")
@@ -138,17 +112,39 @@ func ValidateClusterResourcePlacement(clusterResourcePlacement *placementv1beta1
 		}
 	}
 
-	if clusterResourcePlacement.Spec.Policy != nil {
-		if err := validatePlacementPolicy(clusterResourcePlacement.Spec.Policy); err != nil {
+	if policy != nil {
+		if err := validatePlacementPolicy(policy); err != nil {
 			allErr = append(allErr, fmt.Errorf("the placement policy field is invalid: %w", err))
 		}
 	}
 
-	if err := validateRolloutStrategy(clusterResourcePlacement.Spec.Strategy); err != nil {
+	if err := validateRolloutStrategy(strategy); err != nil {
 		allErr = append(allErr, fmt.Errorf("the rollout Strategy field  is invalid: %w", err))
 	}
 
 	return apiErrors.NewAggregate(allErr)
+}
+
+// ValidateClusterResourcePlacement validates a ClusterResourcePlacement object.
+func ValidateClusterResourcePlacement(clusterResourcePlacement *placementv1beta1.ClusterResourcePlacement) error {
+	return validatePlacement(
+		clusterResourcePlacement.Name,
+		clusterResourcePlacement.Spec.ResourceSelectors,
+		clusterResourcePlacement.Spec.Policy,
+		clusterResourcePlacement.Spec.Strategy,
+		true, // isClusterScoped
+	)
+}
+
+// ValidateResourcePlacement validates a ResourcePlacement object.
+func ValidateResourcePlacement(resourcePlacement *placementv1beta1.ResourcePlacement) error {
+	return validatePlacement(
+		resourcePlacement.Name,
+		resourcePlacement.Spec.ResourceSelectors,
+		resourcePlacement.Spec.Policy,
+		resourcePlacement.Spec.Strategy,
+		false, // isClusterScoped
+	)
 }
 
 func IsPlacementPolicyTypeUpdated(oldPolicy, currentPolicy *placementv1beta1.PlacementPolicy) bool {
@@ -476,10 +472,44 @@ func validateName(name string) error {
 		if !supportedResourceCapacityTypesMap[segments[0]] {
 			return fmt.Errorf("invalid capacity type in resource property name %s, supported values are %+v", name, resourceCapacityTypes)
 		}
+
+		if errs := validation.IsQualifiedName(name); errs != nil {
+			return fmt.Errorf("property name %s is not valid: %s", name, strings.Join(errs, "; "))
+		}
+		return nil
 	}
 
-	if err := validation.IsQualifiedName(name); err != nil {
-		return fmt.Errorf("name is not a valid Kubernetes label name: %v", err)
+	// For other properties, they should have a name that is formatted as follows:
+	//
+	// It should be a string of one or more segments, separated by slashes (/) if applicable;
+	// each segment must be 63 characters or less, start and end with an alphanumeric character,
+	// and can include dashes (-), underscores (_), dots (.), and alphanumerics in between.
+	//
+	// Optionally, the property name can have a prefix, which must be a DNS subdomain up to 253 characters,
+	// followed by a slash (/).
+	segs := strings.Split(name, "/")
+	if len(segs) <= 1 {
+		// The property name does not have a slash; it has no prefix.
+		if errs := validation.IsQualifiedName(name); errs != nil {
+			return fmt.Errorf("property name %s is not valid: %s", name, strings.Join(errs, "; "))
+		}
+	} else {
+		// The property name might have a prefix.
+		possiblePrefix := segs[0]
+
+		subDomainErrs := validation.IsDNS1123Subdomain(possiblePrefix)
+		qualifiedNameErrs := validation.IsQualifiedName(possiblePrefix)
+		if len(subDomainErrs) != 0 && len(qualifiedNameErrs) != 0 {
+			return fmt.Errorf("property name first segment %s is not valid: it is neither a valid DNS subdomain (%s) nor a valid qualified name (%s)", possiblePrefix, strings.Join(subDomainErrs, "; "), strings.Join(qualifiedNameErrs, "; "))
+		}
+
+		segsLeft := segs[1:]
+		for idx := range segsLeft {
+			seg := segsLeft[idx]
+			if errs := validation.IsQualifiedName(seg); errs != nil {
+				return fmt.Errorf("property name segment %s is not valid: %s", seg, strings.Join(errs, "; "))
+			}
+		}
 	}
 	return nil
 }
@@ -518,4 +548,59 @@ func supportedResourceCapacityTypes() []string {
 	}
 	sort.Strings(capacityTypes)
 	return capacityTypes
+}
+
+// HandlePlacementValidation provides consolidated webhook validation logic for placement objects.
+// This function accepts higher-order functions for type-specific operations.
+func HandlePlacementValidation(
+	ctx context.Context,
+	req admission.Request,
+	decoder webhook.AdmissionDecoder,
+	resourceType string,
+	decodeFunc func(admission.Request, webhook.AdmissionDecoder) (placementv1beta1.PlacementObj, error),
+	decodeOldFunc func(admission.Request, webhook.AdmissionDecoder) (placementv1beta1.PlacementObj, error),
+	validateFunc func(placementv1beta1.PlacementObj) error,
+) admission.Response {
+	if req.Operation == admissionv1.Create || req.Operation == admissionv1.Update {
+		klog.V(2).InfoS("handling placement", "resourceType", resourceType, "operation", req.Operation, "namespacedName", types.NamespacedName{Name: req.Name, Namespace: req.Namespace})
+
+		placement, err := decodeFunc(req, decoder)
+		if err != nil {
+			klog.ErrorS(err, "failed to decode v1beta1 placement object for create/update operation", "resourceType", resourceType, "userName", req.UserInfo.Username, "groups", req.UserInfo.Groups)
+			return admission.Errored(http.StatusBadRequest, err)
+		}
+
+		if req.Operation == admissionv1.Update {
+			oldPlacement, err := decodeOldFunc(req, decoder)
+			if err != nil {
+				return admission.Errored(http.StatusBadRequest, err)
+			}
+
+			// Special case: allow updates to old placement objects with invalid fields so that we can
+			// update the placement to remove finalizer then delete it.
+			if err := validateFunc(oldPlacement); err != nil {
+				if placement.GetDeletionTimestamp() != nil {
+					return admission.Allowed(fmt.Sprintf(AllowUpdateOldInvalidFmt, resourceType))
+				}
+				return admission.Denied(fmt.Sprintf(DenyUpdateOldInvalidFmt, resourceType, err))
+			}
+
+			// Handle update case where placement type should be immutable.
+			if IsPlacementPolicyTypeUpdated(oldPlacement.GetPlacementSpec().Policy, placement.GetPlacementSpec().Policy) {
+				return admission.Denied("placement type is immutable")
+			}
+
+			// Handle update case where existing tolerations were updated/deleted
+			if IsTolerationsUpdatedOrDeleted(oldPlacement.GetPlacementSpec().Tolerations(), placement.GetPlacementSpec().Tolerations()) {
+				return admission.Denied("tolerations have been updated/deleted, only additions to tolerations are allowed")
+			}
+		}
+
+		if err := validateFunc(placement); err != nil {
+			klog.V(2).InfoS("v1beta1 placement has invalid fields, request is denied", "resourceType", resourceType, "operation", req.Operation, "namespacedName", types.NamespacedName{Name: placement.GetName(), Namespace: req.Namespace})
+			return admission.Denied(fmt.Sprintf(DenyCreateUpdateInvalidFmt, resourceType, err))
+		}
+	}
+
+	return admission.Allowed(fmt.Sprintf(AllowModifyFmt, resourceType))
 }

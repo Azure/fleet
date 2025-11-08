@@ -37,17 +37,14 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/manager"
 	metricsserver "sigs.k8s.io/controller-runtime/pkg/metrics/server"
 	ctrlwebhook "sigs.k8s.io/controller-runtime/pkg/webhook"
-	workv1alpha1 "sigs.k8s.io/work-api/pkg/apis/v1alpha1"
 
 	fleetnetworkingv1alpha1 "go.goms.io/fleet-networking/api/v1alpha1"
 
 	clusterv1beta1 "go.goms.io/fleet/apis/cluster/v1beta1"
 	placementv1alpha1 "go.goms.io/fleet/apis/placement/v1alpha1"
 	placementv1beta1 "go.goms.io/fleet/apis/placement/v1beta1"
-	fleetv1alpha1 "go.goms.io/fleet/apis/v1alpha1"
 	"go.goms.io/fleet/cmd/hubagent/options"
 	"go.goms.io/fleet/cmd/hubagent/workload"
-	mcv1alpha1 "go.goms.io/fleet/pkg/controllers/membercluster/v1alpha1"
 	mcv1beta1 "go.goms.io/fleet/pkg/controllers/membercluster/v1beta1"
 	"go.goms.io/fleet/pkg/webhook"
 	"go.goms.io/fleet/pkg/webhook/managedresource"
@@ -73,8 +70,6 @@ const (
 
 func init() {
 	utilruntime.Must(clientgoscheme.AddToScheme(scheme))
-	utilruntime.Must(fleetv1alpha1.AddToScheme(scheme))
-	utilruntime.Must(workv1alpha1.AddToScheme(scheme))
 	utilruntime.Must(placementv1beta1.AddToScheme(scheme))
 	utilruntime.Must(clusterv1beta1.AddToScheme(scheme))
 	utilruntime.Must(apiextensionsv1.AddToScheme(scheme))
@@ -138,16 +133,6 @@ func main() {
 	}
 
 	klog.V(2).InfoS("starting hubagent")
-	if opts.EnableV1Alpha1APIs {
-		klog.Info("Setting up memberCluster v1alpha1 controller")
-		if err = (&mcv1alpha1.Reconciler{
-			Client:                  mgr.GetClient(),
-			NetworkingAgentsEnabled: opts.NetworkingAgentsEnabled,
-		}).SetupWithManager(mgr, "memberclusterv1alpha1-controller"); err != nil {
-			klog.ErrorS(err, "unable to create v1alpha1 controller", "controller", "MemberCluster")
-			exitWithErrorFunc()
-		}
-	}
 	if opts.EnableV1Beta1APIs {
 		klog.Info("Setting up memberCluster v1beta1 controller")
 		if err = (&mcv1beta1.Reconciler{
@@ -227,7 +212,7 @@ func SetupWebhook(mgr manager.Manager, webhookClientConnectionType options.Webho
 		klog.ErrorS(err, "unable to add WebhookConfig")
 		return err
 	}
-	if err = webhook.AddToManager(mgr, whiteListedUsers, isFleetV1Beta1API, denyModifyMemberClusterLabels); err != nil {
+	if err = webhook.AddToManager(mgr, whiteListedUsers, denyModifyMemberClusterLabels); err != nil {
 		klog.ErrorS(err, "unable to register webhooks to the manager")
 		return err
 	}

@@ -55,7 +55,7 @@ jobs:
            ## Repository upload token - get it from codecov.io. Required only for private repositories
           token: ${{ secrets.CODECOV_TOKEN }}
           ## Comma-separated list of files to upload
-          files: ./it-coverage.xml;./ut-coverage.xml
+          files: ./ut-coverage.xml
   
   e2e-tests:
     strategy:
@@ -84,13 +84,6 @@ jobs:
     ]
     if: needs.detect-noop.outputs.noop != 'true'
     steps:
-      - name: Remove unnecessary files
-        run: |
-          sudo rm -rf /usr/share/dotnet
-          sudo rm -rf /opt/ghc
-          sudo rm -rf "/usr/local/share/boost"
-          sudo rm -rf "$AGENT_TOOLSDIRECTORY"
-
       - name: Set up Go
         uses: actions/setup-go@v6
         with:
@@ -153,7 +146,10 @@ jobs:
       
       - name: Collect logs
         if: always()
+        # Wait for a bit before log collection; this gives the agent pods some time to shut down
+        # gracefully and flush their logs.
         run: |
+          sleep 30
           make collect-e2e-logs
         env:
           KUBECONFIG: '/home/runner/.kube/config'
@@ -161,7 +157,7 @@ jobs:
       
       - name: Upload logs
         if: always()
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v5
         with:
           name: e2e-logs-${{ matrix.customized-settings }}
           path: test/e2e/logs-${{ matrix.customized-settings }}/

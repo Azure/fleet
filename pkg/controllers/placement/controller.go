@@ -30,19 +30,24 @@ import (
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	"k8s.io/apimachinery/pkg/api/meta"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/types"
 	utilerrors "k8s.io/apimachinery/pkg/util/errors"
+	"k8s.io/client-go/tools/record"
 	"k8s.io/klog/v2"
 	ctrl "sigs.k8s.io/controller-runtime"
+	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/controller/controllerutil"
 
 	fleetv1beta1 "go.goms.io/fleet/apis/placement/v1beta1"
 	hubmetrics "go.goms.io/fleet/pkg/metrics/hub"
 	"go.goms.io/fleet/pkg/scheduler/queue"
+	"go.goms.io/fleet/pkg/utils"
 	"go.goms.io/fleet/pkg/utils/annotations"
 	"go.goms.io/fleet/pkg/utils/condition"
 	"go.goms.io/fleet/pkg/utils/controller"
 	"go.goms.io/fleet/pkg/utils/defaulter"
+	"go.goms.io/fleet/pkg/utils/informer"
 	"go.goms.io/fleet/pkg/utils/labels"
 	"go.goms.io/fleet/pkg/utils/resource"
 	fleettime "go.goms.io/fleet/pkg/utils/time"
@@ -56,6 +61,40 @@ var resourceSnapshotResourceSizeLimit = 800 * (1 << 10) // 800KB
 // We use a safety resync period to requeue all the finished request just in case there is a bug in the system.
 // TODO: unify all the controllers with this pattern and make this configurable in place of the controller runtime resync period.
 const controllerResyncPeriod = 30 * time.Minute
+
+// Reconciler reconciles a cluster resource placement object
+type Reconciler struct {
+	// the informer contains the cache for all the resources we need.
+	InformerManager informer.Manager
+
+	// RestMapper is used to convert between gvk and gvr on known resources.
+	RestMapper meta.RESTMapper
+
+	// Client is used to update objects which goes to the api server directly.
+	Client client.Client
+
+	// UncachedReader is the uncached read-only client for accessing Kubernetes API server; in most cases client should
+	// be used instead, unless consistency becomes a serious concern.
+	// It's only needed by v1beta1 APIs.
+	UncachedReader client.Reader
+
+	// ResourceConfig contains all the API resources that we won't select based on allowed or skipped propagating APIs option.
+	ResourceConfig *utils.ResourceConfig
+
+	// SkippedNamespaces contains the namespaces that we should not propagate.
+	SkippedNamespaces map[string]bool
+
+	Recorder record.EventRecorder
+
+	Scheme *runtime.Scheme
+
+	// ResourceSnapshotCreationMinimumInterval is the minimum interval to create a new resourcesnapshot
+	// to avoid too frequent updates.
+	ResourceSnapshotCreationMinimumInterval time.Duration
+
+	// ResourceChangesCollectionDuration is the duration for collecting resource changes into one snapshot.
+	ResourceChangesCollectionDuration time.Duration
+}
 
 func (r *Reconciler) Reconcile(ctx context.Context, key controller.QueueKey) (ctrl.Result, error) {
 	placementKey, ok := key.(string)
@@ -1175,7 +1214,7 @@ func (r *Reconciler) determineRolloutStateForPlacementWithExternalRolloutStrateg
 			})
 			// As placement status will refresh even if the spec has not changed, we reset any unused conditions to avoid confusion.
 			for i := condition.RolloutStartedCondition + 1; i < condition.TotalCondition; i++ {
-				meta.RemoveStatusCondition(&placementStatus.Conditions, string(i.ClusterResourcePlacementConditionType()))
+				meta.RemoveStatusCondition(&placementStatus.Conditions, getPlacementConditionType(placementObj, i))
 			}
 			return true, nil
 		}

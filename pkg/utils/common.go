@@ -43,13 +43,11 @@ import (
 	"k8s.io/client-go/discovery"
 	"k8s.io/client-go/util/retry"
 	"k8s.io/klog/v2"
-	workv1alpha1 "sigs.k8s.io/work-api/pkg/apis/v1alpha1"
 
 	fleetnetworkingv1alpha1 "go.goms.io/fleet-networking/api/v1alpha1"
 
 	clusterv1beta1 "go.goms.io/fleet/apis/cluster/v1beta1"
 	placementv1beta1 "go.goms.io/fleet/apis/placement/v1beta1"
-	fleetv1alpha1 "go.goms.io/fleet/apis/v1alpha1"
 	"go.goms.io/fleet/pkg/utils/condition"
 	"go.goms.io/fleet/pkg/utils/controller"
 	"go.goms.io/fleet/pkg/utils/informer"
@@ -113,11 +111,6 @@ const (
 )
 
 var (
-	FleetRule = rbacv1.PolicyRule{
-		Verbs:     []string{"*"},
-		APIGroups: []string{fleetv1alpha1.GroupVersion.Group},
-		Resources: []string{"*"},
-	}
 	FleetClusterRule = rbacv1.PolicyRule{
 		Verbs:     []string{"*"},
 		APIGroups: []string{clusterv1beta1.GroupVersion.Group},
@@ -133,11 +126,6 @@ var (
 		APIGroups: []string{""},
 		Resources: []string{"events"},
 	}
-	WorkRule = rbacv1.PolicyRule{
-		Verbs:     []string{"*"},
-		APIGroups: []string{workv1alpha1.GroupName},
-		Resources: []string{"*"},
-	}
 	FleetNetworkRule = rbacv1.PolicyRule{
 		Verbs:     []string{"*"},
 		APIGroups: []string{NetworkingGroupName},
@@ -147,18 +135,6 @@ var (
 
 // Those are the GVR/GVKs in use by Fleet source code.
 var (
-	ClusterResourcePlacementV1Alpha1GVK = schema.GroupVersionKind{
-		Group:   fleetv1alpha1.GroupVersion.Group,
-		Version: fleetv1alpha1.GroupVersion.Version,
-		Kind:    "ClusterResourcePlacement",
-	}
-
-	ClusterResourcePlacementV1Alpha1GVR = schema.GroupVersionResource{
-		Group:    fleetv1alpha1.GroupVersion.Group,
-		Version:  fleetv1alpha1.GroupVersion.Version,
-		Resource: fleetv1alpha1.ClusterResourcePlacementResource,
-	}
-
 	ClusterResourcePlacementGVR = schema.GroupVersionResource{
 		Group:    placementv1beta1.GroupVersion.Group,
 		Version:  placementv1beta1.GroupVersion.Version,
@@ -249,12 +225,6 @@ var (
 		Kind:    "Event",
 	}
 
-	IMCV1Alpha1MetaGVK = metav1.GroupVersionKind{
-		Group:   fleetv1alpha1.GroupVersion.Group,
-		Version: fleetv1alpha1.GroupVersion.Version,
-		Kind:    "InternalMemberCluster",
-	}
-
 	IngressClassGVR = schema.GroupVersionResource{
 		Group:    networkingv1.SchemeGroupVersion.Group,
 		Version:  networkingv1.SchemeGroupVersion.Version,
@@ -283,24 +253,6 @@ var (
 		Group:    corev1.SchemeGroupVersion.Group,
 		Version:  corev1.SchemeGroupVersion.Version,
 		Resource: "limitranges",
-	}
-
-	MCV1Alpha1MetaGVK = metav1.GroupVersionKind{
-		Group:   fleetv1alpha1.GroupVersion.Group,
-		Version: fleetv1alpha1.GroupVersion.Version,
-		Kind:    "MemberCluster",
-	}
-
-	MCV1Alpha1GVK = schema.GroupVersionKind{
-		Group:   fleetv1alpha1.GroupVersion.Group,
-		Version: fleetv1alpha1.GroupVersion.Version,
-		Kind:    fleetv1alpha1.MemberClusterKind,
-	}
-
-	MCV1Alpha1GVR = schema.GroupVersionResource{
-		Group:    fleetv1alpha1.GroupVersion.Group,
-		Version:  fleetv1alpha1.GroupVersion.Version,
-		Resource: fleetv1alpha1.MemberClusterResource,
 	}
 
 	MCMetaGVK = metav1.GroupVersionKind{
@@ -385,24 +337,6 @@ var (
 		Group:    storagev1.SchemeGroupVersion.Group,
 		Version:  storagev1.SchemeGroupVersion.Version,
 		Resource: "storageclasses",
-	}
-
-	WorkV1Alpha1MetaGVK = metav1.GroupVersionKind{
-		Group:   workv1alpha1.GroupVersion.Group,
-		Version: workv1alpha1.GroupVersion.Version,
-		Kind:    "Work",
-	}
-
-	WorkV1Alpha1GVK = schema.GroupVersionKind{
-		Group:   workv1alpha1.GroupVersion.Group,
-		Version: workv1alpha1.GroupVersion.Version,
-		Kind:    workv1alpha1.WorkKind,
-	}
-
-	WorkV1Alpha1GVR = schema.GroupVersionResource{
-		Group:    workv1alpha1.GroupVersion.Group,
-		Version:  workv1alpha1.GroupVersion.Version,
-		Resource: workv1alpha1.WorkResource,
 	}
 
 	WorkMetaGVK = metav1.GroupVersionKind{

@@ -32,10 +32,8 @@ import (
 	"k8s.io/apimachinery/pkg/types"
 	"k8s.io/klog/v2"
 	"sigs.k8s.io/controller-runtime/pkg/client"
-	workv1alpha1 "sigs.k8s.io/work-api/pkg/apis/v1alpha1"
 
 	fleetv1beta1 "go.goms.io/fleet/apis/placement/v1beta1"
-	fleetv1alpha1 "go.goms.io/fleet/apis/v1alpha1"
 	"go.goms.io/fleet/pkg/utils"
 	"go.goms.io/fleet/pkg/utils/controller"
 )
@@ -88,53 +86,6 @@ var (
 		"ValidatingWebhookConfiguration": 31,
 	}
 )
-
-// selectResources selects the resources according to the placement resourceSelectors.
-// It also generates an array of manifests obj based on the selected resources.
-func (r *Reconciler) selectResources(placement *fleetv1alpha1.ClusterResourcePlacement) ([]workv1alpha1.Manifest, error) {
-	selectedObjects, err := r.gatherSelectedResource(types.NamespacedName{Name: placement.GetName()}, convertResourceSelector(placement.Spec.ResourceSelectors))
-	if err != nil {
-		return nil, err
-	}
-	placement.Status.SelectedResources = make([]fleetv1alpha1.ResourceIdentifier, 0)
-	manifests := make([]workv1alpha1.Manifest, len(selectedObjects))
-	for i, unstructuredObj := range selectedObjects {
-		gvk := unstructuredObj.GroupVersionKind()
-		res := fleetv1alpha1.ResourceIdentifier{
-			Group:     gvk.Group,
-			Version:   gvk.Version,
-			Kind:      gvk.Kind,
-			Name:      unstructuredObj.GetName(),
-			Namespace: unstructuredObj.GetNamespace(),
-		}
-		placement.Status.SelectedResources = append(placement.Status.SelectedResources, res)
-		klog.V(2).InfoS("selected one resource ", "placement", placement.Name, "resource", res)
-		manifest, err := generateManifest(unstructuredObj)
-		if err != nil {
-			return nil, err
-		}
-		manifests[i] = *manifest
-	}
-	return manifests, nil
-}
-
-// Note: temporary solution to share the same set of utils between v1alpha1 and v1beta1 APIs so that v1alpha1 implementation
-// won't be broken. v1alpha1 implementation should be removed when new API is ready.
-// The clusterResourceSelect has no changes between different versions.
-func convertResourceSelector(old []fleetv1alpha1.ClusterResourceSelector) []fleetv1beta1.ResourceSelectorTerm {
-	res := make([]fleetv1beta1.ResourceSelectorTerm, len(old))
-	for i, item := range old {
-		res[i] = fleetv1beta1.ResourceSelectorTerm{
-			Group:          item.Group,
-			Version:        item.Version,
-			Kind:           item.Kind,
-			Name:           item.Name,
-			LabelSelector:  item.LabelSelector,
-			SelectionScope: fleetv1beta1.NamespaceWithResources,
-		}
-	}
-	return res
-}
 
 // gatherSelectedResource gets all the resources according to the resource selector.
 func (r *Reconciler) gatherSelectedResource(placementKey types.NamespacedName, selectors []fleetv1beta1.ResourceSelectorTerm) ([]*unstructured.Unstructured, error) {
@@ -543,17 +494,6 @@ func generateRawContent(object *unstructured.Unstructured) ([]byte, error) {
 		return nil, fmt.Errorf("failed to marshal the unstructured object gvk = %s, name =%s: %w", object.GroupVersionKind(), object.GetName(), err)
 	}
 	return rawContent, nil
-}
-
-// generateManifest creates a manifest from the unstructured obj.
-func generateManifest(object *unstructured.Unstructured) (*workv1alpha1.Manifest, error) {
-	rawContent, err := generateRawContent(object)
-	if err != nil {
-		return nil, err
-	}
-	return &workv1alpha1.Manifest{
-		RawExtension: runtime.RawExtension{Raw: rawContent},
-	}, nil
 }
 
 // generateResourceContent creates a resource content from the unstructured obj.

@@ -34,7 +34,6 @@ import (
 	clusterv1beta1 "go.goms.io/fleet/apis/cluster/v1beta1"
 	placementv1beta1 "go.goms.io/fleet/apis/placement/v1beta1"
 	"go.goms.io/fleet/pkg/utils/defaulter"
-	testutils "go.goms.io/fleet/test/e2e/v1alpha1/utils"
 )
 
 var _ = Describe("webhook tests for CRP CREATE operations", func() {
@@ -79,7 +78,7 @@ var _ = Describe("webhook tests for CRP CREATE operations", func() {
 				g.Expect(statusErr.ErrStatus.Message).Should(MatchRegexp("cluster names cannot be empty for policy type"))
 				g.Expect(statusErr.ErrStatus.Message).Should(MatchRegexp("number of clusters must be nil for policy type PickFixed"))
 				return nil
-			}, testutils.PollTimeout, testutils.PollInterval).Should(Succeed())
+			}, eventuallyDuration, eventuallyInterval).Should(Succeed())
 		})
 
 		It("should deny create on CRP with invalid placement policy for PickN", func() {
@@ -126,7 +125,7 @@ var _ = Describe("webhook tests for CRP CREATE operations", func() {
 				g.Expect(statusErr.ErrStatus.Message).Should(MatchRegexp("unknown unsatisfiable type random-type"))
 				g.Expect(statusErr.ErrStatus.Message).Should(MatchRegexp("number of cluster cannot be nil for policy type PickN"))
 				return nil
-			}, testutils.PollTimeout, testutils.PollInterval).Should(Succeed())
+			}, eventuallyDuration, eventuallyInterval).Should(Succeed())
 		})
 
 		It("should deny create CRP with invalid GVK", func() {
@@ -156,7 +155,7 @@ var _ = Describe("webhook tests for CRP CREATE operations", func() {
 				g.Expect(errors.As(err, &statusErr)).To(BeTrue(), fmt.Sprintf("Create CRP call produced error %s. Error type wanted is %s.", reflect.TypeOf(err), reflect.TypeOf(&k8sErrors.StatusError{})))
 				g.Expect(statusErr.ErrStatus.Message).Should(MatchRegexp(regexp.QuoteMeta("failed to get GVR of the selector")))
 				return nil
-			}, testutils.PollTimeout, testutils.PollInterval).Should(Succeed())
+			}, eventuallyDuration, eventuallyInterval).Should(Succeed())
 		})
 
 		It("should deny create CRP with namespaced resource selected", func() {
@@ -186,7 +185,7 @@ var _ = Describe("webhook tests for CRP CREATE operations", func() {
 				g.Expect(errors.As(err, &statusErr)).To(BeTrue(), fmt.Sprintf("Create CRP call produced error %s. Error type wanted is %s.", reflect.TypeOf(err), reflect.TypeOf(&k8sErrors.StatusError{})))
 				g.Expect(statusErr.ErrStatus.Message).Should(MatchRegexp(regexp.QuoteMeta("the resource is not found in schema (please retry) or it is not a cluster scoped resource")))
 				return nil
-			}, testutils.PollTimeout, testutils.PollInterval).Should(Succeed())
+			}, eventuallyDuration, eventuallyInterval).Should(Succeed())
 		})
 	})
 
@@ -227,7 +226,7 @@ var _ = Describe("webhook tests for CRP CREATE operations", func() {
 				g.Expect(hubClient.Get(ctx, types.NamespacedName{Name: crpName}, &createdCRP)).Should(Succeed(), "Failed to get CRP %s", crpName)
 				g.Expect(createdCRP.Spec.Policy).To(Equal(&placementv1beta1.PlacementPolicy{PlacementType: placementv1beta1.PickAllPlacementType}), "CRP should have default policy type PickAll")
 				return nil
-			}, testutils.PollTimeout, testutils.PollInterval).Should(Succeed())
+			}, eventuallyDuration, eventuallyInterval).Should(Succeed())
 		})
 
 		It("should allow create CRP with TopologySpreadConstraints & Tolerations fields and update fields with default values", func() {
@@ -288,7 +287,7 @@ var _ = Describe("webhook tests for CRP CREATE operations", func() {
 					},
 				}), "CRP should have default tolerations fields")
 				return nil
-			}, testutils.PollTimeout, testutils.PollInterval).Should(Succeed())
+			}, eventuallyDuration, eventuallyInterval).Should(Succeed())
 		})
 
 		It("should allow create CRP with nil strategy and update fields with default values", func() {
@@ -324,7 +323,7 @@ var _ = Describe("webhook tests for CRP CREATE operations", func() {
 					},
 				}), "CRP should have default strategy type RollingUpdate with default values")
 				return nil
-			}, testutils.PollTimeout, testutils.PollInterval).Should(Succeed())
+			}, eventuallyDuration, eventuallyInterval).Should(Succeed())
 		})
 
 		It("should allow create CRP with nil revision history limit and update fields with default values", func() {
@@ -357,7 +356,7 @@ var _ = Describe("webhook tests for CRP CREATE operations", func() {
 				g.Expect(hubClient.Get(ctx, types.NamespacedName{Name: crpName}, &createdCRP)).Should(Succeed(), "Failed to get CRP %s", crpName)
 				g.Expect(*createdCRP.Spec.RevisionHistoryLimit).To(Equal(int32(defaulter.DefaultRevisionHistoryLimitValue)), "CRP should have default revision history limit value")
 				return nil
-			}, testutils.PollTimeout, testutils.PollInterval).Should(Succeed())
+			}, eventuallyDuration, eventuallyInterval).Should(Succeed())
 		})
 
 		It("should allow create CRP with nil serverside apply config and update fields with default values", func() {
@@ -395,7 +394,7 @@ var _ = Describe("webhook tests for CRP CREATE operations", func() {
 					ForceConflicts: false,
 				}), "CRP should have default serverside apply config")
 				return nil
-			}, testutils.PollTimeout, testutils.PollInterval).Should(Succeed())
+			}, eventuallyDuration, eventuallyInterval).Should(Succeed())
 		})
 	})
 })
@@ -440,7 +439,7 @@ var _ = Describe("webhook tests for CRP UPDATE operations", Ordered, func() {
 				g.Expect(errors.As(err, &statusErr)).To(BeTrue(), fmt.Sprintf("Update CRP call produced error %s. Error type wanted is %s.", reflect.TypeOf(err), reflect.TypeOf(&k8sErrors.StatusError{})))
 				g.Expect(statusErr.ErrStatus.Message).Should(MatchRegexp("the labelSelector and name fields are mutually exclusive"))
 				return nil
-			}, testutils.PollTimeout, testutils.PollInterval).Should(Succeed())
+			}, eventuallyDuration, eventuallyInterval).Should(Succeed())
 		})
 
 		It("should deny update on CRP with invalid placement policy for PickAll", func() {
@@ -482,7 +481,7 @@ var _ = Describe("webhook tests for CRP UPDATE operations", Ordered, func() {
 				g.Expect(statusErr.ErrStatus.Message).Should(MatchRegexp(regexp.QuoteMeta(fmt.Sprintf("the labelSelector in cluster selector %+v is invalid:", crp.Spec.Policy.Affinity.ClusterAffinity.RequiredDuringSchedulingIgnoredDuringExecution.ClusterSelectorTerms[0].LabelSelector))))
 				g.Expect(statusErr.ErrStatus.Message).Should(MatchRegexp("topology spread constraints needs to be empty for policy type PickAll"))
 				return nil
-			}, testutils.PollTimeout, testutils.PollInterval).Should(Succeed())
+			}, eventuallyDuration, eventuallyInterval).Should(Succeed())
 		})
 
 		It("should deny update on CRP with placement policy type update", func() {
@@ -502,7 +501,7 @@ var _ = Describe("webhook tests for CRP UPDATE operations", Ordered, func() {
 				g.Expect(errors.As(err, &statusErr)).To(BeTrue(), fmt.Sprintf("Update CRP call produced error %s. Error type wanted is %s.", reflect.TypeOf(err), reflect.TypeOf(&k8sErrors.StatusError{})))
 				g.Expect(statusErr.ErrStatus.Message).Should(MatchRegexp("placement type is immutable"))
 				return nil
-			}, testutils.PollTimeout, testutils.PollInterval).Should(Succeed())
+			}, eventuallyDuration, eventuallyInterval).Should(Succeed())
 		})
 	})
 
@@ -540,7 +539,7 @@ var _ = Describe("webhook tests for CRP UPDATE operations", Ordered, func() {
 				g.Expect(hubClient.Get(ctx, types.NamespacedName{Name: crpName}, &updatedCRP)).Should(Succeed(), "Failed to get CRP %s", crpName)
 				g.Expect(updatedCRP.Spec.Policy).To(Equal(&placementv1beta1.PlacementPolicy{PlacementType: placementv1beta1.PickAllPlacementType}), "CRP should have default policy type PickAll")
 				return nil
-			}, testutils.PollTimeout, testutils.PollInterval).Should(Succeed())
+			}, eventuallyDuration, eventuallyInterval).Should(Succeed())
 		})
 
 		It("should allow update CRP with empty strategy and update fields with default values", func() {
@@ -567,7 +566,7 @@ var _ = Describe("webhook tests for CRP UPDATE operations", Ordered, func() {
 					},
 				}), "CRP should have default strategy type RollingUpdate with default values")
 				return nil
-			}, testutils.PollTimeout, testutils.PollInterval).Should(Succeed())
+			}, eventuallyDuration, eventuallyInterval).Should(Succeed())
 		})
 
 		It("should allow update CRP with nil revision history limit and update fields with default values", func() {
@@ -581,7 +580,7 @@ var _ = Describe("webhook tests for CRP UPDATE operations", Ordered, func() {
 				g.Expect(hubClient.Get(ctx, types.NamespacedName{Name: crpName}, &updatedCRP)).Should(Succeed(), "Failed to get CRP %s", crpName)
 				g.Expect(*createdCRP.Spec.RevisionHistoryLimit).To(Equal(int32(defaulter.DefaultRevisionHistoryLimitValue)), "CRP should have default revision history limit value")
 				return nil
-			}, testutils.PollTimeout, testutils.PollInterval).Should(Succeed())
+			}, eventuallyDuration, eventuallyInterval).Should(Succeed())
 		})
 
 		It("should allow update CRP with nil serverside apply config and update fields with default values", func() {
@@ -601,7 +600,7 @@ var _ = Describe("webhook tests for CRP UPDATE operations", Ordered, func() {
 					ForceConflicts: false,
 				}), "CRP should have default serverside apply config")
 				return nil
-			}, testutils.PollTimeout, testutils.PollInterval).Should(Succeed())
+			}, eventuallyDuration, eventuallyInterval).Should(Succeed())
 		})
 	})
 
@@ -667,7 +666,7 @@ var _ = Describe("webhook tests for CRP UPDATE operations", Ordered, func() {
 					},
 				}), "CRP should have default tolerations fields")
 				return nil
-			}, testutils.PollTimeout, testutils.PollInterval).Should(Succeed())
+			}, eventuallyDuration, eventuallyInterval).Should(Succeed())
 		})
 	})
 })
@@ -730,7 +729,7 @@ var _ = Describe("webhook tests for CRP tolerations", Ordered, func() {
 			g.Expect(errors.As(err, &statusErr)).To(BeTrue(), fmt.Sprintf("Update CRP call produced error %s. Error type wanted is %s.", reflect.TypeOf(err), reflect.TypeOf(&k8sErrors.StatusError{})))
 			g.Expect(statusErr.ErrStatus.Message).Should(MatchRegexp(fmt.Sprintf("invalid toleration %+v: %s", invalidToleration, "toleration key cannot be empty, when operator is Equal")))
 			return nil
-		}, testutils.PollTimeout, testutils.PollInterval).Should(Succeed())
+		}, eventuallyDuration, eventuallyInterval).Should(Succeed())
 	})
 
 	It("should deny update on CRP with update to existing toleration", func() {
@@ -759,7 +758,7 @@ var _ = Describe("webhook tests for CRP tolerations", Ordered, func() {
 			g.Expect(errors.As(err, &statusErr)).To(BeTrue(), fmt.Sprintf("Update CRP call produced error %s. Error type wanted is %s.", reflect.TypeOf(err), reflect.TypeOf(&k8sErrors.StatusError{})))
 			g.Expect(statusErr.ErrStatus.Message).Should(MatchRegexp("tolerations have been updated/deleted, only additions to tolerations are allowed"))
 			return nil
-		}, testutils.PollTimeout, testutils.PollInterval).Should(Succeed())
+		}, eventuallyDuration, eventuallyInterval).Should(Succeed())
 	})
 
 	It("should allow update on CRP with adding a new toleration", func() {
@@ -774,7 +773,7 @@ var _ = Describe("webhook tests for CRP tolerations", Ordered, func() {
 			}
 			crp.Spec.Policy.Tolerations = append(crp.Spec.Policy.Tolerations, newToleration)
 			return hubClient.Update(ctx, &crp)
-		}, testutils.PollTimeout, testutils.PollInterval).Should(Succeed())
+		}, eventuallyDuration, eventuallyInterval).Should(Succeed())
 	})
 })
 
@@ -807,7 +806,7 @@ var _ = Describe("webhook tests for MC taints", Ordered, func() {
 			g.Expect(errors.As(err, &statusErr)).To(BeTrue(), fmt.Sprintf("Update MC call produced error %s. Error type wanted is %s.", reflect.TypeOf(err), reflect.TypeOf(&k8sErrors.StatusError{})))
 			g.Expect(statusErr.ErrStatus.Message).Should(MatchRegexp("name part must consist of alphanumeric characters, '-', '_' or '.', and must start and end with an alphanumeric character"))
 			return nil
-		}, testutils.PollTimeout, testutils.PollInterval).Should(Succeed())
+		}, eventuallyDuration, eventuallyInterval).Should(Succeed())
 	})
 })
 
@@ -1168,7 +1167,7 @@ var _ = Describe("webhook tests for CRO UPDATE operations", Ordered, func() {
 			Expect(statusErr.Status().Message).Should(MatchRegexp(fmt.Sprintf("resource selector %+v already exists, and must be unique", cro.Spec.ClusterResourceSelectors[0])))
 			Expect(statusErr.Status().Message).Should(MatchRegexp(regexp.QuoteMeta(fmt.Sprintf("resource name is required for resource selection %+v", invalidSelector1))))
 			return nil
-		}, testutils.PollTimeout, testutils.PollInterval).Should(Succeed())
+		}, eventuallyDuration, eventuallyInterval).Should(Succeed())
 	})
 
 	It("should deny update CRO for invalid cluster resource override", func() {
@@ -1247,7 +1246,7 @@ var _ = Describe("webhook tests for CRO UPDATE operations", Ordered, func() {
 			Expect(statusErr.Status().Message).Should(MatchRegexp("cannot override typeMeta fields"))
 			Expect(statusErr.Status().Message).Should(MatchRegexp("path cannot be empty"))
 			return nil
-		}, testutils.PollTimeout, testutils.PollInterval).Should(Succeed())
+		}, eventuallyDuration, eventuallyInterval).Should(Succeed())
 	})
 })
 
@@ -1590,7 +1589,7 @@ var _ = Describe("webhook tests for ResourceOverride UPDATE operations", Ordered
 			Expect(errors.As(err, &statusErr)).To(BeTrue(), fmt.Sprintf("Update RO call produced error %s. Error type wanted is %s.", reflect.TypeOf(err), reflect.TypeOf(&k8sErrors.StatusError{})))
 			Expect(statusErr.Status().Message).Should(MatchRegexp(fmt.Sprintf("resource selector %+v already exists, and must be unique", selector)))
 			return nil
-		}, testutils.PollTimeout, testutils.PollInterval).Should(Succeed())
+		}, eventuallyDuration, eventuallyInterval).Should(Succeed())
 	})
 
 	It("should deny update RO with invalid resource override", func() {
@@ -1674,6 +1673,6 @@ var _ = Describe("webhook tests for ResourceOverride UPDATE operations", Ordered
 			Expect(statusErr.Status().Message).Should(MatchRegexp("path cannot contain empty string"))
 			Expect(statusErr.Status().Message).Should(MatchRegexp("cannot override metadata fields except annotations and labels"))
 			return nil
-		}, testutils.PollTimeout, testutils.PollInterval).Should(Succeed())
+		}, eventuallyDuration, eventuallyInterval).Should(Succeed())
 	})
 })

@@ -208,7 +208,7 @@ var _ = Describe("placing wrapped resources using a CRP", func() {
 		AfterAll(func() {
 			By(fmt.Sprintf("deleting envelope %s", testResourceEnvelope.Name))
 			Expect(hubClient.Delete(ctx, &testResourceEnvelope)).To(Succeed(), "Failed to delete ResourceEnvelope")
-			By(fmt.Sprintf("deleting envelope %s", testClusterResourceEnvelope.Name))
+			By(fmt.Sprintf("deleting cluster scoped envelope %s", testClusterResourceEnvelope.Name))
 			Expect(hubClient.Delete(ctx, &testClusterResourceEnvelope)).To(Succeed(), "Failed to delete testClusterResourceEnvelope")
 			By(fmt.Sprintf("deleting placement %s and related resources", crpName))
 			ensureCRPAndRelatedResourcesDeleted(crpName, allMemberClusters)
@@ -514,6 +514,163 @@ var _ = Describe("placing wrapped resources using a CRP", func() {
 	})
 })
 
+// Note that this container will run in parallel with other containers.
+var _ = Describe("Test NamespaceOnly placement through CRP then resource placement through ResourcePlacement", Ordered, func() {
+	crpName := fmt.Sprintf(crpNameTemplate, GinkgoParallelProcess())
+	rpName := fmt.Sprintf(rpNameTemplate, GinkgoParallelProcess())
+	workNamespaceName := appNamespace().Name
+
+	BeforeAll(func() {
+		// Create the test resources.
+		By("Create the test resources in the namespace")
+		readEnvelopTestManifests()
+		createWrappedResourcesForEnvelopTest()
+	})
+
+	It("Create the CRP that selects only the namespace with NamespaceOnly scope", func() {
+		createNamespaceOnlyCRP(crpName)
+	})
+
+	It("should update CRP status to show namespace placement", func() {
+		statusUpdatedActual := crpStatusUpdatedActual(workNamespaceIdentifiers(), allMemberClusterNames, nil, "0")
+		Eventually(statusUpdatedActual, workloadEventuallyDuration, eventuallyInterval).Should(Succeed(), "Failed to update CRP status as expected")
+	})
+
+	It("should place only the namespace on all member clusters", func() {
+		for idx := range allMemberClusters {
+			memberCluster := allMemberClusters[idx]
+			// Verify namespace is placed
+			workNamespacePlacedActual := func() error {
+				return validateWorkNamespaceOnCluster(memberCluster, types.NamespacedName{Name: workNamespaceName})
+			}
+			Eventually(workNamespacePlacedActual, eventuallyDuration, eventuallyInterval).Should(Succeed(), "Failed to place namespace on member cluster %s", memberCluster.ClusterName)
+
+			// Verify configMap is NOT placed (NamespaceOnly should not include resources within namespace)
+			nameSpaceResourceNotPlacedActual := namespacedResourcesRemovedFromClusterActual(memberCluster, &testConfigMap)
+			Consistently(nameSpaceResourceNotPlacedActual, consistentlyDuration, consistentlyInterval).Should(Succeed(), "Namespace resource (ConfigMap) should not be placed with NamespaceOnly selection on member cluster %s", memberCluster.ClusterName)
+		}
+	})
+
+	It("Create the ResourcePlacement that selects the ResourceEnvelope", func() {
+		rp := &placementv1beta1.ResourcePlacement{
+			ObjectMeta: metav1.ObjectMeta{
+				Name:      rpName,
+				Namespace: workNamespaceName,
+				// Add a custom finalizer; this would allow us to better observe
+				// the behavior of the controllers.
+				Finalizers: []string{customDeletionBlockerFinalizer},
+			},
+			Spec: placementv1beta1.PlacementSpec{
+				ResourceSelectors: []placementv1beta1.ResourceSelectorTerm{
+					{
+						Group:   placementv1beta1.GroupVersion.Group,
+						Kind:    placementv1beta1.ResourceEnvelopeKind,
+						Version: placementv1beta1.GroupVersion.Version,
+						Name:    testResourceEnvelope.Name,
+					},
+				},
+				Strategy: placementv1beta1.RolloutStrategy{
+					Type: placementv1beta1.RollingUpdateRolloutStrategyType,
+					RollingUpdate: &placementv1beta1.RollingUpdateConfig{
+						UnavailablePeriodSeconds: ptr.To(2),
+					},
+				},
+			},
+		}
+		Expect(hubClient.Create(ctx, rp)).To(Succeed(), "Failed to create ResourcePlacement")
+	})
+
+	It("should update ResourcePlacement status as expected", func() {
+		rpSelectedResources := []placementv1beta1.ResourceIdentifier{
+			{
+				Group:     placementv1beta1.GroupVersion.Group,
+				Kind:      placementv1beta1.ResourceEnvelopeKind,
+				Version:   placementv1beta1.GroupVersion.Version,
+				Name:      testResourceEnvelope.Name,
+				Namespace: workNamespaceName,
+			},
+		}
+		Eventually(rpStatusUpdatedActual(rpSelectedResources, allMemberClusterNames, nil, "0"), eventuallyDuration, eventuallyInterval).Should(Succeed(), "Failed to update ResourcePlacement status as expected")
+	})
+
+	It("should place the enveloped resources on all member clusters", func() {
+		for idx := range allMemberClusters {
+			memberCluster := allMemberClusters[idx]
+			workResourcesPlacedActual := checkEnvelopedResourcesPlacement(memberCluster)
+			Eventually(workResourcesPlacedActual, eventuallyDuration, eventuallyInterval).Should(Succeed(), "Failed to place enveloped resources on member cluster %s", memberCluster.ClusterName)
+		}
+	})
+
+	It("should not placed the configMap on any clusters as its not selected", func() {
+		// Verify that all resources placed have been removed from specified member clusters.
+		for idx := range allMemberClusters {
+			memberCluster := allMemberClusters[idx]
+			configMapNotPlacedActual := namespacedResourcesRemovedFromClusterActual(memberCluster, &testConfigMap)
+			Eventually(configMapNotPlacedActual, eventuallyDuration, eventuallyInterval).Should(Succeed(), "Failed to remove work resources from member cluster %s", memberCluster.ClusterName)
+		}
+	})
+
+	It("can delete the ResourcePlacement", func() {
+		rp := &placementv1beta1.ResourcePlacement{
+			ObjectMeta: metav1.ObjectMeta{
+				Name:      rpName,
+				Namespace: workNamespaceName,
+			},
+		}
+		Expect(hubClient.Delete(ctx, rp)).To(Succeed(), "Failed to delete ResourcePlacement")
+	})
+
+	It("should remove enveloped resources from all clusters", func() {
+		// Verify that all resources placed have been removed from specified member clusters.
+		for idx := range allMemberClusters {
+			memberCluster := allMemberClusters[idx]
+			workResourcesRemovedActual := namespacedResourcesRemovedFromClusterActual(memberCluster, &testDeployment, &testResourceQuota)
+			Eventually(workResourcesRemovedActual, eventuallyDuration, eventuallyInterval).Should(Succeed(), "Failed to remove work resources from member cluster %s", memberCluster.ClusterName)
+		}
+	})
+
+	It("should remove controller finalizers from ResourcePlacement", func() {
+		finalizerRemovedActual := allFinalizersExceptForCustomDeletionBlockerRemovedFromPlacementActual(types.NamespacedName{Name: rpName, Namespace: workNamespaceName})
+		Eventually(finalizerRemovedActual, eventuallyDuration, eventuallyInterval).Should(Succeed(), "Failed to remove controller finalizers from ResourcePlacement")
+	})
+
+	It("should not remove namespace on all member clusters", func() {
+		for idx := range allMemberClusters {
+			memberCluster := allMemberClusters[idx]
+			// Verify namespace is placed
+			workNamespacePlacedActual := func() error {
+				return validateWorkNamespaceOnCluster(memberCluster, types.NamespacedName{Name: workNamespaceName})
+			}
+			Eventually(workNamespacePlacedActual, eventuallyDuration, eventuallyInterval).Should(Succeed(), "Failed to place namespace on member cluster %s", memberCluster.ClusterName)
+		}
+	})
+
+	It("can delete the CRP", func() {
+		crp := &placementv1beta1.ClusterResourcePlacement{
+			ObjectMeta: metav1.ObjectMeta{
+				Name: crpName,
+			},
+		}
+		Expect(hubClient.Delete(ctx, crp)).To(Succeed(), "Failed to delete CRP")
+	})
+
+	It("should remove placed resources from all member clusters", checkIfRemovedWorkResourcesFromAllMemberClusters)
+
+	It("should remove controller finalizers from CRP", func() {
+		finalizerRemovedActual := allFinalizersExceptForCustomDeletionBlockerRemovedFromPlacementActual(types.NamespacedName{Name: crpName})
+		Eventually(finalizerRemovedActual, eventuallyDuration, eventuallyInterval).Should(Succeed(), "Failed to remove controller finalizers from CRP")
+	})
+
+	AfterAll(func() {
+		By(fmt.Sprintf("deleting ResourcePlacement %s and related resources", rpName))
+		ensureRPAndRelatedResourcesDeleted(types.NamespacedName{Name: rpName, Namespace: workNamespaceName}, allMemberClusters)
+		By(fmt.Sprintf("deleting envelope %s", testClusterResourceEnvelope.Name))
+		Expect(hubClient.Delete(ctx, &testClusterResourceEnvelope)).To(Succeed(), "Failed to delete testClusterResourceEnvelope")
+		By(fmt.Sprintf("deleting placement %s and related resources", crpName))
+		ensureCRPAndRelatedResourcesDeleted(crpName, allMemberClusters)
+	})
+})
+
 var _ = Describe("Process objects with generate name", Ordered, func() {
 	crpName := fmt.Sprintf(crpNameTemplate, GinkgoParallelProcess())
 	workNamespaceName := fmt.Sprintf(workNamespaceNameTemplate, GinkgoParallelProcess())
@@ -772,9 +929,10 @@ func readEnvelopTestManifests() {
 	}
 
 	By("Create ClusterResourceEnvelope template")
+	clusterEnvName := fmt.Sprintf("test-cluster-resource-envelope-%d", GinkgoParallelProcess())
 	testClusterResourceEnvelope = placementv1beta1.ClusterResourceEnvelope{
 		ObjectMeta: metav1.ObjectMeta{
-			Name: "test-cluster-resource-envelope",
+			Name: clusterEnvName,
 		},
 		Data: make(map[string]runtime.RawExtension),
 	}
@@ -824,28 +982,10 @@ func cleanupWrappedResourcesForEnvelopTest() {
 	}, eventuallyDuration, eventuallyInterval).Should(Succeed(), "Failed to remove testClusterResourceEnvelope from hub cluster")
 }
 
-func checkAllResourcesPlacement(memberCluster *framework.Cluster) func() error {
+// checkEnvelopedResourcesPlacement checks if the enveloped resources (ResourceQuota and Deployment from ResourceEnvelope) are placed correctly
+func checkEnvelopedResourcesPlacement(memberCluster *framework.Cluster) func() error {
 	workNamespaceName := appNamespace().Name
 	return func() error {
-		// Verify namespace exists on target cluster
-		if err := validateWorkNamespaceOnCluster(memberCluster, types.NamespacedName{Name: workNamespaceName}); err != nil {
-			return err
-		}
-
-		// Check that ConfigMap was placed
-		By("Check ConfigMap")
-		placedConfigMap := &corev1.ConfigMap{}
-		if err := memberCluster.KubeClient.Get(ctx, types.NamespacedName{
-			Namespace: workNamespaceName,
-			Name:      testConfigMap.Name,
-		}, placedConfigMap); err != nil {
-			return fmt.Errorf("failed to find configMap %s: %w", testConfigMap.Name, err)
-		}
-		// Verify the Configmap matches expected spec
-		if diff := cmp.Diff(placedConfigMap.Data, testConfigMap.Data); diff != "" {
-			return fmt.Errorf("ResourceQuota from ResourceEnvelope diff (-got, +want): %s", diff)
-		}
-
 		// Check that ResourceQuota from ResourceEnvelope was placed
 		By("Check ResourceQuota from ResourceEnvelope")
 		placedResourceQuota := &corev1.ResourceQuota{}
@@ -867,12 +1007,43 @@ func checkAllResourcesPlacement(memberCluster *framework.Cluster) func() error {
 			Namespace: workNamespaceName,
 			Name:      testDeployment.Name,
 		}, placedDeployment); err != nil {
-			return fmt.Errorf("failed to find ResourceQuota from ResourceEnvelope: %w", err)
+			return fmt.Errorf("failed to find Deployment from ResourceEnvelope: %w", err)
 		}
 
 		// Verify the deployment matches expected spec
 		if diff := cmp.Diff(placedDeployment.Spec.Template.Spec.Containers[0].Image, testDeployment.Spec.Template.Spec.Containers[0].Image); diff != "" {
 			return fmt.Errorf("deployment from ResourceEnvelope diff (-got, +want): %s", diff)
+		}
+
+		return nil
+	}
+}
+
+func checkAllResourcesPlacement(memberCluster *framework.Cluster) func() error {
+	workNamespaceName := appNamespace().Name
+	return func() error {
+		// Verify namespace exists on target cluster
+		if err := validateWorkNamespaceOnCluster(memberCluster, types.NamespacedName{Name: workNamespaceName}); err != nil {
+			return err
+		}
+
+		// Check that ConfigMap was placed
+		By("Check ConfigMap")
+		placedConfigMap := &corev1.ConfigMap{}
+		if err := memberCluster.KubeClient.Get(ctx, types.NamespacedName{
+			Namespace: workNamespaceName,
+			Name:      testConfigMap.Name,
+		}, placedConfigMap); err != nil {
+			return fmt.Errorf("failed to find configMap %s: %w", testConfigMap.Name, err)
+		}
+		// Verify the Configmap matches expected spec
+		if diff := cmp.Diff(placedConfigMap.Data, testConfigMap.Data); diff != "" {
+			return fmt.Errorf("ConfigMap diff (-got, +want): %s", diff)
+		}
+
+		// Check enveloped resources (ResourceQuota and Deployment from ResourceEnvelope)
+		if err := checkEnvelopedResourcesPlacement(memberCluster)(); err != nil {
+			return err
 		}
 
 		// Check that ClusterRole from ClusterResourceEnvelope was placed

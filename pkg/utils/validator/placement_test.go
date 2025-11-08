@@ -26,7 +26,6 @@ import (
 	"k8s.io/apimachinery/pkg/util/intstr"
 
 	placementv1beta1 "go.goms.io/fleet/apis/placement/v1beta1"
-	fleetv1alpha1 "go.goms.io/fleet/apis/v1alpha1"
 	"go.goms.io/fleet/pkg/utils"
 	"go.goms.io/fleet/pkg/utils/informer"
 	testinformer "go.goms.io/fleet/test/utils/informer"
@@ -42,172 +41,6 @@ var (
 		Name:    "test-cluster-role",
 	}
 )
-
-func TestValidateClusterResourcePlacementAlpha(t *testing.T) {
-	tests := map[string]struct {
-		crp              *fleetv1alpha1.ClusterResourcePlacement
-		resourceInformer informer.Manager
-		wantErr          bool
-		wantErrMsg       string
-	}{
-		"valid CRP": {
-			crp: &fleetv1alpha1.ClusterResourcePlacement{
-				ObjectMeta: metav1.ObjectMeta{
-					Name: "test-crp",
-				},
-				Spec: fleetv1alpha1.ClusterResourcePlacementSpec{
-					ResourceSelectors: []fleetv1alpha1.ClusterResourceSelector{
-						{
-							Group:   "rbac.authorization.k8s.io",
-							Version: "v1",
-							Kind:    "ClusterRole",
-							Name:    "test-cluster-role",
-						},
-					},
-				},
-			},
-			resourceInformer: &testinformer.FakeManager{IsClusterScopedResource: false},
-			wantErr:          false,
-		},
-		"invalid Resource Selector with name & label selector": {
-			crp: &fleetv1alpha1.ClusterResourcePlacement{
-				ObjectMeta: metav1.ObjectMeta{
-					Name: "test-crp",
-				},
-				Spec: fleetv1alpha1.ClusterResourcePlacementSpec{
-					ResourceSelectors: []fleetv1alpha1.ClusterResourceSelector{
-						{
-							Group:   "rbac.authorization.k8s.io",
-							Version: "v1",
-							Kind:    "ClusterRole",
-							Name:    "test-cluster-role",
-							LabelSelector: &metav1.LabelSelector{
-								MatchLabels: map[string]string{"test-key": "test-value"},
-							},
-						},
-					},
-				},
-			},
-			resourceInformer: &testinformer.FakeManager{IsClusterScopedResource: false},
-			wantErr:          true,
-			wantErrMsg:       "the labelSelector and name fields are mutually exclusive in selector",
-		},
-		"invalid Resource Selector with invalid label selector": {
-			crp: &fleetv1alpha1.ClusterResourcePlacement{
-				ObjectMeta: metav1.ObjectMeta{
-					Name: "test-crp",
-				},
-				Spec: fleetv1alpha1.ClusterResourcePlacementSpec{
-					ResourceSelectors: []fleetv1alpha1.ClusterResourceSelector{
-						{
-							LabelSelector: &metav1.LabelSelector{
-								MatchExpressions: []metav1.LabelSelectorRequirement{
-									{
-										Key:      "test-key",
-										Operator: metav1.LabelSelectorOpIn,
-									},
-								},
-							},
-						},
-					},
-				},
-			},
-			resourceInformer: &testinformer.FakeManager{IsClusterScopedResource: false},
-			wantErr:          true,
-			wantErrMsg:       "for 'in', 'notin' operators, values set can't be empty",
-		},
-		"invalid Resource Selector with invalid cluster resource selector": {
-			crp: &fleetv1alpha1.ClusterResourcePlacement{
-				ObjectMeta: metav1.ObjectMeta{
-					Name: "test-crp",
-				},
-				Spec: fleetv1alpha1.ClusterResourcePlacementSpec{
-					ResourceSelectors: []fleetv1alpha1.ClusterResourceSelector{
-						{
-							Group:   "rbac.authorization.k8s.io",
-							Version: "v1",
-							Kind:    "Role",
-							Name:    "test-role",
-						},
-					},
-				},
-			},
-			resourceInformer: &testinformer.FakeManager{IsClusterScopedResource: true},
-			wantErr:          true,
-			wantErrMsg:       "the resource is not found in schema (please retry) or it is not a cluster scoped resource",
-		},
-		"nil resource informer": {
-			crp: &fleetv1alpha1.ClusterResourcePlacement{
-				ObjectMeta: metav1.ObjectMeta{
-					Name: "test-crp",
-				},
-				Spec: fleetv1alpha1.ClusterResourcePlacementSpec{
-					ResourceSelectors: []fleetv1alpha1.ClusterResourceSelector{
-						{
-							Group:   "rbac.authorization.k8s.io",
-							Version: "v1",
-							Kind:    "ClusterRole",
-							Name:    "test-cluster-role",
-						},
-					},
-				},
-			},
-			resourceInformer: nil,
-			wantErr:          true,
-			wantErrMsg:       "cannot perform resource scope check for now, please retry",
-		},
-		"invalid placement policy with invalid label selector": {
-			crp: &fleetv1alpha1.ClusterResourcePlacement{
-				ObjectMeta: metav1.ObjectMeta{
-					Name: "test-crp",
-				},
-				Spec: fleetv1alpha1.ClusterResourcePlacementSpec{
-					ResourceSelectors: []fleetv1alpha1.ClusterResourceSelector{
-						{
-							Group:   "rbac.authorization.k8s.io",
-							Version: "v1",
-							Kind:    "ClusterRole",
-							Name:    "test-cluster-role",
-						},
-					},
-					Policy: &fleetv1alpha1.PlacementPolicy{
-						Affinity: &fleetv1alpha1.Affinity{
-							ClusterAffinity: &fleetv1alpha1.ClusterAffinity{
-								ClusterSelectorTerms: []fleetv1alpha1.ClusterSelectorTerm{
-									{
-										LabelSelector: metav1.LabelSelector{
-											MatchExpressions: []metav1.LabelSelectorRequirement{
-												{
-													Key:      "test-key",
-													Operator: metav1.LabelSelectorOpIn,
-												},
-											},
-										},
-									},
-								},
-							},
-						},
-					},
-				},
-			},
-			resourceInformer: &testinformer.FakeManager{IsClusterScopedResource: false},
-			wantErr:          true,
-			wantErrMsg:       "for 'in', 'notin' operators, values set can't be empty",
-		},
-	}
-	for testName, testCase := range tests {
-		t.Run(testName, func(t *testing.T) {
-			ResourceInformer = testCase.resourceInformer
-			gotErr := ValidateClusterResourcePlacementAlpha(testCase.crp)
-			if (gotErr != nil) != testCase.wantErr {
-				t.Errorf("ValidateClusterResourcePlacementAlpha() error = %v, wantErr %v", gotErr, testCase.wantErr)
-			}
-			if testCase.wantErr && !strings.Contains(gotErr.Error(), testCase.wantErrMsg) {
-				t.Errorf("ValidateClusterResourcePlacementAlpha() got %v, should contain want %s", gotErr, testCase.wantErrMsg)
-			}
-		})
-	}
-}
 
 func TestValidateClusterResourcePlacement(t *testing.T) {
 	tests := map[string]struct {
@@ -333,6 +166,29 @@ func TestValidateClusterResourcePlacement(t *testing.T) {
 			resourceInformer: nil,
 			wantErr:          true,
 			wantErrMsg:       "cannot perform resource scope check for now, please retry",
+		},
+		"CRP with namespaced resource should fail": {
+			crp: &placementv1beta1.ClusterResourcePlacement{
+				ObjectMeta: metav1.ObjectMeta{
+					Name: "test-crp",
+				},
+				Spec: placementv1beta1.PlacementSpec{
+					ResourceSelectors: []placementv1beta1.ResourceSelectorTerm{
+						{
+							Group:   "apps",
+							Version: "v1",
+							Kind:    "Deployment",
+							Name:    "test-deployment",
+						},
+					},
+				},
+			},
+			resourceInformer: &testinformer.FakeManager{
+				APIResources:            map[schema.GroupVersionKind]bool{utils.DeploymentGVK: true},
+				IsClusterScopedResource: false, // Deployment is namespaced
+			},
+			wantErr:    true,
+			wantErrMsg: "resource is not found in schema (please retry) or it is not a cluster scoped resource",
 		},
 	}
 	for testName, testCase := range tests {
@@ -1225,9 +1081,9 @@ func TestValidateClusterResourcePlacement_PickNPlacementPolicy(t *testing.T) {
 				},
 			},
 			wantErr:    true,
-			wantErrMsg: "name is not a valid Kubernetes label name",
+			wantErrMsg: "property name resources.kubernetes-fleet.io/total-nospecialchars%^=@ is not valid",
 		},
-		"valid placement policy - PickN with valid property selector name": {
+		"valid placement policy - PickN with valid property selector name (non-resource, single segment)": {
 			policy: &placementv1beta1.PlacementPolicy{
 				PlacementType:    placementv1beta1.PickNPlacementType,
 				NumberOfClusters: &positiveNumberOfClusters,
@@ -1242,7 +1098,38 @@ func TestValidateClusterResourcePlacement_PickNPlacementPolicy(t *testing.T) {
 									PropertySelector: &placementv1beta1.PropertySelector{
 										MatchExpressions: []placementv1beta1.PropertySelectorRequirement{
 											{
-												Name:     "resources.kubernetes-fleet.io/total-allocatable-cpu",
+												Name:     "k8s-minor-version",
+												Operator: placementv1beta1.PropertySelectorEqualTo,
+												Values:   []string{"28"},
+											},
+										},
+									},
+								},
+							},
+						},
+					},
+				},
+			},
+			wantErr: false,
+		},
+		"valid placement policy - PickN with valid property selector name (non-resource, multiple segments)": {
+			policy: &placementv1beta1.PlacementPolicy{
+				PlacementType:    placementv1beta1.PickNPlacementType,
+				NumberOfClusters: &positiveNumberOfClusters,
+				Affinity: &placementv1beta1.Affinity{
+					ClusterAffinity: &placementv1beta1.ClusterAffinity{
+						RequiredDuringSchedulingIgnoredDuringExecution: &placementv1beta1.ClusterSelector{
+							ClusterSelectorTerms: []placementv1beta1.ClusterSelectorTerm{
+								{
+									LabelSelector: &metav1.LabelSelector{
+										MatchLabels: map[string]string{"test-key1": "test-value1"},
+									},
+									PropertySelector: &placementv1beta1.PropertySelector{
+										MatchExpressions: []placementv1beta1.PropertySelectorRequirement{
+											{
+												// Note that the first segment is both a valid DNS subdomain name and a qualified
+												// name.
+												Name:     "kubernetes.azure.com/vm-sizes/Standard_D8s_v3/count",
 												Operator: placementv1beta1.PropertySelectorEqualTo,
 												Values:   []string{"2"},
 											},
@@ -1255,6 +1142,128 @@ func TestValidateClusterResourcePlacement_PickNPlacementPolicy(t *testing.T) {
 				},
 			},
 			wantErr: false,
+		},
+		"valid placement policy - PickN with valid property selector name (non-resource, multiple segments with prefix)": {
+			policy: &placementv1beta1.PlacementPolicy{
+				PlacementType:    placementv1beta1.PickNPlacementType,
+				NumberOfClusters: &positiveNumberOfClusters,
+				Affinity: &placementv1beta1.Affinity{
+					ClusterAffinity: &placementv1beta1.ClusterAffinity{
+						RequiredDuringSchedulingIgnoredDuringExecution: &placementv1beta1.ClusterSelector{
+							ClusterSelectorTerms: []placementv1beta1.ClusterSelectorTerm{
+								{
+									LabelSelector: &metav1.LabelSelector{
+										MatchLabels: map[string]string{"test-key1": "test-value1"},
+									},
+									PropertySelector: &placementv1beta1.PropertySelector{
+										MatchExpressions: []placementv1beta1.PropertySelectorRequirement{
+											{
+												// Note that the first segment is longer than 63 characters; it is a valid
+												// DNS subdomain name, but not a qualified name.
+												Name:     "a.very.loooooooong.suuuuuuuub.doooooooomain.kubernetes.azure.com/vm-sizes/Standard_D8s_v3/count",
+												Operator: placementv1beta1.PropertySelectorEqualTo,
+												Values:   []string{"2"},
+											},
+										},
+									},
+								},
+							},
+						},
+					},
+				},
+			},
+			wantErr: false,
+		},
+		"valid placement policy - PickN with valid property selector name (non-resource, multiple segments with no prefix)": {
+			policy: &placementv1beta1.PlacementPolicy{
+				PlacementType:    placementv1beta1.PickNPlacementType,
+				NumberOfClusters: &positiveNumberOfClusters,
+				Affinity: &placementv1beta1.Affinity{
+					ClusterAffinity: &placementv1beta1.ClusterAffinity{
+						RequiredDuringSchedulingIgnoredDuringExecution: &placementv1beta1.ClusterSelector{
+							ClusterSelectorTerms: []placementv1beta1.ClusterSelectorTerm{
+								{
+									LabelSelector: &metav1.LabelSelector{
+										MatchLabels: map[string]string{"test-key1": "test-value1"},
+									},
+									PropertySelector: &placementv1beta1.PropertySelector{
+										MatchExpressions: []placementv1beta1.PropertySelectorRequirement{
+											{
+												// Note that DNS subdomain names do not allow underscores, so the first
+												// segment cannot be a prefix.
+												Name:     "Standard_D8s_v3/count",
+												Operator: placementv1beta1.PropertySelectorEqualTo,
+												Values:   []string{"2"},
+											},
+										},
+									},
+								},
+							},
+						},
+					},
+				},
+			},
+			wantErr: false,
+		},
+		"invalid placement policy - PickN with invalid property selector name (non-resource, invalid prefix)": {
+			policy: &placementv1beta1.PlacementPolicy{
+				PlacementType:    placementv1beta1.PickNPlacementType,
+				NumberOfClusters: &positiveNumberOfClusters,
+				Affinity: &placementv1beta1.Affinity{
+					ClusterAffinity: &placementv1beta1.ClusterAffinity{
+						RequiredDuringSchedulingIgnoredDuringExecution: &placementv1beta1.ClusterSelector{
+							ClusterSelectorTerms: []placementv1beta1.ClusterSelectorTerm{
+								{
+									LabelSelector: &metav1.LabelSelector{
+										MatchLabels: map[string]string{"test-key1": "test-value1"},
+									},
+									PropertySelector: &placementv1beta1.PropertySelector{
+										MatchExpressions: []placementv1beta1.PropertySelectorRequirement{
+											{
+												Name:     "St@ndard_D8s_v3/count",
+												Operator: placementv1beta1.PropertySelectorEqualTo,
+												Values:   []string{"2"},
+											},
+										},
+									},
+								},
+							},
+						},
+					},
+				},
+			},
+			wantErr:    true,
+			wantErrMsg: "property name first segment St@ndard_D8s_v3 is not valid",
+		},
+		"invalid placement policy - PickN with invalid property selector name (non-resource, invalid non-prefix segment)": {
+			policy: &placementv1beta1.PlacementPolicy{
+				PlacementType:    placementv1beta1.PickNPlacementType,
+				NumberOfClusters: &positiveNumberOfClusters,
+				Affinity: &placementv1beta1.Affinity{
+					ClusterAffinity: &placementv1beta1.ClusterAffinity{
+						RequiredDuringSchedulingIgnoredDuringExecution: &placementv1beta1.ClusterSelector{
+							ClusterSelectorTerms: []placementv1beta1.ClusterSelectorTerm{
+								{
+									LabelSelector: &metav1.LabelSelector{
+										MatchLabels: map[string]string{"test-key1": "test-value1"},
+									},
+									PropertySelector: &placementv1beta1.PropertySelector{
+										MatchExpressions: []placementv1beta1.PropertySelectorRequirement{
+											{
+												Name:     "Standard_D8s_v3/count/$",
+												Operator: placementv1beta1.PropertySelectorEqualTo,
+												Values:   []string{"2"},
+											},
+										},
+									},
+								},
+							},
+						},
+					},
+				},
+			},
+			wantErr:    true,
+			wantErrMsg: "property name segment $ is not valid",
 		},
 	}
 
@@ -1729,6 +1738,133 @@ func TestIsTolerationsUpdatedOrDeleted(t *testing.T) {
 		t.Run(testName, func(t *testing.T) {
 			if got := IsTolerationsUpdatedOrDeleted(testCase.oldTolerations, testCase.newTolerations); got != testCase.want {
 				t.Errorf("IsTolerationsUpdatedOrDeleted() got = %v, want = %v", got, testCase.want)
+			}
+		})
+	}
+}
+
+func TestValidateResourcePlacement(t *testing.T) {
+	tests := map[string]struct {
+		rp               *placementv1beta1.ResourcePlacement
+		resourceInformer informer.Manager
+		wantErr          bool
+		wantErrMsg       string
+	}{
+		"RP with invalid placement policy": {
+			rp: &placementv1beta1.ResourcePlacement{
+				ObjectMeta: metav1.ObjectMeta{
+					Name: "test-rp",
+				},
+				Spec: placementv1beta1.PlacementSpec{
+					ResourceSelectors: []placementv1beta1.ResourceSelectorTerm{
+						{
+							Group:   "apps",
+							Version: "v1",
+							Kind:    "Deployment",
+							Name:    "test-deployment",
+						},
+					},
+					Policy: &placementv1beta1.PlacementPolicy{
+						PlacementType: placementv1beta1.PickFixedPlacementType,
+						ClusterNames:  []string{}, // Empty cluster names for PickFixed type
+					},
+				},
+			},
+			resourceInformer: &testinformer.FakeManager{
+				APIResources:            map[schema.GroupVersionKind]bool{utils.DeploymentGVK: true},
+				IsClusterScopedResource: false,
+			},
+			wantErr:    true,
+			wantErrMsg: "cluster names cannot be empty for policy type PickFixed",
+		},
+		"RP with invalid rollout strategy": {
+			rp: &placementv1beta1.ResourcePlacement{
+				ObjectMeta: metav1.ObjectMeta{
+					Name: "test-rp",
+				},
+				Spec: placementv1beta1.PlacementSpec{
+					ResourceSelectors: []placementv1beta1.ResourceSelectorTerm{
+						{
+							Group:   "apps",
+							Version: "v1",
+							Kind:    "Deployment",
+							Name:    "test-deployment",
+						},
+					},
+					Strategy: placementv1beta1.RolloutStrategy{
+						Type: placementv1beta1.RollingUpdateRolloutStrategyType,
+						RollingUpdate: &placementv1beta1.RollingUpdateConfig{
+							MaxUnavailable: &intstr.IntOrString{Type: intstr.Int, IntVal: -1}, // Negative value
+						},
+					},
+				},
+			},
+			resourceInformer: &testinformer.FakeManager{
+				APIResources:            map[schema.GroupVersionKind]bool{utils.DeploymentGVK: true},
+				IsClusterScopedResource: false,
+			},
+			wantErr:    true,
+			wantErrMsg: "maxUnavailable must be greater than or equal to 0",
+		},
+		"RP with cluster scoped resource should fail": {
+			rp: &placementv1beta1.ResourcePlacement{
+				ObjectMeta: metav1.ObjectMeta{
+					Name:      "test-rp",
+					Namespace: "test-namespace",
+				},
+				Spec: placementv1beta1.PlacementSpec{
+					ResourceSelectors: []placementv1beta1.ResourceSelectorTerm{
+						{
+							Group:   "rbac.authorization.k8s.io",
+							Version: "v1",
+							Kind:    "ClusterRole",
+							Name:    "test-cluster-role",
+						},
+					},
+				},
+			},
+			resourceInformer: &testinformer.FakeManager{
+				APIResources:            map[schema.GroupVersionKind]bool{utils.ClusterRoleGVK: true},
+				IsClusterScopedResource: true, // ClusterRole is cluster-scoped
+			},
+			wantErr:    true,
+			wantErrMsg: "resource is not found in schema (please retry) or it is a cluster scoped resource",
+		},
+		"RP with namespaced resource should succeed": {
+			rp: &placementv1beta1.ResourcePlacement{
+				ObjectMeta: metav1.ObjectMeta{
+					Name:      "test-rp",
+					Namespace: "test-namespace",
+				},
+				Spec: placementv1beta1.PlacementSpec{
+					ResourceSelectors: []placementv1beta1.ResourceSelectorTerm{
+						{
+							Group:   "apps",
+							Version: "v1",
+							Kind:    "Deployment",
+							Name:    "test-deployment",
+						},
+					},
+				},
+			},
+			resourceInformer: &testinformer.FakeManager{
+				APIResources:            map[schema.GroupVersionKind]bool{utils.DeploymentGVK: true},
+				IsClusterScopedResource: false, // Deployment is namespaced
+			},
+			wantErr: false,
+		},
+	}
+
+	for testName, testCase := range tests {
+		t.Run(testName, func(t *testing.T) {
+			RestMapper = utils.TestMapper{}
+			ResourceInformer = testCase.resourceInformer
+			gotErr := ValidateResourcePlacement(testCase.rp)
+			if (gotErr != nil) != testCase.wantErr {
+				t.Errorf("ValidateResourcePlacement() error = %v, wantErr %v", gotErr, testCase.wantErr)
+			}
+			if testCase.wantErr && !strings.Contains(gotErr.Error(), testCase.wantErrMsg) {
+				t.Errorf("ValidateResourcePlacement() got %v, should contain want %s", gotErr, testCase.wantErrMsg)
 			}
 		})
 	}
