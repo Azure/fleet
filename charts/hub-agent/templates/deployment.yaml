@@ -54,8 +54,8 @@ spec:
             - --cluster-unhealthy-threshold={{ .Values.clusterUnhealthyThreshold }}
             - --resource-snapshot-creation-minimum-interval={{ .Values.resourceSnapshotCreationMinimumInterval }}
             - --resource-changes-collection-duration={{ .Values.resourceChangesCollectionDuration }}
-            {{- if .Values.azurePropertyChecker.isEnabled }}
             - --azure-property-checker-enabled={{ .Values.azurePropertyChecker.isEnabled }}
+            {{- if .Values.azurePropertyChecker.isEnabled }}
             - --azure-property-checker-config-file={{ .Values.azurePropertyChecker.computeServiceAddressWithBasePath }}
             {{- end }}
           ports:
