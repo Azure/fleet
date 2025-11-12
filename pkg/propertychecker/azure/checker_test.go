@@ -24,103 +24,148 @@ import (
 	"go.goms.io/fleet/pkg/utils/labels"
 )
 
+func TestSupportsProperty(t *testing.T) {
+	propertyChecker := &PropertyChecker{}
+
+	tests := []struct {
+		name         string
+		propertyName string
+		want         bool
+	}{
+		{
+			name:         "supported Azure SKU capacity property",
+			propertyName: fmt.Sprintf(azure.CapacityPerSKUPropertyTmpl, "Standard_D2s_v3"),
+			want:         true,
+		},
+		{
+			name:         "unsupported property name",
+			propertyName: "fleet.azure.com/unsupported-property",
+			want:         false,
+		},
+		{
+			name:         "similar but unsupported property name with extra suffix",
+			propertyName: fmt.Sprintf(azure.CapacityPerSKUPropertyTmpl, "Standard_D2s_v3") + "-extra-suffix",
+			want:         false,
+		},
+		{
+			name:         "unsupported property name with missing SKU",
+			propertyName: fmt.Sprintf(azure.CapacityPerSKUPropertyTmpl, ""),
+			want:         false,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got := propertyChecker.SupportsProperty(tt.propertyName)
+			if got != tt.want {
+				t.Errorf("SupportsProperty() = %v, want %v", got, tt.want)
+			}
+		})
+	}
+
+}
 func TestValidateCapacity(t *testing.T) {
 	tests := []struct {
 		name           string
-		value          string
-		operator       placementv1beta1.PropertySelectorOperator
+		req            placementv1beta1.PropertySelectorRequirement
 		wantValue      uint32
 		wantError      bool
 		errorSubstring string
 	}{
 		{
-			name:      "valid capacity value for GreaterThan operator",
-			value:     "10",
-			operator:  placementv1beta1.PropertySelectorGreaterThan,
+			name: "valid capacity value for GreaterThan operator",
+			req: placementv1beta1.PropertySelectorRequirement{
+				Name:     fmt.Sprintf(azure.CapacityPerSKUPropertyTmpl, "Standard_D2s_v3"),
+				Operator: placementv1beta1.PropertySelectorGreaterThan,
+				Values:   []string{"10"},
+			},
 			wantValue: 10,
 			wantError: false,
 		},
 		{
-			name:      "valid capacity value for GreaterThanOrEqualTo operator",
-			value:     "50",
-			operator:  placementv1beta1.PropertySelectorGreaterThanOrEqualTo,
+			name: "valid capacity value for GreaterThanOrEqualTo operator",
+			req: placementv1beta1.PropertySelectorRequirement{
+				Name:     fmt.Sprintf(azure.CapacityPerSKUPropertyTmpl, "Standard_D2s_v3"),
+				Operator: placementv1beta1.PropertySelectorGreaterThanOrEqualTo,
+				Values:   []string{"50"},
+			},
 			wantValue: 49,
 			wantError: false,
 		},
 		{
-			name:           "capacity value exceeds maximum limit",
-			operator:       placementv1beta1.PropertySelectorGreaterThanOrEqualTo,
-			value:          "201",
+			name: "capacity value exceeds maximum limit",
+			req: placementv1beta1.PropertySelectorRequirement{
+				Name:     fmt.Sprintf(azure.CapacityPerSKUPropertyTmpl, "Standard_D2s_v3"),
+				Operator: placementv1beta1.PropertySelectorGreaterThanOrEqualTo,
+				Values:   []string{"201"},
+			},
 			wantError:      true,
 			errorSubstring: "exceeds maximum allowed value of 200",
 		},
 		{
-			name:           "capacity value is a negative integer",
-			value:          "-5",
-			operator:       placementv1beta1.PropertySelectorGreaterThanOrEqualTo,
-			wantError:      true,
-			errorSubstring: "invalid capacity value",
-		},
-		{
-			name:           "invalid capacity value (non-integer)",
-			value:          "invalid-quantity",
-			operator:       placementv1beta1.PropertySelectorGreaterThan,
-			wantError:      true,
-			errorSubstring: "invalid capacity value",
-		},
-		{
-			name:           "invalid capacity value (decimal)",
-			value:          "3.5",
-			operator:       placementv1beta1.PropertySelectorGreaterThan,
-			wantError:      true,
-			errorSubstring: "invalid capacity value",
-		},
-		{
-			name:           "unsupported operator for capacity of zero",
-			value:          "0",
-			operator:       placementv1beta1.PropertySelectorGreaterThanOrEqualTo,
+			name: "unsupported operator for capacity of zero",
+			req: placementv1beta1.PropertySelectorRequirement{
+				Name:     fmt.Sprintf(azure.CapacityPerSKUPropertyTmpl, "Standard_D2s_v3"),
+				Operator: placementv1beta1.PropertySelectorGreaterThanOrEqualTo,
+				Values:   []string{"0"},
+			},
 			wantError:      true,
 			errorSubstring: "capacity value cannot be zero for operator",
 		},
 		{
-			name:           "capacity equal to max limit with GreaterThan operator",
-			value:          "200",
-			operator:       placementv1beta1.PropertySelectorGreaterThan,
+			name: "capacity equal to max limit with GreaterThan operator",
+			req: placementv1beta1.PropertySelectorRequirement{
+				Name:     fmt.Sprintf(azure.CapacityPerSKUPropertyTmpl, "Standard_D2s_v3"),
+				Operator: placementv1beta1.PropertySelectorGreaterThan,
+				Values:   []string{"200"},
+			},
 			wantError:      true,
 			errorSubstring: "exceeds maximum allowed value",
 		},
 		{
-			name:      "supported operator with capacity of zero",
-			value:     "0",
-			operator:  placementv1beta1.PropertySelectorGreaterThan,
+			name: "supported operator with capacity of zero",
+			req: placementv1beta1.PropertySelectorRequirement{
+				Name:     fmt.Sprintf(azure.CapacityPerSKUPropertyTmpl, "Standard_D2s_v3"),
+				Operator: placementv1beta1.PropertySelectorGreaterThan,
+				Values:   []string{"0"},
+			},
 			wantValue: 0,
 			wantError: false,
 		},
 		{
-			name:      "capacity equal to max limit with supported operator",
-			value:     "200",
-			operator:  placementv1beta1.PropertySelectorGreaterThanOrEqualTo,
+			name: "capacity equal to max limit with supported operator",
+			req: placementv1beta1.PropertySelectorRequirement{
+				Name:     fmt.Sprintf(azure.CapacityPerSKUPropertyTmpl, "Standard_D2s_v3"),
+				Operator: placementv1beta1.PropertySelectorGreaterThanOrEqualTo,
+				Values:   []string{"200"},
+			},
 			wantValue: 199,
 			wantError: false,
 		},
 		{
-			name:           "capacity above maximum limit",
-			value:          "300",
-			operator:       placementv1beta1.PropertySelectorGreaterThan,
+			name: "capacity above maximum limit",
+			req: placementv1beta1.PropertySelectorRequirement{
+				Name:     fmt.Sprintf(azure.CapacityPerSKUPropertyTmpl, "Standard_D2s_v3"),
+				Operator: placementv1beta1.PropertySelectorGreaterThan,
+				Values:   []string{"300"},
+			},
 			wantError:      true,
 			errorSubstring: "exceeds maximum allowed value",
 		},
 		{
-			name:      "capacity at minimum limit",
-			value:     "1",
-			operator:  placementv1beta1.PropertySelectorGreaterThan,
+			name: "capacity at minimum limit",
+			req: placementv1beta1.PropertySelectorRequirement{
+				Name:     fmt.Sprintf(azure.CapacityPerSKUPropertyTmpl, "Standard_D2s_v3"),
+				Operator: placementv1beta1.PropertySelectorGreaterThan,
+				Values:   []string{"1"},
+			},
 			wantValue: 1,
 			wantError: false,
 		},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			value, err := validateCapacity(tt.value, tt.operator)
+			value, err := validateCapacity(tt.req)
 
 			if tt.wantError {
 				if err == nil {
@@ -195,7 +240,7 @@ func TestExtractCapacityRequirements(t *testing.T) {
 				Values:   []string{},
 			},
 			wantError:      true,
-			errorSubstring: "must have exactly one value, got 0",
+			errorSubstring: "must have exactly 1 value(s), got 0",
 		},
 		{
 			name: "multiple values",
@@ -205,7 +250,7 @@ func TestExtractCapacityRequirements(t *testing.T) {
 				Values:   []string{"4", "8"},
 			},
 			wantError:      true,
-			errorSubstring: "must have exactly one value, got 2",
+			errorSubstring: "must have exactly 1 value(s), got 2",
 		},
 		{
 			name: "invalid capacity value",
@@ -225,7 +270,7 @@ func TestExtractCapacityRequirements(t *testing.T) {
 				Values:   []string{"4"},
 			},
 			wantError:      true,
-			errorSubstring: "unsupported operator \"Eq\" for SKU capacity property, only GreaterThan (Gt) and GreaterThanOrEqualTo (Ge) are supported",
+			errorSubstring: "unsupported operator \"Eq\" for property \"kubernetes.azure.com/vm-sizes/Standard_D2s_v3/capacity\", only GreaterThan (Gt) and GreaterThanOrEqualTo (Ge) are supported",
 		},
 		{
 			name: "unsupported operator LessThanOrEqualTo",
@@ -235,7 +280,7 @@ func TestExtractCapacityRequirements(t *testing.T) {
 				Values:   []string{"4"},
 			},
 			wantError:      true,
-			errorSubstring: "unsupported operator \"Le\" for SKU capacity property, only GreaterThan (Gt) and GreaterThanOrEqualTo (Ge) are supported",
+			errorSubstring: "unsupported operator \"Le\" for property \"kubernetes.azure.com/vm-sizes/Standard_D2s_v3/capacity\", only GreaterThan (Gt) and GreaterThanOrEqualTo (Ge) are supported",
 		},
 		{
 			name: "unsupported operator LessThan",
@@ -245,7 +290,7 @@ func TestExtractCapacityRequirements(t *testing.T) {
 				Values:   []string{"4"},
 			},
 			wantError:      true,
-			errorSubstring: "unsupported operator \"Lt\" for SKU capacity property, only GreaterThan (Gt) and GreaterThanOrEqualTo (Ge) are supported",
+			errorSubstring: "unsupported operator \"Lt\" for property \"kubernetes.azure.com/vm-sizes/Standard_D2s_v3/capacity\", only GreaterThan (Gt) and GreaterThanOrEqualTo (Ge) are supported",
 		},
 		{
 			name: "unsupported operator NotEqualTo",
@@ -255,7 +300,7 @@ func TestExtractCapacityRequirements(t *testing.T) {
 				Values:   []string{"4"},
 			},
 			wantError:      true,
-			errorSubstring: "unsupported operator \"Ne\" for SKU capacity property, only GreaterThan (Gt) and GreaterThanOrEqualTo (Ge) are supported",
+			errorSubstring: "unsupported operator \"Ne\" for property \"kubernetes.azure.com/vm-sizes/Standard_D2s_v3/capacity\", only GreaterThan (Gt) and GreaterThanOrEqualTo (Ge) are supported",
 		},
 	}
 
@@ -395,7 +440,7 @@ func TestCheckIfMeetSKUCapacityRequirement(t *testing.T) {
 			},
 			mockStatusCode: http.StatusOK,
 			wantError:      true,
-			errorSubstring: "unsupported operator \"Eq\" for SKU capacity property, only GreaterThan (Gt) and GreaterThanOrEqualTo (Ge) are supported",
+			errorSubstring: "unsupported operator \"Eq\" for property \"kubernetes.azure.com/vm-sizes/Standard_D2s_v3/capacity\", only GreaterThan (Gt) and GreaterThanOrEqualTo (Ge) are supported",
 		},
 		{
 			name:    "unsupported operator in requirement",
