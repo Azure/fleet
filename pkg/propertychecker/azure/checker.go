@@ -9,7 +9,6 @@ package azure
 import (
 	"context"
 	"fmt"
-	"strconv"
 	"strings"
 
 	"k8s.io/klog/v2"
@@ -18,6 +17,8 @@ import (
 	placementv1beta1 "go.goms.io/fleet/apis/placement/v1beta1"
 	computev1 "go.goms.io/fleet/apis/protos/azure/compute/v1"
 	"go.goms.io/fleet/pkg/clients/azure/compute"
+	"go.goms.io/fleet/pkg/propertychecker"
+	provider "go.goms.io/fleet/pkg/propertyprovider/azure"
 	"go.goms.io/fleet/pkg/utils/labels"
 )
 
@@ -38,12 +39,48 @@ type PropertyChecker struct {
 	vmSizeRecommenderClient compute.AttributeBasedVMSizeRecommenderClient
 }
 
-// NewPropertyChecker creates a new PropertyChecker with the given client.
+// Verify that the Azure PropertyChecker implements the PropertyChecker interface at compile time.
+var _ propertychecker.PropertyChecker = &PropertyChecker{}
+
+// NewPropertyChecker creates a new Azure PropertyChecker with the given client.
 // The vmSizeRecommenderClient is used to validate SKU capacity requirements.
 func NewPropertyChecker(vmSizeRecommenderClient compute.AttributeBasedVMSizeRecommenderClient) *PropertyChecker {
 	return &PropertyChecker{
 		vmSizeRecommenderClient: vmSizeRecommenderClient,
 	}
+}
+
+// SupportsProperty returns true if this property checker can validate the given property name.
+// The Azure property checker supports:
+// - Azure VM SKU capacity properties: "kubernetes.azure.com/vm-sizes/{sku}/capacity"
+func (p *PropertyChecker) SupportsProperty(propertyName string) bool {
+	// Check if it's an Azure SKU capacity property
+	return provider.CapacityPerSKUPropertyRegex.MatchString(propertyName)
+}
+
+// ValidatePropertyRequirement validates whether a member cluster can meet the specified
+// property selector requirement. This implementation handles Azure-specific properties
+// such as VM SKU capacity requirements.
+func (p *PropertyChecker) ValidatePropertyRequirement(
+	cluster *clusterv1beta1.MemberCluster,
+	req placementv1beta1.PropertySelectorRequirement,
+) (bool, error) {
+	// Check if this is an Azure SKU capacity property
+	if p.SupportsProperty(req.Name) {
+		if matches := provider.CapacityPerSKUPropertyRegex.FindStringSubmatch(req.Name); len(matches) == 2 {
+			sku := matches[1]
+			canMeet, err := p.CheckIfMeetSKUCapacityRequirement(cluster, req, sku)
+			if err != nil {
+				return false, err
+			}
+
+			return canMeet, nil
+		}
+		return false, fmt.Errorf("invalid property format for %q", req.Name)
+	}
+
+	// If we reach here, the property is not supported by this checker
+	return false, fmt.Errorf("property %q is not supported by the Azure property checker", req.Name)
 }
 
 // CheckIfMeetSKUCapacityRequirement validates whether a member cluster can meet the specified
@@ -53,7 +90,7 @@ func NewPropertyChecker(vmSizeRecommenderClient compute.AttributeBasedVMSizeReco
 //
 // The cluster must have both Azure location and subscription ID labels configured.
 // Returns true if the SKU capacity requirement can be met, false otherwise.
-func (s *PropertyChecker) CheckIfMeetSKUCapacityRequirement(
+func (p *PropertyChecker) CheckIfMeetSKUCapacityRequirement(
 	cluster *clusterv1beta1.MemberCluster,
 	req placementv1beta1.PropertySelectorRequirement,
 	sku string,
@@ -94,7 +131,7 @@ func (s *PropertyChecker) CheckIfMeetSKUCapacityRequirement(
 		},
 	}
 
-	respObj, err := s.vmSizeRecommenderClient.GenerateAttributeBasedRecommendations(context.Background(), request)
+	respObj, err := p.vmSizeRecommenderClient.GenerateAttributeBasedRecommendations(context.Background(), request)
 	if err != nil {
 		return false, fmt.Errorf("failed to generate VM size recommendations from Azure: %w", err)
 	}
@@ -120,36 +157,31 @@ func (s *PropertyChecker) CheckIfMeetSKUCapacityRequirement(
 // The capacity will be updated based on the configured operator as VMSizeRecommender API
 // checks if the current allocatableCapacity > the requested capacity.
 func extractCapacityRequirements(req placementv1beta1.PropertySelectorRequirement) (uint32, error) {
-	if req.Operator != placementv1beta1.PropertySelectorGreaterThan && req.Operator != placementv1beta1.PropertySelectorGreaterThanOrEqualTo {
-		return 0, fmt.Errorf("unsupported operator %q for SKU capacity property, only GreaterThan (Gt) and GreaterThanOrEqualTo (Ge) are supported", req.Operator)
+	// Validate operator support
+	if err := propertychecker.ValidateOperatorSupport(req,
+		placementv1beta1.PropertySelectorGreaterThan,
+		placementv1beta1.PropertySelectorGreaterThanOrEqualTo); err != nil {
+		return 0, fmt.Errorf("%v, only GreaterThan (Gt) and GreaterThanOrEqualTo (Ge) are supported", err)
 	}
 
-	// Validate that we have exactly one value.
-	if len(req.Values) != 1 {
-		return 0, fmt.Errorf("azure SKU capacity property must have exactly one value, got %d", len(req.Values))
-	}
-
-	capacity, err := validateCapacity(req.Values[0], req.Operator)
+	// Validate and extract capacity value
+	capacity, err := validateCapacity(req)
 	if err != nil {
-		return 0, fmt.Errorf("failed to validate capacity value %q: %w", req.Values[0], err)
+		return 0, fmt.Errorf("failed to validate capacity value %d: %w", capacity, err)
 	}
 
-	// Safe conversion to uint32 - all validations passed
 	return capacity, nil
 }
 
 // validateCapacity checks if the provided capacity value is valid.
 // Returns the capacity as uint32 if valid, or a zero and an error if invalid.
-func validateCapacity(value string, operator placementv1beta1.PropertySelectorOperator) (uint32, error) {
-	// Parse directly as uint32 to avoid integer overflow issues.
-	valueUint, err := strconv.ParseUint(value, 10, 32)
+func validateCapacity(req placementv1beta1.PropertySelectorRequirement) (uint32, error) {
+	capacity, err := propertychecker.ValidateSingleUint32Value(req)
 	if err != nil {
-		return 0, fmt.Errorf("invalid capacity value %q: %w", value, err)
+		return 0, err
 	}
 
-	capacity := uint32(valueUint) // capacity is >= 0 since it's parsed as uint.
-
-	if operator == placementv1beta1.PropertySelectorGreaterThanOrEqualTo && capacity > 0 {
+	if req.Operator == placementv1beta1.PropertySelectorGreaterThanOrEqualTo && capacity > 0 {
 		capacity -= 1
 	}
 
@@ -159,8 +191,8 @@ func validateCapacity(value string, operator placementv1beta1.PropertySelectorOp
 	}
 
 	// A capacity of zero is only valid for GreaterThan operator.
-	if capacity == 0 && operator != placementv1beta1.PropertySelectorGreaterThan {
-		return 0, fmt.Errorf("capacity value cannot be zero for operator %q", operator)
+	if capacity == 0 && req.Operator != placementv1beta1.PropertySelectorGreaterThan {
+		return 0, fmt.Errorf("capacity value cannot be zero for operator %q", req.Operator)
 	}
 
 	return capacity, nil
