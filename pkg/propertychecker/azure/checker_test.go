@@ -64,6 +64,7 @@ func TestSupportsProperty(t *testing.T) {
 	}
 
 }
+
 func TestValidateCapacity(t *testing.T) {
 	tests := []struct {
 		name           string
@@ -101,6 +102,36 @@ func TestValidateCapacity(t *testing.T) {
 			},
 			wantError:      true,
 			errorSubstring: "exceeds maximum allowed value of 200",
+		},
+		{
+			name: "capacity value is a negative integer",
+			req: placementv1beta1.PropertySelectorRequirement{
+				Name:     fmt.Sprintf(azure.CapacityPerSKUPropertyTmpl, "Standard_D2s_v3"),
+				Operator: placementv1beta1.PropertySelectorGreaterThanOrEqualTo,
+				Values:   []string{"-5"},
+			},
+			wantError:      true,
+			errorSubstring: "invalid value \"-5\" for property",
+		},
+		{
+			name: "invalid capacity value (non-integer)",
+			req: placementv1beta1.PropertySelectorRequirement{
+				Name:     fmt.Sprintf(azure.CapacityPerSKUPropertyTmpl, "Standard_D2s_v3"),
+				Operator: placementv1beta1.PropertySelectorGreaterThan,
+				Values:   []string{"invalid-quantity"},
+			},
+			wantError:      true,
+			errorSubstring: "invalid value \"invalid-quantity\" for property",
+		},
+		{
+			name: "invalid capacity value (decimal)",
+			req: placementv1beta1.PropertySelectorRequirement{
+				Name:     fmt.Sprintf(azure.CapacityPerSKUPropertyTmpl, "Standard_D2s_v3"),
+				Operator: placementv1beta1.PropertySelectorGreaterThan,
+				Values:   []string{"3.5"},
+			},
+			wantError:      true,
+			errorSubstring: "invalid value \"3.5\" for property",
 		},
 		{
 			name: "unsupported operator for capacity of zero",
