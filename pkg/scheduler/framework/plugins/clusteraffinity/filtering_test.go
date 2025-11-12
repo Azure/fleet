@@ -775,7 +775,7 @@ func TestFilter(t *testing.T) {
 												MatchExpressions: []placementv1beta1.PropertySelectorRequirement{
 													{
 														Name:     fmt.Sprintf(azure.CapacityPerSKUPropertyTmpl, "Standard_D2s_v3"),
-														Operator: placementv1beta1.PropertySelectorGreaterThanOrEqualTo,
+														Operator: placementv1beta1.PropertySelectorGreaterThan,
 														Values: []string{
 															"1",
 														},
@@ -820,7 +820,7 @@ func TestFilter(t *testing.T) {
 												MatchExpressions: []placementv1beta1.PropertySelectorRequirement{
 													{
 														Name:     fmt.Sprintf(azure.CapacityPerSKUPropertyTmpl, "Standard_B2ms"),
-														Operator: placementv1beta1.PropertySelectorGreaterThan,
+														Operator: placementv1beta1.PropertySelectorGreaterThanOrEqualTo,
 														Values: []string{
 															"4",
 														},

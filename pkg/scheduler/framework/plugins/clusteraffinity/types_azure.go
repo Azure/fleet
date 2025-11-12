@@ -13,7 +13,6 @@ import (
 func (c *clusterRequirement) MatchPropertiesInPropertyChecker(cluster *clusterv1beta1.MemberCluster, req placementv1beta1.PropertySelectorRequirement) (handled bool, available bool, err error) {
 	// Check if the property is an Azure SKU capacity property.
 	if sku := isAzureSKUCapacityProperty(req.Name); sku != "" {
-
 		// Use the Azure property checker to validate SKU capacity requirement.
 		available, err := c.PropertyChecker.CheckIfMeetSKUCapacityRequirement(cluster, req, sku)
 		return true, available, err
