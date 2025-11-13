@@ -27,6 +27,7 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
 	"k8s.io/apimachinery/pkg/types"
+	"k8s.io/kubectl/pkg/util/deployment"
 	"k8s.io/utils/ptr"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 
@@ -58,6 +59,7 @@ func TestSanitizeManifestObject(t *testing.T) {
 				fleetv1beta1.ManifestHashAnnotation:      dummyLabelValue1,
 				fleetv1beta1.LastAppliedConfigAnnotation: dummyLabelValue1,
 				corev1.LastAppliedConfigAnnotation:       dummyLabelValue1,
+				deployment.RevisionAnnotation:            dummyLabelValue1,
 				dummyLabelKey:                            dummyLabelValue1,
 			},
 			Labels: map[string]string{

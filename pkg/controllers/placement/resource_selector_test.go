@@ -33,6 +33,7 @@ import (
 	"k8s.io/apimachinery/pkg/runtime/schema"
 	"k8s.io/apimachinery/pkg/types"
 	utilrand "k8s.io/apimachinery/pkg/util/rand"
+	"k8s.io/kubectl/pkg/util/deployment"
 	"k8s.io/utils/ptr"
 
 	fleetv1beta1 "github.com/kubefleet-dev/kubefleet/apis/placement/v1beta1"
@@ -75,6 +76,7 @@ func TestGenerateResourceContent(t *testing.T) {
 					},
 					Annotations: map[string]string{
 						corev1.LastAppliedConfigAnnotation: "svc-object-annotation-lac-value",
+						deployment.RevisionAnnotation:      "svc-object-revision-annotation-value",
 						"svc-annotation-key":               "svc-object-annotation-key-value",
 					},
 					OwnerReferences: []metav1.OwnerReference{

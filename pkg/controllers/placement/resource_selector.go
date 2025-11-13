@@ -31,6 +31,7 @@ import (
 	"k8s.io/apimachinery/pkg/runtime/schema"
 	"k8s.io/apimachinery/pkg/types"
 	"k8s.io/klog/v2"
+	"k8s.io/kubectl/pkg/util/deployment"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 
 	fleetv1beta1 "github.com/kubefleet-dev/kubefleet/apis/placement/v1beta1"
@@ -436,10 +437,13 @@ func generateRawContent(object *unstructured.Unstructured) ([]byte, error) {
 	object.SetSelfLink("")
 	object.SetDeletionTimestamp(nil)
 	object.SetManagedFields(nil)
-	// remove kubectl last applied annotation if exist
+
 	annots := object.GetAnnotations()
 	if annots != nil {
+		// Remove kubectl last applied annotation if exist
 		delete(annots, corev1.LastAppliedConfigAnnotation)
+		// Remove the revision annotation set by deployment controller.
+		delete(annots, deployment.RevisionAnnotation)
 		if len(annots) == 0 {
 			object.SetAnnotations(nil)
 		} else {
