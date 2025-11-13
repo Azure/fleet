@@ -92,6 +92,7 @@ type UpdateRunObjList interface {
 // +kubebuilder:printcolumn:JSONPath=`.spec.resourceSnapshotIndex`,name="Resource-Snapshot-Index",type=string
 // +kubebuilder:printcolumn:JSONPath=`.status.policySnapshotIndexUsed`,name="Policy-Snapshot-Index",type=string
 // +kubebuilder:printcolumn:JSONPath=`.status.conditions[?(@.type=="Initialized")].status`,name="Initialized",type=string
+// +kubebuilder:printcolumn:JSONPath=`.status.conditions[?(@.type=="Progressing")].status`,name="Progressing",type=string
 // +kubebuilder:printcolumn:JSONPath=`.status.conditions[?(@.type=="Succeeded")].status`,name="Succeeded",type=string
 // +kubebuilder:printcolumn:JSONPath=`.metadata.creationTimestamp`,name="Age",type=date
 // +kubebuilder:printcolumn:JSONPath=`.spec.stagedRolloutStrategyName`,name="Strategy",priority=1,type=string
@@ -107,9 +108,8 @@ type ClusterStagedUpdateRun struct {
 	metav1.TypeMeta   `json:",inline"`
 	metav1.ObjectMeta `json:"metadata,omitempty"`
 
-	// The desired state of ClusterStagedUpdateRun. The spec is immutable.
+	// The desired state of ClusterStagedUpdateRun.
 	// +kubebuilder:validation:Required
-	// +kubebuilder:validation:XValidation:rule="self == oldSelf",message="The spec field is immutable"
 	Spec UpdateRunSpec `json:"spec"`
 
 	// The observed status of ClusterStagedUpdateRun.
@@ -147,19 +147,47 @@ func (c *ClusterStagedUpdateRun) SetUpdateRunStatus(status UpdateRunStatus) {
 	c.Status = status
 }
 
+// State represents the desired state of an update run.
+// +enum
+type State string
+
+const (
+	// StateNotStarted describes user intent to initialize but not execute the update run.
+	// This is the default state when an update run is created.
+	StateNotStarted State = "NotStarted"
+
+	// StateStarted describes user intent to execute (or resume execution if paused).
+	// Users can subsequently set the state to Stopped or Abandoned.
+	StateStarted State = "Started"
+
+	// StateStopped describes user intent to pause the update run.
+	// Users can subsequently set the state to Started or Abandoned.
+	StateStopped State = "Stopped"
+
+	// StateAbandoned describes user intent to abandon the update run.
+	// This is a terminal state; once set, it cannot be changed.
+	StateAbandoned State = "Abandoned"
+)
+
 // UpdateRunSpec defines the desired rollout strategy and the snapshot indices of the resources to be updated.
 // It specifies a stage-by-stage update process across selected clusters for the given ResourcePlacement object.
+// +kubebuilder:validation:XValidation:rule="!has(oldSelf.state) || oldSelf.state != 'NotStarted' || self.state != 'Stopped'",message="invalid state transition: cannot transition from NotStarted to Stopped"
+// +kubebuilder:validation:XValidation:rule="!has(oldSelf.state) || oldSelf.state != 'Started' || self.state != 'NotStarted'",message="invalid state transition: cannot transition from Started to NotStarted"
+// +kubebuilder:validation:XValidation:rule="!has(oldSelf.state) || oldSelf.state != 'Stopped' || self.state != 'NotStarted'",message="invalid state transition: cannot transition from Stopped to NotStarted"
+// +kubebuilder:validation:XValidation:rule="!has(oldSelf.state) || oldSelf.state != 'Abandoned' || self.state == 'Abandoned'",message="invalid state transition: Abandoned is a terminal state and cannot transition to any other state"
 type UpdateRunSpec struct {
 	// PlacementName is the name of placement that this update run is applied to.
 	// There can be multiple active update runs for each placement, but
 	// it's up to the DevOps team to ensure they don't conflict with each other.
 	// +kubebuilder:validation:Required
 	// +kubebuilder:validation:MaxLength=255
+	// +kubebuilder:validation:XValidation:rule="self == oldSelf",message="placementName is immutable"
 	PlacementName string `json:"placementName"`
 
 	// The resource snapshot index of the selected resources to be updated across clusters.
 	// The index represents a group of resource snapshots that includes all the resources a ResourcePlacement selected.
 	// +kubebuilder:validation:Required
+	// +kubebuilder:validation:XValidation:rule="self == oldSelf",message="resourceSnapshotIndex is immutable"
 	ResourceSnapshotIndex string `json:"resourceSnapshotIndex"`
 
 	// The name of the update strategy that specifies the stages and the sequence
@@ -167,7 +195,18 @@ type UpdateRunSpec struct {
 	// are computed according to the referenced strategy when the update run starts
 	// and recorded in the status field.
 	// +kubebuilder:validation:Required
+	// +kubebuilder:validation:XValidation:rule="self == oldSelf",message="stagedRolloutStrategyName is immutable"
 	StagedUpdateStrategyName string `json:"stagedRolloutStrategyName"`
+
+	// State indicates the desired state of the update run.
+	// NotStarted: The update run is initialized but execution has not started (default).
+	// Started: The update run should execute or resume execution.
+	// Stopped: The update run should pause execution.
+	// Abandoned: The update run should be abandoned and terminated.
+	// +kubebuilder:validation:Optional
+	// +kubebuilder:default=NotStarted
+	// +kubebuilder:validation:Enum=NotStarted;Started;Stopped;Abandoned
+	State State `json:"state,omitempty"`
 }
 
 // UpdateStrategySpecGetterSetter offers the functionality to work with UpdateStrategySpec.
@@ -387,7 +426,7 @@ const (
 	// StagedUpdateRunConditionProgressing indicates whether the staged update run is making progress.
 	// Its condition status can be one of the following:
 	// - "True": The staged update run is making progress.
-	// - "False": The staged update run is waiting/paused.
+	// - "False": The staged update run is waiting/paused/abandoned.
 	// - "Unknown" means it is unknown.
 	StagedUpdateRunConditionProgressing StagedUpdateRunConditionType = "Progressing"
 
@@ -746,6 +785,7 @@ func (c *ClusterApprovalRequestList) GetApprovalRequestObjs() []ApprovalRequestO
 // +kubebuilder:printcolumn:JSONPath=`.spec.resourceSnapshotIndex`,name="Resource-Snapshot-Index",type=string
 // +kubebuilder:printcolumn:JSONPath=`.status.policySnapshotIndexUsed`,name="Policy-Snapshot-Index",type=string
 // +kubebuilder:printcolumn:JSONPath=`.status.conditions[?(@.type=="Initialized")].status`,name="Initialized",type=string
+// +kubebuilder:printcolumn:JSONPath=`.status.conditions[?(@.type=="Progressing")].status`,name="Progressing",type=string
 // +kubebuilder:printcolumn:JSONPath=`.status.conditions[?(@.type=="Succeeded")].status`,name="Succeeded",type=string
 // +kubebuilder:printcolumn:JSONPath=`.metadata.creationTimestamp`,name="Age",type=date
 // +kubebuilder:printcolumn:JSONPath=`.spec.stagedRolloutStrategyName`,name="Strategy",priority=1,type=string
@@ -761,9 +801,8 @@ type StagedUpdateRun struct {
 	metav1.TypeMeta   `json:",inline"`
 	metav1.ObjectMeta `json:"metadata,omitempty"`
 
-	// The desired state of StagedUpdateRun. The spec is immutable.
+	// The desired state of StagedUpdateRun.
 	// +kubebuilder:validation:Required
-	// +kubebuilder:validation:XValidation:rule="self == oldSelf",message="The spec field is immutable"
 	Spec UpdateRunSpec `json:"spec"`
 
 	// The observed status of StagedUpdateRun.

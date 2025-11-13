@@ -32,6 +32,9 @@ spec:
     - jsonPath: .status.conditions[?(@.type=="Initialized")].status
       name: Initialized
       type: string
+    - jsonPath: .status.conditions[?(@.type=="Progressing")].status
+      name: Progressing
+      type: string
     - jsonPath: .status.conditions[?(@.type=="Succeeded")].status
       name: Succeeded
       type: string
@@ -71,7 +74,7 @@ spec:
           metadata:
             type: object
           spec:
-            description: The desired state of StagedUpdateRun. The spec is immutable.
+            description: The desired state of StagedUpdateRun.
             properties:
               placementName:
                 description: |-
@@ -80,11 +83,17 @@ spec:
                   it's up to the DevOps team to ensure they don't conflict with each other.
                 maxLength: 255
                 type: string
+                x-kubernetes-validations:
+                - message: placementName is immutable
+                  rule: self == oldSelf
               resourceSnapshotIndex:
                 description: |-
                   The resource snapshot index of the selected resources to be updated across clusters.
                   The index represents a group of resource snapshots that includes all the resources a ResourcePlacement selected.
                 type: string
+                x-kubernetes-validations:
+                - message: resourceSnapshotIndex is immutable
+                  rule: self == oldSelf
               stagedRolloutStrategyName:
                 description: |-
                   The name of the update strategy that specifies the stages and the sequence
@@ -92,14 +101,45 @@ spec:
                   are computed according to the referenced strategy when the update run starts
                   and recorded in the status field.
                 type: string
+                x-kubernetes-validations:
+                - message: stagedRolloutStrategyName is immutable
+                  rule: self == oldSelf
+              state:
+                default: NotStarted
+                description: |-
+                  State indicates the desired state of the update run.
+                  NotStarted: The update run is initialized but execution has not started (default).
+                  Started: The update run should execute or resume execution.
+                  Stopped: The update run should pause execution.
+                  Abandoned: The update run should be abandoned and terminated.
+                enum:
+                - NotStarted
+                - Started
+                - Stopped
+                - Abandoned
+                type: string
             required:
             - placementName
             - resourceSnapshotIndex
             - stagedRolloutStrategyName
             type: object
             x-kubernetes-validations:
-            - message: The spec field is immutable
-              rule: self == oldSelf
+            - message: 'invalid state transition: cannot transition from NotStarted
+                to Stopped'
+              rule: '!has(oldSelf.state) || oldSelf.state != ''NotStarted'' || self.state
+                != ''Stopped'''
+            - message: 'invalid state transition: cannot transition from Started to
+                NotStarted'
+              rule: '!has(oldSelf.state) || oldSelf.state != ''Started'' || self.state
+                != ''NotStarted'''
+            - message: 'invalid state transition: cannot transition from Stopped to
+                NotStarted'
+              rule: '!has(oldSelf.state) || oldSelf.state != ''Stopped'' || self.state
+                != ''NotStarted'''
+            - message: 'invalid state transition: Abandoned is a terminal state and
+                cannot transition to any other state'
+              rule: '!has(oldSelf.state) || oldSelf.state != ''Abandoned'' || self.state
+                == ''Abandoned'''
           status:
             description: The observed status of StagedUpdateRun.
             properties:
@@ -917,7 +957,7 @@ spec:
                           description: |-
                             MaxConcurrency specifies the maximum number of clusters that can be updated concurrently within this stage.
                             Value can be an absolute number (ex: 5) or a percentage of the total clusters in the stage (ex: 50%).
-                            Absolute number is calculated from percentage by rounding up.
+                            Fractional results are rounded down. A minimum of 1 update is enforced.
                             If not specified, all clusters in the stage are updated sequentially (effectively maxConcurrency = 1).
                             Defaults to 1.
                           pattern: ^((100|[0-9]{1,2})%|[0-9]+)$

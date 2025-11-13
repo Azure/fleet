@@ -174,7 +174,7 @@ spec:
                       description: |-
                         MaxConcurrency specifies the maximum number of clusters that can be updated concurrently within this stage.
                         Value can be an absolute number (ex: 5) or a percentage of the total clusters in the stage (ex: 50%).
-                        Absolute number is calculated from percentage by rounding up.
+                        Fractional results are rounded down. A minimum of 1 update is enforced.
                         If not specified, all clusters in the stage are updated sequentially (effectively maxConcurrency = 1).
                         Defaults to 1.
                       pattern: ^((100|[0-9]{1,2})%|[0-9]+)$
