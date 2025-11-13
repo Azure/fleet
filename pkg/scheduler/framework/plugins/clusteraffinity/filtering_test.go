@@ -35,6 +35,7 @@ import (
 	"go.goms.io/fleet/pkg/propertyprovider"
 	"go.goms.io/fleet/pkg/propertyprovider/azure"
 	"go.goms.io/fleet/pkg/scheduler/framework"
+	"go.goms.io/fleet/pkg/utils"
 	"go.goms.io/fleet/pkg/utils/labels"
 )
 
@@ -851,7 +852,7 @@ func TestFilter(t *testing.T) {
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
 			// Create mock server
-			server := createMockAttributeBasedVMSizeRecommenderServer(t, http.StatusOK)
+			server := utils.CreateMockAttributeBasedVMSizeRecommenderServer(t, http.StatusOK)
 			defer server.Close()
 
 			client, err := compute.NewAttributeBasedVMSizeRecommenderClient(server.URL, http.DefaultClient)

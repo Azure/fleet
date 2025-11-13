@@ -25,7 +25,7 @@ import (
 	"go.goms.io/fleet/pkg/scheduler/framework"
 )
 
-// Plugin is the scheduler plugin that enforces the cluster affinity (if any) defined on a RP/CRP.
+// Plugin is the scheduler plugin that enforces the cluster affinity (if any) defined on a CRP.
 type Plugin struct {
 	// The name of the plugin.
 	name string
@@ -33,7 +33,7 @@ type Plugin struct {
 	// The framework handle.
 	handle framework.Handle
 
-	// Optional Azure property checker for SKU validation.
+	// Optional property checker for SKU validation.
 	propertyChecker *azure.PropertyChecker
 }
 
@@ -58,7 +58,7 @@ type clusterAffinityPluginOptions struct {
 	// The name of the plugin.
 	name string
 
-	// Optional Azure property checker for SKU validation.
+	// Optional property checker for SKU validation.
 	propertyChecker *azure.PropertyChecker
 }
 
@@ -75,9 +75,9 @@ func WithName(name string) Option {
 	}
 }
 
-// WithAzurePropertyChecker sets the Azure property checker for azure property validation.
-// This enables Azure-specific cluster requirement validation.
-func WithAzurePropertyChecker(checker *azure.PropertyChecker) Option {
+// WithPropertyChecker sets the property checker for property validation.
+// This enables specific cluster requirement validation.
+func WithPropertyChecker(checker *azure.PropertyChecker) Option {
 	return func(o *clusterAffinityPluginOptions) {
 		o.propertyChecker = checker
 	}

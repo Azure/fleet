@@ -10,11 +10,16 @@ import (
 	"go.goms.io/fleet/pkg/propertyprovider/azure"
 )
 
+// MatchPropertiesInPropertyChecker checks if the given property selector requirement
+// matches any azure-specific properties that can be handled by the azure property checker.
 func (c *clusterRequirement) MatchPropertiesInPropertyChecker(cluster *clusterv1beta1.MemberCluster, req placementv1beta1.PropertySelectorRequirement) (handled bool, available bool, err error) {
 	// Check if the property is an Azure SKU capacity property.
 	if sku := isAzureSKUCapacityProperty(req.Name); sku != "" {
 		// Use the Azure property checker to validate SKU capacity requirement.
 		available, err := c.PropertyChecker.CheckIfMeetSKUCapacityRequirement(cluster, req, sku)
+		if err != nil {
+			return false, false, err
+		}
 		return true, available, err
 	}
 

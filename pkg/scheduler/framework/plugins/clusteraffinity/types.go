@@ -32,9 +32,13 @@ import (
 	"go.goms.io/fleet/pkg/propertyprovider"
 )
 
-// clusterRequirement is a type alias for ClusterSelectorTerm in the API and property checker.
+// clusterRequirement is a type alias for ClusterSelectorTerm in the API, which allows
+// easy method extension.
 type clusterRequirement struct {
-	placementv1beta1.ClusterSelectorTerm
+	// Embed the original ClusterSelectorTerm.
+	ClusterSelectorTerm placementv1beta1.ClusterSelectorTerm
+
+	// Optional property checker for SKU validation.
 	*azure.PropertyChecker
 }
 
@@ -124,8 +128,8 @@ func retrievePropertyValueFrom(cluster *clusterv1beta1.MemberCluster, name strin
 // This is an extended method for the ClusterSelectorTerm API.
 func (c *clusterRequirement) Matches(cluster *clusterv1beta1.MemberCluster) (bool, error) {
 	// Match the cluster against the label selector.
-	if c.LabelSelector != nil {
-		ls, err := metav1.LabelSelectorAsSelector(c.LabelSelector)
+	if c.ClusterSelectorTerm.LabelSelector != nil {
+		ls, err := metav1.LabelSelectorAsSelector(c.ClusterSelectorTerm.LabelSelector)
 		if err != nil {
 			return false, fmt.Errorf("failed to parse label selector: %w", err)
 		}
@@ -137,12 +141,12 @@ func (c *clusterRequirement) Matches(cluster *clusterv1beta1.MemberCluster) (boo
 	}
 
 	// Match the cluster against the property selector.
-	if c.PropertySelector == nil || len(c.PropertySelector.MatchExpressions) == 0 {
+	if c.ClusterSelectorTerm.PropertySelector == nil || len(c.ClusterSelectorTerm.PropertySelector.MatchExpressions) == 0 {
 		// The term does not feature a property selector; no check is needed.
 		return true, nil
 	}
 
-	for _, exp := range c.PropertySelector.MatchExpressions {
+	for _, exp := range c.ClusterSelectorTerm.PropertySelector.MatchExpressions {
 		// Check if we have a property checker and if it can handle the property.
 		if c.PropertyChecker != nil {
 			handled, available, err := c.MatchPropertiesInPropertyChecker(cluster, exp)

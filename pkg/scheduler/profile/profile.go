@@ -18,7 +18,6 @@ limitations under the License.
 package profile
 
 import (
-	checker "go.goms.io/fleet/pkg/propertychecker/azure"
 	"go.goms.io/fleet/pkg/scheduler/framework"
 	"go.goms.io/fleet/pkg/scheduler/framework/plugins/clusteraffinity"
 	"go.goms.io/fleet/pkg/scheduler/framework/plugins/clustereligibility"
@@ -33,16 +32,22 @@ const (
 )
 
 type Options struct {
-	// AzurePropertyChecker is Azure property checker used in ClusterAffinity plugin to check Azure specific properties.
-	AzurePropertyChecker *checker.PropertyChecker
+	ClusterAffinityPlugin *clusteraffinity.Plugin
 }
 
 // NewDefaultProfile creates a default scheduling profile.
-func NewDefaultProfile(opts Options) *framework.Profile {
+func NewDefaultProfile() *framework.Profile {
+	return NewProfile(Options{})
+}
+
+func NewProfile(opts Options) *framework.Profile {
 	p := framework.NewProfile(defaultProfileName)
 
 	// default plugin list
-	clusterAffinityPlugin := clusteraffinity.New(clusteraffinity.WithAzurePropertyChecker(opts.AzurePropertyChecker))
+	clusterAffinityPlugin := clusteraffinity.New()
+	if opts.ClusterAffinityPlugin != nil {
+		clusterAffinityPlugin = *opts.ClusterAffinityPlugin
+	}
 	clusterEligibilityPlugin := clustereligibility.New()
 	samePlacementAffinityPlugin := sameplacementaffinity.New()
 	topologySpreadConstraintsPlugin := topologyspreadconstraints.New()
