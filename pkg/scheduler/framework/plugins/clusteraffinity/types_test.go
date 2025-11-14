@@ -19,6 +19,7 @@ package clusteraffinity
 import (
 	"fmt"
 	"math"
+	"net/http"
 	"testing"
 
 	"github.com/google/go-cmp/cmp"
@@ -29,7 +30,12 @@ import (
 
 	clusterv1beta1 "go.goms.io/fleet/apis/cluster/v1beta1"
 	placementv1beta1 "go.goms.io/fleet/apis/placement/v1beta1"
+	"go.goms.io/fleet/pkg/clients/azure/compute"
+	"go.goms.io/fleet/pkg/propertychecker/azure"
 	"go.goms.io/fleet/pkg/propertyprovider"
+	azurePropertyProvider "go.goms.io/fleet/pkg/propertyprovider/azure"
+	"go.goms.io/fleet/pkg/utils"
+	"go.goms.io/fleet/pkg/utils/labels"
 )
 
 const (
@@ -269,13 +275,15 @@ func TestClusterRequirementMatches(t *testing.T) {
 		{
 			name: "invalid label selector",
 			clusterRequirement: &clusterRequirement{
-				LabelSelector: &metav1.LabelSelector{
-					MatchExpressions: []metav1.LabelSelectorRequirement{
-						{
-							Key:      regionLabelName,
-							Operator: metav1.LabelSelectorOperator("invalid"),
-							Values: []string{
-								regionLabelValue1,
+				ClusterSelectorTerm: placementv1beta1.ClusterSelectorTerm{
+					LabelSelector: &metav1.LabelSelector{
+						MatchExpressions: []metav1.LabelSelectorRequirement{
+							{
+								Key:      regionLabelName,
+								Operator: metav1.LabelSelectorOperator("invalid"),
+								Values: []string{
+									regionLabelValue1,
+								},
 							},
 						},
 					},
@@ -287,9 +295,11 @@ func TestClusterRequirementMatches(t *testing.T) {
 		{
 			name: "label selector mismatches",
 			clusterRequirement: &clusterRequirement{
-				LabelSelector: &metav1.LabelSelector{
-					MatchLabels: map[string]string{
-						envLabelName: envLabelValue2,
+				ClusterSelectorTerm: placementv1beta1.ClusterSelectorTerm{
+					LabelSelector: &metav1.LabelSelector{
+						MatchLabels: map[string]string{
+							envLabelName: envLabelValue2,
+						},
 					},
 				},
 			},
@@ -299,9 +309,11 @@ func TestClusterRequirementMatches(t *testing.T) {
 		{
 			name: "label selector matches, no property selector",
 			clusterRequirement: &clusterRequirement{
-				LabelSelector: &metav1.LabelSelector{
-					MatchLabels: map[string]string{
-						envLabelName: envLabelValue1,
+				ClusterSelectorTerm: placementv1beta1.ClusterSelectorTerm{
+					LabelSelector: &metav1.LabelSelector{
+						MatchLabels: map[string]string{
+							envLabelName: envLabelValue1,
+						},
 					},
 				},
 			},
@@ -311,13 +323,15 @@ func TestClusterRequirementMatches(t *testing.T) {
 		{
 			name: "label selector matches, no expressions in the property selector",
 			clusterRequirement: &clusterRequirement{
-				LabelSelector: &metav1.LabelSelector{
-					MatchLabels: map[string]string{
-						envLabelName: envLabelValue1,
+				ClusterSelectorTerm: placementv1beta1.ClusterSelectorTerm{
+					LabelSelector: &metav1.LabelSelector{
+						MatchLabels: map[string]string{
+							envLabelName: envLabelValue1,
+						},
 					},
-				},
-				PropertySelector: &placementv1beta1.PropertySelector{
-					MatchExpressions: []placementv1beta1.PropertySelectorRequirement{},
+					PropertySelector: &placementv1beta1.PropertySelector{
+						MatchExpressions: []placementv1beta1.PropertySelectorRequirement{},
+					},
 				},
 			},
 			cluster: cluster,
@@ -326,13 +340,15 @@ func TestClusterRequirementMatches(t *testing.T) {
 		{
 			name: "invalid resource property name",
 			clusterRequirement: &clusterRequirement{
-				PropertySelector: &placementv1beta1.PropertySelector{
-					MatchExpressions: []placementv1beta1.PropertySelectorRequirement{
-						{
-							Name:     "resources.kubernetes-fleet.io/cpu",
-							Operator: placementv1beta1.PropertySelectorEqualTo,
-							Values: []string{
-								"2",
+				ClusterSelectorTerm: placementv1beta1.ClusterSelectorTerm{
+					PropertySelector: &placementv1beta1.PropertySelector{
+						MatchExpressions: []placementv1beta1.PropertySelectorRequirement{
+							{
+								Name:     "resources.kubernetes-fleet.io/cpu",
+								Operator: placementv1beta1.PropertySelectorEqualTo,
+								Values: []string{
+									"2",
+								},
 							},
 						},
 					},
@@ -344,13 +360,15 @@ func TestClusterRequirementMatches(t *testing.T) {
 		{
 			name: "property not found",
 			clusterRequirement: &clusterRequirement{
-				PropertySelector: &placementv1beta1.PropertySelector{
-					MatchExpressions: []placementv1beta1.PropertySelectorRequirement{
-						{
-							Name:     nonExistentNonResourcePropertyName,
-							Operator: placementv1beta1.PropertySelectorEqualTo,
-							Values: []string{
-								"0",
+				ClusterSelectorTerm: placementv1beta1.ClusterSelectorTerm{
+					PropertySelector: &placementv1beta1.PropertySelector{
+						MatchExpressions: []placementv1beta1.PropertySelectorRequirement{
+							{
+								Name:     nonExistentNonResourcePropertyName,
+								Operator: placementv1beta1.PropertySelectorEqualTo,
+								Values: []string{
+									"0",
+								},
 							},
 						},
 					},
@@ -361,14 +379,16 @@ func TestClusterRequirementMatches(t *testing.T) {
 		{
 			name: "multiple value options",
 			clusterRequirement: &clusterRequirement{
-				PropertySelector: &placementv1beta1.PropertySelector{
-					MatchExpressions: []placementv1beta1.PropertySelectorRequirement{
-						{
-							Name:     propertyprovider.NodeCountProperty,
-							Operator: placementv1beta1.PropertySelectorEqualTo,
-							Values: []string{
-								"1",
-								"2",
+				ClusterSelectorTerm: placementv1beta1.ClusterSelectorTerm{
+					PropertySelector: &placementv1beta1.PropertySelector{
+						MatchExpressions: []placementv1beta1.PropertySelectorRequirement{
+							{
+								Name:     propertyprovider.NodeCountProperty,
+								Operator: placementv1beta1.PropertySelectorEqualTo,
+								Values: []string{
+									"1",
+									"2",
+								},
 							},
 						},
 					},
@@ -380,13 +400,15 @@ func TestClusterRequirementMatches(t *testing.T) {
 		{
 			name: "invalid property value",
 			clusterRequirement: &clusterRequirement{
-				PropertySelector: &placementv1beta1.PropertySelector{
-					MatchExpressions: []placementv1beta1.PropertySelectorRequirement{
-						{
-							Name:     invalidNonResourcePropertyName,
-							Operator: placementv1beta1.PropertySelectorEqualTo,
-							Values: []string{
-								"1",
+				ClusterSelectorTerm: placementv1beta1.ClusterSelectorTerm{
+					PropertySelector: &placementv1beta1.PropertySelector{
+						MatchExpressions: []placementv1beta1.PropertySelectorRequirement{
+							{
+								Name:     invalidNonResourcePropertyName,
+								Operator: placementv1beta1.PropertySelectorEqualTo,
+								Values: []string{
+									"1",
+								},
 							},
 						},
 					},
@@ -398,13 +420,15 @@ func TestClusterRequirementMatches(t *testing.T) {
 		{
 			name: "invalid value option",
 			clusterRequirement: &clusterRequirement{
-				PropertySelector: &placementv1beta1.PropertySelector{
-					MatchExpressions: []placementv1beta1.PropertySelectorRequirement{
-						{
-							Name:     propertyprovider.NodeCountProperty,
-							Operator: placementv1beta1.PropertySelectorEqualTo,
-							Values: []string{
-								"invalid",
+				ClusterSelectorTerm: placementv1beta1.ClusterSelectorTerm{
+					PropertySelector: &placementv1beta1.PropertySelector{
+						MatchExpressions: []placementv1beta1.PropertySelectorRequirement{
+							{
+								Name:     propertyprovider.NodeCountProperty,
+								Operator: placementv1beta1.PropertySelectorEqualTo,
+								Values: []string{
+									"invalid",
+								},
 							},
 						},
 					},
@@ -416,13 +440,15 @@ func TestClusterRequirementMatches(t *testing.T) {
 		{
 			name: "invalid operator",
 			clusterRequirement: &clusterRequirement{
-				PropertySelector: &placementv1beta1.PropertySelector{
-					MatchExpressions: []placementv1beta1.PropertySelectorRequirement{
-						{
-							Name:     propertyprovider.NodeCountProperty,
-							Operator: "invalid",
-							Values: []string{
-								"1",
+				ClusterSelectorTerm: placementv1beta1.ClusterSelectorTerm{
+					PropertySelector: &placementv1beta1.PropertySelector{
+						MatchExpressions: []placementv1beta1.PropertySelectorRequirement{
+							{
+								Name:     propertyprovider.NodeCountProperty,
+								Operator: "invalid",
+								Values: []string{
+									"1",
+								},
 							},
 						},
 					},
@@ -434,13 +460,15 @@ func TestClusterRequirementMatches(t *testing.T) {
 		{
 			name: "op =, matched",
 			clusterRequirement: &clusterRequirement{
-				PropertySelector: &placementv1beta1.PropertySelector{
-					MatchExpressions: []placementv1beta1.PropertySelectorRequirement{
-						{
-							Name:     propertyprovider.NodeCountProperty,
-							Operator: placementv1beta1.PropertySelectorEqualTo,
-							Values: []string{
-								"4",
+				ClusterSelectorTerm: placementv1beta1.ClusterSelectorTerm{
+					PropertySelector: &placementv1beta1.PropertySelector{
+						MatchExpressions: []placementv1beta1.PropertySelectorRequirement{
+							{
+								Name:     propertyprovider.NodeCountProperty,
+								Operator: placementv1beta1.PropertySelectorEqualTo,
+								Values: []string{
+									"4",
+								},
 							},
 						},
 					},
@@ -452,13 +480,15 @@ func TestClusterRequirementMatches(t *testing.T) {
 		{
 			name: "op =, not matched",
 			clusterRequirement: &clusterRequirement{
-				PropertySelector: &placementv1beta1.PropertySelector{
-					MatchExpressions: []placementv1beta1.PropertySelectorRequirement{
-						{
-							Name:     propertyprovider.NodeCountProperty,
-							Operator: placementv1beta1.PropertySelectorEqualTo,
-							Values: []string{
-								"8",
+				ClusterSelectorTerm: placementv1beta1.ClusterSelectorTerm{
+					PropertySelector: &placementv1beta1.PropertySelector{
+						MatchExpressions: []placementv1beta1.PropertySelectorRequirement{
+							{
+								Name:     propertyprovider.NodeCountProperty,
+								Operator: placementv1beta1.PropertySelectorEqualTo,
+								Values: []string{
+									"8",
+								},
 							},
 						},
 					},
@@ -469,13 +499,15 @@ func TestClusterRequirementMatches(t *testing.T) {
 		{
 			name: "op !=, matched",
 			clusterRequirement: &clusterRequirement{
-				PropertySelector: &placementv1beta1.PropertySelector{
-					MatchExpressions: []placementv1beta1.PropertySelectorRequirement{
-						{
-							Name:     propertyprovider.TotalCPUCapacityProperty,
-							Operator: placementv1beta1.PropertySelectorNotEqualTo,
-							Values: []string{
-								"11",
+				ClusterSelectorTerm: placementv1beta1.ClusterSelectorTerm{
+					PropertySelector: &placementv1beta1.PropertySelector{
+						MatchExpressions: []placementv1beta1.PropertySelectorRequirement{
+							{
+								Name:     propertyprovider.TotalCPUCapacityProperty,
+								Operator: placementv1beta1.PropertySelectorNotEqualTo,
+								Values: []string{
+									"11",
+								},
 							},
 						},
 					},
@@ -487,13 +519,15 @@ func TestClusterRequirementMatches(t *testing.T) {
 		{
 			name: "op !=, not matched",
 			clusterRequirement: &clusterRequirement{
-				PropertySelector: &placementv1beta1.PropertySelector{
-					MatchExpressions: []placementv1beta1.PropertySelectorRequirement{
-						{
-							Name:     propertyprovider.TotalCPUCapacityProperty,
-							Operator: placementv1beta1.PropertySelectorNotEqualTo,
-							Values: []string{
-								"10",
+				ClusterSelectorTerm: placementv1beta1.ClusterSelectorTerm{
+					PropertySelector: &placementv1beta1.PropertySelector{
+						MatchExpressions: []placementv1beta1.PropertySelectorRequirement{
+							{
+								Name:     propertyprovider.TotalCPUCapacityProperty,
+								Operator: placementv1beta1.PropertySelectorNotEqualTo,
+								Values: []string{
+									"10",
+								},
 							},
 						},
 					},
@@ -504,13 +538,15 @@ func TestClusterRequirementMatches(t *testing.T) {
 		{
 			name: "op >, matched",
 			clusterRequirement: &clusterRequirement{
-				PropertySelector: &placementv1beta1.PropertySelector{
-					MatchExpressions: []placementv1beta1.PropertySelectorRequirement{
-						{
-							Name:     propertyprovider.AllocatableMemoryCapacityProperty,
-							Operator: placementv1beta1.PropertySelectorGreaterThan,
-							Values: []string{
-								"30Gi",
+				ClusterSelectorTerm: placementv1beta1.ClusterSelectorTerm{
+					PropertySelector: &placementv1beta1.PropertySelector{
+						MatchExpressions: []placementv1beta1.PropertySelectorRequirement{
+							{
+								Name:     propertyprovider.AllocatableMemoryCapacityProperty,
+								Operator: placementv1beta1.PropertySelectorGreaterThan,
+								Values: []string{
+									"30Gi",
+								},
 							},
 						},
 					},
@@ -522,13 +558,15 @@ func TestClusterRequirementMatches(t *testing.T) {
 		{
 			name: "op >, not matched",
 			clusterRequirement: &clusterRequirement{
-				PropertySelector: &placementv1beta1.PropertySelector{
-					MatchExpressions: []placementv1beta1.PropertySelectorRequirement{
-						{
-							Name:     propertyprovider.AllocatableMemoryCapacityProperty,
-							Operator: placementv1beta1.PropertySelectorGreaterThan,
-							Values: []string{
-								"40Gi",
+				ClusterSelectorTerm: placementv1beta1.ClusterSelectorTerm{
+					PropertySelector: &placementv1beta1.PropertySelector{
+						MatchExpressions: []placementv1beta1.PropertySelectorRequirement{
+							{
+								Name:     propertyprovider.AllocatableMemoryCapacityProperty,
+								Operator: placementv1beta1.PropertySelectorGreaterThan,
+								Values: []string{
+									"40Gi",
+								},
 							},
 						},
 					},
@@ -539,13 +577,15 @@ func TestClusterRequirementMatches(t *testing.T) {
 		{
 			name: "op <, matched",
 			clusterRequirement: &clusterRequirement{
-				PropertySelector: &placementv1beta1.PropertySelector{
-					MatchExpressions: []placementv1beta1.PropertySelectorRequirement{
-						{
-							Name:     propertyprovider.AvailableCPUCapacityProperty,
-							Operator: placementv1beta1.PropertySelectorLessThan,
-							Values: []string{
-								"4",
+				ClusterSelectorTerm: placementv1beta1.ClusterSelectorTerm{
+					PropertySelector: &placementv1beta1.PropertySelector{
+						MatchExpressions: []placementv1beta1.PropertySelectorRequirement{
+							{
+								Name:     propertyprovider.AvailableCPUCapacityProperty,
+								Operator: placementv1beta1.PropertySelectorLessThan,
+								Values: []string{
+									"4",
+								},
 							},
 						},
 					},
@@ -557,13 +597,15 @@ func TestClusterRequirementMatches(t *testing.T) {
 		{
 			name: "op <, not matched",
 			clusterRequirement: &clusterRequirement{
-				PropertySelector: &placementv1beta1.PropertySelector{
-					MatchExpressions: []placementv1beta1.PropertySelectorRequirement{
-						{
-							Name:     propertyprovider.AvailableCPUCapacityProperty,
-							Operator: placementv1beta1.PropertySelectorLessThan,
-							Values: []string{
-								"1",
+				ClusterSelectorTerm: placementv1beta1.ClusterSelectorTerm{
+					PropertySelector: &placementv1beta1.PropertySelector{
+						MatchExpressions: []placementv1beta1.PropertySelectorRequirement{
+							{
+								Name:     propertyprovider.AvailableCPUCapacityProperty,
+								Operator: placementv1beta1.PropertySelectorLessThan,
+								Values: []string{
+									"1",
+								},
 							},
 						},
 					},
@@ -574,13 +616,15 @@ func TestClusterRequirementMatches(t *testing.T) {
 		{
 			name: "op >=, matched",
 			clusterRequirement: &clusterRequirement{
-				PropertySelector: &placementv1beta1.PropertySelector{
-					MatchExpressions: []placementv1beta1.PropertySelectorRequirement{
-						{
-							Name:     propertyprovider.TotalMemoryCapacityProperty,
-							Operator: placementv1beta1.PropertySelectorGreaterThanOrEqualTo,
-							Values: []string{
-								"40Gi",
+				ClusterSelectorTerm: placementv1beta1.ClusterSelectorTerm{
+					PropertySelector: &placementv1beta1.PropertySelector{
+						MatchExpressions: []placementv1beta1.PropertySelectorRequirement{
+							{
+								Name:     propertyprovider.TotalMemoryCapacityProperty,
+								Operator: placementv1beta1.PropertySelectorGreaterThanOrEqualTo,
+								Values: []string{
+									"40Gi",
+								},
 							},
 						},
 					},
@@ -592,13 +636,15 @@ func TestClusterRequirementMatches(t *testing.T) {
 		{
 			name: "op >=, not matched",
 			clusterRequirement: &clusterRequirement{
-				PropertySelector: &placementv1beta1.PropertySelector{
-					MatchExpressions: []placementv1beta1.PropertySelectorRequirement{
-						{
-							Name:     propertyprovider.TotalMemoryCapacityProperty,
-							Operator: placementv1beta1.PropertySelectorGreaterThanOrEqualTo,
-							Values: []string{
-								"41Gi",
+				ClusterSelectorTerm: placementv1beta1.ClusterSelectorTerm{
+					PropertySelector: &placementv1beta1.PropertySelector{
+						MatchExpressions: []placementv1beta1.PropertySelectorRequirement{
+							{
+								Name:     propertyprovider.TotalMemoryCapacityProperty,
+								Operator: placementv1beta1.PropertySelectorGreaterThanOrEqualTo,
+								Values: []string{
+									"41Gi",
+								},
 							},
 						},
 					},
@@ -609,13 +655,15 @@ func TestClusterRequirementMatches(t *testing.T) {
 		{
 			name: "op <=, matched",
 			clusterRequirement: &clusterRequirement{
-				PropertySelector: &placementv1beta1.PropertySelector{
-					MatchExpressions: []placementv1beta1.PropertySelectorRequirement{
-						{
-							Name:     propertyprovider.AllocatableCPUCapacityProperty,
-							Operator: placementv1beta1.PropertySelectorLessThanOrEqualTo,
-							Values: []string{
-								"8",
+				ClusterSelectorTerm: placementv1beta1.ClusterSelectorTerm{
+					PropertySelector: &placementv1beta1.PropertySelector{
+						MatchExpressions: []placementv1beta1.PropertySelectorRequirement{
+							{
+								Name:     propertyprovider.AllocatableCPUCapacityProperty,
+								Operator: placementv1beta1.PropertySelectorLessThanOrEqualTo,
+								Values: []string{
+									"8",
+								},
 							},
 						},
 					},
@@ -627,13 +675,15 @@ func TestClusterRequirementMatches(t *testing.T) {
 		{
 			name: "op <=, not matched",
 			clusterRequirement: &clusterRequirement{
-				PropertySelector: &placementv1beta1.PropertySelector{
-					MatchExpressions: []placementv1beta1.PropertySelectorRequirement{
-						{
-							Name:     propertyprovider.AllocatableCPUCapacityProperty,
-							Operator: placementv1beta1.PropertySelectorLessThanOrEqualTo,
-							Values: []string{
-								"7",
+				ClusterSelectorTerm: placementv1beta1.ClusterSelectorTerm{
+					PropertySelector: &placementv1beta1.PropertySelector{
+						MatchExpressions: []placementv1beta1.PropertySelectorRequirement{
+							{
+								Name:     propertyprovider.AllocatableCPUCapacityProperty,
+								Operator: placementv1beta1.PropertySelectorLessThanOrEqualTo,
+								Values: []string{
+									"7",
+								},
 							},
 						},
 					},
@@ -1167,6 +1217,215 @@ func TestInterpolateWeightFor(t *testing.T) {
 
 			if err != nil || weight != tc.want {
 				t.Errorf("interpolateWeightFor() = %d, %v, want %d, nil", weight, err, tc.want)
+			}
+		})
+	}
+}
+
+// TestClusterRequirementMatches_WithPropertyChecker tests the Matches method on clusterRequirement pointers
+// with a property checker.
+func TestClusterRequirementMatches_WithPropertyChecker(t *testing.T) {
+	cluster := &clusterv1beta1.MemberCluster{
+		ObjectMeta: metav1.ObjectMeta{
+			Name: clusterName1,
+			Labels: map[string]string{
+				labels.AzureLocationLabel:       regionLabelValue1,
+				labels.AzureSubscriptionIDLabel: "sub-id-1234",
+			},
+		},
+	}
+
+	validPropertyName := fmt.Sprintf(azurePropertyProvider.CapacityPerSKUPropertyTmpl, "Standard_D2s_v3")
+
+	testCases := []struct {
+		name            string
+		matchExpression []placementv1beta1.PropertySelectorRequirement
+		cluster         *clusterv1beta1.MemberCluster
+		want            bool
+		expectedToFail  bool
+	}{
+		{
+			name: "invalid property name (not handled)",
+			matchExpression: []placementv1beta1.PropertySelectorRequirement{
+				{
+					Name:     "kubernetes.azure.com/vm-sizes/Standard_D2s_v3/count",
+					Operator: placementv1beta1.PropertySelectorEqualTo,
+					Values: []string{
+						"2",
+					},
+				},
+			},
+			cluster: cluster,
+		},
+		{
+			name: "property not found",
+			matchExpression: []placementv1beta1.PropertySelectorRequirement{
+				{
+					Name:     nonExistentNonResourcePropertyName,
+					Operator: placementv1beta1.PropertySelectorGreaterThan,
+					Values: []string{
+						"0",
+					},
+				},
+			},
+			cluster: cluster,
+		},
+		{
+			name: "multiple value options",
+			matchExpression: []placementv1beta1.PropertySelectorRequirement{
+				{
+					Name:     validPropertyName,
+					Operator: placementv1beta1.PropertySelectorGreaterThan,
+					Values: []string{
+						"1",
+						"2",
+					},
+				},
+			},
+			cluster:        cluster,
+			expectedToFail: true,
+		},
+		{
+			name: "invalid value option",
+			matchExpression: []placementv1beta1.PropertySelectorRequirement{
+				{
+					Name:     validPropertyName,
+					Operator: placementv1beta1.PropertySelectorGreaterThanOrEqualTo,
+					Values: []string{
+						"invalid",
+					},
+				},
+			},
+			cluster:        cluster,
+			expectedToFail: true,
+		},
+		{
+			name: "negative value option",
+			matchExpression: []placementv1beta1.PropertySelectorRequirement{
+				{
+					Name:     validPropertyName,
+					Operator: placementv1beta1.PropertySelectorGreaterThanOrEqualTo,
+					Values: []string{
+						"-1",
+					},
+				},
+			},
+			cluster:        cluster,
+			expectedToFail: true,
+		},
+		{
+			name: "non-integer value option",
+			matchExpression: []placementv1beta1.PropertySelectorRequirement{
+				{
+					Name:     validPropertyName,
+					Operator: placementv1beta1.PropertySelectorGreaterThanOrEqualTo,
+					Values: []string{
+						"2.5",
+					},
+				},
+			},
+			cluster:        cluster,
+			expectedToFail: true,
+		},
+		{
+			name: "invalid operator",
+			matchExpression: []placementv1beta1.PropertySelectorRequirement{
+				{
+					Name:     validPropertyName,
+					Operator: placementv1beta1.PropertySelectorEqualTo,
+					Values: []string{
+						"1",
+					},
+				},
+			},
+			cluster:        cluster,
+			expectedToFail: true,
+		},
+		{
+			name: "op >, matched (min limit)",
+			matchExpression: []placementv1beta1.PropertySelectorRequirement{
+				{
+					Name:     validPropertyName,
+					Operator: placementv1beta1.PropertySelectorGreaterThan,
+					Values: []string{
+						"0",
+					},
+				},
+			},
+			cluster: cluster,
+			want:    true,
+		},
+		{
+			name: "op >, not matched",
+			matchExpression: []placementv1beta1.PropertySelectorRequirement{
+				{
+					Name:     fmt.Sprintf(azurePropertyProvider.CapacityPerSKUPropertyTmpl, "Standard_D4s_v3"),
+					Operator: placementv1beta1.PropertySelectorGreaterThan,
+					Values: []string{
+						"8",
+					},
+				},
+			},
+			cluster: cluster,
+		},
+		{
+			name: "op >=, matched (max limit)",
+			matchExpression: []placementv1beta1.PropertySelectorRequirement{
+				{
+					Name:     validPropertyName,
+					Operator: placementv1beta1.PropertySelectorGreaterThanOrEqualTo,
+					Values: []string{
+						"200",
+					},
+				},
+			},
+			cluster: cluster,
+			want:    true,
+		},
+		{
+			name: "op >=, not matched",
+			matchExpression: []placementv1beta1.PropertySelectorRequirement{
+				{
+					Name:     fmt.Sprintf(azurePropertyProvider.CapacityPerSKUPropertyTmpl, "Standard_D4s_v3"),
+					Operator: placementv1beta1.PropertySelectorGreaterThanOrEqualTo,
+					Values: []string{
+						"80",
+					},
+				},
+			},
+			cluster: cluster,
+		},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			// Create mock server.
+			server := utils.CreateMockAttributeBasedVMSizeRecommenderServer(t, http.StatusOK)
+			defer server.Close()
+
+			client, err := compute.NewAttributeBasedVMSizeRecommenderClient(server.URL, http.DefaultClient)
+			if err != nil {
+				t.Fatalf("failed to create VM size recommender client: %v", err)
+			}
+
+			req := clusterRequirement{
+				ClusterSelectorTerm: placementv1beta1.ClusterSelectorTerm{
+					PropertySelector: &placementv1beta1.PropertySelector{
+						MatchExpressions: tc.matchExpression,
+					},
+				},
+				PropertyChecker: azure.NewPropertyChecker(*client),
+			}
+			matches, err := req.Matches(tc.cluster)
+			if tc.expectedToFail {
+				if err == nil {
+					t.Errorf("Matches() (With Property Checker), want error, got nil")
+				}
+				return
+			}
+
+			if err != nil || matches != tc.want {
+				t.Errorf("Matches() (With Property Checker) = %v, %v, want %v, nil", matches, err, tc.want)
 			}
 		})
 	}

@@ -21,6 +21,7 @@ import (
 	"errors"
 	"fmt"
 
+	"go.goms.io/fleet/pkg/propertychecker/azure"
 	"go.goms.io/fleet/pkg/scheduler/framework"
 )
 
@@ -31,6 +32,9 @@ type Plugin struct {
 
 	// The framework handle.
 	handle framework.Handle
+
+	// Optional property checker for SKU validation.
+	propertyChecker *azure.PropertyChecker
 }
 
 var (
@@ -53,6 +57,9 @@ var (
 type clusterAffinityPluginOptions struct {
 	// The name of the plugin.
 	name string
+
+	// Optional property checker for SKU validation.
+	propertyChecker *azure.PropertyChecker
 }
 
 type Option func(*clusterAffinityPluginOptions)
@@ -68,6 +75,14 @@ func WithName(name string) Option {
 	}
 }
 
+// WithPropertyChecker sets the property checker for property validation.
+// This enables specific cluster requirement validation.
+func WithPropertyChecker(checker *azure.PropertyChecker) Option {
+	return func(o *clusterAffinityPluginOptions) {
+		o.propertyChecker = checker
+	}
+}
+
 // New returns a new Plugin.
 func New(opts ...Option) Plugin {
 	options := defaultPluginOptions
@@ -76,7 +91,8 @@ func New(opts ...Option) Plugin {
 	}
 
 	return Plugin{
-		name: options.name,
+		name:            options.name,
+		propertyChecker: options.propertyChecker,
 	}
 }
 

@@ -19,11 +19,16 @@ package utils
 import (
 	"errors"
 	"fmt"
+	"io"
+	"net/http"
+	"net/http/httptest"
 	"os"
 	"strings"
+	"testing"
 
 	"github.com/google/go-cmp/cmp/cmpopts"
 	"github.com/onsi/gomega/format"
+	"google.golang.org/protobuf/encoding/protojson"
 	v1 "k8s.io/api/core/v1"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	"k8s.io/apimachinery/pkg/api/meta"
@@ -35,6 +40,9 @@ import (
 	"k8s.io/apimachinery/pkg/util/yaml"
 	"k8s.io/client-go/kubernetes/scheme"
 	"k8s.io/client-go/tools/record"
+
+	computev1 "go.goms.io/fleet/apis/protos/azure/compute/v1"
+	"go.goms.io/fleet/pkg/clients/httputil"
 )
 
 var (
@@ -176,4 +184,65 @@ func (m TestMapper) RESTMapping(gk schema.GroupKind, _ ...string) (*meta.RESTMap
 		}, nil
 	}
 	return nil, errors.New("test error: mapping does not exist")
+}
+
+// CreateMockAttributeBasedVMSizeRecommenderServer creates a mock HTTP server for testing AttributeBasedVMSizeRecommenderClient.
+func CreateMockAttributeBasedVMSizeRecommenderServer(t *testing.T, httpStatusCode int) *httptest.Server {
+	// Create mock server
+	return httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		// Verify request method
+		if r.Method != http.MethodPost {
+			t.Errorf("Mock PropertyChecker method () = %s, want POST request", r.Method)
+		}
+
+		// Verify headers
+		if r.Header.Get(httputil.HeaderContentTypeKey) != httputil.HeaderContentTypeJSON {
+			t.Errorf("Mock PropertyChecker content () = %s, want %s", r.Header.Get(httputil.HeaderContentTypeKey), httputil.HeaderContentTypeJSON)
+		}
+		if r.Header.Get(httputil.HeaderAcceptKey) != httputil.HeaderContentTypeJSON {
+			t.Errorf("Mock PropertyChecker accept () = %s, want %s", r.Header.Get(httputil.HeaderAcceptKey), httputil.HeaderContentTypeJSON)
+		}
+
+		// Verify request body using proto json for proper proto3 one of support
+		body, err := io.ReadAll(r.Body)
+		if err != nil {
+			t.Fatalf("failed to read request body: %v", err)
+		}
+		var req computev1.GenerateAttributeBasedRecommendationsRequest
+		unmarshaler := protojson.UnmarshalOptions{
+			DiscardUnknown: true,
+		}
+		if err := unmarshaler.Unmarshal(body, &req); err != nil {
+			t.Fatalf("failed to unmarshal request body: %v", err)
+		}
+
+		// Write mock response with status code from test case
+		if httpStatusCode == 0 {
+			httpStatusCode = http.StatusOK
+		}
+		w.Header().Set(httputil.HeaderContentTypeKey, httputil.HeaderContentTypeJSON)
+		w.WriteHeader(httpStatusCode)
+
+		// Mock the expected response from the Azure API.
+		mockAzureResponse := `{
+					"recommendedVmSizes": {
+						"regularVmSizes": [
+							{
+								"family": "Dsv3",
+								"name": "Standard_D2s_v3",
+								"size": "D2"
+							},
+							{
+								"family": "Standard",
+								"name": "Standard_B1s",
+								"size": "Standard_B1s"
+							}
+						]
+					}
+				}`
+
+		if _, err := w.Write([]byte(mockAzureResponse)); err != nil {
+			t.Fatalf("failed to write mock response: %v", err)
+		}
+	}))
 }

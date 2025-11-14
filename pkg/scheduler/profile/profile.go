@@ -31,12 +31,23 @@ const (
 	defaultProfileName = "DefaultProfile"
 )
 
+type Options struct {
+	ClusterAffinityPlugin *clusteraffinity.Plugin
+}
+
 // NewDefaultProfile creates a default scheduling profile.
 func NewDefaultProfile() *framework.Profile {
+	return NewProfile(Options{})
+}
+
+func NewProfile(opts Options) *framework.Profile {
 	p := framework.NewProfile(defaultProfileName)
 
 	// default plugin list
 	clusterAffinityPlugin := clusteraffinity.New()
+	if opts.ClusterAffinityPlugin != nil {
+		clusterAffinityPlugin = *opts.ClusterAffinityPlugin
+	}
 	clusterEligibilityPlugin := clustereligibility.New()
 	samePlacementAffinityPlugin := sameplacementaffinity.New()
 	topologySpreadConstraintsPlugin := topologyspreadconstraints.New()
