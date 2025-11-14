@@ -182,7 +182,6 @@ func TestMatchPropertiesInPropertyChecker(t *testing.T) {
 			if available != tt.wantAvailable {
 				t.Errorf("MatchPropertiesInPropertyChecker() available = %v, want %v", available, tt.wantAvailable)
 			}
-
 		})
 	}
 }
