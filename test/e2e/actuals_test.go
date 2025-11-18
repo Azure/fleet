@@ -2092,6 +2092,7 @@ func updateRunSucceedConditions(generation int64) []metav1.Condition {
 
 func clusterStagedUpdateRunStatusSucceededActual(
 	updateRunName string,
+	wantResourceIndex string,
 	wantPolicyIndex string,
 	wantClusterCount int,
 	wantApplyStrategy *placementv1beta1.ApplyStrategy,
@@ -2109,6 +2110,7 @@ func clusterStagedUpdateRunStatusSucceededActual(
 
 		wantStatus := placementv1beta1.UpdateRunStatus{
 			PolicySnapshotIndexUsed:    wantPolicyIndex,
+			ResourceSnapshotIndexUsed:  wantResourceIndex,
 			PolicyObservedClusterCount: wantClusterCount,
 			ApplyStrategy:              wantApplyStrategy.DeepCopy(),
 			UpdateStrategySnapshot:     wantStrategySpec,
@@ -2126,7 +2128,7 @@ func clusterStagedUpdateRunStatusSucceededActual(
 
 func stagedUpdateRunStatusSucceededActual(
 	updateRunName, namespace string,
-	wantPolicyIndex string,
+	wantResourceIndex, wantPolicyIndex string,
 	wantClusterCount int,
 	wantApplyStrategy *placementv1beta1.ApplyStrategy,
 	wantStrategySpec *placementv1beta1.UpdateStrategySpec,
@@ -2143,6 +2145,7 @@ func stagedUpdateRunStatusSucceededActual(
 
 		wantStatus := placementv1beta1.UpdateRunStatus{
 			PolicySnapshotIndexUsed:    wantPolicyIndex,
+			ResourceSnapshotIndexUsed:  wantResourceIndex,
 			PolicyObservedClusterCount: wantClusterCount,
 			ApplyStrategy:              wantApplyStrategy.DeepCopy(),
 			UpdateStrategySnapshot:     wantStrategySpec,

@@ -96,7 +96,7 @@ func (r *Reconciler) executeUpdatingStage(
 	updateRunSpec := updateRun.GetUpdateRunSpec()
 	updatingStageStatus := &updateRunStatus.StagesStatus[updatingStageIndex]
 	// The parse error is ignored because the initialization should have caught it.
-	resourceIndex, _ := strconv.Atoi(updateRunSpec.ResourceSnapshotIndex)
+	resourceIndex, _ := strconv.Atoi(updateRunStatus.ResourceSnapshotIndexUsed)
 	resourceSnapshotName := fmt.Sprintf(placementv1beta1.ResourceSnapshotNameFmt, updateRunSpec.PlacementName, resourceIndex)
 	updateRunRef := klog.KObj(updateRun)
 	// Create the map of the toBeUpdatedBindings.

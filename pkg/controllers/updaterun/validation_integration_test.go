@@ -110,7 +110,7 @@ var _ = Describe("UpdateRun validation tests", func() {
 			Expect(k8sClient.Create(ctx, updateRun)).To(Succeed())
 
 			By("Validating the initialization succeeded")
-			initialized := generateSucceededInitializationStatus(crp, updateRun, policySnapshot, updateStrategy, clusterResourceOverride)
+			initialized := generateSucceededInitializationStatus(crp, updateRun, testResourceSnapshotIndex, policySnapshot, updateStrategy, clusterResourceOverride)
 			wantStatus = generateExecutionStartedStatus(updateRun, initialized)
 			validateClusterStagedUpdateRunStatus(ctx, updateRun, wantStatus, "")
 		})
@@ -442,7 +442,7 @@ var _ = Describe("UpdateRun validation tests", func() {
 			Expect(k8sClient.Create(ctx, updateRun)).To(Succeed())
 
 			By("Validating the initialization succeeded")
-			initialized := generateSucceededInitializationStatus(crp, updateRun, policySnapshot, updateStrategy, clusterResourceOverride)
+			initialized := generateSucceededInitializationStatus(crp, updateRun, testResourceSnapshotIndex, policySnapshot, updateStrategy, clusterResourceOverride)
 			wantStatus = generateExecutionStartedStatus(updateRun, initialized)
 			validateClusterStagedUpdateRunStatus(ctx, updateRun, wantStatus, "")
 		})

@@ -186,8 +186,8 @@ type UpdateRunSpec struct {
 
 	// The resource snapshot index of the selected resources to be updated across clusters.
 	// The index represents a group of resource snapshots that includes all the resources a ResourcePlacement selected.
-	// +kubebuilder:validation:Required
 	// +kubebuilder:validation:XValidation:rule="self == oldSelf",message="resourceSnapshotIndex is immutable"
+	// +kubebuilder:validation:Optional
 	ResourceSnapshotIndex string `json:"resourceSnapshotIndex"`
 
 	// The name of the update strategy that specifies the stages and the sequence
@@ -373,6 +373,11 @@ type UpdateRunStatus struct {
 	// If the `ObservedClusterCount` value is updated during the update run, the update run is abandoned.
 	// +kubebuilder:validation:Optional
 	PolicyObservedClusterCount int `json:"policyObservedClusterCount,omitempty"`
+
+	// ResourceSnapshotIndexUsed records the resource snapshot index that the update run is based on.
+	// The index represents the same resource snapshots as specified in the spec field, or the latest.
+	// +kubbebuilder:validation:Optional
+	ResourceSnapshotIndexUsed string `json:"resourceSnapshotIndexUsed,omitempty"`
 
 	// ApplyStrategy is the apply strategy that the stagedUpdateRun is using.
 	// It is the same as the apply strategy in the CRP when the staged update run starts.
