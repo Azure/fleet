@@ -13,9 +13,13 @@ import (
 	"fmt"
 	"io"
 	"net/http"
+	"os"
+	"time"
 
 	"github.com/Azure/azure-sdk-for-go/sdk/azcore/runtime"
+	"github.com/gofrs/uuid"
 	"google.golang.org/protobuf/encoding/protojson"
+	"k8s.io/klog/v2"
 
 	computev1 "go.goms.io/fleet/apis/protos/azure/compute/v1"
 	"go.goms.io/fleet/pkg/clients/httputil"
@@ -23,6 +27,7 @@ import (
 )
 
 const (
+	tenantIDEnvVarName = "AZURE_TENANT_ID"
 	// recommendationsPathTemplate is the URL path template for VM size recommendations API.
 	recommendationsPathTemplate = "/subscriptions/%s/providers/Microsoft.Compute/locations/%s/vmSizeRecommendations/vmAttributeBased/generate"
 )
@@ -30,6 +35,9 @@ const (
 // AttributeBasedVMSizeRecommenderClient accesses Azure Attribute-Based VM Size Recommender API
 // to provide VM size recommendations based on specified attributes.
 type AttributeBasedVMSizeRecommenderClient struct {
+	// tenantID is the ID of the Azure fleet's tenant.
+	// At the moment, Azure fleet is single-tenant, the fleet and all its members must be in the same tenant.
+	tenantID string
 	// baseURL is the base URL of the http(s) requests to the attribute-based VM size recommender service endpoint.
 	baseURL string
 	// httpClient is the HTTP client used for making requests.
@@ -43,6 +51,10 @@ func NewAttributeBasedVMSizeRecommenderClient(
 	serverAddress string,
 	httpClient *http.Client,
 ) (*AttributeBasedVMSizeRecommenderClient, error) {
+	tenantID := os.Getenv(tenantIDEnvVarName)
+	if tenantID == "" {
+		return nil, fmt.Errorf("failed to get tenantID: environment variable %s is not set", tenantIDEnvVarName)
+	}
 	if len(serverAddress) == 0 {
 		return nil, fmt.Errorf("serverAddress cannot be empty")
 	}
@@ -50,6 +62,7 @@ func NewAttributeBasedVMSizeRecommenderClient(
 		return nil, fmt.Errorf("httpClient cannot be nil")
 	}
 	return &AttributeBasedVMSizeRecommenderClient{
+		tenantID:   tenantID,
 		baseURL:    serverAddress,
 		httpClient: httpClient,
 	}, nil
@@ -59,7 +72,7 @@ func NewAttributeBasedVMSizeRecommenderClient(
 func (c *AttributeBasedVMSizeRecommenderClient) GenerateAttributeBasedRecommendations(
 	ctx context.Context,
 	req *computev1.GenerateAttributeBasedRecommendationsRequest,
-) (*computev1.GenerateAttributeBasedRecommendationsResponse, error) {
+) (response *computev1.GenerateAttributeBasedRecommendationsResponse, err error) {
 	if req == nil {
 		return nil, controller.NewUnexpectedBehaviorError(errors.New("request cannot be nil"))
 	}
@@ -94,10 +107,23 @@ func (c *AttributeBasedVMSizeRecommenderClient) GenerateAttributeBasedRecommenda
 	}
 
 	// Set headers
+	clientRequestID := uuid.Must(uuid.NewV4()).String()
 	httpReq.Header.Set(httputil.HeaderContentTypeKey, httputil.HeaderContentTypeJSON)
 	httpReq.Header.Set(httputil.HeaderAcceptKey, httputil.HeaderContentTypeJSON)
+	httpReq.Header.Set(httputil.HeaderAzureSubscriptionTenantIDKey, c.tenantID)
+	httpReq.Header.Set(httputil.HeaderAzureClientRequestIDKey, clientRequestID)
 
 	// Execute the request
+	startTime := time.Now()
+	klog.V(2).InfoS("Generating VM size recommendations", "subscriptionID", req.SubscriptionId, "location", req.Location, "clientRequestID", clientRequestID)
+	defer func() {
+		latency := time.Since(startTime).Milliseconds()
+		if err != nil {
+			klog.ErrorS(err, "Failed to generate VM size recommendations", "subscriptionID", req.SubscriptionId, "location", req.Location, "clientRequestID", clientRequestID, "latency", latency)
+		}
+		klog.V(2).InfoS("Generated VM size recommendations", "subscriptionID", req.SubscriptionId, "location", req.Location, "clientRequestID", clientRequestID, "latency", latency)
+	}()
+
 	resp, err := c.httpClient.Do(httpReq)
 	if err != nil {
 		return nil, fmt.Errorf("failed to execute request: %w", err)
@@ -116,13 +142,13 @@ func (c *AttributeBasedVMSizeRecommenderClient) GenerateAttributeBasedRecommenda
 	}
 
 	// Unmarshal response using protojson for proper proto3 support
-	var response computev1.GenerateAttributeBasedRecommendationsResponse
+	response = &computev1.GenerateAttributeBasedRecommendationsResponse{}
 	unmarshaler := protojson.UnmarshalOptions{
 		DiscardUnknown: true,
 	}
-	if err := unmarshaler.Unmarshal(respBody, &response); err != nil {
+	if err := unmarshaler.Unmarshal(respBody, response); err != nil {
 		return nil, fmt.Errorf("failed to unmarshal response: %w", err)
 	}
 
-	return &response, nil
+	return response, nil
 }
