@@ -14,7 +14,7 @@ See the License for the specific language governing permissions and
 limitations under the License.
 */
 
-// Package clusteraffinity features a scheduler plugin that enforces cluster affinity (if any) defined on a CRP.
+// Package clusteraffinity features a scheduler plugin that enforces cluster affinity (if any) defined on a RP/CRP.
 package clusteraffinity
 
 import (
@@ -24,7 +24,7 @@ import (
 	"github.com/kubefleet-dev/kubefleet/pkg/scheduler/framework"
 )
 
-// Plugin is the scheduler plugin that enforces the cluster affinity (if any) defined on a CRP.
+// Plugin is the scheduler plugin that enforces the cluster affinity (if any) defined on a R/CRP.
 type Plugin struct {
 	// The name of the plugin.
 	name string

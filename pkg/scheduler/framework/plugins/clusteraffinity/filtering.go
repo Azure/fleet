@@ -59,7 +59,9 @@ func (p *Plugin) Filter(
 
 	for idx := range ps.GetPolicySnapshotSpec().Policy.Affinity.ClusterAffinity.RequiredDuringSchedulingIgnoredDuringExecution.ClusterSelectorTerms {
 		t := &ps.GetPolicySnapshotSpec().Policy.Affinity.ClusterAffinity.RequiredDuringSchedulingIgnoredDuringExecution.ClusterSelectorTerms[idx]
-		r := clusterRequirement(*t)
+		r := clusterRequirement{
+			ClusterSelectorTerm: *t,
+		}
 		isMatched, err := r.Matches(cluster)
 		if err != nil {
 			// An error has occurred when matching the cluster against a required affinity term.
