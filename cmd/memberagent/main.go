@@ -177,6 +177,12 @@ func main() {
 			DefaultNamespaces: map[string]cache.Config{
 				mcNamespace: {},
 			},
+			// Strip managed fields from the objects to reduce memory usage.
+			//
+			// Note (chenyu1): the work applier does read the managedFields field,
+			// however, it concerns only objects from the member cluster side, which
+			// are not managed by this cache.
+			DefaultTransform: cache.TransformStripManagedFields(),
 		},
 	}
 
