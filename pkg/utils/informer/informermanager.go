@@ -27,6 +27,7 @@ import (
 	"k8s.io/client-go/dynamic/dynamicinformer"
 	"k8s.io/client-go/tools/cache"
 	"k8s.io/klog/v2"
+	ctrlcache "sigs.k8s.io/controller-runtime/pkg/cache"
 )
 
 // InformerManager manages dynamic shared informer for all resources, include Kubernetes resource and
@@ -130,7 +131,17 @@ func (s *informerManagerImpl) AddDynamicResources(dynResources []APIResourceMeta
 			s.apiResources[newRes.GroupVersionKind] = &newRes
 			// TODO (rzhang): remember the ResourceEventHandlerRegistration and remove it when the resource is deleted
 			// TODO: handle error which only happens if the informer is stopped
-			_, _ = s.informerFactory.ForResource(newRes.GroupVersionResource).Informer().AddEventHandler(handler)
+			informer := s.informerFactory.ForResource(newRes.GroupVersionResource).Informer()
+			// Strip away the ManagedFields info from objects to save memory.
+			//
+			// TO-DO (chenyu1): evaluate if there are other fields, e.g., owner refs, status, that can also be stripped
+			// away to save memory.
+			if err := informer.SetTransform(ctrlcache.TransformStripManagedFields()); err != nil {
+				// The SetTransform func would only fail if the informer has already started. In this case,
+				// no further action is needed.
+				klog.ErrorS(err, "Failed to set transform func for informer", "gvr", newRes.GroupVersionResource)
+			}
+			_, _ = informer.AddEventHandler(handler)
 			klog.InfoS("Added an informer for a new resource", "res", newRes)
 		} else if !dynRes.isPresent {
 			// we just mark it as enabled as we should not add another eventhandler to the informer as it's still

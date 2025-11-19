@@ -31,12 +31,25 @@ const (
 	defaultProfileName = "DefaultProfile"
 )
 
+// Options holds the configuration options for creating a scheduling profile.
+type Options struct {
+	ClusterAffinityPlugin *clusteraffinity.Plugin
+}
+
 // NewDefaultProfile creates a default scheduling profile.
 func NewDefaultProfile() *framework.Profile {
+	return NewProfile(Options{})
+}
+
+// NewProfile creates a scheduling profile with the given options.
+func NewProfile(opts Options) *framework.Profile {
 	p := framework.NewProfile(defaultProfileName)
 
 	// default plugin list
 	clusterAffinityPlugin := clusteraffinity.New()
+	if opts.ClusterAffinityPlugin != nil {
+		clusterAffinityPlugin = *opts.ClusterAffinityPlugin
+	}
 	clusterEligibilityPlugin := clustereligibility.New()
 	samePlacementAffinityPlugin := sameplacementaffinity.New()
 	topologySpreadConstraintsPlugin := topologyspreadconstraints.New()

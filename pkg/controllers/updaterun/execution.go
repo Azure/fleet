@@ -96,7 +96,7 @@ func (r *Reconciler) executeUpdatingStage(
 	updateRunSpec := updateRun.GetUpdateRunSpec()
 	updatingStageStatus := &updateRunStatus.StagesStatus[updatingStageIndex]
 	// The parse error is ignored because the initialization should have caught it.
-	resourceIndex, _ := strconv.Atoi(updateRunSpec.ResourceSnapshotIndex)
+	resourceIndex, _ := strconv.Atoi(updateRunStatus.ResourceSnapshotIndexUsed)
 	resourceSnapshotName := fmt.Sprintf(placementv1beta1.ResourceSnapshotNameFmt, updateRunSpec.PlacementName, resourceIndex)
 	updateRunRef := klog.KObj(updateRun)
 	// Create the map of the toBeUpdatedBindings.
@@ -316,7 +316,7 @@ func (r *Reconciler) checkAfterStageTasksStatus(ctx context.Context, updatingSta
 	afterStageWaitTime := time.Duration(-1)
 	for i, task := range updatingStage.AfterStageTasks {
 		switch task.Type {
-		case placementv1beta1.AfterStageTaskTypeTimedWait:
+		case placementv1beta1.StageTaskTypeTimedWait:
 			waitStartTime := meta.FindStatusCondition(updatingStageStatus.Conditions, string(placementv1beta1.StageUpdatingConditionProgressing)).LastTransitionTime.Time
 			// Check if the wait time has passed.
 			waitTime := time.Until(waitStartTime.Add(task.WaitTime.Duration))
@@ -328,8 +328,8 @@ func (r *Reconciler) checkAfterStageTasksStatus(ctx context.Context, updatingSta
 				markAfterStageWaitTimeElapsed(&updatingStageStatus.AfterStageTaskStatus[i], updateRun.GetGeneration())
 				klog.V(2).InfoS("The after stage wait task has completed", "stage", updatingStage.Name, "updateRun", updateRunRef)
 			}
-		case placementv1beta1.AfterStageTaskTypeApproval:
-			afterStageTaskApproved := condition.IsConditionStatusTrue(meta.FindStatusCondition(updatingStageStatus.AfterStageTaskStatus[i].Conditions, string(placementv1beta1.AfterStageTaskConditionApprovalRequestApproved)), updateRun.GetGeneration())
+		case placementv1beta1.StageTaskTypeApproval:
+			afterStageTaskApproved := condition.IsConditionStatusTrue(meta.FindStatusCondition(updatingStageStatus.AfterStageTaskStatus[i].Conditions, string(placementv1beta1.StageTaskConditionApprovalRequestApproved)), updateRun.GetGeneration())
 			if afterStageTaskApproved {
 				// The afterStageTask has been approved.
 				continue
@@ -668,9 +668,9 @@ func markClusterUpdatingFailed(clusterUpdatingStatus *placementv1beta1.ClusterUp
 }
 
 // markAfterStageRequestCreated marks the Approval after stage task as ApprovalRequestCreated in memory.
-func markAfterStageRequestCreated(afterStageTaskStatus *placementv1beta1.AfterStageTaskStatus, generation int64) {
+func markAfterStageRequestCreated(afterStageTaskStatus *placementv1beta1.StageTaskStatus, generation int64) {
 	meta.SetStatusCondition(&afterStageTaskStatus.Conditions, metav1.Condition{
-		Type:               string(placementv1beta1.AfterStageTaskConditionApprovalRequestCreated),
+		Type:               string(placementv1beta1.StageTaskConditionApprovalRequestCreated),
 		Status:             metav1.ConditionTrue,
 		ObservedGeneration: generation,
 		Reason:             condition.AfterStageTaskApprovalRequestCreatedReason,
@@ -679,9 +679,9 @@ func markAfterStageRequestCreated(afterStageTaskStatus *placementv1beta1.AfterSt
 }
 
 // markAfterStageRequestApproved marks the Approval after stage task as Approved in memory.
-func markAfterStageRequestApproved(afterStageTaskStatus *placementv1beta1.AfterStageTaskStatus, generation int64) {
+func markAfterStageRequestApproved(afterStageTaskStatus *placementv1beta1.StageTaskStatus, generation int64) {
 	meta.SetStatusCondition(&afterStageTaskStatus.Conditions, metav1.Condition{
-		Type:               string(placementv1beta1.AfterStageTaskConditionApprovalRequestApproved),
+		Type:               string(placementv1beta1.StageTaskConditionApprovalRequestApproved),
 		Status:             metav1.ConditionTrue,
 		ObservedGeneration: generation,
 		Reason:             condition.AfterStageTaskApprovalRequestApprovedReason,
@@ -690,9 +690,9 @@ func markAfterStageRequestApproved(afterStageTaskStatus *placementv1beta1.AfterS
 }
 
 // markAfterStageWaitTimeElapsed marks the TimeWait after stage task as TimeElapsed in memory.
-func markAfterStageWaitTimeElapsed(afterStageTaskStatus *placementv1beta1.AfterStageTaskStatus, generation int64) {
+func markAfterStageWaitTimeElapsed(afterStageTaskStatus *placementv1beta1.StageTaskStatus, generation int64) {
 	meta.SetStatusCondition(&afterStageTaskStatus.Conditions, metav1.Condition{
-		Type:               string(placementv1beta1.AfterStageTaskConditionWaitTimeElapsed),
+		Type:               string(placementv1beta1.StageTaskConditionWaitTimeElapsed),
 		Status:             metav1.ConditionTrue,
 		ObservedGeneration: generation,
 		Reason:             condition.AfterStageTaskWaitTimeElapsedReason,

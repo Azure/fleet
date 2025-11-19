@@ -113,7 +113,7 @@ type ClusterResourcePlacement struct {
 
 	// The desired state of ClusterResourcePlacement.
 	// +kubebuilder:validation:Required
-	// +kubebuilder:validation:XValidation:rule="!((has(oldSelf.policy) && !has(self.policy)) || (has(oldSelf.policy) && has(self.policy) && has(self.policy.placementType) && has(oldSelf.policy.placementType) && self.policy.placementType != oldSelf.policy.placementType))",message="placement type is immutable"
+	// +kubebuilder:validation:XValidation:rule="!(has(oldSelf.policy) && !has(self.policy))",message="policy cannot be removed once set"
 	// +kubebuilder:validation:XValidation:rule="!(self.statusReportingScope == 'NamespaceAccessible' && size(self.resourceSelectors.filter(x, x.kind == 'Namespace')) != 1)",message="when statusReportingScope is NamespaceAccessible, exactly one resourceSelector with kind 'Namespace' is required"
 	// +kubebuilder:validation:XValidation:rule="!has(oldSelf.statusReportingScope) || self.statusReportingScope == oldSelf.statusReportingScope",message="statusReportingScope is immutable"
 	Spec PlacementSpec `json:"spec"`
@@ -135,6 +135,7 @@ type PlacementSpec struct {
 	// Policy defines how to select member clusters to place the selected resources.
 	// If unspecified, all the joined member clusters are selected.
 	// +kubebuilder:validation:Optional
+	// +kubebuilder:validation:XValidation:rule="!(self.placementType != oldSelf.placementType)",message="placement type is immutable"
 	Policy *PlacementPolicy `json:"policy,omitempty"`
 
 	// The rollout strategy to use to replace existing placement with new ones.
@@ -1628,6 +1629,7 @@ type ResourcePlacement struct {
 
 	// The desired state of ResourcePlacement.
 	// +kubebuilder:validation:Required
+	// +kubebuilder:validation:XValidation:rule="!(has(oldSelf.policy) && !has(self.policy))",message="policy cannot be removed once set"
 	Spec PlacementSpec `json:"spec"`
 
 	// The observed status of ResourcePlacement.
