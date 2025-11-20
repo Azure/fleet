@@ -61,6 +61,7 @@ func (p *Plugin) Filter(
 		t := &ps.GetPolicySnapshotSpec().Policy.Affinity.ClusterAffinity.RequiredDuringSchedulingIgnoredDuringExecution.ClusterSelectorTerms[idx]
 		r := clusterRequirement{
 			ClusterSelectorTerm: *t,
+			PropertyChecker:     p.PropertyChecker,
 		}
 		isMatched, err := r.Matches(cluster)
 		if err != nil {

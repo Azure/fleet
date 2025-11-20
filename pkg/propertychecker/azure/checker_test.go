@@ -6,22 +6,18 @@ package azure
 
 import (
 	"fmt"
-	"io"
 	"net/http"
-	"net/http/httptest"
 	"strings"
 	"testing"
 
-	"google.golang.org/protobuf/encoding/protojson"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 
 	clusterv1beta1 "go.goms.io/fleet/apis/cluster/v1beta1"
 	placementv1beta1 "go.goms.io/fleet/apis/placement/v1beta1"
-	computev1 "go.goms.io/fleet/apis/protos/azure/compute/v1"
 	"go.goms.io/fleet/pkg/clients/azure/compute"
-	"go.goms.io/fleet/pkg/clients/httputil"
 	"go.goms.io/fleet/pkg/propertyprovider/azure"
 	"go.goms.io/fleet/pkg/utils/labels"
+	testcompute "go.goms.io/fleet/test/utils/azure/compute"
 )
 
 func TestValidateCapacity(t *testing.T) {
@@ -305,6 +301,7 @@ func TestCheckIfMeetSKUCapacityRequirement(t *testing.T) {
 		name           string
 		cluster        *clusterv1beta1.MemberCluster
 		sku            string
+		targetCapacity uint32
 		req            placementv1beta1.PropertySelectorRequirement
 		mockStatusCode int
 		wantAvailable  bool
@@ -315,15 +312,17 @@ func TestCheckIfMeetSKUCapacityRequirement(t *testing.T) {
 			name:           "valid capacity request",
 			cluster:        cluster,
 			sku:            validSKU,
+			targetCapacity: 3,
 			req:            validPropertySelectorRequirement,
 			mockStatusCode: http.StatusOK,
 			wantAvailable:  true,
 			wantError:      false,
 		},
 		{
-			name:    "unavailable SKU request",
-			cluster: cluster,
-			sku:     "Standard_D2s_v4",
+			name:           "unavailable SKU request",
+			cluster:        cluster,
+			sku:            "Standard_D2s_v4",
+			targetCapacity: 1,
 			req: placementv1beta1.PropertySelectorRequirement{
 				Name:     fmt.Sprintf(azure.CapacityPerSKUPropertyTmpl, "Standard_D2s_v4"),
 				Operator: placementv1beta1.PropertySelectorGreaterThanOrEqualTo,
@@ -343,6 +342,7 @@ func TestCheckIfMeetSKUCapacityRequirement(t *testing.T) {
 				},
 			},
 			sku:            validSKU,
+			targetCapacity: 3,
 			req:            validPropertySelectorRequirement,
 			wantError:      true,
 			errorSubstring: "failed to extract Azure location label from cluster : label \"fleet.azure.com/location\" not found in cluster",
@@ -357,6 +357,7 @@ func TestCheckIfMeetSKUCapacityRequirement(t *testing.T) {
 				},
 			},
 			sku:            validSKU,
+			targetCapacity: 3,
 			req:            validPropertySelectorRequirement,
 			wantError:      true,
 			errorSubstring: "failed to extract Azure location label from cluster",
@@ -371,6 +372,7 @@ func TestCheckIfMeetSKUCapacityRequirement(t *testing.T) {
 				},
 			},
 			sku:            validSKU,
+			targetCapacity: 3,
 			req:            validPropertySelectorRequirement,
 			wantError:      true,
 			errorSubstring: "failed to extract Azure subscription ID label from cluster",
@@ -379,28 +381,31 @@ func TestCheckIfMeetSKUCapacityRequirement(t *testing.T) {
 			name:           "Azure API returns error",
 			cluster:        cluster,
 			sku:            validSKU,
+			targetCapacity: 3,
 			req:            validPropertySelectorRequirement,
 			mockStatusCode: http.StatusInternalServerError,
 			wantError:      true,
 			errorSubstring: "failed to generate VM size recommendations from Azure",
 		},
 		{
-			name:    "invalid operator in requirement",
-			cluster: cluster,
-			sku:     validSKU,
+			name:           "invalid operator in requirement",
+			cluster:        cluster,
+			sku:            validSKU,
+			targetCapacity: 2,
 			req: placementv1beta1.PropertySelectorRequirement{
 				Name:     fmt.Sprintf(azure.CapacityPerSKUPropertyTmpl, validSKU),
 				Operator: placementv1beta1.PropertySelectorEqualTo,
-				Values:   []string{"3"},
+				Values:   []string{"2"},
 			},
 			mockStatusCode: http.StatusOK,
 			wantError:      true,
 			errorSubstring: "unsupported operator \"Eq\" for SKU capacity property, only GreaterThan (Gt) and GreaterThanOrEqualTo (Ge) are supported",
 		},
 		{
-			name:    "unsupported operator in requirement",
-			cluster: cluster,
-			sku:     validSKU,
+			name:           "unsupported operator in requirement",
+			cluster:        cluster,
+			sku:            validSKU,
+			targetCapacity: 0,
 			req: placementv1beta1.PropertySelectorRequirement{
 				Name:     fmt.Sprintf(azure.CapacityPerSKUPropertyTmpl, validSKU),
 				Operator: placementv1beta1.PropertySelectorGreaterThanOrEqualTo,
@@ -411,9 +416,10 @@ func TestCheckIfMeetSKUCapacityRequirement(t *testing.T) {
 			errorSubstring: "capacity value cannot be zero for operator",
 		},
 		{
-			name:    "cases-insensitive request - unavailable SKU",
-			cluster: cluster,
-			sku:     "STANDARD_D2S_V3",
+			name:           "cases-insensitive request - available SKU",
+			cluster:        cluster,
+			sku:            "STANDARD_D2S_V3",
+			targetCapacity: 1,
 			req: placementv1beta1.PropertySelectorRequirement{
 				Name:     fmt.Sprintf(azure.CapacityPerSKUPropertyTmpl, "STANDARD_D2S_V3"),
 				Operator: placementv1beta1.PropertySelectorGreaterThanOrEqualTo,
@@ -426,11 +432,14 @@ func TestCheckIfMeetSKUCapacityRequirement(t *testing.T) {
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			// Create mock server
-			server := createMockAttributeBasedVMSizeRecommenderServer(t, tt.mockStatusCode)
+			// Set tenant ID environment variable to create client.
+			testTenantId := "test-tenant-id"
+			t.Setenv("AZURE_TENANT_ID", testTenantId)
+			// Create mock server.
+			mockRequest := testcompute.GenerateAttributeBasedVMSizeRecommenderRequest(tt.cluster.Labels[labels.AzureSubscriptionIDLabel], tt.cluster.Labels[labels.AzureLocationLabel], tt.sku, tt.targetCapacity)
+			server := testcompute.CreateMockAttributeBasedVMSizeRecommenderServer(t, mockRequest, testTenantId, testcompute.MockAttributeBasedVMSizeRecommenderResponse, tt.mockStatusCode)
 			defer server.Close()
 
-			t.Setenv("AZURE_TENANT_ID", "test-tenant-id")
 			client, err := compute.NewAttributeBasedVMSizeRecommenderClient(server.URL, http.DefaultClient)
 			if err != nil {
 				t.Fatalf("failed to create VM size recommender client: %v", err)
@@ -442,12 +451,11 @@ func TestCheckIfMeetSKUCapacityRequirement(t *testing.T) {
 				if err == nil {
 					t.Fatalf("CheckIfMeetSKUCapacityRequirement error () = nil, want error")
 				} else if tt.errorSubstring != "" && !strings.Contains(err.Error(), tt.errorSubstring) {
-					t.Errorf("CheckIfMeetSKUCapacityRequirement error () = %s, want %v", err, tt.errorSubstring)
+					t.Fatalf("CheckIfMeetSKUCapacityRequirement error () = %s, want %v", err, tt.errorSubstring)
 				}
-				return
 			}
 
-			if err != nil {
+			if !tt.wantError && err != nil {
 				t.Fatalf("CheckIfMeetSKUCapacityRequirement error () = %v, want nil", err)
 			}
 
@@ -456,65 +464,4 @@ func TestCheckIfMeetSKUCapacityRequirement(t *testing.T) {
 			}
 		})
 	}
-}
-
-// createMockAttributeBasedVMSizeRecommenderServer creates a mock HTTP server for testing AttributeBasedVMSizeRecommenderClient.
-func createMockAttributeBasedVMSizeRecommenderServer(t *testing.T, httpStatusCode int) *httptest.Server {
-	// Create mock server
-	return httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		// Verify request method
-		if r.Method != http.MethodPost {
-			t.Errorf("Mock PropertyChecker method () = %s, want POST request", r.Method)
-		}
-
-		// Verify headers
-		if r.Header.Get(httputil.HeaderContentTypeKey) != httputil.HeaderContentTypeJSON {
-			t.Errorf("Mock PropertyChecker content () = %s, want %s", r.Header.Get(httputil.HeaderContentTypeKey), httputil.HeaderContentTypeJSON)
-		}
-		if r.Header.Get(httputil.HeaderAcceptKey) != httputil.HeaderContentTypeJSON {
-			t.Errorf("Mock PropertyChecker accept () = %s, want %s", r.Header.Get(httputil.HeaderAcceptKey), httputil.HeaderContentTypeJSON)
-		}
-
-		// Verify request body using proto json for proper proto3 one of support
-		body, err := io.ReadAll(r.Body)
-		if err != nil {
-			t.Fatalf("failed to read request body: %v", err)
-		}
-		var req computev1.GenerateAttributeBasedRecommendationsRequest
-		unmarshaler := protojson.UnmarshalOptions{
-			DiscardUnknown: true,
-		}
-		if err := unmarshaler.Unmarshal(body, &req); err != nil {
-			t.Fatalf("failed to unmarshal request body: %v", err)
-		}
-
-		// Write mock response with status code from test case
-		if httpStatusCode == 0 {
-			httpStatusCode = http.StatusOK
-		}
-		w.Header().Set(httputil.HeaderContentTypeKey, httputil.HeaderContentTypeJSON)
-		w.WriteHeader(httpStatusCode)
-
-		// Mock the expected response from the Azure API.
-		mockAzureResponse := `{
-					"recommendedVmSizes": {
-						"regularVmSizes": [
-							{
-								"family": "Dsv3",
-								"name": "Standard_D2s_v3",
-								"size": "D2"
-							},
-							{
-								"family": "Standard",
-								"name": "Standard_B1s",
-								"size": "Standard_B1s"
-							}
-						]
-					}
-				}`
-
-		if _, err := w.Write([]byte(mockAzureResponse)); err != nil {
-			t.Fatalf("failed to write mock response: %v", err)
-		}
-	}))
 }
