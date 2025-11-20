@@ -1,4 +1,0 @@
-{{ $files := .Files }}
-{{ if .Values.enableV1Alpha1APIs }}
-    {{ $files.Get "crdbases/multicluster.x-k8s.io_appliedworks.yaml" }}
-{{ end }}
