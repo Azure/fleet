@@ -21,16 +21,29 @@ import (
 	computev1 "go.goms.io/fleet/apis/protos/azure/compute/v1"
 )
 
+const (
+	testTenantID = "test-tenant-id"
+)
+
 func TestNewAttributeBasedVMSizeRecommenderClient(t *testing.T) {
 	tests := []struct {
 		name          string
+		tenantID      string
 		serverAddress string
 		httpClient    *http.Client
 		wantClient    *AttributeBasedVMSizeRecommenderClient
 		wantErr       bool
 	}{
 		{
+			name:          "with missing tenant ID environment variable",
+			serverAddress: "https://example.com",
+			httpClient:    http.DefaultClient,
+			wantClient:    nil,
+			wantErr:       true,
+		},
+		{
 			name:          "with empty server address",
+			tenantID:      testTenantID,
 			serverAddress: "",
 			httpClient:    http.DefaultClient,
 			wantClient:    nil,
@@ -38,16 +51,19 @@ func TestNewAttributeBasedVMSizeRecommenderClient(t *testing.T) {
 		},
 		{
 			name:          "with nil HTTP client",
+			tenantID:      testTenantID,
 			serverAddress: "http://localhost:8080",
 			httpClient:    nil,
 			wantClient:    nil,
 			wantErr:       true,
 		},
 		{
-			name:          "with both server address and HTTP client",
+			name:          "with all fields properly set",
+			tenantID:      testTenantID,
 			serverAddress: "https://example.com",
 			httpClient:    http.DefaultClient,
 			wantClient: &AttributeBasedVMSizeRecommenderClient{
+				tenantID:   testTenantID,
 				baseURL:    "https://example.com",
 				httpClient: http.DefaultClient,
 			},
@@ -57,6 +73,7 @@ func TestNewAttributeBasedVMSizeRecommenderClient(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
+			t.Setenv(tenantIDEnvVarName, tt.tenantID)
 			got, gotErr := NewAttributeBasedVMSizeRecommenderClient(tt.serverAddress, tt.httpClient)
 			if (gotErr != nil) != tt.wantErr {
 				t.Errorf("NewAttributeBasedVMSizeRecommenderClient() error = %v, wantErr %v", gotErr, tt.wantErr)
@@ -204,29 +221,38 @@ func TestClient_GenerateAttributeBasedRecommendations(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			// Create mock server
+			// Set tenant ID environment variable to create client.
+			t.Setenv(tenantIDEnvVarName, testTenantID)
+			// Create mock server.
 			server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-				// Verify request method
+				// Verify request method.
 				if r.Method != http.MethodPost {
 					t.Errorf("got %s, want POST request", r.Method)
 				}
 
-				// Verify headers
+				// Verify headers.
 				if r.Header.Get("Content-Type") != "application/json" {
 					t.Errorf("got %s, want Content-Type: application/json", r.Header.Get("Content-Type"))
 				}
 				if r.Header.Get("Accept") != "application/json" {
 					t.Errorf("got %s, want Accept: application/json", r.Header.Get("Accept"))
 				}
+				if r.Header.Get("Grpc-Metadata-subscriptionTenantID") != testTenantID {
+					t.Errorf("got %s, want Grpc-Metadata-subscriptionTenantID: %s",
+						r.Header.Get("Grpc-Metadata-subscriptionTenantID"), testTenantID)
+				}
+				if r.Header.Get("Grpc-Metadata-clientRequestID") == "" {
+					t.Error("Grpc-Metadata-clientRequestID header is missing")
+				}
 
-				// Verify URL path if request is not nil
+				// Verify URL path if request is not nil.
 				if tt.request != nil && tt.request.SubscriptionId != "" && tt.request.Location != "" {
 					wantPath := fmt.Sprintf(recommendationsPathTemplate, tt.request.SubscriptionId, tt.request.Location)
 					if r.URL.Path != wantPath {
 						t.Errorf("got %s, want path %s", r.URL.Path, wantPath)
 					}
 
-					// Verify request body using protojson for proper proto3 oneof support
+					// Verify request body using protojson for proper proto3 oneof support.
 					body, err := io.ReadAll(r.Body)
 					if err != nil {
 						t.Fatalf("failed to read request body: %v", err)
@@ -243,7 +269,7 @@ func TestClient_GenerateAttributeBasedRecommendations(t *testing.T) {
 					}
 				}
 
-				// Write mock response
+				// Write mock response.
 				w.WriteHeader(tt.mockStatusCode)
 				if _, err := w.Write([]byte(tt.mockResponse)); err != nil {
 					t.Fatalf("failed to write response: %v", err)
@@ -251,16 +277,16 @@ func TestClient_GenerateAttributeBasedRecommendations(t *testing.T) {
 			}))
 			defer server.Close()
 
-			// Create client
+			// Create client.
 			client, err := NewAttributeBasedVMSizeRecommenderClient(server.URL, http.DefaultClient)
 			if err != nil {
 				t.Errorf("failed to create client: %v", err)
 			}
 
-			// Execute request
+			// Execute request.
 			got, err := client.GenerateAttributeBasedRecommendations(context.Background(), tt.request)
 
-			// Check error
+			// Check error.
 			if (err != nil) != tt.wantErr {
 				t.Errorf("GenerateAttributeBasedRecommendations() error = %v, wantErr %v", err, tt.wantErr)
 				return
@@ -271,7 +297,7 @@ func TestClient_GenerateAttributeBasedRecommendations(t *testing.T) {
 				return
 			}
 
-			// Compare response
+			// Compare response.
 			if !proto.Equal(tt.wantResponse, got) {
 				t.Errorf("GenerateAttributeBasedRecommendations() = %+v, want %+v", got, tt.wantResponse)
 			}
