@@ -1112,6 +1112,9 @@ spec:
     - jsonPath: .status.conditions[?(@.type=="Initialized")].status
       name: Initialized
       type: string
+    - jsonPath: .status.conditions[?(@.type=="Progressing")].status
+      name: Progressing
+      type: string
     - jsonPath: .status.conditions[?(@.type=="Succeeded")].status
       name: Succeeded
       type: string
@@ -1151,8 +1154,7 @@ spec:
           metadata:
             type: object
           spec:
-            description: The desired state of ClusterStagedUpdateRun. The spec is
-              immutable.
+            description: The desired state of ClusterStagedUpdateRun.
             properties:
               placementName:
                 description: |-
@@ -1161,11 +1163,17 @@ spec:
                   it's up to the DevOps team to ensure they don't conflict with each other.
                 maxLength: 255
                 type: string
+                x-kubernetes-validations:
+                - message: placementName is immutable
+                  rule: self == oldSelf
               resourceSnapshotIndex:
                 description: |-
                   The resource snapshot index of the selected resources to be updated across clusters.
                   The index represents a group of resource snapshots that includes all the resources a ResourcePlacement selected.
                 type: string
+                x-kubernetes-validations:
+                - message: resourceSnapshotIndex is immutable
+                  rule: self == oldSelf
               stagedRolloutStrategyName:
                 description: |-
                   The name of the update strategy that specifies the stages and the sequence
@@ -1173,14 +1181,44 @@ spec:
                   are computed according to the referenced strategy when the update run starts
                   and recorded in the status field.
                 type: string
+                x-kubernetes-validations:
+                - message: stagedRolloutStrategyName is immutable
+                  rule: self == oldSelf
+              state:
+                default: NotStarted
+                description: |-
+                  State indicates the desired state of the update run.
+                  NotStarted: The update run is initialized but execution has not started (default).
+                  Started: The update run should execute or resume execution.
+                  Stopped: The update run should pause execution.
+                  Abandoned: The update run should be abandoned and terminated.
+                enum:
+                - NotStarted
+                - Started
+                - Stopped
+                - Abandoned
+                type: string
             required:
             - placementName
-            - resourceSnapshotIndex
             - stagedRolloutStrategyName
             type: object
             x-kubernetes-validations:
-            - message: The spec field is immutable
-              rule: self == oldSelf
+            - message: 'invalid state transition: cannot transition from NotStarted
+                to Stopped'
+              rule: '!has(oldSelf.state) || oldSelf.state != ''NotStarted'' || self.state
+                != ''Stopped'''
+            - message: 'invalid state transition: cannot transition from Started to
+                NotStarted'
+              rule: '!has(oldSelf.state) || oldSelf.state != ''Started'' || self.state
+                != ''NotStarted'''
+            - message: 'invalid state transition: cannot transition from Stopped to
+                NotStarted'
+              rule: '!has(oldSelf.state) || oldSelf.state != ''Stopped'' || self.state
+                != ''NotStarted'''
+            - message: 'invalid state transition: Abandoned is a terminal state and
+                cannot transition to any other state'
+              rule: '!has(oldSelf.state) || oldSelf.state != ''Abandoned'' || self.state
+                == ''Abandoned'''
           status:
             description: The observed status of ClusterStagedUpdateRun.
             properties:
@@ -1494,7 +1532,7 @@ spec:
                           type: string
                         conditions:
                           description: |-
-                            Conditions is an array of current observed conditions for the specific type of post-update task.
+                            Conditions is an array of current observed conditions for the specific type of pre or post update task.
                             Known conditions are "ApprovalRequestCreated", "WaitTimeElapsed", and "ApprovalRequestApproved".
                           items:
                             description: Condition contains details for one aspect
@@ -1557,7 +1595,7 @@ spec:
                           - type
                           x-kubernetes-list-type: map
                         type:
-                          description: The type of the post-update task.
+                          description: The type of the pre or post update task.
                           enum:
                           - TimedWait
                           - Approval
@@ -1566,6 +1604,91 @@ spec:
                       - type
                       type: object
                     maxItems: 2
+                    type: array
+                  beforeStageTaskStatus:
+                    description: The status of the pre-update tasks associated with
+                      the current stage.
+                    items:
+                      properties:
+                        approvalRequestName:
+                          description: |-
+                            The name of the approval request object that is created for this stage.
+                            Only valid if the AfterStageTaskType is Approval.
+                          type: string
+                        conditions:
+                          description: |-
+                            Conditions is an array of current observed conditions for the specific type of pre or post update task.
+                            Known conditions are "ApprovalRequestCreated", "WaitTimeElapsed", and "ApprovalRequestApproved".
+                          items:
+                            description: Condition contains details for one aspect
+                              of the current state of this API Resource.
+                            properties:
+                              lastTransitionTime:
+                                description: |-
+                                  lastTransitionTime is the last time the condition transitioned from one status to another.
+                                  This should be when the underlying condition changed.  If that is not known, then using the time when the API field changed is acceptable.
+                                format: date-time
+                                type: string
+                              message:
+                                description: |-
+                                  message is a human readable message indicating details about the transition.
+                                  This may be an empty string.
+                                maxLength: 32768
+                                type: string
+                              observedGeneration:
+                                description: |-
+                                  observedGeneration represents the .metadata.generation that the condition was set based upon.
+                                  For instance, if .metadata.generation is currently 12, but the .status.conditions[x].observedGeneration is 9, the condition is out of date
+                                  with respect to the current state of the instance.
+                                format: int64
+                                minimum: 0
+                                type: integer
+                              reason:
+                                description: |-
+                                  reason contains a programmatic identifier indicating the reason for the condition's last transition.
+                                  Producers of specific condition types may define expected values and meanings for this field,
+                                  and whether the values are considered a guaranteed API.
+                                  The value should be a CamelCase string.
+                                  This field may not be empty.
+                                maxLength: 1024
+                                minLength: 1
+                                pattern: ^[A-Za-z]([A-Za-z0-9_,:]*[A-Za-z0-9_])?$
+                                type: string
+                              status:
+                                description: status of the condition, one of True,
+                                  False, Unknown.
+                                enum:
+                                - "True"
+                                - "False"
+                                - Unknown
+                                type: string
+                              type:
+                                description: type of condition in CamelCase or in
+                                  foo.example.com/CamelCase.
+                                maxLength: 316
+                                pattern: ^([a-z0-9]([-a-z0-9]*[a-z0-9])?(\.[a-z0-9]([-a-z0-9]*[a-z0-9])?)*/)?(([A-Za-z0-9][-A-Za-z0-9_.]*)?[A-Za-z0-9])$
+                                type: string
+                            required:
+                            - lastTransitionTime
+                            - message
+                            - reason
+                            - status
+                            - type
+                            type: object
+                          type: array
+                          x-kubernetes-list-map-keys:
+                          - type
+                          x-kubernetes-list-type: map
+                        type:
+                          description: The type of the pre or post update task.
+                          enum:
+                          - TimedWait
+                          - Approval
+                          type: string
+                      required:
+                      - type
+                      type: object
+                    maxItems: 1
                     type: array
                   clusters:
                     description: The list of each cluster's updating status in this
@@ -1771,6 +1894,11 @@ spec:
                   All clusters involved in the update run are selected from the list of clusters scheduled by the CRP according
                   to the current policy.
                 type: string
+              resourceSnapshotIndexUsed:
+                description: |-
+                  ResourceSnapshotIndexUsed records the resource snapshot index that the update run is based on.
+                  The index represents the same resource snapshots as specified in the spec field, or the latest.
+                type: string
               stagedUpdateStrategySnapshot:
                 description: |-
                   UpdateStrategySnapshot is the snapshot of the UpdateStrategy used for the update run.
@@ -1793,12 +1921,13 @@ spec:
                             The collection of tasks that each stage needs to complete successfully before moving to the next stage.
                             Each task is executed in parallel and there cannot be more than one task of the same type.
                           items:
-                            description: AfterStageTask is the collection of post-stage
-                              tasks that ALL need to be completed before moving to
-                              the next stage.
+                            description: StageTask is the pre or post stage task that
+                              needs to be completed before starting or moving to the
+                              next stage.
                             properties:
                               type:
-                                description: The type of the after-stage task.
+                                description: The type of the before or after stage
+                                  task.
                                 enum:
                                 - TimedWait
                                 - Approval
@@ -1821,6 +1950,39 @@ spec:
                           - message: AfterStageTaskType is TimedWait, waitTime is
                               required
                             rule: '!self.exists(e, e.type == ''TimedWait'' && !has(e.waitTime))'
+                        beforeStageTasks:
+                          description: |-
+                            The collection of tasks that needs to completed successfully by each stage before starting the stage.
+                            Each task is executed in parallel and there cannot be more than one task of the same type.
+                          items:
+                            description: StageTask is the pre or post stage task that
+                              needs to be completed before starting or moving to the
+                              next stage.
+                            properties:
+                              type:
+                                description: The type of the before or after stage
+                                  task.
+                                enum:
+                                - TimedWait
+                                - Approval
+                                type: string
+                              waitTime:
+                                description: The time to wait after all the clusters
+                                  in the current stage complete the update before
+                                  moving to the next stage.
+                                pattern: ^0|([0-9]+(\.[0-9]+)?(s|m|h))+$
+                                type: string
+                            required:
+                            - type
+                            type: object
+                          maxItems: 1
+                          type: array
+                          x-kubernetes-validations:
+                          - message: AfterStageTaskType is Approval, waitTime is not
+                              allowed
+                            rule: '!self.exists(e, e.type == ''Approval'' && has(e.waitTime))'
+                          - message: BeforeStageTaskType cannot be TimedWait
+                            rule: '!self.exists(e, e.type == ''TimedWait'')'
                         labelSelector:
                           description: |-
                             LabelSelector is a label query over all the joined member clusters. Clusters matching the query are selected
@@ -1871,6 +2033,19 @@ spec:
                               type: object
                           type: object
                           x-kubernetes-map-type: atomic
+                        maxConcurrency:
+                          anyOf:
+                          - type: integer
+                          - type: string
+                          default: 1
+                          description: |-
+                            MaxConcurrency specifies the maximum number of clusters that can be updated concurrently within this stage.
+                            Value can be an absolute number (ex: 5) or a percentage of the total clusters in the stage (ex: 50%).
+                            Fractional results are rounded down. A minimum of 1 update is enforced.
+                            If not specified, all clusters in the stage are updated sequentially (effectively maxConcurrency = 1).
+                            Defaults to 1.
+                          pattern: ^((100|[0-9]{1,2})%|[0-9]+)$
+                          x-kubernetes-int-or-string: true
                         name:
                           description: The name of the stage. This MUST be unique
                             within the same StagedUpdateStrategy.
@@ -1913,7 +2088,7 @@ spec:
                             type: string
                           conditions:
                             description: |-
-                              Conditions is an array of current observed conditions for the specific type of post-update task.
+                              Conditions is an array of current observed conditions for the specific type of pre or post update task.
                               Known conditions are "ApprovalRequestCreated", "WaitTimeElapsed", and "ApprovalRequestApproved".
                             items:
                               description: Condition contains details for one aspect
@@ -1976,7 +2151,7 @@ spec:
                             - type
                             x-kubernetes-list-type: map
                           type:
-                            description: The type of the post-update task.
+                            description: The type of the pre or post update task.
                             enum:
                             - TimedWait
                             - Approval
@@ -1985,6 +2160,91 @@ spec:
                         - type
                         type: object
                       maxItems: 2
+                      type: array
+                    beforeStageTaskStatus:
+                      description: The status of the pre-update tasks associated with
+                        the current stage.
+                      items:
+                        properties:
+                          approvalRequestName:
+                            description: |-
+                              The name of the approval request object that is created for this stage.
+                              Only valid if the AfterStageTaskType is Approval.
+                            type: string
+                          conditions:
+                            description: |-
+                              Conditions is an array of current observed conditions for the specific type of pre or post update task.
+                              Known conditions are "ApprovalRequestCreated", "WaitTimeElapsed", and "ApprovalRequestApproved".
+                            items:
+                              description: Condition contains details for one aspect
+                                of the current state of this API Resource.
+                              properties:
+                                lastTransitionTime:
+                                  description: |-
+                                    lastTransitionTime is the last time the condition transitioned from one status to another.
+                                    This should be when the underlying condition changed.  If that is not known, then using the time when the API field changed is acceptable.
+                                  format: date-time
+                                  type: string
+                                message:
+                                  description: |-
+                                    message is a human readable message indicating details about the transition.
+                                    This may be an empty string.
+                                  maxLength: 32768
+                                  type: string
+                                observedGeneration:
+                                  description: |-
+                                    observedGeneration represents the .metadata.generation that the condition was set based upon.
+                                    For instance, if .metadata.generation is currently 12, but the .status.conditions[x].observedGeneration is 9, the condition is out of date
+                                    with respect to the current state of the instance.
+                                  format: int64
+                                  minimum: 0
+                                  type: integer
+                                reason:
+                                  description: |-
+                                    reason contains a programmatic identifier indicating the reason for the condition's last transition.
+                                    Producers of specific condition types may define expected values and meanings for this field,
+                                    and whether the values are considered a guaranteed API.
+                                    The value should be a CamelCase string.
+                                    This field may not be empty.
+                                  maxLength: 1024
+                                  minLength: 1
+                                  pattern: ^[A-Za-z]([A-Za-z0-9_,:]*[A-Za-z0-9_])?$
+                                  type: string
+                                status:
+                                  description: status of the condition, one of True,
+                                    False, Unknown.
+                                  enum:
+                                  - "True"
+                                  - "False"
+                                  - Unknown
+                                  type: string
+                                type:
+                                  description: type of condition in CamelCase or in
+                                    foo.example.com/CamelCase.
+                                  maxLength: 316
+                                  pattern: ^([a-z0-9]([-a-z0-9]*[a-z0-9])?(\.[a-z0-9]([-a-z0-9]*[a-z0-9])?)*/)?(([A-Za-z0-9][-A-Za-z0-9_.]*)?[A-Za-z0-9])$
+                                  type: string
+                              required:
+                              - lastTransitionTime
+                              - message
+                              - reason
+                              - status
+                              - type
+                              type: object
+                            type: array
+                            x-kubernetes-list-map-keys:
+                            - type
+                            x-kubernetes-list-type: map
+                          type:
+                            description: The type of the pre or post update task.
+                            enum:
+                            - TimedWait
+                            - Approval
+                            type: string
+                        required:
+                        - type
+                        type: object
+                      maxItems: 1
                       type: array
                     clusters:
                       description: The list of each cluster's updating status in this

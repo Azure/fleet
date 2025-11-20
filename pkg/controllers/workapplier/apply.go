@@ -32,6 +32,7 @@ import (
 	"k8s.io/apimachinery/pkg/util/strategicpatch"
 	clientgoscheme "k8s.io/client-go/kubernetes/scheme"
 	"k8s.io/klog/v2"
+	"k8s.io/kubectl/pkg/util/deployment"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 
 	fleetv1beta1 "go.goms.io/fleet/apis/placement/v1beta1"
@@ -569,6 +570,10 @@ func sanitizeManifestObject(manifestObj *unstructured.Unstructured) *unstructure
 
 		// Remove the last applied configuration set by kubectl.
 		delete(annotations, corev1.LastAppliedConfigAnnotation)
+
+		// Remove the revision annotation set by deployment controller.
+		delete(annotations, deployment.RevisionAnnotation)
+
 		if len(annotations) == 0 {
 			manifestObjCopy.SetAnnotations(nil)
 		} else {
