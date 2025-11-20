@@ -145,7 +145,7 @@ func TestValidateClusterUpdatingStatus(t *testing.T) {
 			wantLastFinishedStageIndex: -1,
 		},
 		{
-			name:                   "determineUpdatignStage should return error if there are multiple clusters updating in an updating stage",
+			name:                   "determineUpdatignStage should not return error if there are multiple clusters updating in an updating stage",
 			curStage:               0,
 			updatingStageIndex:     -1,
 			lastFinishedStageIndex: -1,
@@ -163,8 +163,8 @@ func TestValidateClusterUpdatingStatus(t *testing.T) {
 					},
 				},
 			},
-			wantErr:                    wrapErr(true, fmt.Errorf("more than one cluster is updating in the stage `test-stage`, clusters: [cluster-1 cluster-2]")),
-			wantUpdatingStageIndex:     -1,
+			wantErr:                    nil,
+			wantUpdatingStageIndex:     0,
 			wantLastFinishedStageIndex: -1,
 		},
 		{

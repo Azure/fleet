@@ -322,7 +322,8 @@ type StageConfig struct {
 	// Defaults to 1.
 	// +kubebuilder:default=1
 	// +kubebuilder:validation:XIntOrString
-	// +kubebuilder:validation:Pattern="^((100|[0-9]{1,2})%|[0-9]+)$"
+	// +kubebuilder:validation:Pattern="^(100|[1-9][0-9]?)%$"
+	// +kubebuilder:validation:XValidation:rule="self == null || type(self) != int || self >= 1",message="maxConcurrency must be at least 1"
 	// +kubebuilder:validation:Optional
 	MaxConcurrency *intstr.IntOrString `json:"maxConcurrency,omitempty"`
 

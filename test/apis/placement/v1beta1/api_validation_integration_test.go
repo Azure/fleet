@@ -1282,6 +1282,86 @@ var _ = Describe("Test placement v1beta1 API validation", func() {
 			Expect(strategy.Spec.Stages[0].BeforeStageTasks[0].WaitTime).Should(BeNil())
 			Expect(hubClient.Delete(ctx, &strategy)).Should(Succeed())
 		})
+
+		It("Should allow creation of ClusterStagedUpdateStrategy with MaxConcurrency as integer between 1-100", func() {
+			maxConcurrency := intstr.FromInt(70)
+			strategy := placementv1beta1.ClusterStagedUpdateStrategy{
+				ObjectMeta: metav1.ObjectMeta{
+					Name: fmt.Sprintf(updateRunStrategyNameTemplate, GinkgoParallelProcess()),
+				},
+				Spec: placementv1beta1.UpdateStrategySpec{
+					Stages: []placementv1beta1.StageConfig{
+						{
+							Name:           fmt.Sprintf(updateRunStageNameTemplate, GinkgoParallelProcess(), 1),
+							MaxConcurrency: &maxConcurrency,
+						},
+					},
+				},
+			}
+			Expect(hubClient.Create(ctx, &strategy)).Should(Succeed())
+			Expect(*strategy.Spec.Stages[0].MaxConcurrency).Should(Equal(maxConcurrency))
+			Expect(hubClient.Delete(ctx, &strategy)).Should(Succeed())
+		})
+
+		It("Should allow creation of ClusterStagedUpdateStrategy with MaxConcurrency as integer greater than 100", func() {
+			maxConcurrency := intstr.FromInt(150)
+			strategy := placementv1beta1.ClusterStagedUpdateStrategy{
+				ObjectMeta: metav1.ObjectMeta{
+					Name: fmt.Sprintf(updateRunStrategyNameTemplate, GinkgoParallelProcess()),
+				},
+				Spec: placementv1beta1.UpdateStrategySpec{
+					Stages: []placementv1beta1.StageConfig{
+						{
+							Name:           fmt.Sprintf(updateRunStageNameTemplate, GinkgoParallelProcess(), 1),
+							MaxConcurrency: &maxConcurrency,
+						},
+					},
+				},
+			}
+			Expect(hubClient.Create(ctx, &strategy)).Should(Succeed())
+			Expect(*strategy.Spec.Stages[0].MaxConcurrency).Should(Equal(maxConcurrency))
+			Expect(hubClient.Delete(ctx, &strategy)).Should(Succeed())
+		})
+
+		It("Should allow creation of ClusterStagedUpdateStrategy with MaxConcurrency as 1%", func() {
+			maxConcurrency := intstr.FromString("1%")
+			strategy := placementv1beta1.ClusterStagedUpdateStrategy{
+				ObjectMeta: metav1.ObjectMeta{
+					Name: fmt.Sprintf(updateRunStrategyNameTemplate, GinkgoParallelProcess()),
+				},
+				Spec: placementv1beta1.UpdateStrategySpec{
+					Stages: []placementv1beta1.StageConfig{
+						{
+							Name:           fmt.Sprintf(updateRunStageNameTemplate, GinkgoParallelProcess(), 1),
+							MaxConcurrency: &maxConcurrency,
+						},
+					},
+				},
+			}
+			Expect(hubClient.Create(ctx, &strategy)).Should(Succeed())
+			Expect(*strategy.Spec.Stages[0].MaxConcurrency).Should(Equal(maxConcurrency))
+			Expect(hubClient.Delete(ctx, &strategy)).Should(Succeed())
+		})
+
+		It("Should allow creation of ClusterStagedUpdateStrategy with MaxConcurrency as 100%", func() {
+			maxConcurrency := intstr.FromString("100%")
+			strategy := placementv1beta1.ClusterStagedUpdateStrategy{
+				ObjectMeta: metav1.ObjectMeta{
+					Name: fmt.Sprintf(updateRunStrategyNameTemplate, GinkgoParallelProcess()),
+				},
+				Spec: placementv1beta1.UpdateStrategySpec{
+					Stages: []placementv1beta1.StageConfig{
+						{
+							Name:           fmt.Sprintf(updateRunStageNameTemplate, GinkgoParallelProcess(), 1),
+							MaxConcurrency: &maxConcurrency,
+						},
+					},
+				},
+			}
+			Expect(hubClient.Create(ctx, &strategy)).Should(Succeed())
+			Expect(*strategy.Spec.Stages[0].MaxConcurrency).Should(Equal(maxConcurrency))
+			Expect(hubClient.Delete(ctx, &strategy)).Should(Succeed())
+		})
 	})
 
 	Context("Test ClusterStagedUpdateStrategy API validation - invalid cases", func() {
@@ -1566,6 +1646,132 @@ var _ = Describe("Test placement v1beta1 API validation", func() {
 			var statusErr *k8sErrors.StatusError
 			Expect(errors.As(err, &statusErr)).To(BeTrue(), fmt.Sprintf("Create updateRunStrategy call produced error %s. Error type wanted is %s.", reflect.TypeOf(err), reflect.TypeOf(&k8sErrors.StatusError{})))
 			Expect(statusErr.ErrStatus.Message).Should(MatchRegexp("Too many: 2: must have at most 1 items"))
+		})
+
+		It("Should deny creation of ClusterStagedUpdateStrategy with MaxConcurrency set to a negative value", func() {
+			maxConcurrency := intstr.FromInt(-1)
+			strategy := placementv1beta1.ClusterStagedUpdateStrategy{
+				ObjectMeta: metav1.ObjectMeta{
+					Name: fmt.Sprintf(updateRunStrategyNameTemplate, GinkgoParallelProcess()),
+				},
+				Spec: placementv1beta1.UpdateStrategySpec{
+					Stages: []placementv1beta1.StageConfig{
+						{
+							Name:           fmt.Sprintf(updateRunStageNameTemplate, GinkgoParallelProcess(), 1),
+							MaxConcurrency: &maxConcurrency,
+						},
+					},
+				},
+			}
+			err := hubClient.Create(ctx, &strategy)
+			var statusErr *k8sErrors.StatusError
+			Expect(errors.As(err, &statusErr)).To(BeTrue(), fmt.Sprintf("Create updateRunStrategy call produced error %s. Error type wanted is %s.", reflect.TypeOf(err), reflect.TypeOf(&k8sErrors.StatusError{})))
+			Expect(statusErr.ErrStatus.Message).Should(MatchRegexp("maxConcurrency must be at least 1"))
+		})
+
+		It("Should deny creation of ClusterStagedUpdateStrategy with MaxConcurrency set to 0", func() {
+			maxConcurrency := intstr.FromInt(0)
+			strategy := placementv1beta1.ClusterStagedUpdateStrategy{
+				ObjectMeta: metav1.ObjectMeta{
+					Name: fmt.Sprintf(updateRunStrategyNameTemplate, GinkgoParallelProcess()),
+				},
+				Spec: placementv1beta1.UpdateStrategySpec{
+					Stages: []placementv1beta1.StageConfig{
+						{
+							Name:           fmt.Sprintf(updateRunStageNameTemplate, GinkgoParallelProcess(), 1),
+							MaxConcurrency: &maxConcurrency,
+						},
+					},
+				},
+			}
+			err := hubClient.Create(ctx, &strategy)
+			var statusErr *k8sErrors.StatusError
+			Expect(errors.As(err, &statusErr)).To(BeTrue(), fmt.Sprintf("Create updateRunStrategy call produced error %s. Error type wanted is %s.", reflect.TypeOf(err), reflect.TypeOf(&k8sErrors.StatusError{})))
+			Expect(statusErr.ErrStatus.Message).Should(MatchRegexp("maxConcurrency must be at least 1"))
+		})
+
+		It("Should deny creation of ClusterStagedUpdateStrategy with MaxConcurrency set to '0'", func() {
+			maxConcurrency := intstr.FromString("0")
+			strategy := placementv1beta1.ClusterStagedUpdateStrategy{
+				ObjectMeta: metav1.ObjectMeta{
+					Name: fmt.Sprintf(updateRunStrategyNameTemplate, GinkgoParallelProcess()),
+				},
+				Spec: placementv1beta1.UpdateStrategySpec{
+					Stages: []placementv1beta1.StageConfig{
+						{
+							Name:           fmt.Sprintf(updateRunStageNameTemplate, GinkgoParallelProcess(), 1),
+							MaxConcurrency: &maxConcurrency,
+						},
+					},
+				},
+			}
+			err := hubClient.Create(ctx, &strategy)
+			var statusErr *k8sErrors.StatusError
+			Expect(errors.As(err, &statusErr)).To(BeTrue(), fmt.Sprintf("Create updateRunStrategy call produced error %s. Error type wanted is %s.", reflect.TypeOf(err), reflect.TypeOf(&k8sErrors.StatusError{})))
+			Expect(statusErr.ErrStatus.Message).Should(MatchRegexp("spec.stages\\[0\\].maxConcurrency in body should match"))
+		})
+
+		It("Should deny creation of ClusterStagedUpdateStrategy with MaxConcurrency set to '50'", func() {
+			maxConcurrency := intstr.FromString("50")
+			strategy := placementv1beta1.ClusterStagedUpdateStrategy{
+				ObjectMeta: metav1.ObjectMeta{
+					Name: fmt.Sprintf(updateRunStrategyNameTemplate, GinkgoParallelProcess()),
+				},
+				Spec: placementv1beta1.UpdateStrategySpec{
+					Stages: []placementv1beta1.StageConfig{
+						{
+							Name:           fmt.Sprintf(updateRunStageNameTemplate, GinkgoParallelProcess(), 1),
+							MaxConcurrency: &maxConcurrency,
+						},
+					},
+				},
+			}
+			err := hubClient.Create(ctx, &strategy)
+			var statusErr *k8sErrors.StatusError
+			Expect(errors.As(err, &statusErr)).To(BeTrue(), fmt.Sprintf("Create updateRunStrategy call produced error %s. Error type wanted is %s.", reflect.TypeOf(err), reflect.TypeOf(&k8sErrors.StatusError{})))
+			Expect(statusErr.ErrStatus.Message).Should(MatchRegexp("spec.stages\\[0\\].maxConcurrency in body should match"))
+		})
+
+		It("Should deny creation of ClusterStagedUpdateStrategy with MaxConcurrency set to 0%", func() {
+			maxConcurrency := intstr.FromString("0%")
+			strategy := placementv1beta1.ClusterStagedUpdateStrategy{
+				ObjectMeta: metav1.ObjectMeta{
+					Name: fmt.Sprintf(updateRunStrategyNameTemplate, GinkgoParallelProcess()),
+				},
+				Spec: placementv1beta1.UpdateStrategySpec{
+					Stages: []placementv1beta1.StageConfig{
+						{
+							Name:           fmt.Sprintf(updateRunStageNameTemplate, GinkgoParallelProcess(), 1),
+							MaxConcurrency: &maxConcurrency,
+						},
+					},
+				},
+			}
+			err := hubClient.Create(ctx, &strategy)
+			var statusErr *k8sErrors.StatusError
+			Expect(errors.As(err, &statusErr)).To(BeTrue(), fmt.Sprintf("Create updateRunStrategy call produced error %s. Error type wanted is %s.", reflect.TypeOf(err), reflect.TypeOf(&k8sErrors.StatusError{})))
+			Expect(statusErr.ErrStatus.Message).Should(MatchRegexp("spec.stages\\[0\\].maxConcurrency in body should match"))
+		})
+
+		It("Should deny creation of ClusterStagedUpdateStrategy with MaxConcurrency set to 101%", func() {
+			maxConcurrency := intstr.FromString("101%")
+			strategy := placementv1beta1.ClusterStagedUpdateStrategy{
+				ObjectMeta: metav1.ObjectMeta{
+					Name: fmt.Sprintf(updateRunStrategyNameTemplate, GinkgoParallelProcess()),
+				},
+				Spec: placementv1beta1.UpdateStrategySpec{
+					Stages: []placementv1beta1.StageConfig{
+						{
+							Name:           fmt.Sprintf(updateRunStageNameTemplate, GinkgoParallelProcess(), 1),
+							MaxConcurrency: &maxConcurrency,
+						},
+					},
+				},
+			}
+			err := hubClient.Create(ctx, &strategy)
+			var statusErr *k8sErrors.StatusError
+			Expect(errors.As(err, &statusErr)).To(BeTrue(), fmt.Sprintf("Create updateRunStrategy call produced error %s. Error type wanted is %s.", reflect.TypeOf(err), reflect.TypeOf(&k8sErrors.StatusError{})))
+			Expect(statusErr.ErrStatus.Message).Should(MatchRegexp("spec.stages\\[0\\].maxConcurrency in body should match"))
 		})
 	})
 
