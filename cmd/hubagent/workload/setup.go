@@ -33,6 +33,8 @@ import (
 	clusterv1beta1 "go.goms.io/fleet/apis/cluster/v1beta1"
 	placementv1beta1 "go.goms.io/fleet/apis/placement/v1beta1"
 	"go.goms.io/fleet/cmd/hubagent/options"
+	"go.goms.io/fleet/pkg/clients/azure/compute"
+	"go.goms.io/fleet/pkg/clients/httputil"
 	"go.goms.io/fleet/pkg/controllers/bindingwatcher"
 	"go.goms.io/fleet/pkg/controllers/clusterinventory/clusterprofile"
 	"go.goms.io/fleet/pkg/controllers/clusterresourceplacementeviction"
@@ -45,10 +47,12 @@ import (
 	"go.goms.io/fleet/pkg/controllers/schedulingpolicysnapshot"
 	"go.goms.io/fleet/pkg/controllers/updaterun"
 	"go.goms.io/fleet/pkg/controllers/workgenerator"
+	"go.goms.io/fleet/pkg/propertychecker/azure"
 	"go.goms.io/fleet/pkg/resourcewatcher"
 	"go.goms.io/fleet/pkg/scheduler"
 	"go.goms.io/fleet/pkg/scheduler/clustereligibilitychecker"
 	"go.goms.io/fleet/pkg/scheduler/framework"
+	"go.goms.io/fleet/pkg/scheduler/framework/plugins/clusteraffinity"
 	"go.goms.io/fleet/pkg/scheduler/profile"
 	"go.goms.io/fleet/pkg/scheduler/queue"
 	schedulerbindingwatcher "go.goms.io/fleet/pkg/scheduler/watchers/binding"
@@ -354,8 +358,22 @@ func SetupControllers(ctx context.Context, wg *sync.WaitGroup, mgr ctrl.Manager,
 
 		// Set up the scheduler
 		klog.Info("Setting up scheduler")
-		defaultProfile := profile.NewDefaultProfile()
-		defaultFramework := framework.NewFramework(defaultProfile, mgr)
+		schedulerProfile := profile.NewDefaultProfile()
+		if opts.AzurePropertyCheckerOpts.IsEnabled {
+			klog.Info("Azure property checker is enabled for cluster property validation")
+			client, err := compute.NewAttributeBasedVMSizeRecommenderClient(opts.AzurePropertyCheckerOpts.ComputeServiceAddressWithBasePath, httputil.DefaultClientForAzure)
+			if err != nil {
+				klog.ErrorS(err, "Unable to create Azure vm size recommender client")
+				return err
+			}
+			klog.Info("Setting up cluster affinity plugin with Azure property checker")
+			clusterAffinityPlugin := clusteraffinity.New(clusteraffinity.WithPropertyChecker(azure.NewPropertyChecker(*client)))
+			profileOpts := profile.Options{
+				ClusterAffinityPlugin: &clusterAffinityPlugin,
+			}
+			schedulerProfile = profile.NewProfile(profileOpts)
+		}
+		defaultFramework := framework.NewFramework(schedulerProfile, mgr)
 		defaultSchedulingQueue := queue.NewSimplePlacementSchedulingQueue(
 			queue.WithName(schedulerQueueName),
 		)
