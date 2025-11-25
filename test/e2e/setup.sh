@@ -123,6 +123,7 @@ helm install hub-agent ../../charts/hub-agent/ \
     --set namespace=fleet-system \
     --set logVerbosity=5 \
     --set enableWebhook=true \
+    --set enableWorkload=true \
     --set webhookClientConnectionType=service \
     --set forceDeleteWaitTime="1m0s" \
     --set clusterUnhealthyThreshold="3m0s" \

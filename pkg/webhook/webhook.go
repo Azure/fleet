@@ -159,9 +159,10 @@ type Config struct {
 	enableGuardRail bool
 
 	denyModifyMemberClusterLabels bool
+	enableWorkload                bool
 }
 
-func NewWebhookConfig(mgr manager.Manager, webhookServiceName string, port int32, clientConnectionType *options.WebhookClientConnectionType, certDir string, enableGuardRail bool, denyModifyMemberClusterLabels bool) (*Config, error) {
+func NewWebhookConfig(mgr manager.Manager, webhookServiceName string, port int32, clientConnectionType *options.WebhookClientConnectionType, certDir string, enableGuardRail bool, denyModifyMemberClusterLabels bool, enableWorkload bool) (*Config, error) {
 	// We assume the Pod namespace should be passed to env through downward API in the Pod spec.
 	namespace := os.Getenv("POD_NAMESPACE")
 	if namespace == "" {
@@ -176,6 +177,7 @@ func NewWebhookConfig(mgr manager.Manager, webhookServiceName string, port int32
 		clientConnectionType:          clientConnectionType,
 		enableGuardRail:               enableGuardRail,
 		denyModifyMemberClusterLabels: denyModifyMemberClusterLabels,
+		enableWorkload:                enableWorkload,
 	}
 	caPEM, err := w.genCertificate(certDir)
 	if err != nil {
@@ -302,8 +304,11 @@ func (w *Config) createValidatingWebhookConfiguration(ctx context.Context, webho
 
 // buildValidatingWebHooks returns a slice of fleet validating webhook objects.
 func (w *Config) buildFleetValidatingWebhooks() []admv1.ValidatingWebhook {
-	webHooks := []admv1.ValidatingWebhook{
-		{
+	var webHooks []admv1.ValidatingWebhook
+
+	// When enableWorkload is true, skip pod and replicaset validating webhooks to allow workloads
+	if !w.enableWorkload {
+		webHooks = append(webHooks, admv1.ValidatingWebhook{
 			Name:                    "fleet.pod.validating",
 			ClientConfig:            w.createClientConfig(pod.ValidationPath),
 			FailurePolicy:           &failFailurePolicy,
@@ -311,32 +316,14 @@ func (w *Config) buildFleetValidatingWebhooks() []admv1.ValidatingWebhook {
 			AdmissionReviewVersions: admissionReviewVersions,
 			Rules: []admv1.RuleWithOperations{
 				{
-					Operations: []admv1.OperationType{
-						admv1.Create,
-					},
-					Rule: createRule([]string{corev1.SchemeGroupVersion.Group}, []string{corev1.SchemeGroupVersion.Version}, []string{podResourceName}, &namespacedScope),
+					Operations: []admv1.OperationType{admv1.Create},
+					Rule:       createRule([]string{corev1.SchemeGroupVersion.Group}, []string{corev1.SchemeGroupVersion.Version}, []string{podResourceName}, &namespacedScope),
 				},
 			},
 			TimeoutSeconds: longWebhookTimeout,
-		},
-		{
-			Name:                    "fleet.clusterresourceplacementv1beta1.validating",
-			ClientConfig:            w.createClientConfig(clusterresourceplacement.ValidationPath),
-			FailurePolicy:           &failFailurePolicy,
-			SideEffects:             &sideEffortsNone,
-			AdmissionReviewVersions: admissionReviewVersions,
-			Rules: []admv1.RuleWithOperations{
-				{
-					Operations: []admv1.OperationType{
-						admv1.Create,
-						admv1.Update,
-					},
-					Rule: createRule([]string{placementv1beta1.GroupVersion.Group}, []string{placementv1beta1.GroupVersion.Version}, []string{placementv1beta1.ClusterResourcePlacementResource}, &clusterScope),
-				},
-			},
-			TimeoutSeconds: longWebhookTimeout,
-		},
-		{
+		})
+
+		webHooks = append(webHooks, admv1.ValidatingWebhook{
 			Name:                    "fleet.replicaset.validating",
 			ClientConfig:            w.createClientConfig(replicaset.ValidationPath),
 			FailurePolicy:           &failFailurePolicy,
@@ -344,99 +331,91 @@ func (w *Config) buildFleetValidatingWebhooks() []admv1.ValidatingWebhook {
 			AdmissionReviewVersions: admissionReviewVersions,
 			Rules: []admv1.RuleWithOperations{
 				{
-					Operations: []admv1.OperationType{
-						admv1.Create,
-					},
-					Rule: createRule([]string{appsv1.SchemeGroupVersion.Group}, []string{appsv1.SchemeGroupVersion.Version}, []string{replicaSetResourceName}, &namespacedScope),
+					Operations: []admv1.OperationType{admv1.Create},
+					Rule:       createRule([]string{appsv1.SchemeGroupVersion.Group}, []string{appsv1.SchemeGroupVersion.Version}, []string{replicaSetResourceName}, &namespacedScope),
 				},
 			},
 			TimeoutSeconds: longWebhookTimeout,
+		})
+	}
+
+	webHooks = append(webHooks, admv1.ValidatingWebhook{
+		Name:                    "fleet.clusterresourceplacementv1beta1.validating",
+		ClientConfig:            w.createClientConfig(clusterresourceplacement.ValidationPath),
+		FailurePolicy:           &failFailurePolicy,
+		SideEffects:             &sideEffortsNone,
+		AdmissionReviewVersions: admissionReviewVersions,
+		Rules: []admv1.RuleWithOperations{
+			{
+				Operations: []admv1.OperationType{admv1.Create, admv1.Update},
+				Rule:       createRule([]string{placementv1beta1.GroupVersion.Group}, []string{placementv1beta1.GroupVersion.Version}, []string{placementv1beta1.ClusterResourcePlacementResource}, &clusterScope),
+			},
 		},
-		{
+		TimeoutSeconds: longWebhookTimeout,
+	})
+
+	webHooks = append(webHooks,
+		admv1.ValidatingWebhook{
 			Name:                    "fleet.membercluster.validating",
 			ClientConfig:            w.createClientConfig(membercluster.ValidationPath),
 			FailurePolicy:           &failFailurePolicy,
 			SideEffects:             &sideEffortsNone,
 			AdmissionReviewVersions: admissionReviewVersions,
-			Rules: []admv1.RuleWithOperations{
-				{
-					Operations: []admv1.OperationType{
-						admv1.Create,
-						admv1.Update,
-						admv1.Delete,
-					},
-					Rule: createRule([]string{clusterv1beta1.GroupVersion.Group}, []string{clusterv1beta1.GroupVersion.Version}, []string{memberClusterResourceName}, &clusterScope),
-				},
-			},
+			Rules: []admv1.RuleWithOperations{{
+				Operations: []admv1.OperationType{admv1.Create, admv1.Update, admv1.Delete},
+				Rule:       createRule([]string{clusterv1beta1.GroupVersion.Group}, []string{clusterv1beta1.GroupVersion.Version}, []string{memberClusterResourceName}, &clusterScope),
+			}},
 			TimeoutSeconds: longWebhookTimeout,
 		},
-		{
+		admv1.ValidatingWebhook{
 			Name:                    "fleet.clusterresourceoverride.validating",
 			ClientConfig:            w.createClientConfig(clusterresourceoverride.ValidationPath),
 			FailurePolicy:           &failFailurePolicy,
 			SideEffects:             &sideEffortsNone,
 			AdmissionReviewVersions: admissionReviewVersions,
-			Rules: []admv1.RuleWithOperations{
-				{
-					Operations: []admv1.OperationType{
-						admv1.Create,
-						admv1.Update,
-					},
-					Rule: createRule([]string{placementv1beta1.GroupVersion.Group}, []string{placementv1beta1.GroupVersion.Version}, []string{clusterResourceOverrideName}, &clusterScope),
-				},
-			},
+			Rules: []admv1.RuleWithOperations{{
+				Operations: []admv1.OperationType{admv1.Create, admv1.Update},
+				Rule:       createRule([]string{placementv1beta1.GroupVersion.Group}, []string{placementv1beta1.GroupVersion.Version}, []string{clusterResourceOverrideName}, &clusterScope),
+			}},
 			TimeoutSeconds: longWebhookTimeout,
 		},
-		{
+		admv1.ValidatingWebhook{
 			Name:                    "fleet.resourceoverride.validating",
 			ClientConfig:            w.createClientConfig(resourceoverride.ValidationPath),
 			FailurePolicy:           &failFailurePolicy,
 			SideEffects:             &sideEffortsNone,
 			AdmissionReviewVersions: admissionReviewVersions,
-			Rules: []admv1.RuleWithOperations{
-				{
-					Operations: []admv1.OperationType{
-						admv1.Create,
-						admv1.Update,
-					},
-					Rule: createRule([]string{placementv1beta1.GroupVersion.Group}, []string{placementv1beta1.GroupVersion.Version}, []string{resourceOverrideName}, &namespacedScope),
-				},
-			},
+			Rules: []admv1.RuleWithOperations{{
+				Operations: []admv1.OperationType{admv1.Create, admv1.Update},
+				Rule:       createRule([]string{placementv1beta1.GroupVersion.Group}, []string{placementv1beta1.GroupVersion.Version}, []string{resourceOverrideName}, &namespacedScope),
+			}},
 			TimeoutSeconds: longWebhookTimeout,
 		},
-		{
+		admv1.ValidatingWebhook{
 			Name:                    "fleet.clusterresourceplacementeviction.validating",
 			ClientConfig:            w.createClientConfig(clusterresourceplacementeviction.ValidationPath),
 			FailurePolicy:           &failFailurePolicy,
 			SideEffects:             &sideEffortsNone,
 			AdmissionReviewVersions: admissionReviewVersions,
-			Rules: []admv1.RuleWithOperations{
-				{
-					Operations: []admv1.OperationType{
-						admv1.Create,
-					},
-					Rule: createRule([]string{placementv1beta1.GroupVersion.Group}, []string{placementv1beta1.GroupVersion.Version}, []string{evictionName}, &clusterScope),
-				},
-			},
+			Rules: []admv1.RuleWithOperations{{
+				Operations: []admv1.OperationType{admv1.Create},
+				Rule:       createRule([]string{placementv1beta1.GroupVersion.Group}, []string{placementv1beta1.GroupVersion.Version}, []string{evictionName}, &clusterScope),
+			}},
 			TimeoutSeconds: longWebhookTimeout,
 		},
-		{
+		admv1.ValidatingWebhook{
 			Name:                    "fleet.clusterresourceplacementdisruptionbudget.validating",
 			ClientConfig:            w.createClientConfig(clusterresourceplacementdisruptionbudget.ValidationPath),
 			FailurePolicy:           &failFailurePolicy,
 			SideEffects:             &sideEffortsNone,
 			AdmissionReviewVersions: admissionReviewVersions,
-			Rules: []admv1.RuleWithOperations{
-				{
-					Operations: []admv1.OperationType{
-						admv1.Create, admv1.Update,
-					},
-					Rule: createRule([]string{placementv1beta1.GroupVersion.Group}, []string{placementv1beta1.GroupVersion.Version}, []string{disruptionBudgetName}, &clusterScope),
-				},
-			},
+			Rules: []admv1.RuleWithOperations{{
+				Operations: []admv1.OperationType{admv1.Create, admv1.Update},
+				Rule:       createRule([]string{placementv1beta1.GroupVersion.Group}, []string{placementv1beta1.GroupVersion.Version}, []string{disruptionBudgetName}, &clusterScope),
+			}},
 			TimeoutSeconds: longWebhookTimeout,
 		},
-	}
+	)
 
 	return webHooks
 }
@@ -487,65 +466,82 @@ func (w *Config) buildFleetGuardRailValidatingWebhooks() []admv1.ValidatingWebho
 			Operations: []admv1.OperationType{admv1.Delete},
 			Rule:       createRule([]string{"*"}, []string{"*"}, []string{"*/*"}, &namespacedScope),
 		},
-		// TODO(ArvindThiru): not handling pods, replicasets as part of the fleet guard rail since they have validating webhooks, need to remove validating webhooks before adding these resources to fleet guard rail.
-		{
-			Operations: cuOperations,
-			Rule: createRule([]string{corev1.SchemeGroupVersion.Group}, []string{corev1.SchemeGroupVersion.Version}, []string{bindingResourceName, configMapResourceName, endPointResourceName,
-				limitRangeResourceName, persistentVolumeClaimsName, persistentVolumeClaimsName + "/status", podTemplateResourceName,
-				replicationControllerResourceName, replicationControllerResourceName + "/status", resourceQuotaResourceName, resourceQuotaResourceName + "/status", secretResourceName,
-				serviceAccountResourceName, servicesResourceName, servicesResourceName + "/status"}, &namespacedScope),
-		},
-		{
-			Operations: cuOperations,
-			Rule: createRule([]string{appsv1.SchemeGroupVersion.Group}, []string{appsv1.SchemeGroupVersion.Version}, []string{controllerRevisionResourceName, daemonSetResourceName, daemonSetResourceName + "/status",
-				deploymentResourceName, deploymentResourceName + "/status", statefulSetResourceName, statefulSetResourceName + "/status"}, &namespacedScope),
-		},
-		{
+	}
+
+	// Build core v1 resources list, conditionally including pods if workload is enabled
+	coreV1Resources := []string{bindingResourceName, configMapResourceName, endPointResourceName,
+		limitRangeResourceName, persistentVolumeClaimsName, persistentVolumeClaimsName + "/status", podTemplateResourceName,
+		replicationControllerResourceName, replicationControllerResourceName + "/status", resourceQuotaResourceName, resourceQuotaResourceName + "/status", secretResourceName,
+		serviceAccountResourceName, servicesResourceName, servicesResourceName + "/status"}
+	if w.enableWorkload {
+		coreV1Resources = append(coreV1Resources, podResourceName, podResourceName+"/status")
+	}
+
+	namespacedResourcesRules = append(namespacedResourcesRules, admv1.RuleWithOperations{
+		Operations: cuOperations,
+		Rule:       createRule([]string{corev1.SchemeGroupVersion.Group}, []string{corev1.SchemeGroupVersion.Version}, coreV1Resources, &namespacedScope),
+	})
+
+	// Build apps/v1 resources list, conditionally including replicasets if workload is enabled
+	appsV1Resources := []string{controllerRevisionResourceName, daemonSetResourceName, daemonSetResourceName + "/status",
+		deploymentResourceName, deploymentResourceName + "/status", statefulSetResourceName, statefulSetResourceName + "/status"}
+	if w.enableWorkload {
+		appsV1Resources = append(appsV1Resources, replicaSetResourceName, replicaSetResourceName+"/status")
+	}
+
+	namespacedResourcesRules = append(namespacedResourcesRules, admv1.RuleWithOperations{
+		Operations: cuOperations,
+		Rule:       createRule([]string{appsv1.SchemeGroupVersion.Group}, []string{appsv1.SchemeGroupVersion.Version}, appsV1Resources, &namespacedScope),
+	})
+
+	namespacedResourcesRules = append(namespacedResourcesRules,
+		admv1.RuleWithOperations{
 			Operations: cuOperations,
 			Rule:       createRule([]string{authorizationv1.SchemeGroupVersion.Group}, []string{authorizationv1.SchemeGroupVersion.Version}, []string{localSubjectAccessReviewResourceName, localSubjectAccessReviewResourceName + "/status"}, &namespacedScope),
 		},
-		{
+		admv1.RuleWithOperations{
 			Operations: cuOperations,
 			Rule:       createRule([]string{autoscalingv1.SchemeGroupVersion.Group}, []string{autoscalingv1.SchemeGroupVersion.Version}, []string{horizontalPodAutoScalerResourceName, horizontalPodAutoScalerResourceName + "/status"}, &namespacedScope),
 		},
-		{
+		admv1.RuleWithOperations{
 			Operations: cuOperations,
 			Rule:       createRule([]string{batchv1.SchemeGroupVersion.Group}, []string{batchv1.SchemeGroupVersion.Version}, []string{cronJobResourceName, cronJobResourceName + "/status", jobResourceName, jobResourceName + "/status"}, &namespacedScope),
 		},
-		{
+		admv1.RuleWithOperations{
 			Operations: cuOperations,
 			Rule:       createRule([]string{discoveryv1.SchemeGroupVersion.Group}, []string{discoveryv1.SchemeGroupVersion.Version}, []string{endPointSlicesResourceName}, &namespacedScope),
 		},
-		{
+		admv1.RuleWithOperations{
 			Operations: cuOperations,
 			Rule:       createRule([]string{networkingv1.SchemeGroupVersion.Group}, []string{networkingv1.SchemeGroupVersion.Version}, []string{ingressResourceName, ingressResourceName + "/status", networkPolicyResourceName, networkPolicyResourceName + "/status"}, &namespacedScope),
 		},
-		{
+		admv1.RuleWithOperations{
 			Operations: cuOperations,
 			Rule:       createRule([]string{policyv1.SchemeGroupVersion.Group}, []string{policyv1.SchemeGroupVersion.Version}, []string{podDisruptionBudgetsResourceName, podDisruptionBudgetsResourceName + "/status"}, &namespacedScope),
 		},
-		{
+		admv1.RuleWithOperations{
 			Operations: cuOperations,
 			Rule:       createRule([]string{rbacv1.SchemeGroupVersion.Group}, []string{rbacv1.SchemeGroupVersion.Version}, []string{roleResourceName, roleBindingResourceName}, &namespacedScope),
 		},
 		// rules for fleet namespaced resources.
-		{
+		admv1.RuleWithOperations{
 			Operations: cuOperations,
 			Rule:       createRule([]string{storagev1.SchemeGroupVersion.Group}, []string{storagev1.SchemeGroupVersion.Version}, []string{csiStorageCapacityResourceName}, &namespacedScope),
 		},
-		{
+		admv1.RuleWithOperations{
 			Operations: cuOperations,
 			Rule:       createRule([]string{clusterv1beta1.GroupVersion.Group}, []string{clusterv1beta1.GroupVersion.Version}, []string{internalMemberClusterResourceName, internalMemberClusterResourceName + "/status"}, &namespacedScope),
 		},
-		{
+		admv1.RuleWithOperations{
 			Operations: cuOperations,
 			Rule:       createRule([]string{placementv1beta1.GroupVersion.Group}, []string{placementv1beta1.GroupVersion.Version}, []string{workResourceName, workResourceName + "/status"}, &namespacedScope),
 		},
-		{
+		admv1.RuleWithOperations{
 			Operations: cuOperations,
 			Rule:       createRule([]string{fleetnetworkingv1alpha1.GroupVersion.Group}, []string{fleetnetworkingv1alpha1.GroupVersion.Version}, []string{endpointSliceExportResourceName, endpointSliceImportResourceName, internalServiceExportResourceName, internalServiceExportResourceName + "/status", internalServiceImportResourceName, internalServiceImportResourceName + "/status"}, &namespacedScope),
 		},
-	}
+	)
+
 	guardRailWebhookConfigurations := []admv1.ValidatingWebhook{
 		{
 			Name:                    "fleet.customresourcedefinition.guardrail.validating",

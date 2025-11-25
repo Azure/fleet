@@ -79,6 +79,8 @@ const (
 	ServiceKind     = "Service"
 	NamespaceKind   = "Namespace"
 	JobKind         = "Job"
+	ReplicaSetKind  = "ReplicaSet"
+	PodKind         = "Pod"
 )
 
 const (
@@ -507,6 +509,18 @@ func CheckCRDInstalled(discoveryClient discovery.DiscoveryInterface, gvk schema.
 func ShouldPropagateObj(informerManager informer.Manager, uObj *unstructured.Unstructured) (bool, error) {
 	// TODO:  add more special handling for different resource kind
 	switch uObj.GroupVersionKind() {
+	case appv1.SchemeGroupVersion.WithKind(ReplicaSetKind):
+		// Skip ReplicaSets if they are managed by Deployments (have owner references)
+		// Standalone ReplicaSets (without owners) can be propagated
+		if len(uObj.GetOwnerReferences()) > 0 {
+			return false, nil
+		}
+	case appv1.SchemeGroupVersion.WithKind("ControllerRevision"):
+		// Skip ControllerRevisions if they are managed by DaemonSets/StatefulSets (have owner references)
+		// These are automatically created by controllers and will be recreated on member clusters
+		if len(uObj.GetOwnerReferences()) > 0 {
+			return false, nil
+		}
 	case corev1.SchemeGroupVersion.WithKind(ConfigMapKind):
 		// Skip the built-in custom CA certificate created in the namespace
 		if uObj.GetName() == "kube-root-ca.crt" {

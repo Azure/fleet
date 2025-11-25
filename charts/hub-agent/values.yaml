@@ -16,6 +16,7 @@ enableWebhook: true
 webhookServiceName: fleetwebhook
 enableGuardRail: true
 webhookClientConnectionType: service
+enableWorkload: false
 forceDeleteWaitTime: 15m0s
 clusterUnhealthyThreshold: 3m0s
 resourceSnapshotCreationMinimumInterval: 30s

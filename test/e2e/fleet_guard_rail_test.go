@@ -32,6 +32,7 @@ import (
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/types"
 	utilrand "k8s.io/apimachinery/pkg/util/rand"
+	"k8s.io/utils/ptr"
 
 	clusterv1beta1 "github.com/kubefleet-dev/kubefleet/apis/cluster/v1beta1"
 	placementv1beta1 "github.com/kubefleet-dev/kubefleet/apis/placement/v1beta1"
@@ -911,6 +912,247 @@ var _ = Describe("fleet guard rail networking E2Es", Serial, Ordered, func() {
 				By("expecting denial of operation UPDATE of Internal Service Export")
 				return impersonateHubClient.Update(ctx, &ise)
 			}, eventuallyDuration, eventuallyInterval).Should(Succeed())
+		})
+	})
+})
+
+var _ = Describe("fleet guard rail for pods and replicasets in fleet/kube namespaces", Serial, Ordered, func() {
+	var (
+		podGVK        = metav1.GroupVersionKind{Group: corev1.SchemeGroupVersion.Group, Version: corev1.SchemeGroupVersion.Version, Kind: "Pod"}
+		replicaSetGVK = metav1.GroupVersionKind{Group: appsv1.SchemeGroupVersion.Group, Version: appsv1.SchemeGroupVersion.Version, Kind: "ReplicaSet"}
+	)
+
+	Context("deny pod operations in fleet-system namespace", func() {
+		It("should deny CREATE operation on pod in fleet-system namespace for user not in system:masters", func() {
+			pod := corev1.Pod{
+				ObjectMeta: metav1.ObjectMeta{
+					Name:      "test-pod",
+					Namespace: "fleet-system",
+				},
+				Spec: corev1.PodSpec{
+					Containers: []corev1.Container{
+						{
+							Name:  "test-container",
+							Image: "nginx:latest",
+						},
+					},
+				},
+			}
+			Expect(checkIfStatusErrorWithMessage(impersonateHubClient.Create(ctx, &pod), fmt.Sprintf(validation.ResourceDeniedFormat, testUser, utils.GenerateGroupString(testGroups), admissionv1.Create, &podGVK, "", types.NamespacedName{Name: pod.Name, Namespace: pod.Namespace}))).Should(Succeed())
+		})
+
+		It("should deny UPDATE operation on pod in fleet-system namespace for user not in system:masters", func() {
+			// First create a pod as admin
+			pod := corev1.Pod{
+				ObjectMeta: metav1.ObjectMeta{
+					Name:      "test-pod-update",
+					Namespace: "fleet-system",
+				},
+				Spec: corev1.PodSpec{
+					Containers: []corev1.Container{
+						{
+							Name:  "test-container",
+							Image: "nginx:latest",
+						},
+					},
+				},
+			}
+			Expect(hubClient.Create(ctx, &pod)).Should(Succeed())
+
+			// Try to update as non-admin
+			Eventually(func(g Gomega) error {
+				var p corev1.Pod
+				err := hubClient.Get(ctx, types.NamespacedName{Name: pod.Name, Namespace: pod.Namespace}, &p)
+				if err != nil {
+					return err
+				}
+				p.Labels = map[string]string{testKey: testValue}
+				err = impersonateHubClient.Update(ctx, &p)
+				if k8sErrors.IsConflict(err) {
+					return err
+				}
+				return checkIfStatusErrorWithMessage(err, fmt.Sprintf(validation.ResourceDeniedFormat, testUser, utils.GenerateGroupString(testGroups), admissionv1.Update, &podGVK, "", types.NamespacedName{Name: p.Name, Namespace: p.Namespace}))
+			}, eventuallyDuration, eventuallyInterval).Should(Succeed())
+
+			// Cleanup
+			Expect(hubClient.Delete(ctx, &pod)).Should(Succeed())
+		})
+	})
+
+	Context("deny replicaset operations in fleet-member namespace", func() {
+		var (
+			mcName       string
+			imcNamespace string
+		)
+
+		BeforeAll(func() {
+			mcName = fmt.Sprintf(mcNameTemplate, GinkgoParallelProcess())
+			imcNamespace = fmt.Sprintf(utils.NamespaceNameFormat, mcName)
+			createMemberCluster(mcName, testIdentity, nil, map[string]string{fleetClusterResourceIDAnnotationKey: clusterID1})
+			checkInternalMemberClusterExists(mcName, imcNamespace)
+		})
+
+		AfterAll(func() {
+			ensureMemberClusterAndRelatedResourcesDeletion(mcName)
+		})
+
+		It("should deny CREATE operation on replicaset in fleet-member namespace for user not in MC identity", func() {
+			rs := appsv1.ReplicaSet{
+				ObjectMeta: metav1.ObjectMeta{
+					Name:      "test-replicaset",
+					Namespace: imcNamespace,
+				},
+				Spec: appsv1.ReplicaSetSpec{
+					Replicas: ptr.To(int32(1)),
+					Selector: &metav1.LabelSelector{
+						MatchLabels: map[string]string{"app": "test"},
+					},
+					Template: corev1.PodTemplateSpec{
+						ObjectMeta: metav1.ObjectMeta{
+							Labels: map[string]string{"app": "test"},
+						},
+						Spec: corev1.PodSpec{
+							Containers: []corev1.Container{
+								{
+									Name:  "test-container",
+									Image: "nginx:latest",
+								},
+							},
+						},
+					},
+				},
+			}
+			Expect(checkIfStatusErrorWithMessage(impersonateHubClient.Create(ctx, &rs), fmt.Sprintf(validation.ResourceDeniedFormat, testUser, utils.GenerateGroupString(testGroups), admissionv1.Create, &replicaSetGVK, "", types.NamespacedName{Name: rs.Name, Namespace: rs.Namespace}))).Should(Succeed())
+		})
+
+		It("should deny UPDATE operation on replicaset in fleet-member namespace for user not in MC identity", func() {
+			// First create a replicaset as admin
+			rs := appsv1.ReplicaSet{
+				ObjectMeta: metav1.ObjectMeta{
+					Name:      "test-replicaset-update",
+					Namespace: imcNamespace,
+				},
+				Spec: appsv1.ReplicaSetSpec{
+					Replicas: ptr.To(int32(1)),
+					Selector: &metav1.LabelSelector{
+						MatchLabels: map[string]string{"app": "test"},
+					},
+					Template: corev1.PodTemplateSpec{
+						ObjectMeta: metav1.ObjectMeta{
+							Labels: map[string]string{"app": "test"},
+						},
+						Spec: corev1.PodSpec{
+							Containers: []corev1.Container{
+								{
+									Name:  "test-container",
+									Image: "nginx:latest",
+								},
+							},
+						},
+					},
+				},
+			}
+			Expect(hubClient.Create(ctx, &rs)).Should(Succeed())
+
+			// Try to update as non-admin
+			Eventually(func(g Gomega) error {
+				var r appsv1.ReplicaSet
+				err := hubClient.Get(ctx, types.NamespacedName{Name: rs.Name, Namespace: rs.Namespace}, &r)
+				if err != nil {
+					return err
+				}
+				r.Labels = map[string]string{testKey: testValue}
+				err = impersonateHubClient.Update(ctx, &r)
+				if k8sErrors.IsConflict(err) {
+					return err
+				}
+				return checkIfStatusErrorWithMessage(err, fmt.Sprintf(validation.ResourceDeniedFormat, testUser, utils.GenerateGroupString(testGroups), admissionv1.Update, &replicaSetGVK, "", types.NamespacedName{Name: r.Name, Namespace: r.Namespace}))
+			}, eventuallyDuration, eventuallyInterval).Should(Succeed())
+
+			// Cleanup
+			Expect(hubClient.Delete(ctx, &rs)).Should(Succeed())
+		})
+
+		It("should deny DELETE operation on pod in fleet-member namespace for user not in MC identity", func() {
+			// First create a pod as admin
+			pod := corev1.Pod{
+				ObjectMeta: metav1.ObjectMeta{
+					Name:      "test-pod-delete",
+					Namespace: imcNamespace,
+				},
+				Spec: corev1.PodSpec{
+					Containers: []corev1.Container{
+						{
+							Name:  "test-container",
+							Image: "nginx:latest",
+						},
+					},
+				},
+			}
+			Expect(hubClient.Create(ctx, &pod)).Should(Succeed())
+
+			// Try to delete as non-admin
+			Eventually(func() error {
+				var p corev1.Pod
+				err := hubClient.Get(ctx, types.NamespacedName{Name: pod.Name, Namespace: pod.Namespace}, &p)
+				if err != nil {
+					return err
+				}
+				err = impersonateHubClient.Delete(ctx, &p)
+				return checkIfStatusErrorWithMessage(err, fmt.Sprintf(validation.ResourceDeniedFormat, testUser, utils.GenerateGroupString(testGroups), admissionv1.Delete, &podGVK, "", types.NamespacedName{Name: p.Name, Namespace: p.Namespace}))
+			}, eventuallyDuration, eventuallyInterval).Should(Succeed())
+
+			// Cleanup by admin
+			Expect(hubClient.Delete(ctx, &pod)).Should(Succeed())
+		})
+	})
+
+	Context("deny pod/replicaset operations in kube-system namespace", func() {
+		It("should deny CREATE operation on pod in kube-system namespace for user not in system:masters", func() {
+			pod := corev1.Pod{
+				ObjectMeta: metav1.ObjectMeta{
+					Name:      "test-pod-kube",
+					Namespace: "kube-system",
+				},
+				Spec: corev1.PodSpec{
+					Containers: []corev1.Container{
+						{
+							Name:  "test-container",
+							Image: "nginx:latest",
+						},
+					},
+				},
+			}
+			Expect(checkIfStatusErrorWithMessage(impersonateHubClient.Create(ctx, &pod), fmt.Sprintf(validation.ResourceDeniedFormat, testUser, utils.GenerateGroupString(testGroups), admissionv1.Create, &podGVK, "", types.NamespacedName{Name: pod.Name, Namespace: pod.Namespace}))).Should(Succeed())
+		})
+
+		It("should deny CREATE operation on replicaset in kube-system namespace for user not in system:masters", func() {
+			rs := appsv1.ReplicaSet{
+				ObjectMeta: metav1.ObjectMeta{
+					Name:      "test-replicaset-kube",
+					Namespace: "kube-system",
+				},
+				Spec: appsv1.ReplicaSetSpec{
+					Replicas: ptr.To(int32(1)),
+					Selector: &metav1.LabelSelector{
+						MatchLabels: map[string]string{"app": "test"},
+					},
+					Template: corev1.PodTemplateSpec{
+						ObjectMeta: metav1.ObjectMeta{
+							Labels: map[string]string{"app": "test"},
+						},
+						Spec: corev1.PodSpec{
+							Containers: []corev1.Container{
+								{
+									Name:  "test-container",
+									Image: "nginx:latest",
+								},
+							},
+						},
+					},
+				},
+			}
+			Expect(checkIfStatusErrorWithMessage(impersonateHubClient.Create(ctx, &rs), fmt.Sprintf(validation.ResourceDeniedFormat, testUser, utils.GenerateGroupString(testGroups), admissionv1.Create, &replicaSetGVK, "", types.NamespacedName{Name: rs.Name, Namespace: rs.Namespace}))).Should(Succeed())
 		})
 	})
 })
