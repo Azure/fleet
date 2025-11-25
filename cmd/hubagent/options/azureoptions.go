@@ -16,16 +16,8 @@ type AzurePropertyCheckerOptions struct {
 	ComputeServiceAddressWithBasePath string
 }
 
-// NewAzurePropertyCheckerOptions creates a new AzurePropertyCheckerOptions with default values.
-func NewAzurePropertyCheckerOptions() AzurePropertyCheckerOptions {
-	return AzurePropertyCheckerOptions{
-		IsEnabled:                         false,
-		ComputeServiceAddressWithBasePath: "http://localhost:8421/compute",
-	}
-}
-
 // AddFlags adds flags for Azure Property Checker options to the given FlagSet.
-func (o AzurePropertyCheckerOptions) AddFlags(flags *flag.FlagSet) {
-	flags.BoolVar(&o.IsEnabled, "azure-property-checker-enabled", o.IsEnabled, "Enable Azure property checker for validating Azure-specific cluster properties.")
-	flags.StringVar(&o.ComputeServiceAddressWithBasePath, "azure-compute-server-address", o.ComputeServiceAddressWithBasePath, "The address of the Azure compute service with base path.")
+func (o *AzurePropertyCheckerOptions) AddFlags(flags *flag.FlagSet) {
+	flags.BoolVar(&o.IsEnabled, "azure-property-checker-enabled", false, "Enable Azure property checker for validating Azure-specific cluster properties.")
+	flags.StringVar(&o.ComputeServiceAddressWithBasePath, "azure-compute-server-address", "http://localhost:8421/compute", "The address of the Azure compute service with base path.")
 }

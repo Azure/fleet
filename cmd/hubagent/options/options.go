@@ -136,7 +136,6 @@ func NewOptions() *Options {
 		PprofPort:                               6065,
 		ResourceSnapshotCreationMinimumInterval: 30 * time.Second,
 		ResourceChangesCollectionDuration:       15 * time.Second,
-		AzurePropertyCheckerOpts:                NewAzurePropertyCheckerOptions(),
 	}
 }
 
