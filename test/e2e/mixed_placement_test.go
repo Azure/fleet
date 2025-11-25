@@ -24,7 +24,9 @@ import (
 	. "github.com/onsi/gomega"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/types"
+	"k8s.io/utils/ptr"
 
+	clusterv1beta1 "github.com/kubefleet-dev/kubefleet/apis/cluster/v1beta1"
 	placementv1beta1 "github.com/kubefleet-dev/kubefleet/apis/placement/v1beta1"
 	"github.com/kubefleet-dev/kubefleet/pkg/controllers/workapplier"
 )
@@ -370,6 +372,167 @@ var _ = Describe("mixed ClusterResourcePlacement and ResourcePlacement negative 
 			}
 			crpStatusUpdatedActual := crpStatusUpdatedActual(nsOnlyResIds, allMemberClusterNames, nil, "1")
 			Eventually(crpStatusUpdatedActual, eventuallyDuration, eventuallyInterval).Should(Succeed(), "Failed to update CRP status as expected")
+		})
+	})
+})
+
+var _ = Describe("mixed ClusterResourcePlacement and ResourcePlacement positive test cases", Label("resourceplacement"), func() {
+	crpName := fmt.Sprintf(crpNameTemplate, GinkgoParallelProcess())
+	rpName := fmt.Sprintf(rpNameTemplate, GinkgoParallelProcess())
+	workNamespaceName := fmt.Sprintf(workNamespaceNameTemplate, GinkgoParallelProcess())
+	wantSelectedClusters := []string{memberCluster3WestProdName}
+	wantUnscheduledClusters := []string{memberCluster1EastProdName, memberCluster2EastCanaryName}
+
+	Context("coupling CRP and RP using cluster labeling", Ordered, func() {
+		BeforeAll(func() {
+			By("creating work resources")
+			createWorkResources()
+		})
+
+		AfterAll(func() {
+			ensureRPAndRelatedResourcesDeleted(types.NamespacedName{Name: rpName, Namespace: workNamespaceName}, allMemberClusters)
+			ensureCRPAndRelatedResourcesDeleted(crpName, allMemberClusters)
+
+			By("removing labels from member clusters")
+			Eventually(func() error {
+				for _, clusterName := range wantSelectedClusters {
+					mc := &clusterv1beta1.MemberCluster{}
+					if err := hubClient.Get(ctx, types.NamespacedName{Name: clusterName}, mc); err != nil {
+						return fmt.Errorf("failed to get member cluster %s: %w", clusterName, err)
+					}
+
+					if mc.Labels != nil {
+						delete(mc.Labels, workNamespaceName)
+						if err := hubClient.Update(ctx, mc); err != nil {
+							return fmt.Errorf("failed to update member cluster %s: %w", clusterName, err)
+						}
+					}
+				}
+				return nil
+			}, eventuallyDuration, eventuallyInterval).Should(Succeed(), "Failed to remove labels from member clusters")
+		})
+
+		It("picking fixed cluster", func() {
+			crp := &placementv1beta1.ClusterResourcePlacement{
+				ObjectMeta: metav1.ObjectMeta{
+					Name: crpName,
+					// Add a custom finalizer; this would allow us to better observe
+					// the behavior of the controllers.
+					Finalizers: []string{customDeletionBlockerFinalizer},
+				},
+				Spec: placementv1beta1.PlacementSpec{
+					ResourceSelectors: namespaceOnlySelector(),
+					Policy: &placementv1beta1.PlacementPolicy{
+						PlacementType: placementv1beta1.PickFixedPlacementType,
+						ClusterNames:  wantSelectedClusters,
+					},
+					Strategy: placementv1beta1.RolloutStrategy{
+						Type: placementv1beta1.RollingUpdateRolloutStrategyType,
+						RollingUpdate: &placementv1beta1.RollingUpdateConfig{
+							UnavailablePeriodSeconds: ptr.To(2),
+						},
+					},
+				},
+			}
+			Expect(hubClient.Create(ctx, crp)).To(Succeed(), "Failed to create CRP %s", crpName)
+		})
+
+		It("should update CRP status as expected", func() {
+			crpStatusUpdatedActual := crpStatusUpdatedActual(workNamespaceIdentifiers(), wantSelectedClusters, nil, "0")
+			Eventually(crpStatusUpdatedActual, eventuallyDuration, eventuallyInterval).Should(Succeed(), "Failed to update CRP status as expected")
+		})
+
+		It("add labels to member clusters based on CRP placement decisions", func() {
+			Eventually(func() error {
+				// Add labels to the selected clusters
+				for _, clusterName := range wantSelectedClusters {
+					mc := &clusterv1beta1.MemberCluster{}
+					if err := hubClient.Get(ctx, types.NamespacedName{Name: clusterName}, mc); err != nil {
+						return fmt.Errorf("failed to get member cluster %s: %w", clusterName, err)
+					}
+
+					if mc.Labels == nil {
+						mc.Labels = make(map[string]string)
+					}
+					mc.Labels[workNamespaceName] = "true"
+
+					if err := hubClient.Update(ctx, mc); err != nil {
+						return fmt.Errorf("failed to update member cluster %s: %w", clusterName, err)
+					}
+				}
+				return nil
+			}, eventuallyDuration, eventuallyInterval).Should(Succeed(), "Failed to add labels to member clusters")
+		})
+
+		It("should create an RP with pickN policy using cluster labels", func() {
+			rp := &placementv1beta1.ResourcePlacement{
+				ObjectMeta: metav1.ObjectMeta{
+					Name:       rpName,
+					Namespace:  workNamespaceName,
+					Finalizers: []string{customDeletionBlockerFinalizer},
+				},
+				Spec: placementv1beta1.PlacementSpec{
+					ResourceSelectors: configMapSelector(),
+					Policy: &placementv1beta1.PlacementPolicy{
+						PlacementType:    placementv1beta1.PickNPlacementType,
+						NumberOfClusters: ptr.To(int32(3)),
+						Affinity: &placementv1beta1.Affinity{
+							ClusterAffinity: &placementv1beta1.ClusterAffinity{
+								RequiredDuringSchedulingIgnoredDuringExecution: &placementv1beta1.ClusterSelector{
+									ClusterSelectorTerms: []placementv1beta1.ClusterSelectorTerm{
+										{
+											LabelSelector: &metav1.LabelSelector{
+												MatchLabels: map[string]string{
+													workNamespaceName: "true",
+												},
+											},
+										},
+									},
+								},
+							},
+						},
+					},
+				},
+			}
+			Expect(hubClient.Create(ctx, rp)).To(Succeed(), "Failed to create RP %s", rpName)
+		})
+
+		It("should update RP status as expected", func() {
+			rpStatusUpdatedActual := func() error {
+				rpKey := types.NamespacedName{Name: rpName, Namespace: workNamespaceName}
+				return customizedPlacementStatusUpdatedActual(rpKey, appConfigMapIdentifiers(), wantSelectedClusters, wantUnscheduledClusters, "0", true)()
+			}
+			Eventually(rpStatusUpdatedActual, eventuallyDuration, eventuallyInterval).Should(Succeed(), "Failed to update RP status as expected")
+		})
+
+		It("should place resources on the picked clusters", func() {
+			resourcePlacedActual := workNamespaceAndConfigMapPlacedOnClusterActual(memberCluster3WestProd)
+			Eventually(resourcePlacedActual, eventuallyDuration, eventuallyInterval).Should(Succeed(), "Failed to place resources on the picked clusters")
+		})
+
+		It("update RP to pick 1 cluster instead of 3", func() {
+			Eventually(func() error {
+				rp := &placementv1beta1.ResourcePlacement{}
+				if err := hubClient.Get(ctx, types.NamespacedName{Name: rpName, Namespace: workNamespaceName}, rp); err != nil {
+					return fmt.Errorf("failed to get RP %s: %w", rpName, err)
+				}
+
+				rp.Spec.Policy.NumberOfClusters = ptr.To(int32(1))
+				if err := hubClient.Update(ctx, rp); err != nil {
+					return fmt.Errorf("failed to update RP %s: %w", rpName, err)
+				}
+				return nil
+			}, eventuallyDuration, eventuallyInterval).Should(Succeed(), "Failed to update RP to pick 1 cluster")
+		})
+
+		It("should update RP status as expected", func() {
+			rpStatusUpdatedActual := rpStatusUpdatedActual(appConfigMapIdentifiers(), wantSelectedClusters, nil, "0")
+			Eventually(rpStatusUpdatedActual, eventuallyDuration, eventuallyInterval).Should(Succeed(), "Failed to update RP status as expected")
+		})
+
+		It("should still place resources only on the selected cluster", func() {
+			resourcePlacedActual := workNamespaceAndConfigMapPlacedOnClusterActual(memberCluster3WestProd)
+			Eventually(resourcePlacedActual, eventuallyDuration, eventuallyInterval).Should(Succeed(), "Failed to place resources on the selected cluster after update")
 		})
 	})
 })
