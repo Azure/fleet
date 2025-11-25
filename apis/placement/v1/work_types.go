@@ -110,6 +110,74 @@ type WorkResourceIdentifier struct {
 	Name string `json:"name,omitempty"`
 }
 
+// DriftDetails describes the observed configuration drifts.
+type DriftDetails struct {
+	// ObservationTime is the timestamp when the drift was last detected.
+	//
+	// +kubebuilder:validation:Required
+	// +kubebuilder:validation:Type=string
+	// +kubebuilder:validation:Format=date-time
+	ObservationTime metav1.Time `json:"observationTime"`
+
+	// ObservedInMemberClusterGeneration is the generation of the applied manifest on the member
+	// cluster side.
+	// +kubebuilder:validation:Required
+	ObservedInMemberClusterGeneration int64 `json:"observedInMemberClusterGeneration"`
+
+	// FirstDriftedObservedTime is the timestamp when the drift was first detected.
+	//
+	// +kubebuilder:validation:Required
+	// +kubebuilder:validation:Type=string
+	// +kubebuilder:validation:Format=date-time
+	FirstDriftedObservedTime metav1.Time `json:"firstDriftedObservedTime"`
+
+	// ObservedDrifts describes each drifted field found from the applied manifest.
+	// Fleet might truncate the details as appropriate to control object size.
+	//
+	// Each entry specifies how the live state (the state on the member cluster side) compares
+	// against the desired state (the state kept in the hub cluster manifest).
+	//
+	// +kubebuilder:validation:Optional
+	ObservedDrifts []PatchDetail `json:"observedDrifts,omitempty"`
+}
+
+// DiffDetails describes the observed configuration differences.
+type DiffDetails struct {
+	// ObservationTime is the timestamp when the configuration difference was last detected.
+	//
+	// +kubebuilder:validation:Required
+	// +kubebuilder:validation:Type=string
+	// +kubebuilder:validation:Format=date-time
+	ObservationTime metav1.Time `json:"observationTime"`
+
+	// ObservedInMemberClusterGeneration is the generation of the applied manifest on the member
+	// cluster side.
+	//
+	// This might be nil if the resource has not been created yet in the member cluster.
+	//
+	// +kubebuilder:validation:Optional
+	ObservedInMemberClusterGeneration *int64 `json:"observedInMemberClusterGeneration"`
+
+	// FirstDiffedObservedTime is the timestamp when the configuration difference
+	// was first detected.
+	//
+	// +kubebuilder:validation:Required
+	// +kubebuilder:validation:Type=string
+	// +kubebuilder:validation:Format=date-time
+	FirstDiffedObservedTime metav1.Time `json:"firstDiffedObservedTime"`
+
+	// ObservedDiffs describes each field with configuration difference as found from the
+	// member cluster side.
+	//
+	// Fleet might truncate the details as appropriate to control object size.
+	//
+	// Each entry specifies how the live state (the state on the member cluster side) compares
+	// against the desired state (the state kept in the hub cluster manifest).
+	//
+	// +kubebuilder:validation:Optional
+	ObservedDiffs []PatchDetail `json:"observedDiffs,omitempty"`
+}
+
 // ManifestCondition represents the conditions of the resources deployed on
 // spoke cluster.
 type ManifestCondition struct {
@@ -120,6 +188,28 @@ type ManifestCondition struct {
 	// Conditions represents the conditions of this resource on spoke cluster
 	// +required
 	Conditions []metav1.Condition `json:"conditions"`
+
+	// DriftDetails explains about the observed configuration drifts.
+	// Fleet might truncate the details as appropriate to control object size.
+	//
+	// Note that configuration drifts can only occur on a resource if it is currently owned by
+	// Fleet and its corresponding placement is set to use the ClientSideApply or ServerSideApply
+	// apply strategy. In other words, DriftDetails and DiffDetails will not be populated
+	// at the same time.
+	//
+	// +kubebuilder:validation:Optional
+	DriftDetails *DriftDetails `json:"driftDetails,omitempty"`
+
+	// DiffDetails explains the details about the observed configuration differences.
+	// Fleet might truncate the details as appropriate to control object size.
+	//
+	// Note that configuration differences can only occur on a resource if it is not currently owned
+	// by Fleet (i.e., it is a pre-existing resource that needs to be taken over), or if its
+	// corresponding placement is set to use the ReportDiff apply strategy. In other words,
+	// DiffDetails and DriftDetails will not be populated at the same time.
+	//
+	// +kubebuilder:validation:Optional
+	DiffDetails *DiffDetails `json:"diffDetails,omitempty"`
 }
 
 // +genclient

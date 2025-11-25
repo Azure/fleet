@@ -47,6 +47,7 @@ import (
 	fleetnetworkingv1alpha1 "go.goms.io/fleet-networking/api/v1alpha1"
 
 	clusterv1beta1 "github.com/kubefleet-dev/kubefleet/apis/cluster/v1beta1"
+	placementv1 "github.com/kubefleet-dev/kubefleet/apis/placement/v1"
 	placementv1beta1 "github.com/kubefleet-dev/kubefleet/apis/placement/v1beta1"
 	"github.com/kubefleet-dev/kubefleet/pkg/utils/condition"
 	"github.com/kubefleet-dev/kubefleet/pkg/utils/controller"
@@ -589,6 +590,12 @@ var LessFuncResourceIdentifier = func(a, b placementv1beta1.ResourceIdentifier) 
 	return aStr < bStr
 }
 
+var LessFuncResourceIdentifierV1 = func(a, b placementv1.ResourceIdentifier) bool {
+	aStr := fmt.Sprintf(ResourceIdentifierStringFormat, a.Group, a.Version, a.Kind, a.Namespace, a.Name)
+	bStr := fmt.Sprintf(ResourceIdentifierStringFormat, b.Group, b.Version, b.Kind, b.Namespace, b.Name)
+	return aStr < bStr
+}
+
 // LessFuncPatchDetail is a less function for sorting patch details
 var LessFuncPatchDetail = func(a, b placementv1beta1.PatchDetail) bool {
 	if a.Path != b.Path {
@@ -602,6 +609,22 @@ var LessFuncPatchDetail = func(a, b placementv1beta1.PatchDetail) bool {
 
 // LessFuncFailedResourcePlacements is a less function for sorting failed resource placements
 var LessFuncFailedResourcePlacements = func(a, b placementv1beta1.FailedResourcePlacement) bool {
+	var aStr, bStr string
+	if a.Envelope != nil {
+		aStr = fmt.Sprintf(ResourceIdentifierWithEnvelopeIdentifierStringFormat, a.Group, a.Version, a.Kind, a.Namespace, a.Name, a.Envelope.Type, a.Envelope.Namespace, a.Envelope.Name)
+	} else {
+		aStr = fmt.Sprintf(ResourceIdentifierStringFormat, a.Group, a.Version, a.Kind, a.Namespace, a.Name)
+	}
+	if b.Envelope != nil {
+		bStr = fmt.Sprintf(ResourceIdentifierWithEnvelopeIdentifierStringFormat, b.Group, b.Version, b.Kind, b.Namespace, b.Name, b.Envelope.Type, b.Envelope.Namespace, b.Envelope.Name)
+	} else {
+		bStr = fmt.Sprintf(ResourceIdentifierStringFormat, b.Group, b.Version, b.Kind, b.Namespace, b.Name)
+
+	}
+	return aStr < bStr
+}
+
+var LessFuncFailedResourcePlacementsV1 = func(a, b placementv1.FailedResourcePlacement) bool {
 	var aStr, bStr string
 	if a.Envelope != nil {
 		aStr = fmt.Sprintf(ResourceIdentifierWithEnvelopeIdentifierStringFormat, a.Group, a.Version, a.Kind, a.Namespace, a.Name, a.Envelope.Type, a.Envelope.Namespace, a.Envelope.Name)
@@ -657,6 +680,22 @@ var LessFuncDriftedResourcePlacements = func(a, b placementv1beta1.DriftedResour
 	return aStr < bStr
 }
 
+var LessFuncDriftedResourcePlacementsV1 = func(a, b placementv1.DriftedResourcePlacement) bool {
+	var aStr, bStr string
+	if a.Envelope != nil {
+		aStr = fmt.Sprintf(ResourceIdentifierWithEnvelopeIdentifierStringFormat, a.Group, a.Version, a.Kind, a.Namespace, a.Name, a.Envelope.Type, a.Envelope.Namespace, a.Envelope.Name)
+	} else {
+		aStr = fmt.Sprintf(ResourceIdentifierStringFormat, a.Group, a.Version, a.Kind, a.Namespace, a.Name)
+	}
+	if b.Envelope != nil {
+		bStr = fmt.Sprintf(ResourceIdentifierWithEnvelopeIdentifierStringFormat, b.Group, b.Version, b.Kind, b.Namespace, b.Name, b.Envelope.Type, b.Envelope.Namespace, b.Envelope.Name)
+	} else {
+		bStr = fmt.Sprintf(ResourceIdentifierStringFormat, b.Group, b.Version, b.Kind, b.Namespace, b.Name)
+
+	}
+	return aStr < bStr
+}
+
 // IsDriftedResourcePlacementsEqual returns true if the two set of drifted resource placements are equal.
 func IsDriftedResourcePlacementsEqual(oldDriftedResourcePlacements, newDriftedResourcePlacements []placementv1beta1.DriftedResourcePlacement) bool {
 	if len(oldDriftedResourcePlacements) != len(newDriftedResourcePlacements) {
@@ -683,6 +722,22 @@ func IsDriftedResourcePlacementsEqual(oldDriftedResourcePlacements, newDriftedRe
 
 // LessFuncDiffedResourcePlacements is a less function for sorting drifted resource placements
 var LessFuncDiffedResourcePlacements = func(a, b placementv1beta1.DiffedResourcePlacement) bool {
+	var aStr, bStr string
+	if a.Envelope != nil {
+		aStr = fmt.Sprintf(ResourceIdentifierWithEnvelopeIdentifierStringFormat, a.Group, a.Version, a.Kind, a.Namespace, a.Name, a.Envelope.Type, a.Envelope.Namespace, a.Envelope.Name)
+	} else {
+		aStr = fmt.Sprintf(ResourceIdentifierStringFormat, a.Group, a.Version, a.Kind, a.Namespace, a.Name)
+	}
+	if b.Envelope != nil {
+		bStr = fmt.Sprintf(ResourceIdentifierWithEnvelopeIdentifierStringFormat, b.Group, b.Version, b.Kind, b.Namespace, b.Name, b.Envelope.Type, b.Envelope.Namespace, b.Envelope.Name)
+	} else {
+		bStr = fmt.Sprintf(ResourceIdentifierStringFormat, b.Group, b.Version, b.Kind, b.Namespace, b.Name)
+
+	}
+	return aStr < bStr
+}
+
+var LessFuncDiffedResourcePlacementsV1 = func(a, b placementv1.DiffedResourcePlacement) bool {
 	var aStr, bStr string
 	if a.Envelope != nil {
 		aStr = fmt.Sprintf(ResourceIdentifierWithEnvelopeIdentifierStringFormat, a.Group, a.Version, a.Kind, a.Namespace, a.Name, a.Envelope.Type, a.Envelope.Namespace, a.Envelope.Name)
