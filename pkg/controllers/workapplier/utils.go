@@ -140,7 +140,6 @@ func discardFieldsIrrelevantInComparisonFrom(obj *unstructured.Unstructured) *un
 
 	// Fields below are read-only fields in object meta. Fleet will ignore them in the comparison
 	// process.
-	objCopy.SetCreationTimestamp(metav1.Time{})
 	// Deleted objects are handled separately in the apply process; for comparison purposes,
 	// Fleet will ignore the deletion timestamp and grace period seconds.
 	objCopy.SetDeletionTimestamp(nil)
@@ -152,6 +151,14 @@ func discardFieldsIrrelevantInComparisonFrom(obj *unstructured.Unstructured) *un
 
 	// Remove the status field.
 	unstructured.RemoveNestedField(objCopy.Object, "status")
+
+	// Remove all creationTimestamp fields.
+	unstructured.RemoveNestedField(objCopy.Object, "metadata", "creationTimestamp")
+	// Resources that have .spec.template.metadata include: Deployment, Job, StatefulSet,
+	// DaemonSet, ReplicaSet, and CronJob.
+	unstructured.RemoveNestedField(objCopy.Object, "spec", "template", "metadata", "creationTimestamp")
+	// Also handle CronJob's .spec.jobTemplate.spec.template.metadata
+	unstructured.RemoveNestedField(objCopy.Object, "spec", "jobTemplate", "spec", "template", "metadata", "creationTimestamp")
 
 	return objCopy
 }

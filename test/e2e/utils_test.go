@@ -85,7 +85,7 @@ func createMemberCluster(name, svcAccountName string, labels, annotations map[st
 			HeartbeatPeriodSeconds: memberClusterHeartbeatPeriodSeconds,
 		},
 	}
-	Expect(hubClient.Create(ctx, mcObj)).To(Succeed(), "Failed to create member cluster object %s", name)
+	Expect(hubClient.Create(ctx, mcObj)).To(SatisfyAny(&utils.AlreadyExistMatcher{}, Succeed()), "Failed to create member cluster object %s", name)
 }
 
 func updateMemberClusterDeleteOptions(name string, deleteOptions *clusterv1beta1.DeleteOptions) {
@@ -312,10 +312,15 @@ func checkIfAzurePropertyProviderIsWorking() {
 			ignoreCostProperties := cmpopts.IgnoreMapEntries(func(k clusterv1beta1.PropertyName, v clusterv1beta1.PropertyValue) bool {
 				return k == azure.PerCPUCoreCostProperty || k == azure.PerGBMemoryCostProperty
 			})
+			// we don't know the exact value of k8s version and cluster entry point
+			ignoreClusterProperties := cmpopts.IgnoreMapEntries(func(k clusterv1beta1.PropertyName, v clusterv1beta1.PropertyValue) bool {
+				return k == propertyprovider.K8sVersionProperty || k == propertyprovider.ClusterCertificateAuthorityProperty
+			})
 			if diff := cmp.Diff(
 				mcObj.Status.Properties, wantStatus.Properties,
 				ignoreTimeTypeFields,
 				ignoreCostProperties,
+				ignoreClusterProperties,
 			); diff != "" {
 				return fmt.Errorf("member cluster status properties diff (-got, +want):\n%s", diff)
 			}
@@ -576,7 +581,7 @@ func cleanupInvalidClusters() {
 		}
 		Eventually(func() error {
 			err := hubClient.Get(ctx, types.NamespacedName{Name: name}, mcObj)
-			if err != nil {
+			if err != nil && !k8serrors.IsNotFound(err) {
 				return err
 			}
 			mcObj.Finalizers = []string{}

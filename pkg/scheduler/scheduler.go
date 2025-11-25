@@ -228,6 +228,8 @@ func (s *Scheduler) scheduleOnce(ctx context.Context, worker int) {
 	}
 
 	// Requeue if the scheduling cycle suggests so.
+	//nolint:staticcheck
+	//lint:ignore SA1019 we need more time to fully migrate to RequeueAfter as we used these two fields separately.
 	if res.Requeue {
 		if res.RequeueAfter > 0 {
 			s.queue.AddAfter(placementKey, res.RequeueAfter)
