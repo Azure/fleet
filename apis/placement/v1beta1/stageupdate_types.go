@@ -154,27 +154,27 @@ type State string
 const (
 	// StateNotStarted describes user intent to initialize but not execute the update run.
 	// This is the default state when an update run is created.
-	StateNotStarted State = "NotStarted"
+	StateNotStarted State = "Initialize"
 
 	// StateStarted describes user intent to execute (or resume execution if paused).
-	// Users can subsequently set the state to Stopped or Abandoned.
-	StateStarted State = "Started"
+	// Users can subsequently set the state to Pause or Abandon.
+	StateStarted State = "Execute"
 
 	// StateStopped describes user intent to pause the update run.
-	// Users can subsequently set the state to Started or Abandoned.
-	StateStopped State = "Stopped"
+	// Users can subsequently set the state to Execute or Abandon.
+	StateStopped State = "Pause"
 
 	// StateAbandoned describes user intent to abandon the update run.
 	// This is a terminal state; once set, it cannot be changed.
-	StateAbandoned State = "Abandoned"
+	StateAbandoned State = "Abandon"
 )
 
 // UpdateRunSpec defines the desired rollout strategy and the snapshot indices of the resources to be updated.
 // It specifies a stage-by-stage update process across selected clusters for the given ResourcePlacement object.
-// +kubebuilder:validation:XValidation:rule="!has(oldSelf.state) || oldSelf.state != 'NotStarted' || self.state != 'Stopped'",message="invalid state transition: cannot transition from NotStarted to Stopped"
-// +kubebuilder:validation:XValidation:rule="!has(oldSelf.state) || oldSelf.state != 'Started' || self.state != 'NotStarted'",message="invalid state transition: cannot transition from Started to NotStarted"
-// +kubebuilder:validation:XValidation:rule="!has(oldSelf.state) || oldSelf.state != 'Stopped' || self.state != 'NotStarted'",message="invalid state transition: cannot transition from Stopped to NotStarted"
-// +kubebuilder:validation:XValidation:rule="!has(oldSelf.state) || oldSelf.state != 'Abandoned' || self.state == 'Abandoned'",message="invalid state transition: Abandoned is a terminal state and cannot transition to any other state"
+// +kubebuilder:validation:XValidation:rule="!(has(oldSelf.state) && oldSelf.state == 'Initialize' && self.state == 'Pause')",message="invalid state transition: cannot transition from Initialize to Pause"
+// +kubebuilder:validation:XValidation:rule="!(has(oldSelf.state) && oldSelf.state == 'Execute' && self.state == 'Initialize')",message="invalid state transition: cannot transition from Execute to Initialize"
+// +kubebuilder:validation:XValidation:rule="!(has(oldSelf.state) && oldSelf.state == 'Pause' && self.state == 'Initialize')",message="invalid state transition: cannot transition from Pause to Initialize"
+// +kubebuilder:validation:XValidation:rule="!has(oldSelf.state) || oldSelf.state != 'Abandon' || self.state == 'Abandon'",message="invalid state transition: Abandon is a terminal state and cannot transition to any other state"
 type UpdateRunSpec struct {
 	// PlacementName is the name of placement that this update run is applied to.
 	// There can be multiple active update runs for each placement, but
@@ -199,13 +199,13 @@ type UpdateRunSpec struct {
 	StagedUpdateStrategyName string `json:"stagedRolloutStrategyName"`
 
 	// State indicates the desired state of the update run.
-	// NotStarted: The update run is initialized but execution has not started (default).
-	// Started: The update run should execute or resume execution.
-	// Stopped: The update run should pause execution.
-	// Abandoned: The update run should be abandoned and terminated.
+	// Initialize: The update run should be initialized but execution should not start (default).
+	// Execute: The update run should execute or resume execution.
+	// Pause: The update run should pause execution.
+	// Abandon: The update run should be abandoned and terminated.
 	// +kubebuilder:validation:Optional
-	// +kubebuilder:default=NotStarted
-	// +kubebuilder:validation:Enum=NotStarted;Started;Stopped;Abandoned
+	// +kubebuilder:default=Initialize
+	// +kubebuilder:validation:Enum=Initialize;Execute;Pause;Abandon
 	State State `json:"state,omitempty"`
 }
 

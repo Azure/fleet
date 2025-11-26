@@ -105,40 +105,40 @@ spec:
                 - message: stagedRolloutStrategyName is immutable
                   rule: self == oldSelf
               state:
-                default: NotStarted
+                default: Initialize
                 description: |-
                   State indicates the desired state of the update run.
-                  NotStarted: The update run is initialized but execution has not started (default).
-                  Started: The update run should execute or resume execution.
-                  Stopped: The update run should pause execution.
-                  Abandoned: The update run should be abandoned and terminated.
+                  Initialize: The update run should be initialized but execution should not start (default).
+                  Execute: The update run should execute or resume execution.
+                  Pause: The update run should pause execution.
+                  Abandon: The update run should be abandoned and terminated.
                 enum:
-                - NotStarted
-                - Started
-                - Stopped
-                - Abandoned
+                - Initialize
+                - Execute
+                - Pause
+                - Abandon
                 type: string
             required:
             - placementName
             - stagedRolloutStrategyName
             type: object
             x-kubernetes-validations:
-            - message: 'invalid state transition: cannot transition from NotStarted
-                to Stopped'
-              rule: '!has(oldSelf.state) || oldSelf.state != ''NotStarted'' || self.state
-                != ''Stopped'''
-            - message: 'invalid state transition: cannot transition from Started to
-                NotStarted'
-              rule: '!has(oldSelf.state) || oldSelf.state != ''Started'' || self.state
-                != ''NotStarted'''
-            - message: 'invalid state transition: cannot transition from Stopped to
-                NotStarted'
-              rule: '!has(oldSelf.state) || oldSelf.state != ''Stopped'' || self.state
-                != ''NotStarted'''
-            - message: 'invalid state transition: Abandoned is a terminal state and
+            - message: 'invalid state transition: cannot transition from Initialize
+                to Pause'
+              rule: '!(has(oldSelf.state) && oldSelf.state == ''Initialize'' && self.state
+                == ''Pause'')'
+            - message: 'invalid state transition: cannot transition from Execute to
+                Initialize'
+              rule: '!(has(oldSelf.state) && oldSelf.state == ''Execute'' && self.state
+                == ''Initialize'')'
+            - message: 'invalid state transition: cannot transition from Pause to
+                Initialize'
+              rule: '!(has(oldSelf.state) && oldSelf.state == ''Pause'' && self.state
+                == ''Initialize'')'
+            - message: 'invalid state transition: Abandon is a terminal state and
                 cannot transition to any other state'
-              rule: '!has(oldSelf.state) || oldSelf.state != ''Abandoned'' || self.state
-                == ''Abandoned'''
+              rule: '!has(oldSelf.state) || oldSelf.state != ''Abandon'' || self.state
+                == ''Abandon'''
           status:
             description: The observed status of StagedUpdateRun.
             properties:
