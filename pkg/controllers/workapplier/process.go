@@ -36,7 +36,7 @@ func (r *Reconciler) processManifests(
 	bundles []*manifestProcessingBundle,
 	work *fleetv1beta1.Work,
 	expectedAppliedWorkOwnerRef *metav1.OwnerReference,
-) {
+) error {
 	// Process all manifests in parallel.
 	//
 	// There are cases where certain groups of manifests should not be processed in parallel with
@@ -58,7 +58,17 @@ func (r *Reconciler) processManifests(
 		}
 
 		r.parallelizer.ParallelizeUntil(ctx, len(bundles), doWork, "processingManifestsInReportDiffMode")
-		return
+
+		// Unlike some other steps in the reconciliation loop, the manifest processing step does not end
+		// with a contextual API call; consequently, if the context has been cancelled during this step,
+		// some manifest might not get processed at all, and passing such bundles to the next step may trigger
+		// unexpected behaviors. To address this, at the end of this step the work applier checks for context
+		// cancellation directly.
+		if err := ctx.Err(); err != nil {
+			klog.V(2).InfoS("manifest processing has been interrupted as the main context has been cancelled")
+			return fmt.Errorf("manifest processing has been interrupted: %w", err)
+		}
+		return nil
 	}
 
 	// Organize the bundles into different waves of bundles for parallel processing based on their
@@ -83,7 +93,18 @@ func (r *Reconciler) processManifests(
 		}
 
 		r.parallelizer.ParallelizeUntil(ctx, len(bundlesInWave), doWork, fmt.Sprintf("processingManifestsInWave%d", idx))
+
+		// Unlike some other steps in the reconciliation loop, the manifest processing step does not end
+		// with a contextual API call; consequently, if the context has been cancelled during this step,
+		// some manifest might not get processed at all, and passing such bundles to the next step may trigger
+		// unexpected behaviors. To address this, at the end of this step the work applier checks for context
+		// cancellation directly.
+		if err := ctx.Err(); err != nil {
+			klog.V(2).InfoS("manifest processing has been interrupted as the main context has been cancelled")
+			return fmt.Errorf("manifest processing has been interrupted: %w", err)
+		}
 	}
+	return nil
 }
 
 // processOneManifest processes a manifest (in the JSON format) embedded in the Work object.

@@ -1126,7 +1126,10 @@ func TestTrackInMemberClusterObjAvailability(t *testing.T) {
 				parallelizer: parallelizer.NewParallelizer(2),
 			}
 
-			r.trackInMemberClusterObjAvailability(ctx, tc.bundles, workRef)
+			if err := r.trackInMemberClusterObjAvailability(ctx, tc.bundles, workRef); err != nil {
+				// Normally this would never occur.
+				t.Fatalf("trackInMemberClusterObjAvailability() = %v, want no error", err)
+			}
 
 			// A special less func to sort the bundles by their ordinal.
 			lessFuncManifestProcessingBundle := func(i, j *manifestProcessingBundle) bool {
