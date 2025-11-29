@@ -28,7 +28,7 @@ jobs:
       fleet_networking_version: ${{ steps.vars.outputs.fleet_networking_version }}
       arc_helmchart_version: ${{ steps.vars.outputs.arc_helmchart_version }}
     steps:
-      - uses: actions/checkout@v5
+      - uses: actions/checkout@v6
         with:
           fetch-depth: 0
       - name: 'Set output variables'
@@ -61,7 +61,7 @@ jobs:
       labels: [self-hosted, "1ES.Pool=1es-aks-fleet-pool-ubuntu"]
     needs: prepare-variables
     steps:
-      - uses: actions/checkout@v5
+      - uses: actions/checkout@v6
         with:
           ref: ${{ needs.prepare-variables.outputs.release_tag }}
       - name: 'Login the ACR'
@@ -114,7 +114,7 @@ jobs:
       labels: [self-hosted, "1ES.Pool=1es-aks-fleet-pool-ubuntu-arm64"]
     needs: prepare-variables
     steps:
-      - uses: actions/checkout@v5
+      - uses: actions/checkout@v6
         with:
           ref: ${{ needs.prepare-variables.outputs.release_tag }}
       - name: 'Install the Azure CLI'
