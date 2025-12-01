@@ -34,7 +34,11 @@ make e2e-tests
 
 # Run custom E2E tests with labels
 make e2e-tests-custom
+
+# Clean up E2E environment
+make clean-e2e-tests
 ```
+
 
 ### Code Quality
 ```bash

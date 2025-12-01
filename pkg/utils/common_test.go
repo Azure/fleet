@@ -6,6 +6,7 @@ import (
 
 	"github.com/google/go-cmp/cmp"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
 	"k8s.io/utils/ptr"
 
 	fleetv1beta1 "go.goms.io/fleet/apis/placement/v1beta1"
@@ -1185,6 +1186,153 @@ func TestIsDiffedResourcePlacementEqual(t *testing.T) {
 			got := IsDiffedResourcePlacementsEqual(tc.oldDRP, tc.newDRP)
 			if got != tc.want {
 				t.Errorf("IsDiffedResourcePlacementsEqual() = %v, want %v", got, tc.want)
+			}
+		})
+	}
+}
+
+func TestShouldPropagateObj_PodAndReplicaSet(t *testing.T) {
+	tests := []struct {
+		name            string
+		obj             map[string]interface{}
+		ownerReferences []metav1.OwnerReference
+		want            bool
+	}{
+		{
+			name: "standalone replicaset without ownerReferences should propagate",
+			obj: map[string]interface{}{
+				"apiVersion": "apps/v1",
+				"kind":       "ReplicaSet",
+				"metadata": map[string]interface{}{
+					"name":      "standalone-rs",
+					"namespace": "default",
+				},
+			},
+			ownerReferences: nil,
+			want:            true,
+		},
+		{
+			name: "standalone pod without ownerReferences should propagate",
+			obj: map[string]interface{}{
+				"apiVersion": "v1",
+				"kind":       "Pod",
+				"metadata": map[string]interface{}{
+					"name":      "standalone-pod",
+					"namespace": "default",
+				},
+			},
+			ownerReferences: nil,
+			want:            true,
+		},
+		{
+			name: "replicaset with deployment owner should NOT propagate",
+			obj: map[string]interface{}{
+				"apiVersion": "apps/v1",
+				"kind":       "ReplicaSet",
+				"metadata": map[string]interface{}{
+					"name":      "test-deploy-abc123",
+					"namespace": "default",
+				},
+			},
+			ownerReferences: []metav1.OwnerReference{
+				{
+					APIVersion: "apps/v1",
+					Kind:       "Deployment",
+					Name:       "test-deploy",
+					UID:        "12345",
+				},
+			},
+			want: false,
+		},
+		{
+			name: "pod owned by replicaset - passes ShouldPropagateObj but filtered by resource config",
+			obj: map[string]interface{}{
+				"apiVersion": "v1",
+				"kind":       "Pod",
+				"metadata": map[string]interface{}{
+					"name":      "test-deploy-abc123-xyz",
+					"namespace": "default",
+				},
+			},
+			ownerReferences: []metav1.OwnerReference{
+				{
+					APIVersion: "apps/v1",
+					Kind:       "ReplicaSet",
+					Name:       "test-deploy-abc123",
+					UID:        "67890",
+				},
+			},
+			want: true, // ShouldPropagateObj doesn't filter Pods - they're filtered by NewResourceConfig
+		},
+		{
+			name: "controllerrevision owned by daemonset should NOT propagate",
+			obj: map[string]interface{}{
+				"apiVersion": "apps/v1",
+				"kind":       "ControllerRevision",
+				"metadata": map[string]interface{}{
+					"name":      "test-ds-7b9848797f",
+					"namespace": "default",
+				},
+			},
+			ownerReferences: []metav1.OwnerReference{
+				{
+					APIVersion: "apps/v1",
+					Kind:       "DaemonSet",
+					Name:       "test-ds",
+					UID:        "abcdef",
+				},
+			},
+			want: false,
+		},
+		{
+			name: "controllerrevision owned by statefulset should NOT propagate",
+			obj: map[string]interface{}{
+				"apiVersion": "apps/v1",
+				"kind":       "ControllerRevision",
+				"metadata": map[string]interface{}{
+					"name":      "test-ss-7878b4b446",
+					"namespace": "default",
+				},
+			},
+			ownerReferences: []metav1.OwnerReference{
+				{
+					APIVersion: "apps/v1",
+					Kind:       "StatefulSet",
+					Name:       "test-ss",
+					UID:        "fedcba",
+				},
+			},
+			want: false,
+		},
+		{
+			name: "standalone controllerrevision without owner should propagate",
+			obj: map[string]interface{}{
+				"apiVersion": "apps/v1",
+				"kind":       "ControllerRevision",
+				"metadata": map[string]interface{}{
+					"name":      "custom-revision",
+					"namespace": "default",
+				},
+			},
+			ownerReferences: nil,
+			want:            true,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			uObj := &unstructured.Unstructured{Object: tt.obj}
+			if tt.ownerReferences != nil {
+				uObj.SetOwnerReferences(tt.ownerReferences)
+			}
+
+			got, err := ShouldPropagateObj(nil, uObj)
+			if err != nil {
+				t.Errorf("ShouldPropagateObj() error = %v", err)
+				return
+			}
+			if got != tt.want {
+				t.Errorf("ShouldPropagateObj() = %v, want %v", got, tt.want)
 			}
 		})
 	}

@@ -56,4 +56,13 @@ func (p *parallelizer) ParallelizeUntil(ctx context.Context, pieces int, doWork 
 	}
 
 	workqueue.ParallelizeUntil(ctx, p.numOfWorkers, pieces, doWorkWithLogs)
+
+	// Note (chenyu1): the ParallelizeUntil method is essentially a thin wrapper around the
+	// workqueue.ParallelizeUntil method. Note that the workqueue.ParallelizeUntil method
+	// right now does not return any error; it returns when the context is cancelled, possibly
+	// in a willingly manner. Some of the KubeFleet code makes use of this to facilitate a
+	// fail-fast pattern (i.e., pass in a child context to the parallelizer; if one worker
+	// has exited, cancel the child context in the worker and consequently the whole parallelization).
+	// As only the caller knows why a context is cancelled (willingly by a worker or not), we leave it to the
+	// caller to inspect the context after this method returns rather than trying to do it here.
 }

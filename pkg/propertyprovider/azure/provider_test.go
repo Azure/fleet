@@ -27,6 +27,10 @@ import (
 	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/api/resource"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/apimachinery/pkg/runtime"
+	"k8s.io/apimachinery/pkg/version"
+	"k8s.io/client-go/discovery/fake"
+	k8stesting "k8s.io/client-go/testing"
 
 	clusterv1beta1 "go.goms.io/fleet/apis/cluster/v1beta1"
 	"go.goms.io/fleet/pkg/propertyprovider"
@@ -742,12 +746,17 @@ func TestCollect(t *testing.T) {
 			for idx := range tc.pods {
 				podTracker.AddOrUpdate(&tc.pods[idx])
 			}
-
+			k8sversion := "1.35.5"
 			p := &PropertyProvider{
 				nodeTracker:                           nodeTracker,
 				podTracker:                            podTracker,
 				isCostCollectionEnabled:               true,
 				isAvailableResourcesCollectionEnabled: true,
+				cachedK8sVersion:                      k8sversion,
+				cachedK8sVersionObservedTime:          time.Now(),
+			}
+			tc.wantMetricCollectionResponse.Properties[propertyprovider.K8sVersionProperty] = clusterv1beta1.PropertyValue{
+				Value: k8sversion,
 			}
 			res := p.Collect(ctx)
 			if diff := cmp.Diff(res, tc.wantMetricCollectionResponse, ignoreObservationTimeFieldInPropertyValue); diff != "" {
@@ -935,17 +944,225 @@ func TestCollectWithDisabledFeatures(t *testing.T) {
 					podTracker.AddOrUpdate(&pods[idx])
 				}
 			}
-
+			k8sversion := "1.34.6"
 			p := &PropertyProvider{
 				nodeTracker:                           nodeTracker,
 				podTracker:                            podTracker,
 				isCostCollectionEnabled:               tc.isCostCollectionEnabled,
 				isAvailableResourcesCollectionEnabled: tc.isAvailableResourcesCollectionEnabled,
+				cachedK8sVersion:                      k8sversion,
+				cachedK8sVersionObservedTime:          time.Now(),
+				clusterCertificateAuthority:           []byte("CADATA"),
+			}
+			tc.wantPropertyCollectionResponse.Properties[propertyprovider.K8sVersionProperty] = clusterv1beta1.PropertyValue{
+				Value: k8sversion,
+			}
+			tc.wantPropertyCollectionResponse.Properties[propertyprovider.ClusterCertificateAuthorityProperty] = clusterv1beta1.PropertyValue{
+				Value: "CADATA",
 			}
 			res := p.Collect(ctx)
 			if diff := cmp.Diff(res, tc.wantPropertyCollectionResponse, ignoreObservationTimeFieldInPropertyValue); diff != "" {
 				t.Fatalf("Collect() property collection response diff (-got, +want):\n%s", diff)
 			}
 		})
+	}
+}
+
+func TestCollectK8sVersion(t *testing.T) {
+	ctx := context.Background()
+
+	testCases := []struct {
+		name                   string
+		discoveryClient        *fake.FakeDiscovery
+		cachedVersion          string
+		cacheStartTime         time.Time
+		cacheTTL               time.Duration
+		wantVersion            string
+		wantDiscoveryCallsMade bool
+	}{
+		{
+			name: "cache miss - no cached version",
+			discoveryClient: &fake.FakeDiscovery{
+				Fake: &k8stesting.Fake{},
+				FakedServerVersion: &version.Info{
+					GitVersion: "v1.28.0",
+				},
+			},
+			cachedVersion:          "",
+			cacheStartTime:         time.Now().Add(-1 * time.Hour), // 1 hour ago
+			cacheTTL:               15 * time.Minute,
+			wantVersion:            "v1.28.0",
+			wantDiscoveryCallsMade: true,
+		},
+		{
+			name: "cache hit - cached version still valid",
+			discoveryClient: &fake.FakeDiscovery{
+				Fake: &k8stesting.Fake{},
+				FakedServerVersion: &version.Info{
+					GitVersion: "v1.28.0",
+				},
+			},
+			cachedVersion:          "v1.27.0",
+			cacheStartTime:         time.Now().Add(-5 * time.Minute), // 5 minutes ago
+			cacheTTL:               15 * time.Minute,
+			wantVersion:            "v1.27.0",
+			wantDiscoveryCallsMade: false,
+		},
+		{
+			name: "cache expired - cached version too old",
+			discoveryClient: &fake.FakeDiscovery{
+				Fake: &k8stesting.Fake{},
+				FakedServerVersion: &version.Info{
+					GitVersion: "v1.28.0",
+				},
+			},
+			cachedVersion:          "v1.27.0",
+			cacheStartTime:         time.Now().Add(-20 * time.Minute), // 20 minutes ago
+			cacheTTL:               1 * time.Minute,
+			wantVersion:            "v1.28.0",
+			wantDiscoveryCallsMade: true,
+		},
+		{
+			name: "cache at TTL boundary - should be expired",
+			discoveryClient: &fake.FakeDiscovery{
+				Fake: &k8stesting.Fake{},
+				FakedServerVersion: &version.Info{
+					GitVersion: "v1.28.0",
+				},
+			},
+			cachedVersion:          "v1.27.0",
+			cacheStartTime:         time.Now().Add(-5*time.Minute - time.Second), // Just over 15 minutes
+			cacheTTL:               5 * time.Minute,
+			wantVersion:            "v1.28.0",
+			wantDiscoveryCallsMade: true,
+		},
+		{
+			name: "discovery client error - no property set",
+			discoveryClient: func() *fake.FakeDiscovery {
+				f := &fake.FakeDiscovery{
+					Fake: &k8stesting.Fake{},
+				}
+				f.AddReactor("get", "version", func(action k8stesting.Action) (handled bool, ret runtime.Object, err error) {
+					return true, nil, fmt.Errorf("connection refused")
+				})
+				return f
+			}(),
+			cachedVersion:          "",
+			cacheStartTime:         time.Time{},
+			cacheTTL:               15 * time.Minute,
+			wantVersion:            "", // No property should be set
+			wantDiscoveryCallsMade: true,
+		},
+		{
+			name: "cache hit - cached version still valid even if the client errors",
+			discoveryClient: func() *fake.FakeDiscovery {
+				f := &fake.FakeDiscovery{
+					Fake: &k8stesting.Fake{},
+				}
+				f.AddReactor("get", "version", func(action k8stesting.Action) (handled bool, ret runtime.Object, err error) {
+					return true, nil, fmt.Errorf("connection refused")
+				})
+				return f
+			}(),
+			cachedVersion:          "v1.27.0",
+			cacheStartTime:         time.Now().Add(-5 * time.Minute), // 5 minutes ago
+			cacheTTL:               15 * time.Minute,
+			wantVersion:            "v1.27.0",
+			wantDiscoveryCallsMade: false,
+		},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			k8sVersionCacheTTL = tc.cacheTTL
+			p := &PropertyProvider{
+				cachedK8sVersion:             tc.cachedVersion,
+				cachedK8sVersionObservedTime: tc.cacheStartTime,
+			}
+			// Only set discoveryClient if it's not nil to avoid interface nil pointer issues
+			if tc.discoveryClient != nil {
+				p.discoveryClient = tc.discoveryClient
+			}
+
+			properties := make(map[clusterv1beta1.PropertyName]clusterv1beta1.PropertyValue)
+			p.collectK8sVersion(ctx, properties)
+
+			if tc.wantVersion == "" {
+				// No property should be set
+				if _, ok := properties[propertyprovider.K8sVersionProperty]; ok {
+					t.Errorf("Expected no Kubernetes version property to be set, but got one")
+				}
+			} else {
+				// Check that the property is set correctly
+				gotProperty, ok := properties[propertyprovider.K8sVersionProperty]
+				if !ok {
+					t.Fatalf("Expected Kubernetes version property to be set, but it was not")
+				}
+				if gotProperty.Value != tc.wantVersion {
+					t.Errorf("collectK8sVersion() version = %v, want %v", gotProperty.Value, tc.wantVersion)
+				}
+			} // Check if discovery client was called the expected number of times
+			if tc.discoveryClient != nil {
+				if tc.wantDiscoveryCallsMade && len(tc.discoveryClient.Actions()) == 0 {
+					t.Errorf("Expected discovery client to be called, but it was not")
+				}
+				if !tc.wantDiscoveryCallsMade && len(tc.discoveryClient.Actions()) > 0 {
+					t.Errorf("Expected discovery client not to be called, but it was called %d times", len(tc.discoveryClient.Actions()))
+				}
+			}
+
+			// Verify cache was updated when discovery client was called successfully
+			if tc.wantDiscoveryCallsMade && tc.discoveryClient != nil && tc.discoveryClient.FakedServerVersion != nil {
+				if p.cachedK8sVersion != tc.wantVersion {
+					t.Errorf("Expected cached version to be %v, but got %v", tc.wantVersion, p.cachedK8sVersion)
+				}
+				if p.cachedK8sVersionObservedTime.IsZero() {
+					t.Errorf("Expected cache time to be updated, but it was not")
+				}
+			}
+		})
+	}
+}
+
+func TestCollectK8sVersionConcurrency(t *testing.T) {
+	ctx := context.Background()
+
+	discoveryClient := &fake.FakeDiscovery{
+		Fake: &k8stesting.Fake{},
+		FakedServerVersion: &version.Info{
+			GitVersion: "v1.28.0",
+		},
+	}
+
+	p := &PropertyProvider{
+		discoveryClient: discoveryClient,
+	}
+
+	// Run multiple concurrent calls to collectK8sVersion
+	const numGoroutines = 100
+	k8sVersionCacheTTL = 1 * time.Second // Reduce cache TTL to test cache expire
+	done := make(chan bool, numGoroutines)
+
+	for i := 0; i < numGoroutines; i++ {
+		go func() {
+			properties := make(map[clusterv1beta1.PropertyName]clusterv1beta1.PropertyValue)
+			p.collectK8sVersion(ctx, properties)
+			done <- true
+		}()
+	}
+
+	// Wait for all goroutines to complete
+	for i := 0; i < numGoroutines; i++ {
+		<-done
+	}
+
+	// Verify that the discovery client was called at least once
+	if len(discoveryClient.Actions()) == 0 {
+		t.Errorf("Expected discovery client to be called at least once, but it was not")
+	}
+
+	// Verify that the cache was populated
+	if p.cachedK8sVersion != "v1.28.0" {
+		t.Errorf("Expected cached version to be v1.28.0, but got %v", p.cachedK8sVersion)
 	}
 }

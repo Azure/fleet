@@ -39,6 +39,9 @@ import (
 
 var (
 	ignoreObservationTimeFieldInPropertyValue = cmpopts.IgnoreFields(clusterv1beta1.PropertyValue{}, "ObservationTime")
+	ignoreNonDeterministicProperty            = cmpopts.IgnoreMapEntries(func(k clusterv1beta1.PropertyName, v clusterv1beta1.PropertyValue) bool {
+		return k == propertyprovider.K8sVersionProperty || k == propertyprovider.ClusterCertificateAuthorityProperty
+	})
 )
 
 var (
@@ -311,7 +314,7 @@ var (
 			}
 
 			res := p.Collect(ctx)
-			if diff := cmp.Diff(res, expectedRes, ignoreObservationTimeFieldInPropertyValue, cmpopts.EquateEmpty()); diff != "" {
+			if diff := cmp.Diff(res, expectedRes, ignoreObservationTimeFieldInPropertyValue, ignoreNonDeterministicProperty, cmpopts.EquateEmpty()); diff != "" {
 				return fmt.Errorf("property collection response (-got, +want):\n%s", diff)
 			}
 			return nil
