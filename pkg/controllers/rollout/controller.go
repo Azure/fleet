@@ -151,6 +151,11 @@ func (r *Reconciler) Reconcile(ctx context.Context, req runtime.Request) (runtim
 			"placement", placementObjRef)
 		return runtime.Result{}, err
 	}
+	if masterResourceSnapshot == nil {
+		klog.V(2).InfoS("No masterResourceSnapshot found for the placement, stop rolling", "placement", placementObjRef)
+		// New masterResourceSnapshot creation should trigger the rollout controller.
+		return runtime.Result{}, nil
+	}
 	klog.V(2).InfoS("Found the masterResourceSnapshot for the placement", "placement", placementObjRef, "masterResourceSnapshot", klog.KObj(masterResourceSnapshot))
 
 	// Note: there is a corner case that an override is in-between snapshots (the old one is marked as not the latest while the new one is not created yet)
