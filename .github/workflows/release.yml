@@ -1,0 +1,87 @@
+name: Release Images
+
+on:
+  push:
+    tags:
+      - 'v*.*.*'
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: 'Release tag (e.g., v1.0.0)'
+        required: true
+        type: string
+
+permissions:
+  contents: read
+  packages: write
+
+env:
+  REGISTRY: ghcr.io
+  HUB_AGENT_IMAGE_NAME: hub-agent
+  MEMBER_AGENT_IMAGE_NAME: member-agent
+  REFRESH_TOKEN_IMAGE_NAME: refresh-token
+  GO_VERSION: '1.24.9'
+
+jobs:
+  export-registry:
+    runs-on: ubuntu-latest
+    outputs:
+      registry: ${{ steps.export.outputs.registry }}
+      tag: ${{ steps.export.outputs.tag }}
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v6.0.0
+        
+      - id: export
+        run: |
+          # registry must be in lowercase
+          echo "registry=$(echo "${{ env.REGISTRY }}/${{ github.repository }}" | tr '[:upper:]' '[:lower:]')" >> $GITHUB_OUTPUT
+          
+          # Extract tag from github ref or workflow input
+          if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
+            TAG="${{ inputs.tag }}"
+          elif [[ "${{ github.ref }}" == refs/tags/* ]]; then
+            TAG=${GITHUB_REF#refs/tags/}
+          else
+            echo "Error: Workflow triggered by unsupported event or ref"
+            echo "Event: ${{ github.event_name }}"
+            echo "Ref: ${{ github.ref }}"
+            exit 1
+          fi
+          echo "tag=${TAG}" >> $GITHUB_OUTPUT
+          echo "Release tag: ${TAG}"
+
+  build-and-publish:
+    needs: export-registry
+    env:
+      REGISTRY: ${{ needs.export-registry.outputs.registry }}
+      TAG: ${{ needs.export-registry.outputs.tag }}
+    runs-on: ubuntu-latest
+    steps:
+      - name: Set up Go ${{ env.GO_VERSION }}
+        uses: actions/setup-go@v6
+        with:
+          go-version: ${{ env.GO_VERSION }}
+
+      - name: Checkout code
+        uses: actions/checkout@v6.0.0
+
+      - name: Login to ghcr.io
+        uses: docker/login-action@5e57cd118135c172c3672efd75eb46360885c0ef
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Build and push images with tag ${{ env.TAG }}
+        run: |
+          make push
+
+      - name: Verify images
+        run: |
+          echo "✅ Published images:"
+          echo "  - ${{ env.REGISTRY }}/${{ env.HUB_AGENT_IMAGE_NAME }}:${{ env.TAG }}"
+          echo "  - ${{ env.REGISTRY }}/${{ env.MEMBER_AGENT_IMAGE_NAME }}:${{ env.TAG }}"
+          echo "  - ${{ env.REGISTRY }}/${{ env.REFRESH_TOKEN_IMAGE_NAME }}:${{ env.TAG }}"
+          echo ""
+          echo "📦 Images are now public!"
