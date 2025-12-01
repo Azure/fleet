@@ -72,11 +72,11 @@ func TestValidateCapacity(t *testing.T) {
 			errorSubstring: "invalid capacity value",
 		},
 		{
-			name:           "unsupported operator for capacity of zero",
+			name:           "invalid value of zero for capacity",
 			value:          "0",
 			operator:       placementv1beta1.PropertySelectorGreaterThanOrEqualTo,
 			wantError:      true,
-			errorSubstring: "capacity value cannot be zero for operator",
+			errorSubstring: fmt.Sprintf("capacity value cannot be below minimum %d after adjustment", minVMInstanceCapacity),
 		},
 		{
 			name:           "capacity equal to max limit with GreaterThan operator",
@@ -86,11 +86,12 @@ func TestValidateCapacity(t *testing.T) {
 			errorSubstring: "exceeds maximum allowed value",
 		},
 		{
-			name:      "supported operator with capacity of zero",
-			value:     "0",
-			operator:  placementv1beta1.PropertySelectorGreaterThan,
-			wantValue: 0,
-			wantError: false,
+			name:           "unsupported operator with capacity of 1",
+			value:          "1",
+			operator:       placementv1beta1.PropertySelectorGreaterThanOrEqualTo,
+			wantValue:      0,
+			wantError:      true,
+			errorSubstring: fmt.Sprintf("capacity value cannot be below minimum %d after adjustment", minVMInstanceCapacity),
 		},
 		{
 			name:      "capacity equal to max limit with supported operator",
@@ -110,6 +111,13 @@ func TestValidateCapacity(t *testing.T) {
 			name:      "capacity at minimum limit",
 			value:     "1",
 			operator:  placementv1beta1.PropertySelectorGreaterThan,
+			wantValue: 1,
+			wantError: false,
+		},
+		{
+			name:      "capacity at minimum limit after adjustment",
+			value:     "2",
+			operator:  placementv1beta1.PropertySelectorGreaterThanOrEqualTo,
 			wantValue: 1,
 			wantError: false,
 		},
@@ -171,6 +179,17 @@ func TestExtractCapacityRequirements(t *testing.T) {
 			wantSKU:        "Standard_B2ms",
 			wantError:      true,
 			errorSubstring: "exceeds maximum allowed value of 200",
+		},
+		{
+			name: "invalid Azure SKU capacity property exceeding min limit",
+			req: placementv1beta1.PropertySelectorRequirement{
+				Name:     fmt.Sprintf(azure.CapacityPerSKUPropertyTmpl, "Standard_B2ms"),
+				Operator: placementv1beta1.PropertySelectorGreaterThanOrEqualTo,
+				Values:   []string{"1"},
+			},
+			wantSKU:        "Standard_B2ms",
+			wantError:      true,
+			errorSubstring: fmt.Sprintf("capacity value cannot be below minimum %d after adjustment", minVMInstanceCapacity),
 		},
 		{
 			name: "invalid Azure SKU capacity property with decimal",
@@ -402,7 +421,7 @@ func TestCheckIfMeetSKUCapacityRequirement(t *testing.T) {
 			errorSubstring: "unsupported operator \"Eq\" for SKU capacity property, only GreaterThan (Gt) and GreaterThanOrEqualTo (Ge) are supported",
 		},
 		{
-			name:           "unsupported operator in requirement",
+			name:           "invalid value in requirement",
 			cluster:        cluster,
 			sku:            validSKU,
 			targetCapacity: 0,
@@ -413,7 +432,7 @@ func TestCheckIfMeetSKUCapacityRequirement(t *testing.T) {
 			},
 			mockStatusCode: http.StatusOK,
 			wantError:      true,
-			errorSubstring: "capacity value cannot be zero for operator",
+			errorSubstring: fmt.Sprintf("capacity value cannot be below minimum %d after adjustment", minVMInstanceCapacity),
 		},
 		{
 			name:           "cases-insensitive request - available SKU",

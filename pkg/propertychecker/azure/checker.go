@@ -27,6 +27,11 @@ const (
 	// The value is constrained to a reasonable upper bound of 200 for most production workloads.
 	// Upper bound is enforced after adjusting for operator semantics.
 	maxVMInstanceCapacity = 200
+
+	// minVMInstanceCapacity defines the minimum allowed VM instance capacity for SKU capacity requirements.
+	// The Azure Capacity API requires capacity values greater than 0, so minimum is set to 1.
+	// Lower bound is enforced after adjusting for operator semantics.
+	minVMInstanceCapacity = 1
 )
 
 // PropertyChecker provides Azure-specific property validation for member clusters.
@@ -48,8 +53,8 @@ func NewPropertyChecker(vmSizeRecommenderClient compute.AttributeBasedVMSizeReco
 
 // CheckIfMeetSKUCapacityRequirement validates whether a member cluster can meet the specified
 // SKU capacity requirement. It extracts the required SKU and capacity from the property selector
-// requirement and checks to determine if the cluster's Azure subscription
-// and location can provision the requested VM instances.
+// requirement and checks whether the cluster's Azure subscription and location can provision
+// the requested VM instances.
 //
 // The cluster must have both Azure location and subscription ID labels configured.
 // Returns true if the SKU capacity requirement can be met, false otherwise.
@@ -116,9 +121,8 @@ func (s *PropertyChecker) CheckIfMeetSKUCapacityRequirement(
 // extractCapacityRequirements extracts the capacity value from a PropertySelectorRequirement.
 // This function is specifically designed for Azure SKU capacity properties that follow the pattern:
 // "kubernetes.azure.com/vm-sizes/{sku}/capacity"
-// Returns the capacity if the requirement is valid;
-// The capacity will be updated based on the configured operator as VMSizeRecommender API
-// checks if the current allocatableCapacity > the requested capacity.
+// Returns the capacity value adjusted for the operator semantics, as the VMSizeRecommender API
+// checks whether current allocatable capacity is greater than the requested capacity.
 func extractCapacityRequirements(req placementv1beta1.PropertySelectorRequirement) (uint32, error) {
 	if req.Operator != placementv1beta1.PropertySelectorGreaterThan && req.Operator != placementv1beta1.PropertySelectorGreaterThanOrEqualTo {
 		return 0, fmt.Errorf("unsupported operator %q for SKU capacity property, only GreaterThan (Gt) and GreaterThanOrEqualTo (Ge) are supported", req.Operator)
@@ -149,7 +153,9 @@ func validateCapacity(value string, operator placementv1beta1.PropertySelectorOp
 
 	capacity := uint32(valueUint) // capacity is >= 0 since it's parsed as uint.
 
-	if operator == placementv1beta1.PropertySelectorGreaterThanOrEqualTo && capacity > 0 {
+	// Adjust capacity based on operator semantics for VMSizeRecommender API.
+	// If operator is GreaterThanOrEqualTo, decrement capacity by 1 as the API checks for strictly greater than.
+	if operator == placementv1beta1.PropertySelectorGreaterThanOrEqualTo && capacity >= minVMInstanceCapacity {
 		capacity -= 1
 	}
 
@@ -158,9 +164,10 @@ func validateCapacity(value string, operator placementv1beta1.PropertySelectorOp
 		return 0, fmt.Errorf("capacity value %d exceeds maximum allowed value of %d", capacity, maxVMInstanceCapacity)
 	}
 
-	// A capacity of zero is only valid for GreaterThan operator.
-	if capacity == 0 && operator != placementv1beta1.PropertySelectorGreaterThan {
-		return 0, fmt.Errorf("capacity value cannot be zero for operator %q", operator)
+	// Ensure capacity meets minimum requirements (minVMInstanceCapacity) after operator adjustment.
+	// The VMSizeRecommender API requires capacity > 0.
+	if capacity < minVMInstanceCapacity {
+		return 0, fmt.Errorf("capacity value cannot be below minimum %d after adjustment", minVMInstanceCapacity)
 	}
 
 	return capacity, nil

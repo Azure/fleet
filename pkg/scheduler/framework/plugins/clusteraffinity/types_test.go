@@ -1350,14 +1350,30 @@ func TestClusterRequirementMatches_WithPropertyChecker(t *testing.T) {
 					Name:     validPropertyName,
 					Operator: placementv1beta1.PropertySelectorGreaterThan,
 					Values: []string{
-						"0",
+						"1",
+					},
+				},
+			},
+			cluster:        cluster,
+			sku:            "Standard_D2s_v3",
+			targetCapacity: 1,
+			want:           true,
+		},
+		{
+			name: "op >=, not matched (min limit)",
+			matchExpression: []placementv1beta1.PropertySelectorRequirement{
+				{
+					Name:     validPropertyName,
+					Operator: placementv1beta1.PropertySelectorGreaterThanOrEqualTo,
+					Values: []string{
+						"1",
 					},
 				},
 			},
 			cluster:        cluster,
 			sku:            "Standard_D2s_v3",
 			targetCapacity: 0,
-			want:           true,
+			wantError:      true,
 		},
 		{
 			name: "op >, not matched",
