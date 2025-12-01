@@ -1317,6 +1317,19 @@ func TestShouldPropagateObj_PodAndReplicaSet(t *testing.T) {
 			ownerReferences: nil,
 			want:            true,
 		},
+		{
+			name: "PersistentVolumeClaim should NOT propagate",
+			obj: map[string]interface{}{
+				"apiVersion": "v1",
+				"kind":       "PersistentVolumeClaim",
+				"metadata": map[string]interface{}{
+					"name":      "test-pvc",
+					"namespace": "default",
+				},
+			},
+			ownerReferences: nil,
+			want:            false,
+		},
 	}
 
 	for _, tt := range tests {

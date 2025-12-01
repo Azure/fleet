@@ -342,7 +342,7 @@ var _ = Describe("placing wrapped resources using a CRP", Ordered, func() {
 
 		BeforeAll(func() {
 			// Create the test resources.
-			readStatefulSetTestManifest(&testStatefulSet, false)
+			readStatefulSetTestManifest(&testStatefulSet, StatefulSetBasic)
 			readEnvelopeResourceTestManifest(&testStatefulSetEnvelope)
 			wantSelectedResources = []placementv1beta1.ResourceIdentifier{
 				{

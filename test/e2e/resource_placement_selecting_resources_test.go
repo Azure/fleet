@@ -1013,10 +1013,10 @@ var _ = Describe("testing RP selecting resources", Label("resourceplacement"), f
 
 		It("should update RP status with the correct order of the selected resources", func() {
 			// Define the expected resources in order.
+			// Note: PVCs are not propagated, so they should not appear in selected resources
 			expectedResources := []placementv1beta1.ResourceIdentifier{
 				{Kind: "Secret", Name: secret.Name, Namespace: nsName, Version: "v1"},
 				{Kind: "ConfigMap", Name: configMap.Name, Namespace: nsName, Version: "v1"},
-				{Kind: "PersistentVolumeClaim", Name: pvc.Name, Namespace: nsName, Version: "v1"},
 				{Group: "rbac.authorization.k8s.io", Kind: "Role", Name: role.Name, Namespace: nsName, Version: "v1"},
 			}
 
