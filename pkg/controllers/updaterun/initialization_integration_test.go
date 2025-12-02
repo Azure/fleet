@@ -874,14 +874,14 @@ var _ = Describe("Updaterun initialization tests", func() {
 
 			By("Validating the clusterStagedUpdateRun stats")
 			initialized := generateSucceededInitializationStatus(crp, updateRun, testResourceSnapshotIndex, policySnapshot, updateStrategy, clusterResourceOverride)
-			want := generateExecutionStartedStatus(updateRun, initialized)
+			want := generateExecutionNotStartedStatus(updateRun, initialized)
 			validateClusterStagedUpdateRunStatus(ctx, updateRun, want, "")
 
 			By("Validating the clusterStagedUpdateRun initialized consistently")
 			validateClusterStagedUpdateRunStatusConsistently(ctx, updateRun, want, "")
 
 			By("Checking update run status metrics are emitted")
-			validateUpdateRunMetricsEmitted(generateProgressingMetric(updateRun))
+			validateUpdateRunMetricsEmitted(generateWaitingMetric(updateRun))
 		})
 
 		It("Should put related ClusterResourceOverrides in the status", func() {
@@ -896,14 +896,14 @@ var _ = Describe("Updaterun initialization tests", func() {
 
 			By("Validating the clusterStagedUpdateRun stats")
 			initialized := generateSucceededInitializationStatus(crp, updateRun, testResourceSnapshotIndex, policySnapshot, updateStrategy, clusterResourceOverride)
-			want := generateExecutionStartedStatus(updateRun, initialized)
+			want := generateExecutionNotStartedStatus(updateRun, initialized)
 			validateClusterStagedUpdateRunStatus(ctx, updateRun, want, "")
 
 			By("Validating the clusterStagedUpdateRun initialized consistently")
 			validateClusterStagedUpdateRunStatusConsistently(ctx, updateRun, want, "")
 
 			By("Checking update run status metrics are emitted")
-			validateUpdateRunMetricsEmitted(generateProgressingMetric(updateRun))
+			validateUpdateRunMetricsEmitted(generateWaitingMetric(updateRun))
 		})
 
 		It("Should pick latest master resource snapshot if multiple snapshots", func() {
@@ -931,14 +931,14 @@ var _ = Describe("Updaterun initialization tests", func() {
 
 			By("Validating the clusterStagedUpdateRun status")
 			initialized := generateSucceededInitializationStatus(crp, updateRun, "2", policySnapshot, updateStrategy, clusterResourceOverride)
-			want := generateExecutionStartedStatus(updateRun, initialized)
+			want := generateExecutionNotStartedStatus(updateRun, initialized)
 			validateClusterStagedUpdateRunStatus(ctx, updateRun, want, "")
 
 			By("Validating the clusterStagedUpdateRun initialized consistently")
 			validateClusterStagedUpdateRunStatusConsistently(ctx, updateRun, want, "")
 
 			By("Checking update run status metrics are emitted")
-			validateUpdateRunMetricsEmitted(generateProgressingMetric(updateRun))
+			validateUpdateRunMetricsEmitted(generateWaitingMetric(updateRun))
 		})
 	})
 })
@@ -1010,15 +1010,25 @@ func generateSucceededInitializationStatus(
 		},
 	}
 	for i := range status.StagesStatus {
-		var tasks []placementv1beta1.StageTaskStatus
+		var beforeTasks []placementv1beta1.StageTaskStatus
+		for _, task := range updateStrategy.Spec.Stages[i].BeforeStageTasks {
+			taskStatus := placementv1beta1.StageTaskStatus{Type: task.Type}
+			if task.Type == placementv1beta1.StageTaskTypeApproval {
+				taskStatus.ApprovalRequestName = fmt.Sprintf(placementv1beta1.BeforeStageApprovalTaskNameFmt, updateRun.Name, status.StagesStatus[i].StageName)
+			}
+			beforeTasks = append(beforeTasks, taskStatus)
+		}
+		status.StagesStatus[i].BeforeStageTaskStatus = beforeTasks
+
+		var afterTasks []placementv1beta1.StageTaskStatus
 		for _, task := range updateStrategy.Spec.Stages[i].AfterStageTasks {
 			taskStatus := placementv1beta1.StageTaskStatus{Type: task.Type}
 			if task.Type == placementv1beta1.StageTaskTypeApproval {
-				taskStatus.ApprovalRequestName = updateRun.Name + "-" + status.StagesStatus[i].StageName
+				taskStatus.ApprovalRequestName = fmt.Sprintf(placementv1beta1.AfterStageApprovalTaskNameFmt, updateRun.Name, status.StagesStatus[i].StageName)
 			}
-			tasks = append(tasks, taskStatus)
+			afterTasks = append(afterTasks, taskStatus)
 		}
-		status.StagesStatus[i].AfterStageTaskStatus = tasks
+		status.StagesStatus[i].AfterStageTaskStatus = afterTasks
 	}
 	return status
 }
@@ -1056,28 +1066,56 @@ func generateSucceededInitializationStatusForSmallClusters(
 		},
 	}
 	for i := range status.StagesStatus {
-		var tasks []placementv1beta1.StageTaskStatus
+		var beforeTasks []placementv1beta1.StageTaskStatus
+		for _, task := range updateStrategy.Spec.Stages[i].BeforeStageTasks {
+			taskStatus := placementv1beta1.StageTaskStatus{Type: task.Type}
+			if task.Type == placementv1beta1.StageTaskTypeApproval {
+				taskStatus.ApprovalRequestName = fmt.Sprintf(placementv1beta1.BeforeStageApprovalTaskNameFmt, updateRun.Name, status.StagesStatus[i].StageName)
+			}
+			beforeTasks = append(beforeTasks, taskStatus)
+		}
+		status.StagesStatus[i].BeforeStageTaskStatus = beforeTasks
+
+		var afterTasks []placementv1beta1.StageTaskStatus
 		for _, task := range updateStrategy.Spec.Stages[i].AfterStageTasks {
 			taskStatus := placementv1beta1.StageTaskStatus{Type: task.Type}
 			if task.Type == placementv1beta1.StageTaskTypeApproval {
-				taskStatus.ApprovalRequestName = updateRun.Name + "-" + status.StagesStatus[i].StageName
+				taskStatus.ApprovalRequestName = fmt.Sprintf(placementv1beta1.AfterStageApprovalTaskNameFmt, updateRun.Name, status.StagesStatus[i].StageName)
 			}
-			tasks = append(tasks, taskStatus)
+			afterTasks = append(afterTasks, taskStatus)
 		}
-		status.StagesStatus[i].AfterStageTaskStatus = tasks
+		status.StagesStatus[i].AfterStageTaskStatus = afterTasks
 	}
 	return status
 }
 
 func generateExecutionStartedStatus(
 	updateRun *placementv1beta1.ClusterStagedUpdateRun,
-	initialized *placementv1beta1.UpdateRunStatus,
+	status *placementv1beta1.UpdateRunStatus,
 ) *placementv1beta1.UpdateRunStatus {
 	// Mark updateRun execution has started.
-	initialized.Conditions = append(initialized.Conditions, generateTrueCondition(updateRun, placementv1beta1.StagedUpdateRunConditionProgressing))
+	meta.SetStatusCondition(&status.Conditions, generateTrueCondition(updateRun, placementv1beta1.StagedUpdateRunConditionProgressing))
+
 	// Mark updateRun 1st stage has started.
-	initialized.StagesStatus[0].Conditions = append(initialized.StagesStatus[0].Conditions, generateTrueCondition(updateRun, placementv1beta1.StageUpdatingConditionProgressing))
+	meta.SetStatusCondition(&status.StagesStatus[0].Conditions, generateTrueCondition(updateRun, placementv1beta1.StageUpdatingConditionProgressing))
+
 	// Mark updateRun 1st cluster in the 1st stage has started.
-	initialized.StagesStatus[0].Clusters[0].Conditions = []metav1.Condition{generateTrueCondition(updateRun, placementv1beta1.ClusterUpdatingConditionStarted)}
-	return initialized
+	status.StagesStatus[0].Clusters[0].Conditions = []metav1.Condition{generateTrueCondition(updateRun, placementv1beta1.ClusterUpdatingConditionStarted)}
+	return status
+}
+
+func generateExecutionNotStartedStatus(
+	updateRun *placementv1beta1.ClusterStagedUpdateRun,
+	status *placementv1beta1.UpdateRunStatus,
+) *placementv1beta1.UpdateRunStatus {
+	// Mark updateRun execution has not started.
+	status.Conditions = append(status.Conditions, generateFalseCondition(updateRun, placementv1beta1.StagedUpdateRunConditionProgressing))
+
+	// Mark updateRun 1st stage has not started.
+	status.StagesStatus[0].Conditions = append(status.StagesStatus[0].Conditions, generateFalseCondition(updateRun, placementv1beta1.StageUpdatingConditionProgressing))
+
+	// Mark updateRun 1st stage BeforeStageTasks has created approval request.
+	status.StagesStatus[0].BeforeStageTaskStatus[0].Conditions = append(status.StagesStatus[0].BeforeStageTaskStatus[0].Conditions,
+		generateTrueCondition(updateRun, placementv1beta1.StageTaskConditionApprovalRequestCreated))
+	return status
 }

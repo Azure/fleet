@@ -79,7 +79,7 @@ func (r *Reconciler) Reconcile(ctx context.Context, req runtime.Request) (runtim
 	}
 	runObjRef := klog.KObj(updateRun)
 
-	// Remove waitTime from the updateRun status for AfterStageTask for type Approval.
+	// Remove waitTime from the updateRun status for BeforeStageTask and AfterStageTask for type Approval.
 	removeWaitTimeFromUpdateRunStatus(updateRun)
 
 	// Handle the deletion of the updateRun.
@@ -455,10 +455,15 @@ func emitUpdateRunStatusMetric(updateRun placementv1beta1.UpdateRunObj) {
 }
 
 func removeWaitTimeFromUpdateRunStatus(updateRun placementv1beta1.UpdateRunObj) {
-	// Remove waitTime from the updateRun status for AfterStageTask for type Approval.
+	// Remove waitTime from the updateRun status for BeforeStageTask and AfterStageTask for type Approval.
 	updateRunStatus := updateRun.GetUpdateRunStatus()
 	if updateRunStatus.UpdateStrategySnapshot != nil {
 		for i := range updateRunStatus.UpdateStrategySnapshot.Stages {
+			for j := range updateRunStatus.UpdateStrategySnapshot.Stages[i].BeforeStageTasks {
+				if updateRunStatus.UpdateStrategySnapshot.Stages[i].BeforeStageTasks[j].Type == placementv1beta1.StageTaskTypeApproval {
+					updateRunStatus.UpdateStrategySnapshot.Stages[i].BeforeStageTasks[j].WaitTime = nil
+				}
+			}
 			for j := range updateRunStatus.UpdateStrategySnapshot.Stages[i].AfterStageTasks {
 				if updateRunStatus.UpdateStrategySnapshot.Stages[i].AfterStageTasks[j].Type == placementv1beta1.StageTaskTypeApproval {
 					updateRunStatus.UpdateStrategySnapshot.Stages[i].AfterStageTasks[j].WaitTime = nil

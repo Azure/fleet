@@ -167,8 +167,11 @@ const (
 	// TargetUpdatingStageNameLabel indicates the updating stage name on a staged run related object.
 	TargetUpdatingStageNameLabel = FleetPrefix + "targetUpdatingStage"
 
-	// ApprovalTaskNameFmt is the format of the approval task name.
-	ApprovalTaskNameFmt = "%s-%s"
+	// BeforeStageApprovalTaskNameFmt is the format of the before stage approval task name.
+	BeforeStageApprovalTaskNameFmt = "%s-before-%s"
+
+	// AfterStageApprovalTaskNameFmt is the format of the after stage approval task name.
+	AfterStageApprovalTaskNameFmt = "%s-after-%s"
 )
 
 var (

@@ -912,7 +912,7 @@ func TestRemoveWaitTimeFromUpdateRunStatus(t *testing.T) {
 				},
 			},
 		},
-		"should remove waitTime from Approval tasks only": {
+		"should remove waitTime from Approval tasks only for AfterStageTasks": {
 			inputUpdateRun: &placementv1beta1.ClusterStagedUpdateRun{
 				Status: placementv1beta1.UpdateRunStatus{
 					UpdateStrategySnapshot: &placementv1beta1.UpdateStrategySpec{
@@ -953,25 +953,13 @@ func TestRemoveWaitTimeFromUpdateRunStatus(t *testing.T) {
 				},
 			},
 		},
-		"should handle multiple stages": {
+		"should remove waitTime from Approval tasks only for BeforeStageTasks": {
 			inputUpdateRun: &placementv1beta1.ClusterStagedUpdateRun{
 				Status: placementv1beta1.UpdateRunStatus{
 					UpdateStrategySnapshot: &placementv1beta1.UpdateStrategySpec{
 						Stages: []placementv1beta1.StageConfig{
 							{
-								AfterStageTasks: []placementv1beta1.StageTask{
-									{
-										Type:     placementv1beta1.StageTaskTypeApproval,
-										WaitTime: &waitTime,
-									},
-								},
-							},
-							{
-								AfterStageTasks: []placementv1beta1.StageTask{
-									{
-										Type:     placementv1beta1.StageTaskTypeTimedWait,
-										WaitTime: &waitTime,
-									},
+								BeforeStageTasks: []placementv1beta1.StageTask{
 									{
 										Type:     placementv1beta1.StageTaskTypeApproval,
 										WaitTime: &waitTime,
@@ -987,6 +975,70 @@ func TestRemoveWaitTimeFromUpdateRunStatus(t *testing.T) {
 					UpdateStrategySnapshot: &placementv1beta1.UpdateStrategySpec{
 						Stages: []placementv1beta1.StageConfig{
 							{
+								BeforeStageTasks: []placementv1beta1.StageTask{
+									{
+										Type: placementv1beta1.StageTaskTypeApproval,
+									},
+								},
+							},
+						},
+					},
+				},
+			},
+		},
+		"should handle multiple stages": {
+			inputUpdateRun: &placementv1beta1.ClusterStagedUpdateRun{
+				Status: placementv1beta1.UpdateRunStatus{
+					UpdateStrategySnapshot: &placementv1beta1.UpdateStrategySpec{
+						Stages: []placementv1beta1.StageConfig{
+							{
+								BeforeStageTasks: []placementv1beta1.StageTask{
+									{
+										Type:     placementv1beta1.StageTaskTypeApproval,
+										WaitTime: &waitTime,
+									},
+								},
+								AfterStageTasks: []placementv1beta1.StageTask{
+									{
+										Type:     placementv1beta1.StageTaskTypeApproval,
+										WaitTime: &waitTime,
+									},
+								},
+							},
+							{
+								AfterStageTasks: []placementv1beta1.StageTask{
+									{
+										Type:     placementv1beta1.StageTaskTypeTimedWait,
+										WaitTime: &waitTime,
+									},
+									{
+										Type:     placementv1beta1.StageTaskTypeApproval,
+										WaitTime: &waitTime,
+									},
+								},
+							},
+							{
+								BeforeStageTasks: []placementv1beta1.StageTask{
+									{
+										Type:     placementv1beta1.StageTaskTypeApproval,
+										WaitTime: &waitTime,
+									},
+								},
+							},
+						},
+					},
+				},
+			},
+			wantUpdateRun: &placementv1beta1.ClusterStagedUpdateRun{
+				Status: placementv1beta1.UpdateRunStatus{
+					UpdateStrategySnapshot: &placementv1beta1.UpdateStrategySpec{
+						Stages: []placementv1beta1.StageConfig{
+							{
+								BeforeStageTasks: []placementv1beta1.StageTask{
+									{
+										Type: placementv1beta1.StageTaskTypeApproval,
+									},
+								},
 								AfterStageTasks: []placementv1beta1.StageTask{
 									{
 										Type: placementv1beta1.StageTaskTypeApproval,
@@ -999,6 +1051,13 @@ func TestRemoveWaitTimeFromUpdateRunStatus(t *testing.T) {
 										Type:     placementv1beta1.StageTaskTypeTimedWait,
 										WaitTime: &waitTime,
 									},
+									{
+										Type: placementv1beta1.StageTaskTypeApproval,
+									},
+								},
+							},
+							{
+								BeforeStageTasks: []placementv1beta1.StageTask{
 									{
 										Type: placementv1beta1.StageTaskTypeApproval,
 									},

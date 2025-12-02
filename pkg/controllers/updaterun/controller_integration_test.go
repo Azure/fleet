@@ -505,6 +505,11 @@ func generateTestClusterStagedUpdateStrategy() *placementv1beta1.ClusterStagedUp
 						},
 					},
 					SortingLabelKey: &sortingKey,
+					BeforeStageTasks: []placementv1beta1.StageTask{
+						{
+							Type: placementv1beta1.StageTaskTypeApproval,
+						},
+					},
 					AfterStageTasks: []placementv1beta1.StageTask{
 						{
 							Type: placementv1beta1.StageTaskTypeTimedWait,
@@ -526,6 +531,11 @@ func generateTestClusterStagedUpdateStrategy() *placementv1beta1.ClusterStagedUp
 						},
 					},
 					// no sortingLabelKey, should sort by cluster name
+					BeforeStageTasks: []placementv1beta1.StageTask{
+						{
+							Type: placementv1beta1.StageTaskTypeApproval,
+						},
+					},
 					AfterStageTasks: []placementv1beta1.StageTask{
 						{
 							Type: placementv1beta1.StageTaskTypeApproval,
@@ -543,7 +553,7 @@ func generateTestClusterStagedUpdateStrategy() *placementv1beta1.ClusterStagedUp
 	}
 }
 
-func generateTestClusterStagedUpdateStrategyWithSingleStage(afterStageTasks []placementv1beta1.StageTask) *placementv1beta1.ClusterStagedUpdateStrategy {
+func generateTestClusterStagedUpdateStrategyWithSingleStage(beforeStageTasks, afterStageTasks []placementv1beta1.StageTask) *placementv1beta1.ClusterStagedUpdateStrategy {
 	return &placementv1beta1.ClusterStagedUpdateStrategy{
 		ObjectMeta: metav1.ObjectMeta{
 			Name: testUpdateStrategyName,
@@ -551,9 +561,10 @@ func generateTestClusterStagedUpdateStrategyWithSingleStage(afterStageTasks []pl
 		Spec: placementv1beta1.UpdateStrategySpec{
 			Stages: []placementv1beta1.StageConfig{
 				{
-					Name:            "stage1",
-					LabelSelector:   &metav1.LabelSelector{}, // Select all clusters.
-					AfterStageTasks: afterStageTasks,
+					Name:             "stage1",
+					LabelSelector:    &metav1.LabelSelector{}, // Select all clusters.
+					BeforeStageTasks: beforeStageTasks,
+					AfterStageTasks:  afterStageTasks,
 				},
 			},
 		},
@@ -724,9 +735,9 @@ func generateTrueCondition(obj client.Object, condType any) metav1.Condition {
 		case placementv1beta1.StageTaskConditionWaitTimeElapsed:
 			reason = condition.AfterStageTaskWaitTimeElapsedReason
 		case placementv1beta1.StageTaskConditionApprovalRequestCreated:
-			reason = condition.AfterStageTaskApprovalRequestCreatedReason
+			reason = condition.StageTaskApprovalRequestCreatedReason
 		case placementv1beta1.StageTaskConditionApprovalRequestApproved:
-			reason = condition.AfterStageTaskApprovalRequestApprovedReason
+			reason = condition.StageTaskApprovalRequestApprovedReason
 		}
 		typeStr = string(cond)
 	case placementv1beta1.ApprovalRequestConditionType:
