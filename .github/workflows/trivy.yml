@@ -44,7 +44,7 @@ jobs:
           go-version: ${{ env.GO_VERSION }}
 
       - name: Checkout code
-        uses: actions/checkout@v5
+        uses: actions/checkout@v6
 
       - name: Login to ${{ env.REGISTRY }}
         uses: docker/login-action@5e57cd118135c172c3672efd75eb46360885c0ef
