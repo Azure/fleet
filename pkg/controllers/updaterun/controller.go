@@ -104,15 +104,23 @@ func (r *Reconciler) Reconcile(ctx context.Context, req runtime.Request) (runtim
 	// Emit the update run status metric based on status conditions in the updateRun.
 	defer emitUpdateRunStatusMetric(updateRun)
 
+	state := updateRun.GetUpdateRunSpec().State
+
 	var updatingStageIndex int
 	var toBeUpdatedBindings, toBeDeletedBindings []placementv1beta1.BindingObj
 	updateRunStatus := updateRun.GetUpdateRunStatus()
 	initCond := meta.FindStatusCondition(updateRunStatus.Conditions, string(placementv1beta1.StagedUpdateRunConditionInitialized))
-	if !condition.IsConditionStatusTrue(initCond, updateRun.GetGeneration()) {
-		if condition.IsConditionStatusFalse(initCond, updateRun.GetGeneration()) {
+	// Check if initialized regardless of generation.
+	// The updateRun spec fields are immutable except for the state field. When the state changes,
+	// the update run generation increments, but we don't need to reinitialize since initialization is a one-time setup.
+	if !(initCond != nil && initCond.Status == metav1.ConditionTrue) {
+		// Check if initialization failed for the current generation.
+		if initCond != nil && initCond.Status == metav1.ConditionFalse {
 			klog.V(2).InfoS("The updateRun has failed to initialize", "errorMsg", initCond.Message, "updateRun", runObjRef)
 			return runtime.Result{}, nil
 		}
+
+		// Initialize the updateRun.
 		var initErr error
 		if toBeUpdatedBindings, toBeDeletedBindings, initErr = r.initialize(ctx, updateRun); initErr != nil {
 			klog.ErrorS(initErr, "Failed to initialize the updateRun", "updateRun", runObjRef)
@@ -122,10 +130,10 @@ func (r *Reconciler) Reconcile(ctx context.Context, req runtime.Request) (runtim
 			}
 			return runtime.Result{}, initErr
 		}
-		updatingStageIndex = 0 // start from the first stage.
-		klog.V(2).InfoS("Initialized the updateRun", "updateRun", runObjRef)
+		updatingStageIndex = 0 // start from the first stage (typically for Initialize or Execute states).
+		klog.V(2).InfoS("Initialized the updateRun", "state", state, "updateRun", runObjRef)
 	} else {
-		klog.V(2).InfoS("The updateRun is initialized", "updateRun", runObjRef)
+		klog.V(2).InfoS("The updateRun is initialized", "state", state, "updateRun", runObjRef)
 		// Check if the updateRun is finished.
 		finishedCond := meta.FindStatusCondition(updateRunStatus.Conditions, string(placementv1beta1.StagedUpdateRunConditionSucceeded))
 		if condition.IsConditionStatusTrue(finishedCond, updateRun.GetGeneration()) || condition.IsConditionStatusFalse(finishedCond, updateRun.GetGeneration()) {
@@ -151,28 +159,32 @@ func (r *Reconciler) Reconcile(ctx context.Context, req runtime.Request) (runtim
 	}
 
 	// Execute the updateRun.
-	klog.V(2).InfoS("Continue to execute the updateRun", "updatingStageIndex", updatingStageIndex, "updateRun", runObjRef)
-	finished, waitTime, execErr := r.execute(ctx, updateRun, updatingStageIndex, toBeUpdatedBindings, toBeDeletedBindings)
-	if errors.Is(execErr, errStagedUpdatedAborted) {
-		// errStagedUpdatedAborted cannot be retried.
-		return runtime.Result{}, r.recordUpdateRunFailed(ctx, updateRun, execErr.Error())
-	}
+	if state == placementv1beta1.StateExecuted {
+		klog.V(2).InfoS("Continue to execute the updateRun", "state", state, "updatingStageIndex", updatingStageIndex, "updateRun", runObjRef)
+		finished, waitTime, execErr := r.execute(ctx, updateRun, updatingStageIndex, toBeUpdatedBindings, toBeDeletedBindings)
+		if errors.Is(execErr, errStagedUpdatedAborted) {
+			// errStagedUpdatedAborted cannot be retried.
+			return runtime.Result{}, r.recordUpdateRunFailed(ctx, updateRun, execErr.Error())
+		}
 
-	if finished {
-		klog.V(2).InfoS("The updateRun is completed", "updateRun", runObjRef)
-		return runtime.Result{}, r.recordUpdateRunSucceeded(ctx, updateRun)
-	}
+		if finished {
+			klog.V(2).InfoS("The updateRun is completed", "updateRun", runObjRef)
+			return runtime.Result{}, r.recordUpdateRunSucceeded(ctx, updateRun)
+		}
 
-	// The execution is not finished yet or it encounters a retriable error.
-	// We need to record the status and requeue.
-	if updateErr := r.recordUpdateRunStatus(ctx, updateRun); updateErr != nil {
-		return runtime.Result{}, updateErr
+		// The execution is not finished yet or it encounters a retriable error.
+		// We need to record the status and requeue.
+		if updateErr := r.recordUpdateRunStatus(ctx, updateRun); updateErr != nil {
+			return runtime.Result{}, updateErr
+		}
+		klog.V(2).InfoS("The updateRun is not finished yet", "requeueWaitTime", waitTime, "execErr", execErr, "updateRun", runObjRef)
+		if execErr != nil {
+			return runtime.Result{}, execErr
+		}
+		return runtime.Result{Requeue: true, RequeueAfter: waitTime}, nil
 	}
-	klog.V(2).InfoS("The updateRun is not finished yet", "requeueWaitTime", waitTime, "execErr", execErr, "updateRun", runObjRef)
-	if execErr != nil {
-		return runtime.Result{}, execErr
-	}
-	return runtime.Result{Requeue: true, RequeueAfter: waitTime}, nil
+	klog.V(2).InfoS("The updateRun is initialized but not executed, waiting to execute", "state", state, "updateRun", runObjRef)
+	return runtime.Result{}, nil
 }
 
 // handleDelete handles the deletion of the updateRun object.

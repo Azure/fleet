@@ -619,7 +619,7 @@ func (r *Reconciler) recordInitializationSucceeded(ctx context.Context, updateRu
 		Status:             metav1.ConditionTrue,
 		ObservedGeneration: updateRun.GetGeneration(),
 		Reason:             condition.UpdateRunInitializeSucceededReason,
-		Message:            "ClusterStagedUpdateRun initialized successfully",
+		Message:            "The UpdateRun initialized successfully",
 	})
 	if updateErr := r.Client.Status().Update(ctx, updateRun); updateErr != nil {
 		klog.ErrorS(updateErr, "Failed to update the UpdateRun status as initialized", "updateRun", klog.KObj(updateRun))

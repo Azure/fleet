@@ -285,29 +285,43 @@ func (r *Reconciler) executeUpdatingStage(
 	}
 
 	if finishedClusterCount == len(updatingStageStatus.Clusters) {
-		// All the clusters in the stage have been updated.
-		markUpdateRunWaiting(updateRun, fmt.Sprintf(condition.UpdateRunWaitingMessageFmt, "after-stage", updatingStageStatus.StageName))
-		markStageUpdatingWaiting(updatingStageStatus, updateRun.GetGeneration(), "All clusters in the stage are updated, waiting for after-stage tasks to complete")
-		klog.V(2).InfoS("The stage has finished all cluster updating", "stage", updatingStageStatus.StageName, "updateRun", updateRunRef)
-		// Check if the after stage tasks are ready.
-		approved, waitTime, err := r.checkAfterStageTasksStatus(ctx, updatingStageIndex, updateRun)
-		if err != nil {
-			return 0, err
-		}
-		if approved {
-			markUpdateRunProgressing(updateRun)
-			markStageUpdatingSucceeded(updatingStageStatus, updateRun.GetGeneration())
-			// No need to wait to get to the next stage.
-			return 0, nil
-		}
-		// The after stage tasks are not ready yet.
-		if waitTime < 0 {
-			waitTime = stageUpdatingWaitTime
-		}
-		return waitTime, nil
+		return r.handleStageCompletion(ctx, updatingStageIndex, updateRun, updatingStageStatus)
 	}
+
 	// Some clusters are still updating.
 	return clusterUpdatingWaitTime, nil
+}
+
+// handleStageCompletion handles the completion logic when all clusters in a stage are finished.
+// Returns the wait time and any error encountered.
+func (r *Reconciler) handleStageCompletion(
+	ctx context.Context,
+	updatingStageIndex int,
+	updateRun placementv1beta1.UpdateRunObj,
+	updatingStageStatus *placementv1beta1.StageUpdatingStatus,
+) (time.Duration, error) {
+	updateRunRef := klog.KObj(updateRun)
+
+	// All the clusters in the stage have been updated.
+	markUpdateRunWaiting(updateRun, fmt.Sprintf(condition.UpdateRunWaitingMessageFmt, "after-stage", updatingStageStatus.StageName))
+	markStageUpdatingWaiting(updatingStageStatus, updateRun.GetGeneration(), "All clusters in the stage are updated, waiting for after-stage tasks to complete")
+	klog.V(2).InfoS("The stage has finished all cluster updating", "stage", updatingStageStatus.StageName, "updateRun", updateRunRef)
+	// Check if the after stage tasks are ready.
+	approved, waitTime, err := r.checkAfterStageTasksStatus(ctx, updatingStageIndex, updateRun)
+	if err != nil {
+		return 0, err
+	}
+	if approved {
+		markUpdateRunProgressing(updateRun)
+		markStageUpdatingSucceeded(updatingStageStatus, updateRun.GetGeneration())
+		// No need to wait to get to the next stage.
+		return 0, nil
+	}
+	// The after stage tasks are not ready yet.
+	if waitTime < 0 {
+		waitTime = stageUpdatingWaitTime
+	}
+	return waitTime, nil
 }
 
 // executeDeleteStage executes the delete stage by deleting the bindings.

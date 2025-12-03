@@ -152,13 +152,14 @@ func (c *ClusterStagedUpdateRun) SetUpdateRunStatus(status UpdateRunStatus) {
 type State string
 
 const (
-	// StateNotStarted describes user intent to initialize but not execute the update run.
+	// StateInitialized describes user intent to initialize but not execute the update run.
 	// This is the default state when an update run is created.
-	StateNotStarted State = "Initialize"
+	// Users can subsequently set the state to Execute or Abandon.
+	StateInitialized State = "Initialize"
 
-	// StateStarted describes user intent to execute (or resume execution if paused).
+	// StateExecuted describes user intent to execute (or resume execution if paused).
 	// Users can subsequently set the state to Pause or Abandon.
-	StateStarted State = "Execute"
+	StateExecuted State = "Execute"
 
 	// StateStopped describes user intent to pause the update run.
 	// Users can subsequently set the state to Execute or Abandon.
@@ -426,7 +427,6 @@ const (
 	// Its condition status can be one of the following:
 	// - "True": The staged update run is initialized successfully.
 	// - "False": The staged update run encountered an error during initialization and aborted.
-	// - "Unknown": The staged update run initialization has started.
 	StagedUpdateRunConditionInitialized StagedUpdateRunConditionType = "Initialized"
 
 	// StagedUpdateRunConditionProgressing indicates whether the staged update run is making progress.

@@ -34,6 +34,7 @@ import (
 	clusterv1beta1 "github.com/kubefleet-dev/kubefleet/apis/cluster/v1beta1"
 	placementv1beta1 "github.com/kubefleet-dev/kubefleet/apis/placement/v1beta1"
 	"github.com/kubefleet-dev/kubefleet/pkg/utils"
+	"github.com/kubefleet-dev/kubefleet/pkg/utils/condition"
 )
 
 var _ = Describe("UpdateRun validation tests", func() {
@@ -564,7 +565,7 @@ func generateFailedValidationStatus(
 	updateRun *placementv1beta1.ClusterStagedUpdateRun,
 	started *placementv1beta1.UpdateRunStatus,
 ) *placementv1beta1.UpdateRunStatus {
-	started.Conditions[1] = generateFalseProgressingCondition(updateRun, placementv1beta1.StagedUpdateRunConditionProgressing, false)
+	started.Conditions[1] = generateFalseProgressingCondition(updateRun, placementv1beta1.StagedUpdateRunConditionProgressing, condition.UpdateRunFailedReason)
 	started.Conditions = append(started.Conditions, generateFalseCondition(updateRun, placementv1beta1.StagedUpdateRunConditionSucceeded))
 	return started
 }

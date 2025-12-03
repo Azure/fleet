@@ -1213,12 +1213,12 @@ var _ = Describe("Test placement v1beta1 API validation", func() {
 					PlacementName:            "test-placement",
 					ResourceSnapshotIndex:    "1",
 					StagedUpdateStrategyName: "test-strategy",
-					State:                    placementv1beta1.StateNotStarted,
+					State:                    placementv1beta1.StateInitialized,
 				},
 			}
 			Expect(hubClient.Create(ctx, &updateRun)).Should(Succeed())
 
-			updateRun.Spec.State = placementv1beta1.StateStarted
+			updateRun.Spec.State = placementv1beta1.StateExecuted
 			Expect(hubClient.Update(ctx, &updateRun)).Should(Succeed())
 			Expect(hubClient.Delete(ctx, &updateRun)).Should(Succeed())
 		})
@@ -1823,7 +1823,7 @@ var _ = Describe("Test placement v1beta1 API validation", func() {
 					Name: updateRunName,
 				},
 				Spec: placementv1beta1.UpdateRunSpec{
-					State: placementv1beta1.StateNotStarted,
+					State: placementv1beta1.StateInitialized,
 				},
 			}
 			Expect(hubClient.Create(ctx, updateRun)).Should(Succeed())
@@ -1843,7 +1843,7 @@ var _ = Describe("Test placement v1beta1 API validation", func() {
 				},
 			}
 			Expect(hubClient.Create(ctx, updateRunWithDefaultState)).Should(Succeed())
-			Expect(updateRunWithDefaultState.Spec.State).To(Equal(placementv1beta1.StateNotStarted))
+			Expect(updateRunWithDefaultState.Spec.State).To(Equal(placementv1beta1.StateInitialized))
 			Expect(hubClient.Delete(ctx, updateRunWithDefaultState)).Should(Succeed())
 		})
 
@@ -1857,12 +1857,12 @@ var _ = Describe("Test placement v1beta1 API validation", func() {
 				},
 			}
 			Expect(hubClient.Create(ctx, updateRun)).Should(Succeed())
-			Expect(updateRun.Spec.State).To(Equal(placementv1beta1.StateNotStarted))
+			Expect(updateRun.Spec.State).To(Equal(placementv1beta1.StateInitialized))
 			Expect(hubClient.Delete(ctx, updateRun)).Should(Succeed())
 		})
 
 		It("should allow transition from Initialize to Execute", func() {
-			updateRun.Spec.State = placementv1beta1.StateStarted
+			updateRun.Spec.State = placementv1beta1.StateExecuted
 			Expect(hubClient.Update(ctx, updateRun)).Should(Succeed())
 		})
 
@@ -1882,7 +1882,7 @@ var _ = Describe("Test placement v1beta1 API validation", func() {
 					Name: updateRunName,
 				},
 				Spec: placementv1beta1.UpdateRunSpec{
-					State: placementv1beta1.StateStarted,
+					State: placementv1beta1.StateExecuted,
 				},
 			}
 			Expect(hubClient.Create(ctx, updateRun)).Should(Succeed())
@@ -1913,13 +1913,10 @@ var _ = Describe("Test placement v1beta1 API validation", func() {
 					Name: updateRunName,
 				},
 				Spec: placementv1beta1.UpdateRunSpec{
-					State: placementv1beta1.StateStarted,
+					State: placementv1beta1.StateStopped,
 				},
 			}
 			Expect(hubClient.Create(ctx, updateRun)).Should(Succeed())
-			// Transition to Pause state first
-			updateRun.Spec.State = placementv1beta1.StateStopped
-			Expect(hubClient.Update(ctx, updateRun)).Should(Succeed())
 		})
 
 		AfterEach(func() {
@@ -1927,7 +1924,7 @@ var _ = Describe("Test placement v1beta1 API validation", func() {
 		})
 
 		It("should allow transition from Pause to Execute", func() {
-			updateRun.Spec.State = placementv1beta1.StateStarted
+			updateRun.Spec.State = placementv1beta1.StateExecuted
 			Expect(hubClient.Update(ctx, updateRun)).Should(Succeed())
 		})
 
@@ -1953,7 +1950,7 @@ var _ = Describe("Test placement v1beta1 API validation", func() {
 					Name: updateRunName,
 				},
 				Spec: placementv1beta1.UpdateRunSpec{
-					State: placementv1beta1.StateNotStarted,
+					State: placementv1beta1.StateInitialized,
 				},
 			}
 			Expect(hubClient.Create(ctx, updateRun)).Should(Succeed())
@@ -1971,12 +1968,12 @@ var _ = Describe("Test placement v1beta1 API validation", func() {
 					Name: updateRunName,
 				},
 				Spec: placementv1beta1.UpdateRunSpec{
-					State: placementv1beta1.StateStarted,
+					State: placementv1beta1.StateExecuted,
 				},
 			}
 			Expect(hubClient.Create(ctx, updateRun)).Should(Succeed())
 
-			updateRun.Spec.State = placementv1beta1.StateNotStarted
+			updateRun.Spec.State = placementv1beta1.StateInitialized
 			err := hubClient.Update(ctx, updateRun)
 			var statusErr *k8sErrors.StatusError
 			Expect(errors.As(err, &statusErr)).To(BeTrue(), fmt.Sprintf("Update ClusterStagedUpdateRun call produced error %s. Error type wanted is %s.", reflect.TypeOf(err), reflect.TypeOf(&k8sErrors.StatusError{})))
@@ -1989,17 +1986,13 @@ var _ = Describe("Test placement v1beta1 API validation", func() {
 					Name: updateRunName,
 				},
 				Spec: placementv1beta1.UpdateRunSpec{
-					State: placementv1beta1.StateStarted,
+					State: placementv1beta1.StateStopped,
 				},
 			}
 			Expect(hubClient.Create(ctx, updateRun)).Should(Succeed())
 
-			// Transition to Pause first
-			updateRun.Spec.State = placementv1beta1.StateStopped
-			Expect(hubClient.Update(ctx, updateRun)).Should(Succeed())
-
 			// Try to transition back to Initialize
-			updateRun.Spec.State = placementv1beta1.StateNotStarted
+			updateRun.Spec.State = placementv1beta1.StateInitialized
 			err := hubClient.Update(ctx, updateRun)
 			var statusErr *k8sErrors.StatusError
 			Expect(errors.As(err, &statusErr)).To(BeTrue(), fmt.Sprintf("Update ClusterStagedUpdateRun call produced error %s. Error type wanted is %s.", reflect.TypeOf(err), reflect.TypeOf(&k8sErrors.StatusError{})))
@@ -2017,7 +2010,7 @@ var _ = Describe("Test placement v1beta1 API validation", func() {
 			}
 			Expect(hubClient.Create(ctx, updateRun)).Should(Succeed())
 
-			updateRun.Spec.State = placementv1beta1.StateNotStarted
+			updateRun.Spec.State = placementv1beta1.StateInitialized
 			err := hubClient.Update(ctx, updateRun)
 			var statusErr *k8sErrors.StatusError
 			Expect(errors.As(err, &statusErr)).To(BeTrue(), fmt.Sprintf("Update ClusterStagedUpdateRun call produced error %s. Error type wanted is %s.", reflect.TypeOf(err), reflect.TypeOf(&k8sErrors.StatusError{})))
@@ -2035,7 +2028,7 @@ var _ = Describe("Test placement v1beta1 API validation", func() {
 			}
 			Expect(hubClient.Create(ctx, updateRun)).Should(Succeed())
 
-			updateRun.Spec.State = placementv1beta1.StateStarted
+			updateRun.Spec.State = placementv1beta1.StateExecuted
 			err := hubClient.Update(ctx, updateRun)
 			var statusErr *k8sErrors.StatusError
 			Expect(errors.As(err, &statusErr)).To(BeTrue(), fmt.Sprintf("Update ClusterStagedUpdateRun call produced error %s. Error type wanted is %s.", reflect.TypeOf(err), reflect.TypeOf(&k8sErrors.StatusError{})))
