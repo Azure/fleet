@@ -130,7 +130,7 @@ func (r *Reconciler) Reconcile(ctx context.Context, req runtime.Request) (runtim
 			}
 			return runtime.Result{}, initErr
 		}
-		updatingStageIndex = 0 // start from the first stage (typically for Initialize or Execute states).
+		updatingStageIndex = 0 // start from the first stage (typically for Initialize or Run states).
 		klog.V(2).InfoS("Initialized the updateRun", "state", state, "updateRun", runObjRef)
 	} else {
 		klog.V(2).InfoS("The updateRun is initialized", "state", state, "updateRun", runObjRef)
@@ -159,7 +159,7 @@ func (r *Reconciler) Reconcile(ctx context.Context, req runtime.Request) (runtim
 	}
 
 	// Execute the updateRun.
-	if state == placementv1beta1.StateExecuted {
+	if state == placementv1beta1.StateRun {
 		klog.V(2).InfoS("Continue to execute the updateRun", "state", state, "updatingStageIndex", updatingStageIndex, "updateRun", runObjRef)
 		finished, waitTime, execErr := r.execute(ctx, updateRun, updatingStageIndex, toBeUpdatedBindings, toBeDeletedBindings)
 		if errors.Is(execErr, errStagedUpdatedAborted) {

@@ -1518,11 +1518,11 @@ var _ = Describe("UpdateRun execution tests - single stage", func() {
 		})
 	})
 
-	Context("Cluster staged update run should update clusters one by one - different states (Initialized -> Executed)", Ordered, func() {
+	Context("Cluster staged update run should update clusters one by one - different states (Initialize -> Run)", Ordered, func() {
 		var wantMetrics []*promclient.Metric
 		BeforeAll(func() {
 			By("Creating a new clusterStagedUpdateRun")
-			updateRun.Spec.State = placementv1beta1.StateInitialized
+			updateRun.Spec.State = placementv1beta1.StateInitialize
 			Expect(k8sClient.Create(ctx, updateRun)).To(Succeed())
 
 			By("Validating the initialization succeeded and but not execution started")
@@ -1550,9 +1550,9 @@ var _ = Describe("UpdateRun execution tests - single stage", func() {
 			validateNotBoundBindingState(ctx, binding)
 		})
 
-		It("Should start execution after changing the state to Execute", func() {
-			By("Updating the updateRun state to Execute")
-			updateRun.Spec.State = placementv1beta1.StateExecuted
+		It("Should start execution after changing the state to Run", func() {
+			By("Updating the updateRun state to Run")
+			updateRun.Spec.State = placementv1beta1.StateRun
 			Expect(k8sClient.Update(ctx, updateRun)).Should(Succeed(), "failed to update the updateRun state")
 
 			By("Validating the execution has started")

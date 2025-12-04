@@ -152,30 +152,25 @@ func (c *ClusterStagedUpdateRun) SetUpdateRunStatus(status UpdateRunStatus) {
 type State string
 
 const (
-	// StateInitialized describes user intent to initialize but not execute the update run.
+	// StateInitialize describes user intent to initialize but not run the update run.
 	// This is the default state when an update run is created.
-	// Users can subsequently set the state to Execute or Abandon.
-	StateInitialized State = "Initialize"
+	// Users can subsequently set the state to Run.
+	StateInitialize State = "Initialize"
 
-	// StateExecuted describes user intent to execute (or resume execution if paused).
-	// Users can subsequently set the state to Pause or Abandon.
-	StateExecuted State = "Execute"
+	// StateRun describes user intent to execute (or resume execution if stopped).
+	// Users can subsequently set the state to Stop.
+	StateRun State = "Run"
 
-	// StateStopped describes user intent to pause the update run.
-	// Users can subsequently set the state to Execute or Abandon.
-	StateStopped State = "Pause"
-
-	// StateAbandoned describes user intent to abandon the update run.
-	// This is a terminal state; once set, it cannot be changed.
-	StateAbandoned State = "Abandon"
+	// StateStop describes user intent to stop the update run.
+	// Users can subsequently set the state to Run.
+	StateStop State = "Stop"
 )
 
 // UpdateRunSpec defines the desired rollout strategy and the snapshot indices of the resources to be updated.
 // It specifies a stage-by-stage update process across selected clusters for the given ResourcePlacement object.
-// +kubebuilder:validation:XValidation:rule="!(has(oldSelf.state) && oldSelf.state == 'Initialize' && self.state == 'Pause')",message="invalid state transition: cannot transition from Initialize to Pause"
-// +kubebuilder:validation:XValidation:rule="!(has(oldSelf.state) && oldSelf.state == 'Execute' && self.state == 'Initialize')",message="invalid state transition: cannot transition from Execute to Initialize"
-// +kubebuilder:validation:XValidation:rule="!(has(oldSelf.state) && oldSelf.state == 'Pause' && self.state == 'Initialize')",message="invalid state transition: cannot transition from Pause to Initialize"
-// +kubebuilder:validation:XValidation:rule="!has(oldSelf.state) || oldSelf.state != 'Abandon' || self.state == 'Abandon'",message="invalid state transition: Abandon is a terminal state and cannot transition to any other state"
+// +kubebuilder:validation:XValidation:rule="!(has(oldSelf.state) && oldSelf.state == 'Initialize' && self.state == 'Stop')",message="invalid state transition: cannot transition from Initialize to Stop"
+// +kubebuilder:validation:XValidation:rule="!(has(oldSelf.state) && oldSelf.state == 'Run' && self.state == 'Initialize')",message="invalid state transition: cannot transition from Run to Initialize"
+// +kubebuilder:validation:XValidation:rule="!(has(oldSelf.state) && oldSelf.state == 'Stop' && self.state == 'Initialize')",message="invalid state transition: cannot transition from Stop to Initialize"
 type UpdateRunSpec struct {
 	// PlacementName is the name of placement that this update run is applied to.
 	// There can be multiple active update runs for each placement, but
@@ -201,12 +196,11 @@ type UpdateRunSpec struct {
 
 	// State indicates the desired state of the update run.
 	// Initialize: The update run should be initialized but execution should not start (default).
-	// Execute: The update run should execute or resume execution.
-	// Pause: The update run should pause execution.
-	// Abandon: The update run should be abandoned and terminated.
+	// Run: The update run should execute or resume execution.
+	// Stop: The update run should stop execution.
 	// +kubebuilder:validation:Optional
 	// +kubebuilder:default=Initialize
-	// +kubebuilder:validation:Enum=Initialize;Execute;Pause;Abandon
+	// +kubebuilder:validation:Enum=Initialize;Run;Stop
 	State State `json:"state,omitempty"`
 }
 
