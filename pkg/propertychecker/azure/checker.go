@@ -155,7 +155,7 @@ func validateCapacity(value string, operator placementv1beta1.PropertySelectorOp
 
 	// Adjust capacity based on operator semantics for VMSizeRecommender API.
 	// If operator is GreaterThanOrEqualTo, decrement capacity by 1 as the API checks for strictly greater than.
-	if operator == placementv1beta1.PropertySelectorGreaterThanOrEqualTo && capacity >= minVMInstanceCapacity {
+	if operator == placementv1beta1.PropertySelectorGreaterThanOrEqualTo && capacity > minVMInstanceCapacity {
 		capacity -= 1
 	}
 
@@ -167,7 +167,7 @@ func validateCapacity(value string, operator placementv1beta1.PropertySelectorOp
 	// Ensure capacity meets minimum requirements (minVMInstanceCapacity) after operator adjustment.
 	// The VMSizeRecommender API requires capacity > 0.
 	if capacity < minVMInstanceCapacity {
-		return 0, fmt.Errorf("capacity value cannot be below minimum %d after adjustment", minVMInstanceCapacity)
+		capacity = minVMInstanceCapacity
 	}
 
 	return capacity, nil
