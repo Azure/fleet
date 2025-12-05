@@ -17,9 +17,13 @@ limitations under the License.
 package resource
 
 import (
+	"encoding/json"
 	"testing"
 
+	"github.com/google/go-cmp/cmp"
 	placementv1beta1 "github.com/kubefleet-dev/kubefleet/apis/placement/v1beta1"
+	corev1 "k8s.io/api/core/v1"
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 )
 
 func TestHashOf(t *testing.T) {
@@ -47,6 +51,68 @@ func TestHashOf(t *testing.T) {
 			}
 			if len(got) == 0 {
 				t.Errorf("HashOf() got empty, want not empty")
+			}
+		})
+	}
+}
+
+// TestCalculateSizeDeltaOverLimitFor tests the CalculateSizeDeltaOverLimitFor function.
+func TestCalculateSizeDeltaOverLimitFor(t *testing.T) {
+	cm := &corev1.ConfigMap{
+		TypeMeta: metav1.TypeMeta{
+			APIVersion: "v1",
+			Kind:       "ConfigMap",
+		},
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      "app",
+			Namespace: "default",
+		},
+		Data: map[string]string{
+			"key": "value",
+		},
+	}
+	cmBytes, err := json.Marshal(cm)
+	if err != nil {
+		t.Fatalf("Failed to marshal configMap")
+	}
+	cmSizeBytes := len(cmBytes)
+
+	testCases := []struct {
+		name           string
+		sizeLimitBytes int
+		wantErred      bool
+	}{
+		{
+			name:           "under size limit (negative delta)",
+			sizeLimitBytes: 10000,
+		},
+		{
+			name:           "over size limit (positive delta)",
+			sizeLimitBytes: 1,
+		},
+		{
+			name: "invalid size limit (negative size limit)",
+			// Invalid size limit.
+			sizeLimitBytes: -1,
+			wantErred:      true,
+		},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			sizeDeltaBytes, err := CalculateSizeDeltaOverLimitFor(cm, tc.sizeLimitBytes)
+
+			if tc.wantErred {
+				if err == nil {
+					t.Fatalf("CalculateSizeDeltaOverLimitFor() error = nil, want erred")
+				}
+				return
+			}
+			// Note: this test spec uses runtime calculation rather than static values for expected
+			// size delta comparison as different platforms have slight differences in the serialization process,
+			// which may produce different sizing results.
+			if !cmp.Equal(sizeDeltaBytes, cmSizeBytes-tc.sizeLimitBytes) {
+				t.Errorf("CalculateSizeDeltaOverLimitFor() = %d, want %d", sizeDeltaBytes, cmSizeBytes-tc.sizeLimitBytes)
 			}
 		})
 	}
