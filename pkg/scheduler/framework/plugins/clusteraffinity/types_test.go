@@ -1356,7 +1356,7 @@ func TestClusterRequirementMatches_WithPropertyChecker(t *testing.T) {
 			},
 			cluster:        cluster,
 			sku:            "Standard_D2s_v3",
-			targetCapacity: 1,
+			targetCapacity: 2,
 			want:           true,
 		},
 		{
@@ -1388,7 +1388,7 @@ func TestClusterRequirementMatches_WithPropertyChecker(t *testing.T) {
 			},
 			cluster:        cluster,
 			sku:            "Standard_D4s_v3",
-			targetCapacity: 8,
+			targetCapacity: 9,
 		},
 		{
 			name: "op >=, matched (max limit)",
@@ -1403,7 +1403,7 @@ func TestClusterRequirementMatches_WithPropertyChecker(t *testing.T) {
 			},
 			cluster:        cluster,
 			sku:            "Standard_D2s_v3",
-			targetCapacity: 199,
+			targetCapacity: 200,
 			want:           true,
 		},
 		{
@@ -1419,7 +1419,7 @@ func TestClusterRequirementMatches_WithPropertyChecker(t *testing.T) {
 			},
 			cluster:        cluster,
 			sku:            "Standard_D4s_v3",
-			targetCapacity: 79,
+			targetCapacity: 80,
 		},
 	}
 

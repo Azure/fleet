@@ -153,14 +153,17 @@ func validateCapacity(value string, operator placementv1beta1.PropertySelectorOp
 
 	capacity := uint32(valueUint) // capacity is >= 0 since it's parsed as uint.
 
-	// Adjust capacity based on operator semantics for VMSizeRecommender API.
-	// If operator is GreaterThanOrEqualTo, decrement capacity by 1 as the API checks for strictly greater than.
-	if operator == placementv1beta1.PropertySelectorGreaterThanOrEqualTo && capacity > minVMInstanceCapacity {
-		capacity -= 1
+	// Adjust capacity for VMSizeRecommender API semantics.
+	// The API requires requested capacity >= 1.
+	// If operator is GreaterThan (Gt) , increment the requested value by 1.
+	// Otherwise, use the requested value as-is.
+	// These adjustments ensure the API interprets the request correctly
+	if operator == placementv1beta1.PropertySelectorGreaterThan {
+		capacity += 1
 	}
 
 	// Validate against maximum allowed capacity (exceed maxVMInstanceCapacity).
-	if capacity >= maxVMInstanceCapacity {
+	if capacity > maxVMInstanceCapacity {
 		return 0, fmt.Errorf("capacity value %d exceeds maximum allowed value of %d", capacity, maxVMInstanceCapacity)
 	}
 
