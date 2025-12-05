@@ -35,8 +35,8 @@ import (
 	"go.goms.io/fleet/pkg/utils/controller"
 )
 
-// trackInMemberClusterObjAvailability tracks the availability of an applied objects in the member cluster.
-func (r *Reconciler) trackInMemberClusterObjAvailability(ctx context.Context, bundles []*manifestProcessingBundle, workRef klog.ObjectRef) {
+// trackInMemberClusterObjAvailability tracks the availability of applied objects in the member cluster.
+func (r *Reconciler) trackInMemberClusterObjAvailability(ctx context.Context, bundles []*manifestProcessingBundle, workRef klog.ObjectRef) error {
 	// Track the availability of all the applied objects in the member cluster in parallel.
 	//
 	// This is concurrency-safe as the bundles slice has been pre-allocated.
@@ -83,6 +83,17 @@ func (r *Reconciler) trackInMemberClusterObjAvailability(ctx context.Context, bu
 
 	// Run the availability check in parallel.
 	r.parallelizer.ParallelizeUntil(childCtx, len(bundles), doWork, "trackInMemberClusterObjAvailability")
+
+	// Unlike some other steps in the reconciliation loop, the availability checking step does not end
+	// with a contextual API call; consequently, if the context has been cancelled during this step,
+	// some checks might not run at all, and passing such bundles to the next step may trigger
+	// unexpected behaviors. To address this, at the end of this step the work applier checks for context
+	// cancellation directly.
+	if err := ctx.Err(); err != nil {
+		klog.V(2).InfoS("availability checking has been interrupted as the main context has been cancelled")
+		return fmt.Errorf("availability checking has been interrupted: %w", err)
+	}
+	return nil
 }
 
 // trackInMemberClusterObjAvailabilityByGVR tracks the availability of an object in the member cluster based

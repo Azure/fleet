@@ -27,6 +27,7 @@ import (
 	"k8s.io/apimachinery/pkg/api/meta"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/types"
+	"k8s.io/apimachinery/pkg/util/intstr"
 	"k8s.io/utils/ptr"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 
@@ -1264,6 +1265,184 @@ var _ = Describe("test RP rollout with staged update run", Label("resourceplacem
 				configMapActual := configMapPlacedOnClusterActual(cluster, &newConfigMap)
 				Eventually(configMapActual, eventuallyDuration, eventuallyInterval).Should(Succeed(), "Failed to update to the new configmap %s on cluster %s", newConfigMap.Name, cluster.ClusterName)
 			}
+		})
+	})
+
+	Context("Test parallel cluster updates with maxConcurrency set to 3", Ordered, func() {
+		var strategy *placementv1beta1.StagedUpdateStrategy
+		updateRunName := fmt.Sprintf(stagedUpdateRunNameWithSubIndexTemplate, GinkgoParallelProcess(), 0)
+
+		BeforeAll(func() {
+			// Create the RP with external rollout strategy.
+			rp := &placementv1beta1.ResourcePlacement{
+				ObjectMeta: metav1.ObjectMeta{
+					Name:      rpName,
+					Namespace: testNamespace,
+					// Add a custom finalizer; this would allow us to better observe
+					// the behavior of the controllers.
+					Finalizers: []string{customDeletionBlockerFinalizer},
+				},
+				Spec: placementv1beta1.PlacementSpec{
+					ResourceSelectors: configMapSelector(),
+					Strategy: placementv1beta1.RolloutStrategy{
+						Type: placementv1beta1.ExternalRolloutStrategyType,
+					},
+				},
+			}
+			Expect(hubClient.Create(ctx, rp)).To(Succeed(), "Failed to create RP")
+
+			// Create a strategy with a single stage selecting all 3 clusters with maxConcurrency specified.
+			strategy = &placementv1beta1.StagedUpdateStrategy{
+				ObjectMeta: metav1.ObjectMeta{
+					Name:      strategyName,
+					Namespace: testNamespace,
+				},
+				Spec: placementv1beta1.UpdateStrategySpec{
+					Stages: []placementv1beta1.StageConfig{
+						{
+							Name: "parallel",
+							// Pick all clusters in a single stage.
+							LabelSelector:  &metav1.LabelSelector{},
+							MaxConcurrency: &intstr.IntOrString{Type: intstr.Int, IntVal: 3},
+						},
+					},
+				},
+			}
+			Expect(hubClient.Create(ctx, strategy)).To(Succeed(), "Failed to create StagedUpdateStrategy")
+		})
+
+		AfterAll(func() {
+			// Remove the custom deletion blocker finalizer from the RP.
+			ensureRPAndRelatedResourcesDeleted(types.NamespacedName{Name: rpName, Namespace: testNamespace}, allMemberClusters)
+
+			// Delete the stagedUpdateRun.
+			ensureStagedUpdateRunDeletion(updateRunName, testNamespace)
+
+			// Delete the stagedUpdateStrategy.
+			ensureStagedUpdateRunStrategyDeletion(strategyName, testNamespace)
+		})
+
+		It("Should not rollout any resources to member clusters as there's no update run yet", checkIfRemovedConfigMapFromAllMemberClustersConsistently)
+
+		It("Should have the latest resource snapshot", func() {
+			validateLatestResourceSnapshot(rpName, testNamespace, resourceSnapshotIndex1st)
+		})
+
+		It("Should successfully schedule the rp", func() {
+			validateLatestSchedulingPolicySnapshot(rpName, testNamespace, policySnapshotIndex1st, 3)
+		})
+
+		It("Should update rp status as pending rollout", func() {
+			rpStatusUpdatedActual := rpStatusWithExternalStrategyActual(nil, "", false, allMemberClusterNames, []string{"", "", ""}, []bool{false, false, false}, nil, nil)
+			Eventually(rpStatusUpdatedActual, eventuallyDuration, eventuallyInterval).Should(Succeed(), "Failed to update RP %s/%s status as expected", testNamespace, rpName)
+		})
+
+		It("Should create a staged update run successfully", func() {
+			createStagedUpdateRunSucceed(updateRunName, testNamespace, rpName, resourceSnapshotIndex1st, strategyName)
+		})
+
+		It("Should complete the staged update run with all 3 clusters updated in parallel", func() {
+			// With maxConcurrency=3, all 3 clusters should be updated in parallel.
+			// Each round waits 15 seconds, so total time should be under 20s.
+			surSucceededActual := stagedUpdateRunStatusSucceededActual(updateRunName, testNamespace, resourceSnapshotIndex1st, policySnapshotIndex1st, len(allMemberClusters), defaultApplyStrategy, &strategy.Spec, [][]string{{allMemberClusterNames[0], allMemberClusterNames[1], allMemberClusterNames[2]}}, nil, nil, nil)
+			Eventually(surSucceededActual, updateRunParallelEventuallyDuration, eventuallyInterval).Should(Succeed(), "Failed to validate updateRun %s/%s succeeded", testNamespace, updateRunName)
+			checkIfPlacedWorkResourcesOnMemberClustersInUpdateRun(allMemberClusters)
+		})
+
+		It("Should update rp status as completed", func() {
+			rpStatusUpdatedActual := rpStatusWithExternalStrategyActual(appConfigMapIdentifiers(), resourceSnapshotIndex1st, true, allMemberClusterNames,
+				[]string{resourceSnapshotIndex1st, resourceSnapshotIndex1st, resourceSnapshotIndex1st}, []bool{true, true, true}, nil, nil)
+			Eventually(rpStatusUpdatedActual, eventuallyDuration, eventuallyInterval).Should(Succeed(), "Failed to update RP %s/%s status as expected", testNamespace, rpName)
+		})
+	})
+
+	Context("Test parallel cluster updates with maxConcurrency set to 70%", Ordered, func() {
+		var strategy *placementv1beta1.StagedUpdateStrategy
+		updateRunName := fmt.Sprintf(stagedUpdateRunNameWithSubIndexTemplate, GinkgoParallelProcess(), 0)
+
+		BeforeAll(func() {
+			// Create the RP with external rollout strategy.
+			rp := &placementv1beta1.ResourcePlacement{
+				ObjectMeta: metav1.ObjectMeta{
+					Name:      rpName,
+					Namespace: testNamespace,
+					// Add a custom finalizer; this would allow us to better observe
+					// the behavior of the controllers.
+					Finalizers: []string{customDeletionBlockerFinalizer},
+				},
+				Spec: placementv1beta1.PlacementSpec{
+					ResourceSelectors: configMapSelector(),
+					Strategy: placementv1beta1.RolloutStrategy{
+						Type: placementv1beta1.ExternalRolloutStrategyType,
+					},
+				},
+			}
+			Expect(hubClient.Create(ctx, rp)).To(Succeed(), "Failed to create RP")
+
+			// Create a strategy with maxConcurrency set to 70%.
+			// With 3 clusters, 70% = 2.1, rounded down to 2 clusters.
+			strategy = &placementv1beta1.StagedUpdateStrategy{
+				ObjectMeta: metav1.ObjectMeta{
+					Name:      strategyName,
+					Namespace: testNamespace,
+				},
+				Spec: placementv1beta1.UpdateStrategySpec{
+					Stages: []placementv1beta1.StageConfig{
+						{
+							Name: "parallel",
+							// Pick all clusters in a single stage.
+							LabelSelector:  &metav1.LabelSelector{},
+							MaxConcurrency: &intstr.IntOrString{Type: intstr.String, StrVal: "70%"},
+						},
+					},
+				},
+			}
+			Expect(hubClient.Create(ctx, strategy)).To(Succeed(), "Failed to create StagedUpdateStrategy")
+		})
+
+		AfterAll(func() {
+			// Remove the custom deletion blocker finalizer from the RP.
+			ensureRPAndRelatedResourcesDeleted(types.NamespacedName{Name: rpName, Namespace: testNamespace}, allMemberClusters)
+
+			// Delete the stagedUpdateRun.
+			ensureStagedUpdateRunDeletion(updateRunName, testNamespace)
+
+			// Delete the stagedUpdateStrategy.
+			ensureStagedUpdateRunStrategyDeletion(strategyName, testNamespace)
+		})
+
+		It("Should not rollout any resources to member clusters as there's no update run yet", checkIfRemovedConfigMapFromAllMemberClustersConsistently)
+
+		It("Should have the latest resource snapshot", func() {
+			validateLatestResourceSnapshot(rpName, testNamespace, resourceSnapshotIndex1st)
+		})
+
+		It("Should successfully schedule the rp", func() {
+			validateLatestSchedulingPolicySnapshot(rpName, testNamespace, policySnapshotIndex1st, 3)
+		})
+
+		It("Should update rp status as pending rollout", func() {
+			rpStatusUpdatedActual := rpStatusWithExternalStrategyActual(nil, "", false, allMemberClusterNames, []string{"", "", ""}, []bool{false, false, false}, nil, nil)
+			Eventually(rpStatusUpdatedActual, eventuallyDuration, eventuallyInterval).Should(Succeed(), "Failed to update RP %s/%s status as expected", testNamespace, rpName)
+		})
+
+		It("Should create a staged update run successfully", func() {
+			createStagedUpdateRunSucceed(updateRunName, testNamespace, rpName, resourceSnapshotIndex1st, strategyName)
+		})
+
+		It("Should complete the staged update run with all 3 clusters", func() {
+			// Since maxConcurrency=70% each round we process 2 clusters in parallel,
+			// so all 3 clusters should be updated in 2 rounds.
+			// Each round waits 15 seconds, so total time should be under 40s.
+			surSucceededActual := stagedUpdateRunStatusSucceededActual(updateRunName, testNamespace, resourceSnapshotIndex1st, policySnapshotIndex1st, len(allMemberClusters), defaultApplyStrategy, &strategy.Spec, [][]string{{allMemberClusterNames[0], allMemberClusterNames[1], allMemberClusterNames[2]}}, nil, nil, nil)
+			Eventually(surSucceededActual, updateRunParallelEventuallyDuration*2, eventuallyInterval).Should(Succeed(), "Failed to validate updateRun %s/%s succeeded", testNamespace, updateRunName)
+			checkIfPlacedWorkResourcesOnMemberClustersInUpdateRun(allMemberClusters)
+		})
+
+		It("Should update rp status as completed", func() {
+			rpStatusUpdatedActual := rpStatusWithExternalStrategyActual(appConfigMapIdentifiers(), resourceSnapshotIndex1st, true, allMemberClusterNames,
+				[]string{resourceSnapshotIndex1st, resourceSnapshotIndex1st, resourceSnapshotIndex1st}, []bool{true, true, true}, nil, nil)
+			Eventually(rpStatusUpdatedActual, eventuallyDuration, eventuallyInterval).Should(Succeed(), "Failed to update RP %s/%s status as expected", testNamespace, rpName)
 		})
 	})
 })

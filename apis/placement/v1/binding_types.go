@@ -105,6 +105,30 @@ type ResourceBindingStatus struct {
 	// +optional
 	FailedPlacements []FailedResourcePlacement `json:"failedPlacements,omitempty"`
 
+	// DriftedPlacements is a list of resources that have drifted from their desired states
+	// kept in the hub cluster, as found by Fleet using the drift detection mechanism.
+	//
+	// To control the object size, only the first 100 drifted resources will be included.
+	// This field is only meaningful if the `ClusterName` is not empty.
+	// +kubebuilder:validation:Optional
+	// +kubebuilder:validation:MaxItems=100
+	DriftedPlacements []DriftedResourcePlacement `json:"driftedPlacements,omitempty"`
+
+	// DiffedPlacements is a list of resources that have configuration differences from their
+	// corresponding hub cluster manifests. Fleet will report such differences when:
+	//
+	// * The CRP uses the ReportDiff apply strategy, which instructs Fleet to compare the hub
+	//   cluster manifests against the live resources without actually performing any apply op; or
+	// * Fleet finds a pre-existing resource on the member cluster side that does not match its
+	//   hub cluster counterpart, and the CRP has been configured to only take over a resource if
+	//   no configuration differences are found.
+	//
+	// To control the object size, only the first 100 diffed resources will be included.
+	// This field is only meaningful if the `ClusterName` is not empty.
+	// +kubebuilder:validation:Optional
+	// +kubebuilder:validation:MaxItems=100
+	DiffedPlacements []DiffedResourcePlacement `json:"diffedPlacements,omitempty"`
+
 	// +patchMergeKey=type
 	// +patchStrategy=merge
 	// +listType=map
@@ -156,6 +180,18 @@ const (
 	// - "False" means not all the resources are available in the target cluster yet.
 	// - "Unknown" means we haven't finished the apply yet so that we cannot check the resource availability.
 	ResourceBindingAvailable ResourceBindingConditionType = "Available"
+
+	// ResourceBindingDiffReported indicates that Fleet has successfully reported configuration
+	// differences between the hub cluster and a specific member cluster for the given resources.
+	//
+	// This condition is added only when the ReportDiff apply strategy is used.
+	//
+	// It can have the following condition statuses:
+	// * True: Fleet has successfully reported configuration differences for all resources.
+	// * False: Fleet has not yet reported configuration differences for some resources, or an
+	//   error has occurred.
+	// * Unknown: Fleet has not finished processing the diff reporting yet.
+	ResourceBindingDiffReported ResourceBindingConditionType = "DiffReported"
 )
 
 // ClusterResourceBindingList is a collection of ClusterResourceBinding.

@@ -17,12 +17,21 @@ limitations under the License.
 package updaterun
 
 import (
+	"context"
+	"errors"
+	"strings"
 	"testing"
+	"time"
 
 	"github.com/google/go-cmp/cmp"
 	"k8s.io/apimachinery/pkg/api/meta"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/types"
+	"k8s.io/apimachinery/pkg/util/intstr"
+	"sigs.k8s.io/controller-runtime/pkg/client"
+	"sigs.k8s.io/controller-runtime/pkg/client/fake"
+	"sigs.k8s.io/controller-runtime/pkg/client/interceptor"
 
 	placementv1beta1 "go.goms.io/fleet/apis/placement/v1beta1"
 	"go.goms.io/fleet/pkg/utils/condition"
@@ -394,6 +403,542 @@ func TestBuildApprovalRequestObject(t *testing.T) {
 			// Compare the whole objects using cmp.Diff with ignore options
 			if diff := cmp.Diff(test.want, got); diff != "" {
 				t.Errorf("buildApprovalRequestObject() mismatch (-want +got):\n%s", diff)
+			}
+		})
+	}
+}
+
+// TODO(arvindth): Add more test cases to cover aggregate error scenarios both positive and negative cases.
+func TestExecuteUpdatingStage_Error(t *testing.T) {
+	tests := []struct {
+		name            string
+		updateRun       *placementv1beta1.ClusterStagedUpdateRun
+		bindings        []placementv1beta1.BindingObj
+		interceptorFunc *interceptor.Funcs
+		wantErr         error
+		wantAbortErr    bool
+		wantWaitTime    time.Duration
+	}{
+		{
+			name: "cluster update failed",
+			updateRun: &placementv1beta1.ClusterStagedUpdateRun{
+				ObjectMeta: metav1.ObjectMeta{
+					Name:       "test-update-run",
+					Generation: 1,
+				},
+				Spec: placementv1beta1.UpdateRunSpec{
+					PlacementName:         "test-placement",
+					ResourceSnapshotIndex: "1",
+				},
+				Status: placementv1beta1.UpdateRunStatus{
+					StagesStatus: []placementv1beta1.StageUpdatingStatus{
+						{
+							StageName: "test-stage",
+							Clusters: []placementv1beta1.ClusterUpdatingStatus{
+								{
+									ClusterName: "cluster-1",
+									Conditions: []metav1.Condition{
+										{
+											Type:               string(placementv1beta1.ClusterUpdatingConditionSucceeded),
+											Status:             metav1.ConditionFalse,
+											ObservedGeneration: 1,
+											Reason:             condition.ClusterUpdatingFailedReason,
+											Message:            "cluster update failed",
+										},
+									},
+								},
+							},
+						},
+					},
+					UpdateStrategySnapshot: &placementv1beta1.UpdateStrategySpec{
+						Stages: []placementv1beta1.StageConfig{
+							{
+								Name:           "test-stage",
+								MaxConcurrency: &intstr.IntOrString{Type: intstr.Int, IntVal: 1},
+							},
+						},
+					},
+				},
+			},
+			bindings:        nil,
+			interceptorFunc: nil,
+			wantErr:         errors.New("the cluster `cluster-1` in the stage test-stage has failed"),
+			wantAbortErr:    true,
+			wantWaitTime:    0,
+		},
+		{
+			name: "binding update failure",
+			updateRun: &placementv1beta1.ClusterStagedUpdateRun{
+				ObjectMeta: metav1.ObjectMeta{
+					Name:       "test-update-run",
+					Generation: 1,
+				},
+				Spec: placementv1beta1.UpdateRunSpec{
+					PlacementName:         "test-placement",
+					ResourceSnapshotIndex: "1",
+				},
+				Status: placementv1beta1.UpdateRunStatus{
+					StagesStatus: []placementv1beta1.StageUpdatingStatus{
+						{
+							StageName: "test-stage",
+							Clusters: []placementv1beta1.ClusterUpdatingStatus{
+								{
+									ClusterName: "cluster-1",
+								},
+							},
+						},
+					},
+					UpdateStrategySnapshot: &placementv1beta1.UpdateStrategySpec{
+						Stages: []placementv1beta1.StageConfig{
+							{
+								Name:           "test-stage",
+								MaxConcurrency: &intstr.IntOrString{Type: intstr.Int, IntVal: 1},
+							},
+						},
+					},
+				},
+			},
+			bindings: []placementv1beta1.BindingObj{
+				&placementv1beta1.ClusterResourceBinding{
+					ObjectMeta: metav1.ObjectMeta{
+						Name:       "binding-1",
+						Generation: 1,
+					},
+					Spec: placementv1beta1.ResourceBindingSpec{
+						TargetCluster: "cluster-1",
+						State:         placementv1beta1.BindingStateScheduled,
+					},
+				},
+			},
+			interceptorFunc: &interceptor.Funcs{
+				Update: func(ctx context.Context, client client.WithWatch, obj client.Object, opts ...client.UpdateOption) error {
+					return errors.New("simulated update error")
+				},
+			},
+			wantErr:      errors.New("simulated update error"),
+			wantWaitTime: 0,
+		},
+		{
+			name: "binding preemption",
+			updateRun: &placementv1beta1.ClusterStagedUpdateRun{
+				ObjectMeta: metav1.ObjectMeta{
+					Name:       "test-update-run",
+					Generation: 1,
+				},
+				Spec: placementv1beta1.UpdateRunSpec{
+					PlacementName:         "test-placement",
+					ResourceSnapshotIndex: "1",
+				},
+				Status: placementv1beta1.UpdateRunStatus{
+					StagesStatus: []placementv1beta1.StageUpdatingStatus{
+						{
+							StageName: "test-stage",
+							Clusters: []placementv1beta1.ClusterUpdatingStatus{
+								{
+									ClusterName: "cluster-1",
+									Conditions: []metav1.Condition{
+										{
+											Type:               string(placementv1beta1.ClusterUpdatingConditionStarted),
+											Status:             metav1.ConditionTrue,
+											ObservedGeneration: 1,
+											Reason:             condition.ClusterUpdatingStartedReason,
+										},
+									},
+								},
+							},
+						},
+					},
+					UpdateStrategySnapshot: &placementv1beta1.UpdateStrategySpec{
+						Stages: []placementv1beta1.StageConfig{
+							{
+								Name:           "test-stage",
+								MaxConcurrency: &intstr.IntOrString{Type: intstr.Int, IntVal: 1},
+							},
+						},
+					},
+				},
+			},
+			bindings: []placementv1beta1.BindingObj{
+				&placementv1beta1.ClusterResourceBinding{
+					ObjectMeta: metav1.ObjectMeta{
+						Name:       "binding-1",
+						Generation: 1,
+					},
+					Spec: placementv1beta1.ResourceBindingSpec{
+						TargetCluster:        "cluster-1",
+						ResourceSnapshotName: "wrong-snapshot",
+						State:                placementv1beta1.BindingStateBound,
+					},
+					Status: placementv1beta1.ResourceBindingStatus{
+						Conditions: []metav1.Condition{
+							{
+								Type:               string(placementv1beta1.ResourceBindingRolloutStarted),
+								Status:             metav1.ConditionTrue,
+								ObservedGeneration: 1,
+							},
+						},
+					},
+				},
+			},
+			interceptorFunc: nil,
+			wantErr:         errors.New("the binding of the updating cluster `cluster-1` in the stage `test-stage` is not up-to-date with the desired status"),
+			wantAbortErr:    true,
+			wantWaitTime:    0,
+		},
+		{
+			name: "binding synced but state not bound - update binding state fails",
+			updateRun: &placementv1beta1.ClusterStagedUpdateRun{
+				ObjectMeta: metav1.ObjectMeta{
+					Name:       "test-update-run",
+					Generation: 1,
+				},
+				Spec: placementv1beta1.UpdateRunSpec{
+					PlacementName:         "test-placement",
+					ResourceSnapshotIndex: "1",
+				},
+				Status: placementv1beta1.UpdateRunStatus{
+					ResourceSnapshotIndexUsed: "1",
+					StagesStatus: []placementv1beta1.StageUpdatingStatus{
+						{
+							StageName: "test-stage",
+							Clusters: []placementv1beta1.ClusterUpdatingStatus{
+								{
+									ClusterName: "cluster-1",
+									// No conditions - cluster has not started updating yet.
+								},
+							},
+						},
+					},
+					UpdateStrategySnapshot: &placementv1beta1.UpdateStrategySpec{
+						Stages: []placementv1beta1.StageConfig{
+							{
+								Name:           "test-stage",
+								MaxConcurrency: &intstr.IntOrString{Type: intstr.Int, IntVal: 1},
+							},
+						},
+					},
+				},
+			},
+			bindings: []placementv1beta1.BindingObj{
+				&placementv1beta1.ClusterResourceBinding{
+					ObjectMeta: metav1.ObjectMeta{
+						Name:       "binding-1",
+						Generation: 1,
+					},
+					Spec: placementv1beta1.ResourceBindingSpec{
+						TargetCluster:        "cluster-1",
+						ResourceSnapshotName: "test-placement-1-snapshot",            // Already synced.
+						State:                placementv1beta1.BindingStateScheduled, // But not Bound yet.
+					},
+				},
+			},
+			interceptorFunc: &interceptor.Funcs{
+				Update: func(ctx context.Context, client client.WithWatch, obj client.Object, opts ...client.UpdateOption) error {
+					return errors.New("failed to update binding state")
+				},
+			},
+			wantErr:      errors.New("failed to update binding state"),
+			wantWaitTime: 0,
+		},
+		{
+			name: "binding synced and bound but generation updated - update rolloutStarted fails",
+			updateRun: &placementv1beta1.ClusterStagedUpdateRun{
+				ObjectMeta: metav1.ObjectMeta{
+					Name:       "test-update-run",
+					Generation: 1,
+				},
+				Spec: placementv1beta1.UpdateRunSpec{
+					PlacementName:         "test-placement",
+					ResourceSnapshotIndex: "1",
+				},
+				Status: placementv1beta1.UpdateRunStatus{
+					ResourceSnapshotIndexUsed: "1",
+					StagesStatus: []placementv1beta1.StageUpdatingStatus{
+						{
+							StageName: "test-stage",
+							Clusters: []placementv1beta1.ClusterUpdatingStatus{
+								{
+									ClusterName: "cluster-1",
+									// No conditions - cluster has not started updating yet.
+								},
+							},
+						},
+					},
+					UpdateStrategySnapshot: &placementv1beta1.UpdateStrategySpec{
+						Stages: []placementv1beta1.StageConfig{
+							{
+								Name:           "test-stage",
+								MaxConcurrency: &intstr.IntOrString{Type: intstr.Int, IntVal: 1},
+							},
+						},
+					},
+				},
+			},
+			bindings: []placementv1beta1.BindingObj{
+				&placementv1beta1.ClusterResourceBinding{
+					ObjectMeta: metav1.ObjectMeta{
+						Name:       "binding-1",
+						Generation: 2, // Generation updated by scheduler.
+					},
+					Spec: placementv1beta1.ResourceBindingSpec{
+						TargetCluster:        "cluster-1",
+						ResourceSnapshotName: "test-placement-1-snapshot",        // Already synced.
+						State:                placementv1beta1.BindingStateBound, // Already Bound.
+					},
+					Status: placementv1beta1.ResourceBindingStatus{
+						Conditions: []metav1.Condition{
+							{
+								Type:               string(placementv1beta1.ResourceBindingRolloutStarted),
+								Status:             metav1.ConditionTrue,
+								ObservedGeneration: 1, // Old generation - needs update.
+								Reason:             condition.RolloutStartedReason,
+							},
+						},
+					},
+				},
+			},
+			interceptorFunc: &interceptor.Funcs{
+				SubResourceUpdate: func(ctx context.Context, client client.Client, subResourceName string, obj client.Object, opts ...client.SubResourceUpdateOption) error {
+					// Fail the status update for rolloutStarted.
+					return errors.New("failed to update binding rolloutStarted status")
+				},
+			},
+			wantErr:      errors.New("failed to update binding rolloutStarted status"),
+			wantWaitTime: 0,
+		},
+		{
+			name: "binding synced, bound, rolloutStarted true, but binding has failed condition",
+			updateRun: &placementv1beta1.ClusterStagedUpdateRun{
+				ObjectMeta: metav1.ObjectMeta{
+					Name:       "test-update-run",
+					Generation: 1,
+				},
+				Spec: placementv1beta1.UpdateRunSpec{
+					PlacementName:         "test-placement",
+					ResourceSnapshotIndex: "1",
+				},
+				Status: placementv1beta1.UpdateRunStatus{
+					ResourceSnapshotIndexUsed: "1",
+					StagesStatus: []placementv1beta1.StageUpdatingStatus{
+						{
+							StageName: "test-stage",
+							Clusters: []placementv1beta1.ClusterUpdatingStatus{
+								{
+									ClusterName: "cluster-1",
+									// No conditions - cluster has not started updating yet.
+								},
+							},
+						},
+					},
+					UpdateStrategySnapshot: &placementv1beta1.UpdateStrategySpec{
+						Stages: []placementv1beta1.StageConfig{
+							{
+								Name:           "test-stage",
+								MaxConcurrency: &intstr.IntOrString{Type: intstr.Int, IntVal: 1},
+							},
+						},
+					},
+				},
+			},
+			bindings: []placementv1beta1.BindingObj{
+				&placementv1beta1.ClusterResourceBinding{
+					ObjectMeta: metav1.ObjectMeta{
+						Name:       "binding-1",
+						Generation: 1,
+					},
+					Spec: placementv1beta1.ResourceBindingSpec{
+						TargetCluster:        "cluster-1",
+						ResourceSnapshotName: "test-placement-1-snapshot",        // Already synced.
+						State:                placementv1beta1.BindingStateBound, // Already Bound.
+					},
+					Status: placementv1beta1.ResourceBindingStatus{
+						Conditions: []metav1.Condition{
+							{
+								Type:               string(placementv1beta1.ResourceBindingRolloutStarted),
+								Status:             metav1.ConditionTrue,
+								ObservedGeneration: 1,
+								Reason:             condition.RolloutStartedReason,
+							},
+							{
+								Type:               string(placementv1beta1.ResourceBindingApplied),
+								Status:             metav1.ConditionFalse,
+								ObservedGeneration: 1,
+								Reason:             condition.ApplyFailedReason,
+							},
+						},
+					},
+				},
+			},
+			interceptorFunc: nil,
+			wantErr:         errors.New("cluster updating encountered an error at stage"),
+			wantWaitTime:    0,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			ctx := context.Background()
+			scheme := runtime.NewScheme()
+			_ = placementv1beta1.AddToScheme(scheme)
+
+			var fakeClient client.Client
+			objs := make([]client.Object, len(tt.bindings))
+			for i := range tt.bindings {
+				objs[i] = tt.bindings[i]
+			}
+			if tt.interceptorFunc != nil {
+				fakeClient = interceptor.NewClient(
+					fake.NewClientBuilder().WithScheme(scheme).WithObjects(objs...).Build(),
+					*tt.interceptorFunc,
+				)
+			} else {
+				fakeClient = fake.NewClientBuilder().WithScheme(scheme).WithObjects(objs...).Build()
+			}
+
+			r := &Reconciler{
+				Client: fakeClient,
+			}
+
+			// Execute the stage.
+			waitTime, gotErr := r.executeUpdatingStage(ctx, tt.updateRun, 0, tt.bindings, 1)
+
+			// Verify error expectation.
+			if (tt.wantErr != nil) != (gotErr != nil) {
+				t.Fatalf("executeUpdatingStage() want error: %v, got error: %v", tt.wantErr, gotErr)
+			}
+
+			// Verify error message contains expected substring.
+			if tt.wantErr != nil && gotErr != nil {
+				if errors.Is(gotErr, errStagedUpdatedAborted) != tt.wantAbortErr {
+					t.Fatalf("executeUpdatingStage() want abort error: %v, got error: %v", tt.wantAbortErr, gotErr)
+				}
+				if !strings.Contains(gotErr.Error(), tt.wantErr.Error()) {
+					t.Fatalf("executeUpdatingStage() want error: %v, got error: %v", tt.wantErr, gotErr)
+				}
+			}
+
+			// Verify wait time.
+			if waitTime != tt.wantWaitTime {
+				t.Fatalf("executeUpdatingStage() want waitTime: %v, got waitTime: %v", tt.wantWaitTime, waitTime)
+			}
+		})
+	}
+}
+
+func TestCalculateMaxConcurrencyValue(t *testing.T) {
+	tests := []struct {
+		name           string
+		maxConcurrency *intstr.IntOrString
+		clusterCount   int
+		wantValue      int
+		wantErr        bool
+	}{
+		{
+			name:           "integer value - less than cluster count",
+			maxConcurrency: &intstr.IntOrString{Type: intstr.Int, IntVal: 3},
+			clusterCount:   10,
+			wantValue:      3,
+			wantErr:        false,
+		},
+		{
+			name:           "integer value - equal to cluster count",
+			maxConcurrency: &intstr.IntOrString{Type: intstr.Int, IntVal: 10},
+			clusterCount:   10,
+			wantValue:      10,
+			wantErr:        false,
+		},
+		{
+			name:           "integer value - greater than cluster count",
+			maxConcurrency: &intstr.IntOrString{Type: intstr.Int, IntVal: 15},
+			clusterCount:   10,
+			wantValue:      15,
+			wantErr:        false,
+		},
+		{
+			name:           "percentage value - 50% with cluster count > 1",
+			maxConcurrency: &intstr.IntOrString{Type: intstr.String, StrVal: "50%"},
+			clusterCount:   10,
+			wantValue:      5,
+			wantErr:        false,
+		},
+		{
+			name:           "percentage value - non zero percentage with cluster count equal to 1",
+			maxConcurrency: &intstr.IntOrString{Type: intstr.String, StrVal: "10%"},
+			clusterCount:   1,
+			wantValue:      1,
+			wantErr:        false,
+		},
+		{
+			name:           "percentage value - 33% rounds down",
+			maxConcurrency: &intstr.IntOrString{Type: intstr.String, StrVal: "33%"},
+			clusterCount:   10,
+			wantValue:      3,
+			wantErr:        false,
+		},
+		{
+			name:           "percentage value - 100%",
+			maxConcurrency: &intstr.IntOrString{Type: intstr.String, StrVal: "100%"},
+			clusterCount:   10,
+			wantValue:      10,
+			wantErr:        false,
+		},
+		{
+			name:           "percentage value - 25% with 7 clusters",
+			maxConcurrency: &intstr.IntOrString{Type: intstr.String, StrVal: "25%"},
+			clusterCount:   7,
+			wantValue:      1,
+			wantErr:        false,
+		},
+		{
+			name:           "zero clusters",
+			maxConcurrency: &intstr.IntOrString{Type: intstr.Int, IntVal: 3},
+			clusterCount:   0,
+			wantValue:      3,
+			wantErr:        false,
+		},
+		{
+			name:           "non-zero percentage with zero clusters",
+			maxConcurrency: &intstr.IntOrString{Type: intstr.String, StrVal: "50%"},
+			clusterCount:   0,
+			wantValue:      1,
+			wantErr:        false,
+		},
+		{
+			name:           "non-zero value as string without percentage with zero clusters",
+			maxConcurrency: &intstr.IntOrString{Type: intstr.String, StrVal: "50"},
+			clusterCount:   0,
+			wantValue:      0,
+			wantErr:        true,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			status := &placementv1beta1.UpdateRunStatus{
+				StagesStatus: []placementv1beta1.StageUpdatingStatus{
+					{
+						StageName: "test-stage",
+						Clusters:  make([]placementv1beta1.ClusterUpdatingStatus, tt.clusterCount),
+					},
+				},
+				UpdateStrategySnapshot: &placementv1beta1.UpdateStrategySpec{
+					Stages: []placementv1beta1.StageConfig{
+						{
+							Name:           "test-stage",
+							MaxConcurrency: tt.maxConcurrency,
+						},
+					},
+				},
+			}
+
+			gotValue, gotErr := calculateMaxConcurrencyValue(status, 0)
+
+			if (gotErr != nil) != tt.wantErr {
+				t.Fatalf("calculateMaxConcurrencyValue() error = %v, wantErr %v", gotErr, tt.wantErr)
+			}
+
+			if gotValue != tt.wantValue {
+				t.Fatalf("calculateMaxConcurrencyValue() = %v, want %v", gotValue, tt.wantValue)
 			}
 		})
 	}
