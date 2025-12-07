@@ -145,7 +145,7 @@ var _ = Describe("test CRP rollout with staged update run", func() {
 			crpStatusUpdatedActual := crpStatusWithExternalStrategyActual(nil, "", false, allMemberClusterNames, []string{"", resourceSnapshotIndex1st, ""}, []bool{false, true, false}, nil, nil)
 			Eventually(crpStatusUpdatedActual, eventuallyDuration, eventuallyInterval).Should(Succeed(), "Failed to update CRP %s status as expected", crpName)
 
-			validateAndApproveClusterApprovalRequests(updateRunNames[0], envCanary, placementv1beta1.AfterStageApprovalTaskNameFmt)
+			validateAndApproveClusterApprovalRequests(updateRunNames[0], envCanary, placementv1beta1.AfterStageApprovalTaskNameFmt, placementv1beta1.AfterStageTaskLabelValue)
 		})
 
 		It("Should not rollout resources to prod stage until approved", func() {
@@ -153,7 +153,7 @@ var _ = Describe("test CRP rollout with staged update run", func() {
 		})
 
 		It("Should rollout resources to all the members after approval and complete the cluster staged update run successfully", func() {
-			validateAndApproveClusterApprovalRequests(updateRunNames[0], envProd, placementv1beta1.BeforeStageApprovalTaskNameFmt)
+			validateAndApproveClusterApprovalRequests(updateRunNames[0], envProd, placementv1beta1.BeforeStageApprovalTaskNameFmt, placementv1beta1.BeforeStageTaskLabelValue)
 
 			csurSucceededActual := clusterStagedUpdateRunStatusSucceededActual(updateRunNames[0], resourceSnapshotIndex1st, policySnapshotIndex1st, len(allMemberClusters), defaultApplyStrategy, &strategy.Spec, [][]string{{allMemberClusterNames[1]}, {allMemberClusterNames[0], allMemberClusterNames[2]}}, nil, nil, nil, true)
 			Eventually(csurSucceededActual, updateRunEventuallyDuration, eventuallyInterval).Should(Succeed(), "Failed to validate updateRun %s succeeded", updateRunNames[0])
@@ -217,7 +217,7 @@ var _ = Describe("test CRP rollout with staged update run", func() {
 				[]string{resourceSnapshotIndex1st, resourceSnapshotIndex2nd, resourceSnapshotIndex1st}, []bool{true, true, true}, nil, nil)
 			Eventually(crpStatusUpdatedActual, eventuallyDuration, eventuallyInterval).Should(Succeed(), "Failed to update CRP %s status as expected", crpName)
 
-			validateAndApproveClusterApprovalRequests(updateRunNames[1], envCanary, placementv1beta1.AfterStageApprovalTaskNameFmt)
+			validateAndApproveClusterApprovalRequests(updateRunNames[1], envCanary, placementv1beta1.AfterStageApprovalTaskNameFmt, placementv1beta1.AfterStageTaskLabelValue)
 		})
 
 		It("Should not rollout resources to prod stage until approved", func() {
@@ -229,7 +229,7 @@ var _ = Describe("test CRP rollout with staged update run", func() {
 		})
 
 		It("Should rollout resources to all the members after approval and complete the cluster staged update run successfully", func() {
-			validateAndApproveClusterApprovalRequests(updateRunNames[1], envProd, placementv1beta1.BeforeStageApprovalTaskNameFmt)
+			validateAndApproveClusterApprovalRequests(updateRunNames[1], envProd, placementv1beta1.BeforeStageApprovalTaskNameFmt, placementv1beta1.BeforeStageTaskLabelValue)
 
 			csurSucceededActual := clusterStagedUpdateRunStatusSucceededActual(updateRunNames[1], resourceSnapshotIndex2nd, policySnapshotIndex1st, len(allMemberClusters), defaultApplyStrategy, &strategy.Spec, [][]string{{allMemberClusterNames[1]}, {allMemberClusterNames[0], allMemberClusterNames[2]}}, nil, nil, nil, true)
 			Eventually(csurSucceededActual, updateRunEventuallyDuration, eventuallyInterval).Should(Succeed(), "Failed to validate updateRun %s succeeded", updateRunNames[1])
@@ -325,7 +325,7 @@ var _ = Describe("test CRP rollout with staged update run", func() {
 			crpStatusUpdatedActual := crpStatusWithExternalStrategyActual(nil, "", false, allMemberClusterNames, []string{"", resourceSnapshotIndex1st, ""}, []bool{false, true, false}, nil, nil)
 			Eventually(crpStatusUpdatedActual, eventuallyDuration, eventuallyInterval).Should(Succeed(), "Failed to update CRP %s status as expected", crpName)
 
-			validateAndApproveClusterApprovalRequests(updateRunNames[0], envCanary, placementv1beta1.AfterStageApprovalTaskNameFmt)
+			validateAndApproveClusterApprovalRequests(updateRunNames[0], envCanary, placementv1beta1.AfterStageApprovalTaskNameFmt, placementv1beta1.AfterStageTaskLabelValue)
 		})
 
 		It("Should not rollout resources to prod stage until approved", func() {
@@ -333,7 +333,7 @@ var _ = Describe("test CRP rollout with staged update run", func() {
 		})
 
 		It("Should rollout resources to all the members after approval and complete the cluster staged update run successfully", func() {
-			validateAndApproveClusterApprovalRequests(updateRunNames[0], envProd, placementv1beta1.BeforeStageApprovalTaskNameFmt)
+			validateAndApproveClusterApprovalRequests(updateRunNames[0], envProd, placementv1beta1.BeforeStageApprovalTaskNameFmt, placementv1beta1.BeforeStageTaskLabelValue)
 
 			csurSucceededActual := clusterStagedUpdateRunStatusSucceededActual(updateRunNames[0], resourceSnapshotIndex1st, policySnapshotIndex1st, len(allMemberClusters), defaultApplyStrategy, &strategy.Spec, [][]string{{allMemberClusterNames[1]}, {allMemberClusterNames[0], allMemberClusterNames[2]}}, nil, nil, nil, true)
 			Eventually(csurSucceededActual, updateRunEventuallyDuration, eventuallyInterval).Should(Succeed(), "Failed to validate updateRun %s succeeded", updateRunNames[0])
@@ -396,7 +396,7 @@ var _ = Describe("test CRP rollout with staged update run", func() {
 				[]string{resourceSnapshotIndex1st, resourceSnapshotIndex2nd, resourceSnapshotIndex1st}, []bool{true, true, true}, nil, nil)
 			Eventually(crpStatusUpdatedActual, eventuallyDuration, eventuallyInterval).Should(Succeed(), "Failed to update CRP %s status as expected", crpName)
 
-			validateAndApproveClusterApprovalRequests(updateRunNames[1], envCanary, placementv1beta1.AfterStageApprovalTaskNameFmt)
+			validateAndApproveClusterApprovalRequests(updateRunNames[1], envCanary, placementv1beta1.AfterStageApprovalTaskNameFmt, placementv1beta1.AfterStageTaskLabelValue)
 		})
 
 		It("Should not rollout resources to prod stage until approved", func() {
@@ -408,7 +408,7 @@ var _ = Describe("test CRP rollout with staged update run", func() {
 		})
 
 		It("Should rollout resources to member-cluster-1 and member-cluster-3 after approval and complete the cluster staged update run successfully", func() {
-			validateAndApproveClusterApprovalRequests(updateRunNames[1], envProd, placementv1beta1.BeforeStageApprovalTaskNameFmt)
+			validateAndApproveClusterApprovalRequests(updateRunNames[1], envProd, placementv1beta1.BeforeStageApprovalTaskNameFmt, placementv1beta1.BeforeStageTaskLabelValue)
 
 			csurSucceededActual := clusterStagedUpdateRunStatusSucceededActual(updateRunNames[1], resourceSnapshotIndex2nd, policySnapshotIndex1st, len(allMemberClusters), defaultApplyStrategy, &strategy.Spec, [][]string{{allMemberClusterNames[1]}, {allMemberClusterNames[0], allMemberClusterNames[2]}}, nil, nil, nil, true)
 			Eventually(csurSucceededActual, updateRunEventuallyDuration, eventuallyInterval).Should(Succeed(), "Failed to validate updateRun %s succeeded", updateRunNames[1])
@@ -444,7 +444,7 @@ var _ = Describe("test CRP rollout with staged update run", func() {
 				[]string{resourceSnapshotIndex2nd, resourceSnapshotIndex1st, resourceSnapshotIndex2nd}, []bool{true, true, true}, nil, nil)
 			Eventually(crpStatusUpdatedActual, eventuallyDuration, eventuallyInterval).Should(Succeed(), "Failed to update CRP %s status as expected", crpName)
 
-			validateAndApproveClusterApprovalRequests(updateRunNames[2], envCanary, placementv1beta1.AfterStageApprovalTaskNameFmt)
+			validateAndApproveClusterApprovalRequests(updateRunNames[2], envCanary, placementv1beta1.AfterStageApprovalTaskNameFmt, placementv1beta1.AfterStageTaskLabelValue)
 		})
 
 		It("Should not rollback resources to prod stage until approved", func() {
@@ -456,7 +456,7 @@ var _ = Describe("test CRP rollout with staged update run", func() {
 		})
 
 		It("Should rollback resources to member-cluster-1 and member-cluster-3 after approval and complete the cluster staged update run successfully", func() {
-			validateAndApproveClusterApprovalRequests(updateRunNames[2], envProd, placementv1beta1.BeforeStageApprovalTaskNameFmt)
+			validateAndApproveClusterApprovalRequests(updateRunNames[2], envProd, placementv1beta1.BeforeStageApprovalTaskNameFmt, placementv1beta1.BeforeStageTaskLabelValue)
 
 			csurSucceededActual := clusterStagedUpdateRunStatusSucceededActual(updateRunNames[2], resourceSnapshotIndex1st, policySnapshotIndex1st, len(allMemberClusters), defaultApplyStrategy, &strategy.Spec, [][]string{{allMemberClusterNames[1]}, {allMemberClusterNames[0], allMemberClusterNames[2]}}, nil, nil, nil, true)
 			Eventually(csurSucceededActual, updateRunEventuallyDuration, eventuallyInterval).Should(Succeed(), "Failed to validate updateRun %s succeeded", updateRunNames[1])
@@ -550,7 +550,7 @@ var _ = Describe("test CRP rollout with staged update run", func() {
 			crpStatusUpdatedActual := crpStatusWithExternalStrategyActual(nil, "", false, allMemberClusterNames[:2], []string{"", resourceSnapshotIndex1st}, []bool{false, true}, nil, nil)
 			Eventually(crpStatusUpdatedActual, eventuallyDuration, eventuallyInterval).Should(Succeed(), "Failed to update CRP %s status as expected", crpName)
 
-			validateAndApproveClusterApprovalRequests(updateRunNames[0], envCanary, placementv1beta1.AfterStageApprovalTaskNameFmt)
+			validateAndApproveClusterApprovalRequests(updateRunNames[0], envCanary, placementv1beta1.AfterStageApprovalTaskNameFmt, placementv1beta1.AfterStageTaskLabelValue)
 		})
 
 		It("Should not rollout resources to prod stage until approved", func() {
@@ -558,7 +558,7 @@ var _ = Describe("test CRP rollout with staged update run", func() {
 		})
 
 		It("Should rollout resources to member-cluster-1 after approval but not member-cluster-3 and complete the cluster staged update run successfully", func() {
-			validateAndApproveClusterApprovalRequests(updateRunNames[0], envProd, placementv1beta1.BeforeStageApprovalTaskNameFmt)
+			validateAndApproveClusterApprovalRequests(updateRunNames[0], envProd, placementv1beta1.BeforeStageApprovalTaskNameFmt, placementv1beta1.BeforeStageTaskLabelValue)
 
 			csurSucceededActual := clusterStagedUpdateRunStatusSucceededActual(updateRunNames[0], resourceSnapshotIndex1st, policySnapshotIndex1st, 2, defaultApplyStrategy, &strategy.Spec, [][]string{{allMemberClusterNames[1]}, {allMemberClusterNames[0]}}, nil, nil, nil, true)
 			Eventually(csurSucceededActual, updateRunEventuallyDuration, eventuallyInterval).Should(Succeed(), "Failed to validate updateRun %s succeeded", updateRunNames[0])
@@ -606,7 +606,7 @@ var _ = Describe("test CRP rollout with staged update run", func() {
 			crpStatusUpdatedActual := crpStatusWithExternalStrategyActual(nil, "", false, allMemberClusterNames, []string{resourceSnapshotIndex1st, resourceSnapshotIndex1st, ""}, []bool{false, true, false}, nil, nil)
 			Eventually(crpStatusUpdatedActual, eventuallyDuration, eventuallyInterval).Should(Succeed(), "Failed to keep CRP %s status as expected", crpName)
 
-			validateAndApproveClusterApprovalRequests(updateRunNames[1], envCanary, placementv1beta1.AfterStageApprovalTaskNameFmt)
+			validateAndApproveClusterApprovalRequests(updateRunNames[1], envCanary, placementv1beta1.AfterStageApprovalTaskNameFmt, placementv1beta1.AfterStageTaskLabelValue)
 		})
 
 		It("Should not rollout resources to prod stage until approved", func() {
@@ -614,7 +614,7 @@ var _ = Describe("test CRP rollout with staged update run", func() {
 		})
 
 		It("Should rollout resources to member-cluster-3 after approval and complete the cluster staged update run successfully", func() {
-			validateAndApproveClusterApprovalRequests(updateRunNames[1], envProd, placementv1beta1.BeforeStageApprovalTaskNameFmt)
+			validateAndApproveClusterApprovalRequests(updateRunNames[1], envProd, placementv1beta1.BeforeStageApprovalTaskNameFmt, placementv1beta1.BeforeStageTaskLabelValue)
 
 			csurSucceededActual := clusterStagedUpdateRunStatusSucceededActual(updateRunNames[1], resourceSnapshotIndex1st, policySnapshotIndex2nd, 3, defaultApplyStrategy, &strategy.Spec, [][]string{{allMemberClusterNames[1]}, {allMemberClusterNames[0], allMemberClusterNames[2]}}, nil, nil, nil, true)
 			Eventually(csurSucceededActual, updateRunEventuallyDuration, eventuallyInterval).Should(Succeed(), "Failed to validate updateRun %s succeeded", updateRunNames[1])
@@ -658,11 +658,11 @@ var _ = Describe("test CRP rollout with staged update run", func() {
 			crpStatusUpdatedActual := crpStatusWithExternalStrategyActual(workResourceIdentifiers(), resourceSnapshotIndex1st, false, []string{allMemberClusterNames[2]}, []string{resourceSnapshotIndex1st}, []bool{false}, nil, nil)
 			Consistently(crpStatusUpdatedActual, consistentlyDuration, consistentlyInterval).Should(Succeed(), "Failed to update CRP %s status as expected", crpName)
 
-			validateAndApproveClusterApprovalRequests(updateRunNames[2], envCanary, placementv1beta1.AfterStageApprovalTaskNameFmt)
+			validateAndApproveClusterApprovalRequests(updateRunNames[2], envCanary, placementv1beta1.AfterStageApprovalTaskNameFmt, placementv1beta1.AfterStageTaskLabelValue)
 		})
 
 		It("Should remove resources on member-cluster-1 and member-cluster-2 after approval and complete the cluster staged update run successfully", func() {
-			validateAndApproveClusterApprovalRequests(updateRunNames[2], envProd, placementv1beta1.BeforeStageApprovalTaskNameFmt)
+			validateAndApproveClusterApprovalRequests(updateRunNames[2], envProd, placementv1beta1.BeforeStageApprovalTaskNameFmt, placementv1beta1.BeforeStageTaskLabelValue)
 
 			// need to go through two stages
 			csurSucceededActual := clusterStagedUpdateRunStatusSucceededActual(updateRunNames[2], resourceSnapshotIndex1st, policySnapshotIndex3rd, 1, defaultApplyStrategy, &strategy.Spec, [][]string{{}, {allMemberClusterNames[2]}}, []string{allMemberClusterNames[0], allMemberClusterNames[1]}, nil, nil, true)
@@ -753,7 +753,7 @@ var _ = Describe("test CRP rollout with staged update run", func() {
 			crpStatusUpdatedActual := crpStatusWithExternalStrategyActual(nil, "", false, allMemberClusterNames[2:], []string{""}, []bool{false}, nil, nil)
 			Eventually(crpStatusUpdatedActual, eventuallyDuration, eventuallyInterval).Should(Succeed(), "Failed to update CRP %s status as expected", crpName)
 
-			validateAndApproveClusterApprovalRequests(updateRunNames[0], envCanary, placementv1beta1.AfterStageApprovalTaskNameFmt)
+			validateAndApproveClusterApprovalRequests(updateRunNames[0], envCanary, placementv1beta1.AfterStageApprovalTaskNameFmt, placementv1beta1.AfterStageTaskLabelValue)
 		})
 
 		It("Should not rollout resources to prod stage until approved", func() {
@@ -761,7 +761,7 @@ var _ = Describe("test CRP rollout with staged update run", func() {
 		})
 
 		It("Should rollout resources to member-cluster-3 after approval and complete the cluster staged update run successfully", func() {
-			validateAndApproveClusterApprovalRequests(updateRunNames[0], envProd, placementv1beta1.BeforeStageApprovalTaskNameFmt)
+			validateAndApproveClusterApprovalRequests(updateRunNames[0], envProd, placementv1beta1.BeforeStageApprovalTaskNameFmt, placementv1beta1.BeforeStageTaskLabelValue)
 
 			csurSucceededActual := clusterStagedUpdateRunStatusSucceededActual(updateRunNames[0], resourceSnapshotIndex1st, policySnapshotIndex1st, 1, defaultApplyStrategy, &strategy.Spec, [][]string{{}, {allMemberClusterNames[2]}}, nil, nil, nil, true)
 			Eventually(csurSucceededActual, updateRunEventuallyDuration, eventuallyInterval).Should(Succeed(), "Failed to validate updateRun %s succeeded", updateRunNames[0])
@@ -808,7 +808,7 @@ var _ = Describe("test CRP rollout with staged update run", func() {
 			crpStatusUpdatedActual := crpStatusWithExternalStrategyActual(nil, "", false, allMemberClusterNames, []string{"", resourceSnapshotIndex1st, resourceSnapshotIndex1st}, []bool{false, true, true}, nil, nil)
 			Eventually(crpStatusUpdatedActual, eventuallyDuration, eventuallyInterval).Should(Succeed(), "Failed to keep CRP %s status as expected", crpName)
 
-			validateAndApproveClusterApprovalRequests(updateRunNames[1], envCanary, placementv1beta1.AfterStageApprovalTaskNameFmt)
+			validateAndApproveClusterApprovalRequests(updateRunNames[1], envCanary, placementv1beta1.AfterStageApprovalTaskNameFmt, placementv1beta1.AfterStageTaskLabelValue)
 		})
 
 		It("Should not rollout resources to member-cluster-1 until approved", func() {
@@ -816,7 +816,7 @@ var _ = Describe("test CRP rollout with staged update run", func() {
 		})
 
 		It("Should rollout resources to member-cluster-1 after approval and complete the cluster staged update run successfully", func() {
-			validateAndApproveClusterApprovalRequests(updateRunNames[1], envProd, placementv1beta1.BeforeStageApprovalTaskNameFmt)
+			validateAndApproveClusterApprovalRequests(updateRunNames[1], envProd, placementv1beta1.BeforeStageApprovalTaskNameFmt, placementv1beta1.BeforeStageTaskLabelValue)
 
 			csurSucceededActual := clusterStagedUpdateRunStatusSucceededActual(updateRunNames[1], resourceSnapshotIndex1st, policySnapshotIndex1st, 3, defaultApplyStrategy, &strategy.Spec, [][]string{{allMemberClusterNames[1]}, {allMemberClusterNames[0], allMemberClusterNames[2]}}, nil, nil, nil, true)
 			Eventually(csurSucceededActual, updateRunEventuallyDuration, eventuallyInterval).Should(Succeed(), "Failed to validate updateRun %s succeeded", updateRunNames[1])
@@ -860,7 +860,7 @@ var _ = Describe("test CRP rollout with staged update run", func() {
 			crpStatusUpdatedActual := crpStatusWithExternalStrategyActual(workResourceIdentifiers(), resourceSnapshotIndex1st, true, allMemberClusterNames[1:], []string{resourceSnapshotIndex1st, resourceSnapshotIndex1st}, []bool{true, true}, nil, nil)
 			Consistently(crpStatusUpdatedActual, consistentlyDuration, consistentlyInterval).Should(Succeed(), "Failed to update CRP %s status as expected", crpName)
 
-			validateAndApproveClusterApprovalRequests(updateRunNames[2], envCanary, placementv1beta1.AfterStageApprovalTaskNameFmt)
+			validateAndApproveClusterApprovalRequests(updateRunNames[2], envCanary, placementv1beta1.AfterStageApprovalTaskNameFmt, placementv1beta1.AfterStageTaskLabelValue)
 		})
 
 		It("Should not remove resources from member-cluster-1 until approved", func() {
@@ -868,7 +868,7 @@ var _ = Describe("test CRP rollout with staged update run", func() {
 		})
 
 		It("Should remove resources on member-cluster-1 after approval and complete the cluster staged update run successfully", func() {
-			validateAndApproveClusterApprovalRequests(updateRunNames[2], envProd, placementv1beta1.BeforeStageApprovalTaskNameFmt)
+			validateAndApproveClusterApprovalRequests(updateRunNames[2], envProd, placementv1beta1.BeforeStageApprovalTaskNameFmt, placementv1beta1.BeforeStageTaskLabelValue)
 
 			csurSucceededActual := clusterStagedUpdateRunStatusSucceededActual(updateRunNames[2], resourceSnapshotIndex1st, policySnapshotIndex1st, 2, defaultApplyStrategy, &strategy.Spec, [][]string{{allMemberClusterNames[1]}, {allMemberClusterNames[2]}}, []string{allMemberClusterNames[0]}, nil, nil, true)
 			Eventually(csurSucceededActual, 2*updateRunEventuallyDuration, eventuallyInterval).Should(Succeed(), "Failed to validate updateRun %s succeeded", updateRunNames[2])
@@ -1038,7 +1038,7 @@ var _ = Describe("test CRP rollout with staged update run", func() {
 				[]string{"", resourceSnapshotIndex1st, ""}, []bool{false, true, false}, nil, wantROs)
 			Eventually(crpStatusUpdatedActual, eventuallyDuration, eventuallyInterval).Should(Succeed(), "Failed to update CRP %s status as expected", crpName)
 
-			validateAndApproveClusterApprovalRequests(updateRunName, envCanary, placementv1beta1.AfterStageApprovalTaskNameFmt)
+			validateAndApproveClusterApprovalRequests(updateRunName, envCanary, placementv1beta1.AfterStageApprovalTaskNameFmt, placementv1beta1.AfterStageTaskLabelValue)
 		})
 
 		It("Should not rollout resources to member-cluster-1 and member-cluster-3 until approved", func() {
@@ -1046,7 +1046,7 @@ var _ = Describe("test CRP rollout with staged update run", func() {
 		})
 
 		It("Should rollout resources to member-cluster-1 and member-cluster-3 after approval and complete the cluster staged update run successfully", func() {
-			validateAndApproveClusterApprovalRequests(updateRunName, envProd, placementv1beta1.BeforeStageApprovalTaskNameFmt)
+			validateAndApproveClusterApprovalRequests(updateRunName, envProd, placementv1beta1.BeforeStageApprovalTaskNameFmt, placementv1beta1.BeforeStageTaskLabelValue)
 
 			csurSucceededActual := clusterStagedUpdateRunStatusSucceededActual(updateRunName, resourceSnapshotIndex1st, policySnapshotIndex1st, len(allMemberClusters), defaultApplyStrategy, &strategy.Spec, [][]string{{allMemberClusterNames[1]}, {allMemberClusterNames[0], allMemberClusterNames[2]}}, nil, wantCROs, wantROs, true)
 			Eventually(csurSucceededActual, updateRunEventuallyDuration, eventuallyInterval).Should(Succeed(), "Failed to validate updateRun %s succeeded", updateRunName)
@@ -1144,11 +1144,11 @@ var _ = Describe("test CRP rollout with staged update run", func() {
 				[]string{"", resourceSnapshotIndex1st, ""}, []bool{false, true, false}, nil, nil)
 			Eventually(crpStatusUpdatedActual, eventuallyDuration, eventuallyInterval).Should(Succeed(), "Failed to update CRP %s status as expected", crpName)
 
-			validateAndApproveClusterApprovalRequests(updateRunName, envCanary, placementv1beta1.AfterStageApprovalTaskNameFmt)
+			validateAndApproveClusterApprovalRequests(updateRunName, envCanary, placementv1beta1.AfterStageApprovalTaskNameFmt, placementv1beta1.AfterStageTaskLabelValue)
 		})
 
 		It("Should report diff for member-cluster-1 and member-cluster-3 after approval and complete the cluster staged update run successfully", func() {
-			validateAndApproveClusterApprovalRequests(updateRunName, envProd, placementv1beta1.BeforeStageApprovalTaskNameFmt)
+			validateAndApproveClusterApprovalRequests(updateRunName, envProd, placementv1beta1.BeforeStageApprovalTaskNameFmt, placementv1beta1.BeforeStageTaskLabelValue)
 
 			csurSucceededActual := clusterStagedUpdateRunStatusSucceededActual(updateRunName, resourceSnapshotIndex1st, policySnapshotIndex1st, len(allMemberClusters), applyStrategy, &strategy.Spec, [][]string{{allMemberClusterNames[1]}, {allMemberClusterNames[0], allMemberClusterNames[2]}}, nil, nil, nil, true)
 			Eventually(csurSucceededActual, updateRunEventuallyDuration, eventuallyInterval).Should(Succeed(), "Failed to validate updateRun %s succeeded", updateRunName)
@@ -1259,10 +1259,10 @@ var _ = Describe("test CRP rollout with staged update run", func() {
 			Eventually(configMapActual, eventuallyDuration, eventuallyInterval).Should(Succeed(), "Failed to update to the new configmap %s on cluster %s", newConfigMap.Name, allMemberClusterNames[1])
 
 			// Approval for AfterStageTasks of canary stage
-			validateAndApproveClusterApprovalRequests(updateRunName, envCanary, placementv1beta1.AfterStageApprovalTaskNameFmt)
+			validateAndApproveClusterApprovalRequests(updateRunName, envCanary, placementv1beta1.AfterStageApprovalTaskNameFmt, placementv1beta1.AfterStageTaskLabelValue)
 
 			// Approval for BeforeStageTasks of prod stage
-			validateAndApproveClusterApprovalRequests(updateRunName, envProd, placementv1beta1.BeforeStageApprovalTaskNameFmt)
+			validateAndApproveClusterApprovalRequests(updateRunName, envProd, placementv1beta1.BeforeStageApprovalTaskNameFmt, placementv1beta1.BeforeStageTaskLabelValue)
 
 			// Verify complete rollout
 			csurSucceededActual := clusterStagedUpdateRunStatusSucceededActual(updateRunName, resourceSnapshotIndex2nd, policySnapshotIndex1st, len(allMemberClusters), defaultApplyStrategy, &strategy.Spec, [][]string{{allMemberClusterNames[1]}, {allMemberClusterNames[0], allMemberClusterNames[2]}}, nil, nil, nil, true)
@@ -1333,6 +1333,7 @@ var _ = Describe("test CRP rollout with staged update run", func() {
 				if err := hubClient.List(ctx, appReqList, client.MatchingLabels{
 					placementv1beta1.TargetUpdatingStageNameLabel: envCanary,
 					placementv1beta1.TargetUpdateRunLabel:         updateRunName,
+					placementv1beta1.TaskTypeLabel:                placementv1beta1.AfterStageTaskLabelValue,
 				}); err != nil {
 					return fmt.Errorf("failed to list approval requests: %w", err)
 				}
@@ -1345,11 +1346,11 @@ var _ = Describe("test CRP rollout with staged update run", func() {
 		})
 
 		It("Should approve after-stage cluster approval request using kubectl-fleet approve plugin for canary stage", func() {
-			approveClusterApprovalRequest(envCanary, updateRunName)
+			approveClusterApprovalRequest(envCanary, updateRunName, placementv1beta1.AfterStageTaskLabelValue)
 		})
 
 		It("Should approve before-stage cluster approval request using kubectl-fleet approve plugin for prod stage", func() {
-			approveClusterApprovalRequest(envProd, updateRunName)
+			approveClusterApprovalRequest(envProd, updateRunName, placementv1beta1.BeforeStageTaskLabelValue)
 		})
 
 		It("Should complete the staged update run after approval", func() {
@@ -1425,10 +1426,10 @@ var _ = Describe("test CRP rollout with staged update run", func() {
 			createClusterStagedUpdateRunSucceed(updateRunName, crpName, resourceSnapshotIndex1st, strategyName, placementv1beta1.StateRun)
 
 			// Approval for AfterStageTasks of canary stage
-			validateAndApproveClusterApprovalRequests(updateRunName, envCanary, placementv1beta1.AfterStageApprovalTaskNameFmt)
+			validateAndApproveClusterApprovalRequests(updateRunName, envCanary, placementv1beta1.AfterStageApprovalTaskNameFmt, placementv1beta1.AfterStageTaskLabelValue)
 
 			// Approval for BeforeStageTasks of prod stage
-			validateAndApproveClusterApprovalRequests(updateRunName, envProd, placementv1beta1.BeforeStageApprovalTaskNameFmt)
+			validateAndApproveClusterApprovalRequests(updateRunName, envProd, placementv1beta1.BeforeStageApprovalTaskNameFmt, placementv1beta1.BeforeStageTaskLabelValue)
 
 			csurSucceededActual := clusterStagedUpdateRunStatusSucceededActual(updateRunName, resourceSnapshotIndex1st, policySnapshotIndex1st, len(allMemberClusters), defaultApplyStrategy, &strategy.Spec, [][]string{{allMemberClusterNames[1]}, {allMemberClusterNames[0], allMemberClusterNames[2]}}, nil, nil, nil, true)
 			Eventually(csurSucceededActual, updateRunEventuallyDuration, eventuallyInterval).Should(Succeed(), "Failed to validate updateRun %s succeeded", updateRunName)
@@ -1754,11 +1755,11 @@ var _ = Describe("test CRP rollout with staged update run", func() {
 			crpStatusUpdatedActual := crpStatusWithExternalStrategyActual(nil, "", false, allMemberClusterNames, []string{"", resourceSnapshotIndex1st, ""}, []bool{false, true, false}, nil, nil)
 			Eventually(crpStatusUpdatedActual, eventuallyDuration, eventuallyInterval).Should(Succeed(), "Failed to update CRP %s status as expected", crpName)
 
-			validateAndApproveClusterApprovalRequests(updateRunNames[0], envCanary, placementv1beta1.AfterStageApprovalTaskNameFmt)
+			validateAndApproveClusterApprovalRequests(updateRunNames[0], envCanary, placementv1beta1.AfterStageApprovalTaskNameFmt, placementv1beta1.AfterStageTaskLabelValue)
 		})
 
 		It("Should rollout resources to all the members and complete the cluster staged update run successfully", func() {
-			validateAndApproveClusterApprovalRequests(updateRunNames[0], envProd, placementv1beta1.BeforeStageApprovalTaskNameFmt)
+			validateAndApproveClusterApprovalRequests(updateRunNames[0], envProd, placementv1beta1.BeforeStageApprovalTaskNameFmt, placementv1beta1.BeforeStageTaskLabelValue)
 
 			csurSucceededActual := clusterStagedUpdateRunStatusSucceededActual(updateRunNames[0], resourceSnapshotIndex1st, policySnapshotIndex1st, len(allMemberClusters), defaultApplyStrategy, &strategy.Spec, [][]string{{allMemberClusterNames[1]}, {allMemberClusterNames[0], allMemberClusterNames[2]}}, nil, nil, nil, true)
 			Eventually(csurSucceededActual, updateRunEventuallyDuration, eventuallyInterval).Should(Succeed(), "Failed to validate updateRun %s succeeded", updateRunNames[0])
@@ -2209,12 +2210,13 @@ func updateClusterStagedUpdateRunState(updateRunName string, state placementv1be
 	}, eventuallyDuration, eventuallyInterval).Should(Succeed(), "Failed to update ClusterStagedUpdateRun %s state to %s", updateRunName, state)
 }
 
-func validateAndApproveClusterApprovalRequests(updateRunName, stageName, approvalRequestNameFmt string) {
+func validateAndApproveClusterApprovalRequests(updateRunName, stageName, approvalRequestNameFmt, stageTaskType string) {
 	Eventually(func() error {
 		appReqList := &placementv1beta1.ClusterApprovalRequestList{}
 		if err := hubClient.List(ctx, appReqList, client.MatchingLabels{
 			placementv1beta1.TargetUpdatingStageNameLabel: stageName,
 			placementv1beta1.TargetUpdateRunLabel:         updateRunName,
+			placementv1beta1.TaskTypeLabel:                stageTaskType,
 		}); err != nil {
 			return fmt.Errorf("failed to list approval requests: %w", err)
 		}
@@ -2245,7 +2247,7 @@ func updateConfigMapSucceed(newConfigMap *corev1.ConfigMap) {
 	Expect(hubClient.Update(ctx, cm)).To(Succeed(), "Failed to update configmap %s in namespace %s", newConfigMap.Name, newConfigMap.Namespace)
 }
 
-func approveClusterApprovalRequest(stageName, updateRunName string) {
+func approveClusterApprovalRequest(stageName, updateRunName, stageTask string) {
 	var approvalRequestName string
 
 	// Get the cluster approval request name.
@@ -2254,6 +2256,7 @@ func approveClusterApprovalRequest(stageName, updateRunName string) {
 		if err := hubClient.List(ctx, appReqList, client.MatchingLabels{
 			placementv1beta1.TargetUpdatingStageNameLabel: stageName,
 			placementv1beta1.TargetUpdateRunLabel:         updateRunName,
+			placementv1beta1.TaskTypeLabel:                stageTask,
 		}); err != nil {
 			return fmt.Errorf("failed to list approval requests: %w", err)
 		}

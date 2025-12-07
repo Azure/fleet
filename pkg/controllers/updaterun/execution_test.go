@@ -346,22 +346,25 @@ func TestBuildApprovalRequestObject(t *testing.T) {
 		namespacedName types.NamespacedName
 		stageName      string
 		updateRunName  string
+		stageTaskType  string
 		want           placementv1beta1.ApprovalRequestObj
 	}{
 		{
 			name: "should create ClusterApprovalRequest when namespace is empty",
 			namespacedName: types.NamespacedName{
-				Name:      "test-approval-request",
+				Name:      fmt.Sprintf(placementv1beta1.BeforeStageApprovalTaskNameFmt, "test-update-run", "test-stage"),
 				Namespace: "",
 			},
 			stageName:     "test-stage",
 			updateRunName: "test-update-run",
+			stageTaskType: placementv1beta1.BeforeStageTaskLabelValue,
 			want: &placementv1beta1.ClusterApprovalRequest{
 				ObjectMeta: metav1.ObjectMeta{
-					Name: "test-approval-request",
+					Name: fmt.Sprintf(placementv1beta1.BeforeStageApprovalTaskNameFmt, "test-update-run", "test-stage"),
 					Labels: map[string]string{
 						placementv1beta1.TargetUpdatingStageNameLabel:   "test-stage",
 						placementv1beta1.TargetUpdateRunLabel:           "test-update-run",
+						placementv1beta1.TaskTypeLabel:                  placementv1beta1.BeforeStageTaskLabelValue,
 						placementv1beta1.IsLatestUpdateRunApprovalLabel: "true",
 					},
 				},
@@ -374,18 +377,20 @@ func TestBuildApprovalRequestObject(t *testing.T) {
 		{
 			name: "should create namespaced ApprovalRequest when namespace is provided",
 			namespacedName: types.NamespacedName{
-				Name:      "test-approval-request",
+				Name:      fmt.Sprintf(placementv1beta1.AfterStageApprovalTaskNameFmt, "test-update-run", "test-stage"),
 				Namespace: "test-namespace",
 			},
 			stageName:     "test-stage",
 			updateRunName: "test-update-run",
+			stageTaskType: placementv1beta1.AfterStageTaskLabelValue,
 			want: &placementv1beta1.ApprovalRequest{
 				ObjectMeta: metav1.ObjectMeta{
-					Name:      "test-approval-request",
+					Name:      fmt.Sprintf(placementv1beta1.AfterStageApprovalTaskNameFmt, "test-update-run", "test-stage"),
 					Namespace: "test-namespace",
 					Labels: map[string]string{
 						placementv1beta1.TargetUpdatingStageNameLabel:   "test-stage",
 						placementv1beta1.TargetUpdateRunLabel:           "test-update-run",
+						placementv1beta1.TaskTypeLabel:                  placementv1beta1.AfterStageTaskLabelValue,
 						placementv1beta1.IsLatestUpdateRunApprovalLabel: "true",
 					},
 				},
@@ -399,7 +404,7 @@ func TestBuildApprovalRequestObject(t *testing.T) {
 
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {
-			got := buildApprovalRequestObject(test.namespacedName, test.stageName, test.updateRunName)
+			got := buildApprovalRequestObject(test.namespacedName, test.stageName, test.updateRunName, test.stageTaskType)
 
 			// Compare the whole objects using cmp.Diff with ignore options
 			if diff := cmp.Diff(test.want, got); diff != "" {
@@ -1035,6 +1040,7 @@ func TestCheckBeforeStageTasksStatus_NegativeCases(t *testing.T) {
 					Labels: map[string]string{
 						placementv1beta1.TargetUpdatingStageNameLabel:   stageName,
 						placementv1beta1.TargetUpdateRunLabel:           testUpdateRunName,
+						placementv1beta1.TaskTypeLabel:                  placementv1beta1.BeforeStageTaskLabelValue,
 						placementv1beta1.IsLatestUpdateRunApprovalLabel: "true",
 					},
 				},
@@ -1091,6 +1097,7 @@ func TestCheckBeforeStageTasksStatus_NegativeCases(t *testing.T) {
 					Labels: map[string]string{
 						placementv1beta1.TargetUpdatingStageNameLabel:   stageName,
 						placementv1beta1.TargetUpdateRunLabel:           testUpdateRunName,
+						placementv1beta1.TaskTypeLabel:                  placementv1beta1.BeforeStageTaskLabelValue,
 						placementv1beta1.IsLatestUpdateRunApprovalLabel: "true",
 					},
 				},
@@ -1147,6 +1154,7 @@ func TestCheckBeforeStageTasksStatus_NegativeCases(t *testing.T) {
 					Labels: map[string]string{
 						placementv1beta1.TargetUpdatingStageNameLabel:   stageName,
 						placementv1beta1.TargetUpdateRunLabel:           testUpdateRunName,
+						placementv1beta1.TaskTypeLabel:                  placementv1beta1.BeforeStageTaskLabelValue,
 						placementv1beta1.IsLatestUpdateRunApprovalLabel: "true",
 					},
 				},

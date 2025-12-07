@@ -83,10 +83,6 @@ func (r *Reconciler) execute(
 	// which would update the lastTransitionTime even though the status hasn't effectively changed.
 	markUpdateRunProgressingIfNotWaitingOrStuck(updateRun)
 	if updatingStageIndex < len(updateRunStatus.StagesStatus) {
-		maxConcurrency, err := calculateMaxConcurrencyValue(updateRunStatus, updatingStageIndex)
-		if err != nil {
-			return false, 0, err
-		}
 		updatingStageStatus = &updateRunStatus.StagesStatus[updatingStageIndex]
 		approved, err := r.checkBeforeStageTasksStatus(ctx, updatingStageIndex, updateRun)
 		if err != nil {
@@ -96,6 +92,10 @@ func (r *Reconciler) execute(
 			markStageUpdatingWaiting(updatingStageStatus, updateRun.GetGeneration(), "Not all before-stage tasks are completed, waiting for approval")
 			markUpdateRunWaiting(updateRun, fmt.Sprintf(condition.UpdateRunWaitingMessageFmt, "before-stage", updatingStageStatus.StageName))
 			return false, stageUpdatingWaitTime, nil
+		}
+		maxConcurrency, err := calculateMaxConcurrencyValue(updateRunStatus, updatingStageIndex)
+		if err != nil {
+			return false, 0, err
 		}
 		waitTime, err = r.executeUpdatingStage(ctx, updateRun, updatingStageIndex, toBeUpdatedBindings, maxConcurrency)
 		// The execution has not finished yet.
@@ -111,17 +111,17 @@ func (r *Reconciler) execute(
 func (r *Reconciler) checkBeforeStageTasksStatus(ctx context.Context, updatingStageIndex int, updateRun placementv1beta1.UpdateRunObj) (bool, error) {
 	updateRunRef := klog.KObj(updateRun)
 	updateRunStatus := updateRun.GetUpdateRunStatus()
-	updatingStageStatus := &updateRunStatus.StagesStatus[updatingStageIndex]
 	updatingStage := &updateRunStatus.UpdateStrategySnapshot.Stages[updatingStageIndex]
 	if updatingStage.BeforeStageTasks == nil {
 		klog.V(2).InfoS("There is no before stage task for this stage", "stage", updatingStage.Name, "updateRun", updateRunRef)
 		return true, nil
 	}
 
+	updatingStageStatus := &updateRunStatus.StagesStatus[updatingStageIndex]
 	for i, task := range updatingStage.BeforeStageTasks {
 		switch task.Type {
 		case placementv1beta1.StageTaskTypeApproval:
-			approved, err := r.handleStageApprovalTask(ctx, &updatingStageStatus.BeforeStageTaskStatus[i], updatingStage, updateRun)
+			approved, err := r.handleStageApprovalTask(ctx, &updatingStageStatus.BeforeStageTaskStatus[i], updatingStage, updateRun, placementv1beta1.BeforeStageTaskLabelValue)
 			if err != nil {
 				return false, err
 			}
@@ -418,7 +418,7 @@ func (r *Reconciler) checkAfterStageTasksStatus(ctx context.Context, updatingSta
 				klog.V(2).InfoS("The after stage wait task has completed", "stage", updatingStage.Name, "updateRun", updateRunRef)
 			}
 		case placementv1beta1.StageTaskTypeApproval:
-			approved, err := r.handleStageApprovalTask(ctx, &updatingStageStatus.AfterStageTaskStatus[i], updatingStage, updateRun)
+			approved, err := r.handleStageApprovalTask(ctx, &updatingStageStatus.AfterStageTaskStatus[i], updatingStage, updateRun, placementv1beta1.AfterStageTaskLabelValue)
 			if err != nil {
 				return false, -1, err
 			}
@@ -440,6 +440,7 @@ func (r *Reconciler) handleStageApprovalTask(
 	stageTaskStatus *placementv1beta1.StageTaskStatus,
 	updatingStage *placementv1beta1.StageConfig,
 	updateRun placementv1beta1.UpdateRunObj,
+	stageTaskType string,
 ) (bool, error) {
 	updateRunRef := klog.KObj(updateRun)
 
@@ -450,7 +451,7 @@ func (r *Reconciler) handleStageApprovalTask(
 	}
 
 	// Check if the approval request has been created.
-	approvalRequest := buildApprovalRequestObject(types.NamespacedName{Name: stageTaskStatus.ApprovalRequestName, Namespace: updateRun.GetNamespace()}, updatingStage.Name, updateRun.GetName())
+	approvalRequest := buildApprovalRequestObject(types.NamespacedName{Name: stageTaskStatus.ApprovalRequestName, Namespace: updateRun.GetNamespace()}, updatingStage.Name, updateRun.GetName(), stageTaskType)
 	requestRef := klog.KObj(approvalRequest)
 	if err := r.Client.Create(ctx, approvalRequest); err != nil {
 		if apierrors.IsAlreadyExists(err) {
@@ -618,9 +619,9 @@ func checkClusterUpdateResult(
 	return false, nil
 }
 
-// buildApprovalRequestObject creates an approval request object for after-stage tasks.
+// buildApprovalRequestObject creates an approval request object for before-stage or after-stage tasks.
 // It returns a ClusterApprovalRequest if namespace is empty, otherwise returns an ApprovalRequest.
-func buildApprovalRequestObject(namespacedName types.NamespacedName, stageName, updateRunName string) placementv1beta1.ApprovalRequestObj {
+func buildApprovalRequestObject(namespacedName types.NamespacedName, stageName, updateRunName, stageTaskType string) placementv1beta1.ApprovalRequestObj {
 	var approvalRequest placementv1beta1.ApprovalRequestObj
 	if namespacedName.Namespace == "" {
 		approvalRequest = &placementv1beta1.ClusterApprovalRequest{
@@ -629,6 +630,7 @@ func buildApprovalRequestObject(namespacedName types.NamespacedName, stageName, 
 				Labels: map[string]string{
 					placementv1beta1.TargetUpdatingStageNameLabel:   stageName,
 					placementv1beta1.TargetUpdateRunLabel:           updateRunName,
+					placementv1beta1.TaskTypeLabel:                  stageTaskType,
 					placementv1beta1.IsLatestUpdateRunApprovalLabel: "true",
 				},
 			},
@@ -645,6 +647,7 @@ func buildApprovalRequestObject(namespacedName types.NamespacedName, stageName, 
 				Labels: map[string]string{
 					placementv1beta1.TargetUpdatingStageNameLabel:   stageName,
 					placementv1beta1.TargetUpdateRunLabel:           updateRunName,
+					placementv1beta1.TaskTypeLabel:                  stageTaskType,
 					placementv1beta1.IsLatestUpdateRunApprovalLabel: "true",
 				},
 			},
