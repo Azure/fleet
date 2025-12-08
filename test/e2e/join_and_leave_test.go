@@ -17,9 +17,7 @@ limitations under the License.
 package e2e
 
 import (
-	"errors"
 	"fmt"
-	"reflect"
 
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
@@ -163,34 +161,8 @@ var _ = Describe("Test member cluster join and leave flow", Label("joinleave"), 
 				}
 			})
 
-			It("Should fail the unjoin requests", func() {
-				for idx := range allMemberClusters {
-					memberCluster := allMemberClusters[idx]
-					mcObj := &clusterv1beta1.MemberCluster{
-						ObjectMeta: metav1.ObjectMeta{
-							Name: memberCluster.ClusterName,
-						},
-					}
-					err := hubClient.Delete(ctx, mcObj)
-					Expect(err).ShouldNot(Succeed(), "Want the deletion to be denied")
-					var statusErr *apierrors.StatusError
-					Expect(errors.As(err, &statusErr)).To(BeTrue(), fmt.Sprintf("Delete memberCluster call produced error %s. Error type wanted is %s.", reflect.TypeOf(err), reflect.TypeOf(&apierrors.StatusError{})))
-					Expect(statusErr.ErrStatus.Message).Should(MatchRegexp("Please delete serviceExport test-namespace/test-svc in the member cluster before leaving, request is denied"))
-				}
-			})
-
-			It("Deleting the internalServiceExports", func() {
-				for idx := range allMemberClusterNames {
-					memberCluster := allMemberClusters[idx]
-					namespaceName := fmt.Sprintf(utils.NamespaceNameFormat, memberCluster.ClusterName)
-
-					internalSvcExportKey := types.NamespacedName{Namespace: namespaceName, Name: internalServiceExportName}
-					var export fleetnetworkingv1alpha1.InternalServiceExport
-					Expect(hubClient.Get(ctx, internalSvcExportKey, &export)).Should(Succeed(), "Failed to get internalServiceExport")
-					Expect(hubClient.Delete(ctx, &export)).To(Succeed(), "Failed to delete internalServiceExport")
-				}
-			})
-
+			// The network agent is not turned on by default in the e2e so we are still able to leave when we have internalServiceExport
+			// TODO: add a test case for the network agent is turned on in the fleet network repository.
 			It("Should be able to trigger the member cluster DELETE", func() {
 				setAllMemberClustersToLeave()
 			})
@@ -362,22 +334,7 @@ var _ = Describe("Test member cluster join and leave flow", Label("joinleave"), 
 				}
 			})
 
-			It("Should fail the unjoin requests", func() {
-				for idx := range allMemberClusters {
-					memberCluster := allMemberClusters[idx]
-					mcObj := &clusterv1beta1.MemberCluster{
-						ObjectMeta: metav1.ObjectMeta{
-							Name: memberCluster.ClusterName,
-						},
-					}
-					err := hubClient.Delete(ctx, mcObj)
-					Expect(err).ShouldNot(Succeed(), "Want the deletion to be denied")
-					var statusErr *apierrors.StatusError
-					Expect(errors.As(err, &statusErr)).To(BeTrue(), fmt.Sprintf("Delete memberCluster call produced error %s. Error type wanted is %s.", reflect.TypeOf(err), reflect.TypeOf(&apierrors.StatusError{})))
-					Expect(statusErr.ErrStatus.Message).Should(MatchRegexp("Please delete serviceExport test-namespace/test-svc in the member cluster before leaving, request is denied"))
-				}
-			})
-
+			// It does not really matter here as the network agent is not turned on by default in the e2e so we are still able to leave when we have internalServiceExport
 			It("Updating the member cluster to skip validation", func() {
 				for idx := range allMemberClusterNames {
 					memberCluster := allMemberClusters[idx]

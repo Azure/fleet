@@ -131,14 +131,16 @@ var (
 
 var AddToManagerFuncs []func(manager.Manager) error
 var AddToManagerFleetResourceValidator func(manager.Manager, []string, bool) error
+var AddToManagerMemberclusterValidator func(manager.Manager, bool)
 
 // AddToManager adds all Controllers to the Manager
-func AddToManager(m manager.Manager, whiteListedUsers []string, denyModifyMemberClusterLabels bool) error {
+func AddToManager(m manager.Manager, whiteListedUsers []string, denyModifyMemberClusterLabels bool, networkingAgentsEnabled bool) error {
 	for _, f := range AddToManagerFuncs {
 		if err := f(m); err != nil {
 			return err
 		}
 	}
+	AddToManagerMemberclusterValidator(m, networkingAgentsEnabled)
 	return AddToManagerFleetResourceValidator(m, whiteListedUsers, denyModifyMemberClusterLabels)
 }
 
