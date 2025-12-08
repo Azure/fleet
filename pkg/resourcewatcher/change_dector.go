@@ -84,6 +84,9 @@ type ChangeDetector struct {
 	// ConcurrentResourceChangeWorker is the number of resource change work that are
 	// allowed to sync concurrently.
 	ConcurrentResourceChangeWorker int
+
+	// EnableWorkload indicates whether workloads are allowed to run on the hub cluster.
+	EnableWorkload bool
 }
 
 // Start runs the detector, never stop until stopCh closed. This is called by the controller manager.
@@ -189,7 +192,7 @@ func (d *ChangeDetector) dynamicResourceFilter(obj interface{}) bool {
 	}
 
 	if unstructuredObj, ok := obj.(*unstructured.Unstructured); ok {
-		shouldPropagate, err := utils.ShouldPropagateObj(d.InformerManager, unstructuredObj.DeepCopy())
+		shouldPropagate, err := utils.ShouldPropagateObj(d.InformerManager, unstructuredObj.DeepCopy(), d.EnableWorkload)
 		if err != nil || !shouldPropagate {
 			klog.V(5).InfoS("Skip watching resource in namespace", "namespace", cwKey.Namespace,
 				"group", cwKey.Group, "version", cwKey.Version, "kind", cwKey.Kind, "object", cwKey.Name)

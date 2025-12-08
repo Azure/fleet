@@ -168,6 +168,7 @@ func SetupControllers(ctx context.Context, wg *sync.WaitGroup, mgr ctrl.Manager,
 		UncachedReader:                          mgr.GetAPIReader(),
 		ResourceSnapshotCreationMinimumInterval: opts.ResourceSnapshotCreationMinimumInterval,
 		ResourceChangesCollectionDuration:       opts.ResourceChangesCollectionDuration,
+		EnableWorkload:                          opts.EnableWorkload,
 	}
 
 	rateLimiter := options.DefaultControllerRateLimiter(opts.RateLimiterOpts)
@@ -507,6 +508,7 @@ func SetupControllers(ctx context.Context, wg *sync.WaitGroup, mgr ctrl.Manager,
 		SkippedNamespaces:                         skippedNamespaces,
 		ConcurrentPlacementWorker:                 int(math.Ceil(float64(opts.MaxConcurrentClusterPlacement) / 10)),
 		ConcurrentResourceChangeWorker:            opts.ConcurrentResourceChangeSyncs,
+		EnableWorkload:                            opts.EnableWorkload,
 	}
 
 	if err := mgr.Add(resourceChangeDetector); err != nil {

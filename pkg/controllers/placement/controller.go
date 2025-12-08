@@ -94,6 +94,9 @@ type Reconciler struct {
 
 	// ResourceChangesCollectionDuration is the duration for collecting resource changes into one snapshot.
 	ResourceChangesCollectionDuration time.Duration
+
+	// EnableWorkload indicates whether workloads are allowed to run on the hub cluster.
+	EnableWorkload bool
 }
 
 func (r *Reconciler) Reconcile(ctx context.Context, key controller.QueueKey) (ctrl.Result, error) {

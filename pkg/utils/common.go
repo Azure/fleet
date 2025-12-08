@@ -505,29 +505,30 @@ func CheckCRDInstalled(discoveryClient discovery.DiscoveryInterface, gvk schema.
 	return err
 }
 
-// ShouldPropagateObj decides if one should propagate the object
-func ShouldPropagateObj(informerManager informer.Manager, uObj *unstructured.Unstructured) (bool, error) {
+// ShouldPropagateObj decides if one should propagate the object.
+// PVCs are only propagated when enableWorkload is false (workloads not allowed on hub).
+func ShouldPropagateObj(informerManager informer.Manager, uObj *unstructured.Unstructured, enableWorkload bool) (bool, error) {
 	// TODO:  add more special handling for different resource kind
 	switch uObj.GroupVersionKind() {
 	case appv1.SchemeGroupVersion.WithKind(ReplicaSetKind):
-		// Skip ReplicaSets if they are managed by Deployments (have owner references)
-		// Standalone ReplicaSets (without owners) can be propagated
+		// Skip ReplicaSets if they are managed by Deployments (have owner references).
+		// Standalone ReplicaSets (without owners) can be propagated.
 		if len(uObj.GetOwnerReferences()) > 0 {
 			return false, nil
 		}
 	case appv1.SchemeGroupVersion.WithKind("ControllerRevision"):
-		// Skip ControllerRevisions if they are managed by DaemonSets/StatefulSets (have owner references)
-		// These are automatically created by controllers and will be recreated on member clusters
+		// Skip ControllerRevisions if they are managed by DaemonSets/StatefulSets (have owner references).
+		// Standalone ControllerRevisions (without owners) can be propagated.
 		if len(uObj.GetOwnerReferences()) > 0 {
 			return false, nil
 		}
 	case corev1.SchemeGroupVersion.WithKind(ConfigMapKind):
-		// Skip the built-in custom CA certificate created in the namespace
+		// Skip the built-in custom CA certificate created in the namespace.
 		if uObj.GetName() == "kube-root-ca.crt" {
 			return false, nil
 		}
 	case corev1.SchemeGroupVersion.WithKind("ServiceAccount"):
-		// Skip the default service account created in the namespace
+		// Skip the default service account created in the namespace.
 		if uObj.GetName() == "default" {
 			return false, nil
 		}
@@ -542,8 +543,11 @@ func ShouldPropagateObj(informerManager informer.Manager, uObj *unstructured.Uns
 			return false, nil
 		}
 	case corev1.SchemeGroupVersion.WithKind("PersistentVolumeClaim"):
-		// Skip PersistentVolumeClaims to avoid conflicts with the PVCs created by statefulset controller
-		return false, nil
+		// Skip PersistentVolumeClaims by default to avoid conflicts with the PVCs created by statefulset controller.
+		// This only happens if the workloads are allowed to run on the hub cluster.
+		if enableWorkload {
+			return false, nil
+		}
 	case corev1.SchemeGroupVersion.WithKind("Endpoints"):
 		// we assume that all endpoints with the same name of a service is created by the service controller
 		if _, err := informerManager.Lister(ServiceGVR).ByNamespace(uObj.GetNamespace()).Get(uObj.GetName()); err != nil {

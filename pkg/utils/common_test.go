@@ -1191,11 +1191,12 @@ func TestIsDiffedResourcePlacementEqual(t *testing.T) {
 	}
 }
 
-func TestShouldPropagateObj_PodAndReplicaSet(t *testing.T) {
+func TestShouldPropagateObj(t *testing.T) {
 	tests := []struct {
 		name            string
 		obj             map[string]interface{}
 		ownerReferences []metav1.OwnerReference
+		enableWorkload  bool
 		want            bool
 	}{
 		{
@@ -1209,6 +1210,21 @@ func TestShouldPropagateObj_PodAndReplicaSet(t *testing.T) {
 				},
 			},
 			ownerReferences: nil,
+			enableWorkload:  true,
+			want:            true,
+		},
+		{
+			name: "standalone replicaset without ownerReferences should propagate if workload is disabled",
+			obj: map[string]interface{}{
+				"apiVersion": "apps/v1",
+				"kind":       "ReplicaSet",
+				"metadata": map[string]interface{}{
+					"name":      "standalone-rs",
+					"namespace": "default",
+				},
+			},
+			ownerReferences: nil,
+			enableWorkload:  false,
 			want:            true,
 		},
 		{
@@ -1222,6 +1238,7 @@ func TestShouldPropagateObj_PodAndReplicaSet(t *testing.T) {
 				},
 			},
 			ownerReferences: nil,
+			enableWorkload:  true,
 			want:            true,
 		},
 		{
@@ -1242,7 +1259,8 @@ func TestShouldPropagateObj_PodAndReplicaSet(t *testing.T) {
 					UID:        "12345",
 				},
 			},
-			want: false,
+			enableWorkload: true,
+			want:           false,
 		},
 		{
 			name: "pod owned by replicaset - passes ShouldPropagateObj but filtered by resource config",
@@ -1262,7 +1280,8 @@ func TestShouldPropagateObj_PodAndReplicaSet(t *testing.T) {
 					UID:        "67890",
 				},
 			},
-			want: true, // ShouldPropagateObj doesn't filter Pods - they're filtered by NewResourceConfig
+			enableWorkload: false,
+			want:           true, // ShouldPropagateObj doesn't filter Pods - they're filtered by NewResourceConfig
 		},
 		{
 			name: "controllerrevision owned by daemonset should NOT propagate",
@@ -1282,7 +1301,8 @@ func TestShouldPropagateObj_PodAndReplicaSet(t *testing.T) {
 					UID:        "abcdef",
 				},
 			},
-			want: false,
+			enableWorkload: false,
+			want:           false,
 		},
 		{
 			name: "controllerrevision owned by statefulset should NOT propagate",
@@ -1302,7 +1322,8 @@ func TestShouldPropagateObj_PodAndReplicaSet(t *testing.T) {
 					UID:        "fedcba",
 				},
 			},
-			want: false,
+			enableWorkload: false,
+			want:           false,
 		},
 		{
 			name: "standalone controllerrevision without owner should propagate",
@@ -1315,10 +1336,11 @@ func TestShouldPropagateObj_PodAndReplicaSet(t *testing.T) {
 				},
 			},
 			ownerReferences: nil,
+			enableWorkload:  false,
 			want:            true,
 		},
 		{
-			name: "PersistentVolumeClaim should NOT propagate",
+			name: "PVC should propagate when workload is disabled",
 			obj: map[string]interface{}{
 				"apiVersion": "v1",
 				"kind":       "PersistentVolumeClaim",
@@ -1328,7 +1350,43 @@ func TestShouldPropagateObj_PodAndReplicaSet(t *testing.T) {
 				},
 			},
 			ownerReferences: nil,
+			enableWorkload:  false,
+			want:            true,
+		},
+		{
+			name: "PVC should NOT propagate when workload is enabled",
+			obj: map[string]interface{}{
+				"apiVersion": "v1",
+				"kind":       "PersistentVolumeClaim",
+				"metadata": map[string]interface{}{
+					"name":      "test-pvc",
+					"namespace": "default",
+				},
+			},
+			ownerReferences: nil,
+			enableWorkload:  true,
 			want:            false,
+		},
+		{
+			name: "PVC with ownerReferences should NOT propagate when workload is enabled",
+			obj: map[string]interface{}{
+				"apiVersion": "v1",
+				"kind":       "PersistentVolumeClaim",
+				"metadata": map[string]interface{}{
+					"name":      "data-statefulset-0",
+					"namespace": "default",
+				},
+			},
+			ownerReferences: []metav1.OwnerReference{
+				{
+					APIVersion: "apps/v1",
+					Kind:       "StatefulSet",
+					Name:       "statefulset",
+					UID:        "sts-uid",
+				},
+			},
+			enableWorkload: true,
+			want:           false,
 		},
 	}
 
@@ -1339,7 +1397,7 @@ func TestShouldPropagateObj_PodAndReplicaSet(t *testing.T) {
 				uObj.SetOwnerReferences(tt.ownerReferences)
 			}
 
-			got, err := ShouldPropagateObj(nil, uObj)
+			got, err := ShouldPropagateObj(nil, uObj, tt.enableWorkload)
 			if err != nil {
 				t.Errorf("ShouldPropagateObj() error = %v", err)
 				return
