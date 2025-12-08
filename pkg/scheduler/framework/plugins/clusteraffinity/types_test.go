@@ -1350,13 +1350,13 @@ func TestClusterRequirementMatches_WithPropertyChecker(t *testing.T) {
 					Name:     validPropertyName,
 					Operator: placementv1beta1.PropertySelectorGreaterThan,
 					Values: []string{
-						"1",
+						"0",
 					},
 				},
 			},
 			cluster:        cluster,
 			sku:            "Standard_D2s_v3",
-			targetCapacity: 2,
+			targetCapacity: 1,
 			want:           true,
 		},
 		{

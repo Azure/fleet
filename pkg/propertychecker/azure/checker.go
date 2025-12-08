@@ -80,7 +80,7 @@ func (s *PropertyChecker) CheckIfMeetSKUCapacityRequirement(
 	}
 
 	// Request VM size recommendations to validate SKU availability and capacity.
-	// The capacity is checked by ensuring the current allocatable capacity is greater than or equals to the requested capacity.
+	// The capacity is checked by ensuring the current allocatable capacity is greater than or equal to the requested capacity.
 	klog.V(2).Infof("Checking SKU %s with capacity %d in cluster %s", sku, capacity, cluster.Name)
 	request := &computev1.GenerateAttributeBasedRecommendationsRequest{
 		SubscriptionId: subID,
