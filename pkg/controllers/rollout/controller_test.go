@@ -1218,7 +1218,10 @@ func TestIsBindingReady(t *testing.T) {
 
 func TestPickBindingsToRoll(t *testing.T) {
 	tests := map[string]struct {
-		allBindings                 []*placementv1beta1.ClusterResourceBinding
+		// We have to generate the bindings before calling PickBindingsToRoll instead of building them
+		// during the initialization.
+		// So that the waitTime is under the control.
+		allBindingsFunc             func() []*placementv1beta1.ClusterResourceBinding
 		latestResourceSnapshotName  string
 		crp                         *placementv1beta1.ClusterResourcePlacement
 		matchedCROs                 []*placementv1beta1.ClusterResourceOverrideSnapshot
@@ -1234,8 +1237,10 @@ func TestPickBindingsToRoll(t *testing.T) {
 	}{
 		// TODO: add more tests
 		"test scheduled binding to bound, outdated resources and nil overrides - rollout allowed": {
-			allBindings: []*placementv1beta1.ClusterResourceBinding{
-				generateClusterResourceBinding(placementv1beta1.BindingStateScheduled, "snapshot-1", cluster1),
+			allBindingsFunc: func() []*placementv1beta1.ClusterResourceBinding {
+				return []*placementv1beta1.ClusterResourceBinding{
+					generateClusterResourceBinding(placementv1beta1.BindingStateScheduled, "snapshot-1", cluster1),
+				}
 			},
 			latestResourceSnapshotName: "snapshot-2",
 			crp: clusterResourcePlacementForTest("test",
@@ -1253,8 +1258,10 @@ func TestPickBindingsToRoll(t *testing.T) {
 			wantWaitTime: 0,
 		},
 		"test scheduled binding to bound, outdated resources and updated apply strategy - rollout allowed": {
-			allBindings: []*placementv1beta1.ClusterResourceBinding{
-				generateClusterResourceBinding(placementv1beta1.BindingStateScheduled, "snapshot-1", cluster1),
+			allBindingsFunc: func() []*placementv1beta1.ClusterResourceBinding {
+				return []*placementv1beta1.ClusterResourceBinding{
+					generateClusterResourceBinding(placementv1beta1.BindingStateScheduled, "snapshot-1", cluster1),
+				}
 			},
 			latestResourceSnapshotName: "snapshot-2",
 			crp: clusterResourcePlacementForTest("test",
@@ -1276,8 +1283,10 @@ func TestPickBindingsToRoll(t *testing.T) {
 			wantWaitTime: 0,
 		},
 		"test scheduled binding to bound, outdated resources and empty overrides - rollout allowed": {
-			allBindings: []*placementv1beta1.ClusterResourceBinding{
-				generateClusterResourceBinding(placementv1beta1.BindingStateScheduled, "snapshot-1", cluster1),
+			allBindingsFunc: func() []*placementv1beta1.ClusterResourceBinding {
+				return []*placementv1beta1.ClusterResourceBinding{
+					generateClusterResourceBinding(placementv1beta1.BindingStateScheduled, "snapshot-1", cluster1),
+				}
 			},
 			latestResourceSnapshotName: "snapshot-2",
 			crp: clusterResourcePlacementForTest("test",
@@ -1297,8 +1306,10 @@ func TestPickBindingsToRoll(t *testing.T) {
 			wantWaitTime: 0,
 		},
 		"test scheduled binding to bound, outdated resources with overrides matching cluster - rollout allowed": {
-			allBindings: []*placementv1beta1.ClusterResourceBinding{
-				generateClusterResourceBinding(placementv1beta1.BindingStateScheduled, "snapshot-1", cluster1),
+			allBindingsFunc: func() []*placementv1beta1.ClusterResourceBinding {
+				return []*placementv1beta1.ClusterResourceBinding{
+					generateClusterResourceBinding(placementv1beta1.BindingStateScheduled, "snapshot-1", cluster1),
+				}
 			},
 			latestResourceSnapshotName: "snapshot-2",
 			crp: clusterResourcePlacementForTest("test",
@@ -1391,8 +1402,10 @@ func TestPickBindingsToRoll(t *testing.T) {
 			wantWaitTime: 0,
 		},
 		"test scheduled binding to bound, outdated resources with overrides not matching any cluster - rollout allowed": {
-			allBindings: []*placementv1beta1.ClusterResourceBinding{
-				generateClusterResourceBinding(placementv1beta1.BindingStateScheduled, "snapshot-1", cluster1),
+			allBindingsFunc: func() []*placementv1beta1.ClusterResourceBinding {
+				return []*placementv1beta1.ClusterResourceBinding{
+					generateClusterResourceBinding(placementv1beta1.BindingStateScheduled, "snapshot-1", cluster1),
+				}
 			},
 			latestResourceSnapshotName: "snapshot-2",
 			crp: clusterResourcePlacementForTest("test",
@@ -1474,8 +1487,10 @@ func TestPickBindingsToRoll(t *testing.T) {
 			wantWaitTime: 0,
 		},
 		"test scheduled binding to bound, overrides matching cluster - rollout allowed": {
-			allBindings: []*placementv1beta1.ClusterResourceBinding{
-				generateClusterResourceBinding(placementv1beta1.BindingStateScheduled, "snapshot-1", cluster1),
+			allBindingsFunc: func() []*placementv1beta1.ClusterResourceBinding {
+				return []*placementv1beta1.ClusterResourceBinding{
+					generateClusterResourceBinding(placementv1beta1.BindingStateScheduled, "snapshot-1", cluster1),
+				}
 			},
 			latestResourceSnapshotName: "snapshot-1",
 			crp: clusterResourcePlacementForTest("test",
@@ -1568,8 +1583,10 @@ func TestPickBindingsToRoll(t *testing.T) {
 			wantWaitTime: 0,
 		},
 		"test bound binding with latest resources - rollout not needed": {
-			allBindings: []*placementv1beta1.ClusterResourceBinding{
-				generateClusterResourceBinding(placementv1beta1.BindingStateBound, "snapshot-1", cluster1),
+			allBindingsFunc: func() []*placementv1beta1.ClusterResourceBinding {
+				return []*placementv1beta1.ClusterResourceBinding{
+					generateClusterResourceBinding(placementv1beta1.BindingStateBound, "snapshot-1", cluster1),
+				}
 			},
 			latestResourceSnapshotName: "snapshot-1",
 			crp: clusterResourcePlacementForTest("test",
@@ -1581,8 +1598,10 @@ func TestPickBindingsToRoll(t *testing.T) {
 			wantNeedRoll:                false,
 		},
 		"test failed to apply bound binding, outdated resources - rollout allowed": {
-			allBindings: []*placementv1beta1.ClusterResourceBinding{
-				generateFailedToApplyClusterResourceBinding(placementv1beta1.BindingStateBound, "snapshot-1", cluster1),
+			allBindingsFunc: func() []*placementv1beta1.ClusterResourceBinding {
+				return []*placementv1beta1.ClusterResourceBinding{
+					generateFailedToApplyClusterResourceBinding(placementv1beta1.BindingStateBound, "snapshot-1", cluster1),
+				}
 			},
 			latestResourceSnapshotName: "snapshot-2",
 			crp: clusterResourcePlacementForTest("test",
@@ -1600,12 +1619,14 @@ func TestPickBindingsToRoll(t *testing.T) {
 			wantWaitTime: defaultUnavailablePeriod * time.Second,
 		},
 		"test one failed to apply bound binding and four failed non ready bound bindings, outdated resources with maxUnavailable specified - rollout allowed": {
-			allBindings: []*placementv1beta1.ClusterResourceBinding{
-				generateFailedToApplyClusterResourceBinding(placementv1beta1.BindingStateBound, "snapshot-1", cluster1),
-				generateClusterResourceBinding(placementv1beta1.BindingStateBound, "snapshot-1", cluster2),
-				generateClusterResourceBinding(placementv1beta1.BindingStateBound, "snapshot-1", cluster3),
-				generateClusterResourceBinding(placementv1beta1.BindingStateBound, "snapshot-1", cluster4),
-				generateClusterResourceBinding(placementv1beta1.BindingStateBound, "snapshot-1", cluster5),
+			allBindingsFunc: func() []*placementv1beta1.ClusterResourceBinding {
+				return []*placementv1beta1.ClusterResourceBinding{
+					generateFailedToApplyClusterResourceBinding(placementv1beta1.BindingStateBound, "snapshot-1", cluster1),
+					generateClusterResourceBinding(placementv1beta1.BindingStateBound, "snapshot-1", cluster2),
+					generateClusterResourceBinding(placementv1beta1.BindingStateBound, "snapshot-1", cluster3),
+					generateClusterResourceBinding(placementv1beta1.BindingStateBound, "snapshot-1", cluster4),
+					generateClusterResourceBinding(placementv1beta1.BindingStateBound, "snapshot-1", cluster5),
+				}
 			},
 			latestResourceSnapshotName: "snapshot-2",
 			crp: clusterResourcePlacementForTest("test",
@@ -1644,12 +1665,14 @@ func TestPickBindingsToRoll(t *testing.T) {
 			wantWaitTime: defaultUnavailablePeriod * time.Second,
 		},
 		"test three failed to apply bound binding, two ready bound binding, outdated resources with maxUnavailable specified - rollout allowed": {
-			allBindings: []*placementv1beta1.ClusterResourceBinding{
-				generateFailedToApplyClusterResourceBinding(placementv1beta1.BindingStateBound, "snapshot-1", cluster1),
-				generateFailedToApplyClusterResourceBinding(placementv1beta1.BindingStateBound, "snapshot-1", cluster2),
-				generateFailedToApplyClusterResourceBinding(placementv1beta1.BindingStateBound, "snapshot-1", cluster3),
-				generateReadyClusterResourceBinding(placementv1beta1.BindingStateBound, "snapshot-1", cluster4),
-				generateReadyClusterResourceBinding(placementv1beta1.BindingStateBound, "snapshot-1", cluster5),
+			allBindingsFunc: func() []*placementv1beta1.ClusterResourceBinding {
+				return []*placementv1beta1.ClusterResourceBinding{
+					generateFailedToApplyClusterResourceBinding(placementv1beta1.BindingStateBound, "snapshot-1", cluster1),
+					generateFailedToApplyClusterResourceBinding(placementv1beta1.BindingStateBound, "snapshot-1", cluster2),
+					generateFailedToApplyClusterResourceBinding(placementv1beta1.BindingStateBound, "snapshot-1", cluster3),
+					generateReadyClusterResourceBinding(placementv1beta1.BindingStateBound, "snapshot-1", cluster4),
+					generateReadyClusterResourceBinding(placementv1beta1.BindingStateBound, "snapshot-1", cluster5),
+				}
 			},
 			latestResourceSnapshotName: "snapshot-2",
 			crp: clusterResourcePlacementForTest("test",
@@ -1688,12 +1711,14 @@ func TestPickBindingsToRoll(t *testing.T) {
 			wantWaitTime: defaultUnavailablePeriod * time.Second,
 		},
 		"test bound ready bindings, maxUnavailable is set to zero - rollout blocked": {
-			allBindings: []*placementv1beta1.ClusterResourceBinding{
-				generateReadyClusterResourceBinding(placementv1beta1.BindingStateBound, "snapshot-1", cluster1),
-				generateReadyClusterResourceBinding(placementv1beta1.BindingStateBound, "snapshot-1", cluster2),
-				generateReadyClusterResourceBinding(placementv1beta1.BindingStateBound, "snapshot-1", cluster3),
-				generateReadyClusterResourceBinding(placementv1beta1.BindingStateBound, "snapshot-1", cluster4),
-				generateReadyClusterResourceBinding(placementv1beta1.BindingStateBound, "snapshot-1", cluster5),
+			allBindingsFunc: func() []*placementv1beta1.ClusterResourceBinding {
+				return []*placementv1beta1.ClusterResourceBinding{
+					generateReadyClusterResourceBinding(placementv1beta1.BindingStateBound, "snapshot-1", cluster1),
+					generateReadyClusterResourceBinding(placementv1beta1.BindingStateBound, "snapshot-1", cluster2),
+					generateReadyClusterResourceBinding(placementv1beta1.BindingStateBound, "snapshot-1", cluster3),
+					generateReadyClusterResourceBinding(placementv1beta1.BindingStateBound, "snapshot-1", cluster4),
+					generateReadyClusterResourceBinding(placementv1beta1.BindingStateBound, "snapshot-1", cluster5),
+				}
 			},
 			latestResourceSnapshotName: "snapshot-2",
 			crp: clusterResourcePlacementForTest("test",
@@ -1742,7 +1767,9 @@ func TestPickBindingsToRoll(t *testing.T) {
 			wantWaitTime: 0,
 		},
 		"test with no bindings": {
-			allBindings:                []*placementv1beta1.ClusterResourceBinding{},
+			allBindingsFunc: func() []*placementv1beta1.ClusterResourceBinding {
+				return []*placementv1beta1.ClusterResourceBinding{}
+			},
 			latestResourceSnapshotName: "snapshot-2",
 			crp: clusterResourcePlacementForTest("test",
 				createPlacementPolicyForTest(placementv1beta1.PickNPlacementType, 5),
@@ -1752,9 +1779,11 @@ func TestPickBindingsToRoll(t *testing.T) {
 			wantWaitTime:            0,
 		},
 		"test two scheduled bindings, outdated resources - rollout allowed": {
-			allBindings: []*placementv1beta1.ClusterResourceBinding{
-				generateClusterResourceBinding(placementv1beta1.BindingStateScheduled, "snapshot-1", cluster1),
-				generateClusterResourceBinding(placementv1beta1.BindingStateScheduled, "snapshot-1", cluster2),
+			allBindingsFunc: func() []*placementv1beta1.ClusterResourceBinding {
+				return []*placementv1beta1.ClusterResourceBinding{
+					generateClusterResourceBinding(placementv1beta1.BindingStateScheduled, "snapshot-1", cluster1),
+					generateClusterResourceBinding(placementv1beta1.BindingStateScheduled, "snapshot-1", cluster2),
+				}
 			},
 			latestResourceSnapshotName: "snapshot-2",
 			crp: clusterResourcePlacementForTest("test",
@@ -1777,9 +1806,11 @@ func TestPickBindingsToRoll(t *testing.T) {
 			wantWaitTime: 0,
 		},
 		"test canBeReady bound and scheduled binding - rollout allowed with unavailable period wait time": {
-			allBindings: []*placementv1beta1.ClusterResourceBinding{
-				generateCanBeReadyClusterResourceBinding(placementv1beta1.BindingStateBound, "snapshot-1", cluster1),
-				generateClusterResourceBinding(placementv1beta1.BindingStateScheduled, "snapshot-1", cluster2),
+			allBindingsFunc: func() []*placementv1beta1.ClusterResourceBinding {
+				return []*placementv1beta1.ClusterResourceBinding{
+					generateCanBeReadyClusterResourceBinding(placementv1beta1.BindingStateBound, "snapshot-1", cluster1),
+					generateClusterResourceBinding(placementv1beta1.BindingStateScheduled, "snapshot-1", cluster2),
+				}
 			},
 			latestResourceSnapshotName: "snapshot-2",
 			crp: clusterResourcePlacementForTest("test",
@@ -1813,9 +1844,11 @@ func TestPickBindingsToRoll(t *testing.T) {
 			wantWaitTime: 60 * time.Second,
 		},
 		"test two unscheduled bindings, maxUnavailable specified - rollout allowed": {
-			allBindings: []*placementv1beta1.ClusterResourceBinding{
-				generateReadyClusterResourceBinding(placementv1beta1.BindingStateUnscheduled, "snapshot-1", cluster1),
-				generateReadyClusterResourceBinding(placementv1beta1.BindingStateUnscheduled, "snapshot-1", cluster2),
+			allBindingsFunc: func() []*placementv1beta1.ClusterResourceBinding {
+				return []*placementv1beta1.ClusterResourceBinding{
+					generateReadyClusterResourceBinding(placementv1beta1.BindingStateUnscheduled, "snapshot-1", cluster1),
+					generateReadyClusterResourceBinding(placementv1beta1.BindingStateUnscheduled, "snapshot-1", cluster2),
+				}
 			},
 			latestResourceSnapshotName: "snapshot-1",
 			crp: clusterResourcePlacementForTest("test",
@@ -1831,8 +1864,10 @@ func TestPickBindingsToRoll(t *testing.T) {
 			wantWaitTime: 0,
 		},
 		"test overrides and the cluster is not found": {
-			allBindings: []*placementv1beta1.ClusterResourceBinding{
-				generateClusterResourceBinding(placementv1beta1.BindingStateBound, "snapshot-1", cluster1),
+			allBindingsFunc: func() []*placementv1beta1.ClusterResourceBinding {
+				return []*placementv1beta1.ClusterResourceBinding{
+					generateClusterResourceBinding(placementv1beta1.BindingStateBound, "snapshot-1", cluster1),
+				}
 			},
 			latestResourceSnapshotName: "snapshot-1",
 			matchedCROs: []*placementv1beta1.ClusterResourceOverrideSnapshot{
@@ -1870,10 +1905,12 @@ func TestPickBindingsToRoll(t *testing.T) {
 		},
 		"test bound bindings with different waitTimes and check the wait time should be the min of them all": {
 			// want the min wait time of bound bindings that are not ready
-			allBindings: []*placementv1beta1.ClusterResourceBinding{
-				generateNotTrackableClusterResourceBinding(placementv1beta1.BindingStateBound, "snapshot-1", cluster3, metav1.Time{Time: now.Add(-35 * time.Second)}), // notReady, waitTime = t - 35s
-				generateCanBeReadyClusterResourceBinding(placementv1beta1.BindingStateBound, "snapshot-1", cluster1),                                                  // notReady, no wait time because it does not have available condition yet,
-				generateReadyClusterResourceBinding(placementv1beta1.BindingStateBound, "snapshot-2", cluster2),                                                       // Ready
+			allBindingsFunc: func() []*placementv1beta1.ClusterResourceBinding {
+				return []*placementv1beta1.ClusterResourceBinding{
+					generateNotTrackableClusterResourceBinding(placementv1beta1.BindingStateBound, "snapshot-1", cluster3, metav1.Time{Time: time.Now().Add(-35 * time.Second)}), // notReady, waitTime = t - 35s
+					generateCanBeReadyClusterResourceBinding(placementv1beta1.BindingStateBound, "snapshot-1", cluster1),                                                         // notReady, no wait time because it does not have available condition yet,
+					generateReadyClusterResourceBinding(placementv1beta1.BindingStateBound, "snapshot-2", cluster2),                                                              // Ready
+				}
 			},
 			latestResourceSnapshotName: "snapshot-2",
 			crp: clusterResourcePlacementForTest("test",
@@ -1909,9 +1946,11 @@ func TestPickBindingsToRoll(t *testing.T) {
 		},
 		"test unscheduled bindings with different waitTimes and check the wait time is correct": {
 			// want the min wait time of unscheduled bindings that are not ready
-			allBindings: []*placementv1beta1.ClusterResourceBinding{
-				generateNotTrackableClusterResourceBinding(placementv1beta1.BindingStateUnscheduled, "snapshot-1", cluster2, metav1.Time{Time: now.Add(-1 * time.Minute)}),  // NotReady, waitTime = t - 60s
-				generateNotTrackableClusterResourceBinding(placementv1beta1.BindingStateUnscheduled, "snapshot-1", cluster3, metav1.Time{Time: now.Add(-35 * time.Second)}), // NotReady,  waitTime = t - 35s
+			allBindingsFunc: func() []*placementv1beta1.ClusterResourceBinding {
+				return []*placementv1beta1.ClusterResourceBinding{
+					generateNotTrackableClusterResourceBinding(placementv1beta1.BindingStateUnscheduled, "snapshot-1", cluster2, metav1.Time{Time: time.Now().Add(-1 * time.Minute)}),  // NotReady, waitTime = t - 60s
+					generateNotTrackableClusterResourceBinding(placementv1beta1.BindingStateUnscheduled, "snapshot-1", cluster3, metav1.Time{Time: time.Now().Add(-35 * time.Second)}), // NotReady,  waitTime = t - 35s
+				}
 			},
 			latestResourceSnapshotName: "snapshot-2",
 			crp: clusterResourcePlacementForTest("test",
@@ -1933,8 +1972,10 @@ func TestPickBindingsToRoll(t *testing.T) {
 			wantWaitTime:                25 * time.Second, // minWaitTime = (t - 35 seconds) - (t - 60 seconds) = 25 seconds
 		},
 		"test only one bound but is deleting binding - rollout blocked": {
-			allBindings: []*placementv1beta1.ClusterResourceBinding{
-				setDeletionTimeStampForBinding(generateClusterResourceBinding(placementv1beta1.BindingStateBound, "snapshot-1", cluster1)),
+			allBindingsFunc: func() []*placementv1beta1.ClusterResourceBinding {
+				return []*placementv1beta1.ClusterResourceBinding{
+					setDeletionTimeStampForBinding(generateClusterResourceBinding(placementv1beta1.BindingStateBound, "snapshot-1", cluster1)),
+				}
 			},
 			crp: clusterResourcePlacementForTest("test",
 				createPlacementPolicyForTest(placementv1beta1.PickAllPlacementType, 0),
@@ -1944,11 +1985,13 @@ func TestPickBindingsToRoll(t *testing.T) {
 			wantNeedRoll:                false,
 		},
 		"test policy change with MaxSurge specified, evict resources on unscheduled cluster - rollout allowed for one scheduled binding": {
-			allBindings: []*placementv1beta1.ClusterResourceBinding{
-				setDeletionTimeStampForBinding(generateCanBeReadyClusterResourceBinding(placementv1beta1.BindingStateUnscheduled, "snapshot-1", cluster1)),
-				generateCanBeReadyClusterResourceBinding(placementv1beta1.BindingStateUnscheduled, "snapshot-1", cluster2),
-				generateClusterResourceBinding(placementv1beta1.BindingStateScheduled, "snapshot-1", cluster3),
-				generateClusterResourceBinding(placementv1beta1.BindingStateScheduled, "snapshot-1", cluster4),
+			allBindingsFunc: func() []*placementv1beta1.ClusterResourceBinding {
+				return []*placementv1beta1.ClusterResourceBinding{
+					setDeletionTimeStampForBinding(generateCanBeReadyClusterResourceBinding(placementv1beta1.BindingStateUnscheduled, "snapshot-1", cluster1)),
+					generateCanBeReadyClusterResourceBinding(placementv1beta1.BindingStateUnscheduled, "snapshot-1", cluster2),
+					generateClusterResourceBinding(placementv1beta1.BindingStateScheduled, "snapshot-1", cluster3),
+					generateClusterResourceBinding(placementv1beta1.BindingStateScheduled, "snapshot-1", cluster4),
+				}
 			},
 			latestResourceSnapshotName: "snapshot-1",
 			crp: clusterResourcePlacementForTest("test",
@@ -1984,11 +2027,13 @@ func TestPickBindingsToRoll(t *testing.T) {
 			wantWaitTime:                time.Second,
 		},
 		"test policy change with MaxUnavailable specified, evict resources on unscheduled cluster - rollout allowed for one unscheduled binding": {
-			allBindings: []*placementv1beta1.ClusterResourceBinding{
-				setDeletionTimeStampForBinding(generateReadyClusterResourceBinding(placementv1beta1.BindingStateUnscheduled, "snapshot-1", cluster1)),
-				generateReadyClusterResourceBinding(placementv1beta1.BindingStateUnscheduled, "snapshot-1", cluster2),
-				generateClusterResourceBinding(placementv1beta1.BindingStateScheduled, "snapshot-1", cluster3),
-				generateClusterResourceBinding(placementv1beta1.BindingStateScheduled, "snapshot-1", cluster4),
+			allBindingsFunc: func() []*placementv1beta1.ClusterResourceBinding {
+				return []*placementv1beta1.ClusterResourceBinding{
+					setDeletionTimeStampForBinding(generateReadyClusterResourceBinding(placementv1beta1.BindingStateUnscheduled, "snapshot-1", cluster1)),
+					generateReadyClusterResourceBinding(placementv1beta1.BindingStateUnscheduled, "snapshot-1", cluster2),
+					generateClusterResourceBinding(placementv1beta1.BindingStateScheduled, "snapshot-1", cluster3),
+					generateClusterResourceBinding(placementv1beta1.BindingStateScheduled, "snapshot-1", cluster4),
+				}
 			},
 			latestResourceSnapshotName: "snapshot-1",
 			crp: clusterResourcePlacementForTest("test",
@@ -2024,9 +2069,11 @@ func TestPickBindingsToRoll(t *testing.T) {
 			wantWaitTime:                0,
 		},
 		"test resource snapshot change with MaxUnavailable specified, evict resources on ready bound binding - rollout allowed for one ready bound binding": {
-			allBindings: []*placementv1beta1.ClusterResourceBinding{
-				setDeletionTimeStampForBinding(generateReadyClusterResourceBinding(placementv1beta1.BindingStateBound, "snapshot-1", cluster1)),
-				generateReadyClusterResourceBinding(placementv1beta1.BindingStateBound, "snapshot-1", cluster2),
+			allBindingsFunc: func() []*placementv1beta1.ClusterResourceBinding {
+				return []*placementv1beta1.ClusterResourceBinding{
+					setDeletionTimeStampForBinding(generateReadyClusterResourceBinding(placementv1beta1.BindingStateBound, "snapshot-1", cluster1)),
+					generateReadyClusterResourceBinding(placementv1beta1.BindingStateBound, "snapshot-1", cluster2),
+				}
 			},
 			latestResourceSnapshotName: "snapshot-2",
 			crp: clusterResourcePlacementForTest("test",
@@ -2056,9 +2103,11 @@ func TestPickBindingsToRoll(t *testing.T) {
 			wantWaitTime:                0,
 		},
 		"test resource snapshot change with MaxUnavailable specified, evict resource on canBeReady binding - rollout blocked": {
-			allBindings: []*placementv1beta1.ClusterResourceBinding{
-				setDeletionTimeStampForBinding(generateReadyClusterResourceBinding(placementv1beta1.BindingStateBound, "snapshot-1", cluster1)),
-				generateCanBeReadyClusterResourceBinding(placementv1beta1.BindingStateBound, "snapshot-1", cluster2),
+			allBindingsFunc: func() []*placementv1beta1.ClusterResourceBinding {
+				return []*placementv1beta1.ClusterResourceBinding{
+					setDeletionTimeStampForBinding(generateReadyClusterResourceBinding(placementv1beta1.BindingStateBound, "snapshot-1", cluster1)),
+					generateCanBeReadyClusterResourceBinding(placementv1beta1.BindingStateBound, "snapshot-1", cluster2),
+				}
 			},
 			latestResourceSnapshotName: "snapshot-2",
 			crp: clusterResourcePlacementForTest("test",
@@ -2088,9 +2137,11 @@ func TestPickBindingsToRoll(t *testing.T) {
 			wantWaitTime:                time.Second,
 		},
 		"test resource snapshot change with MaxUnavailable specified, evict resources on failed to apply bound binding - rollout allowed for one failed to apply bound binding": {
-			allBindings: []*placementv1beta1.ClusterResourceBinding{
-				setDeletionTimeStampForBinding(generateReadyClusterResourceBinding(placementv1beta1.BindingStateBound, "snapshot-1", cluster1)),
-				generateFailedToApplyClusterResourceBinding(placementv1beta1.BindingStateBound, "snapshot-1", cluster2),
+			allBindingsFunc: func() []*placementv1beta1.ClusterResourceBinding {
+				return []*placementv1beta1.ClusterResourceBinding{
+					setDeletionTimeStampForBinding(generateReadyClusterResourceBinding(placementv1beta1.BindingStateBound, "snapshot-1", cluster1)),
+					generateFailedToApplyClusterResourceBinding(placementv1beta1.BindingStateBound, "snapshot-1", cluster2),
+				}
 			},
 			latestResourceSnapshotName: "snapshot-2",
 			crp: clusterResourcePlacementForTest("test",
@@ -2120,11 +2171,13 @@ func TestPickBindingsToRoll(t *testing.T) {
 			wantWaitTime:                time.Second,
 		},
 		"test upscale, evict resources from ready bound binding - rollout allowed for two new scheduled bindings": {
-			allBindings: []*placementv1beta1.ClusterResourceBinding{
-				setDeletionTimeStampForBinding(generateReadyClusterResourceBinding(placementv1beta1.BindingStateBound, "snapshot-1", cluster1)),
-				generateReadyClusterResourceBinding(placementv1beta1.BindingStateBound, "snapshot-1", cluster2),
-				generateClusterResourceBinding(placementv1beta1.BindingStateScheduled, "snapshot-1", cluster3),
-				generateClusterResourceBinding(placementv1beta1.BindingStateScheduled, "snapshot-1", cluster4),
+			allBindingsFunc: func() []*placementv1beta1.ClusterResourceBinding {
+				return []*placementv1beta1.ClusterResourceBinding{
+					setDeletionTimeStampForBinding(generateReadyClusterResourceBinding(placementv1beta1.BindingStateBound, "snapshot-1", cluster1)),
+					generateReadyClusterResourceBinding(placementv1beta1.BindingStateBound, "snapshot-1", cluster2),
+					generateClusterResourceBinding(placementv1beta1.BindingStateScheduled, "snapshot-1", cluster3),
+					generateClusterResourceBinding(placementv1beta1.BindingStateScheduled, "snapshot-1", cluster4),
+				}
 			},
 			latestResourceSnapshotName: "snapshot-1",
 			crp: clusterResourcePlacementForTest("test",
@@ -2161,13 +2214,15 @@ func TestPickBindingsToRoll(t *testing.T) {
 			wantWaitTime:                0,
 		},
 		"test upscale with policy change MaxSurge specified, evict resources from canBeReady bound binding - rollout allowed for three new scheduled bindings": {
-			allBindings: []*placementv1beta1.ClusterResourceBinding{
-				setDeletionTimeStampForBinding(generateCanBeReadyClusterResourceBinding(placementv1beta1.BindingStateUnscheduled, "snapshot-1", cluster1)),
-				generateCanBeReadyClusterResourceBinding(placementv1beta1.BindingStateUnscheduled, "snapshot-1", cluster2),
-				generateClusterResourceBinding(placementv1beta1.BindingStateScheduled, "snapshot-1", cluster3),
-				generateClusterResourceBinding(placementv1beta1.BindingStateScheduled, "snapshot-1", cluster4),
-				generateClusterResourceBinding(placementv1beta1.BindingStateScheduled, "snapshot-1", cluster5),
-				generateClusterResourceBinding(placementv1beta1.BindingStateScheduled, "snapshot-1", cluster6),
+			allBindingsFunc: func() []*placementv1beta1.ClusterResourceBinding {
+				return []*placementv1beta1.ClusterResourceBinding{
+					setDeletionTimeStampForBinding(generateCanBeReadyClusterResourceBinding(placementv1beta1.BindingStateUnscheduled, "snapshot-1", cluster1)),
+					generateCanBeReadyClusterResourceBinding(placementv1beta1.BindingStateUnscheduled, "snapshot-1", cluster2),
+					generateClusterResourceBinding(placementv1beta1.BindingStateScheduled, "snapshot-1", cluster3),
+					generateClusterResourceBinding(placementv1beta1.BindingStateScheduled, "snapshot-1", cluster4),
+					generateClusterResourceBinding(placementv1beta1.BindingStateScheduled, "snapshot-1", cluster5),
+					generateClusterResourceBinding(placementv1beta1.BindingStateScheduled, "snapshot-1", cluster6),
+				}
 			},
 			latestResourceSnapshotName: "snapshot-1",
 			crp: clusterResourcePlacementForTest("test",
@@ -2213,11 +2268,13 @@ func TestPickBindingsToRoll(t *testing.T) {
 			wantWaitTime:                time.Second,
 		},
 		"test upscale with resource change MaxUnavailable specified, evict resources from ready bound binding - rollout allowed for old bound and new scheduled bindings": {
-			allBindings: []*placementv1beta1.ClusterResourceBinding{
-				setDeletionTimeStampForBinding(generateReadyClusterResourceBinding(placementv1beta1.BindingStateBound, "snapshot-1", cluster1)),
-				generateReadyClusterResourceBinding(placementv1beta1.BindingStateBound, "snapshot-1", cluster2),
-				generateClusterResourceBinding(placementv1beta1.BindingStateScheduled, "snapshot-2", cluster3),
-				generateClusterResourceBinding(placementv1beta1.BindingStateScheduled, "snapshot-2", cluster4),
+			allBindingsFunc: func() []*placementv1beta1.ClusterResourceBinding {
+				return []*placementv1beta1.ClusterResourceBinding{
+					setDeletionTimeStampForBinding(generateReadyClusterResourceBinding(placementv1beta1.BindingStateBound, "snapshot-1", cluster1)),
+					generateReadyClusterResourceBinding(placementv1beta1.BindingStateBound, "snapshot-1", cluster2),
+					generateClusterResourceBinding(placementv1beta1.BindingStateScheduled, "snapshot-2", cluster3),
+					generateClusterResourceBinding(placementv1beta1.BindingStateScheduled, "snapshot-2", cluster4),
+				}
 			},
 			latestResourceSnapshotName: "snapshot-2",
 			crp: clusterResourcePlacementForTest("test",
@@ -2257,11 +2314,13 @@ func TestPickBindingsToRoll(t *testing.T) {
 			wantWaitTime:                0,
 		},
 		"test downscale, evict resources from ready unscheduled binding - rollout allowed for one unscheduled binding": {
-			allBindings: []*placementv1beta1.ClusterResourceBinding{
-				generateReadyClusterResourceBinding(placementv1beta1.BindingStateBound, "snapshot-1", cluster1),
-				generateReadyClusterResourceBinding(placementv1beta1.BindingStateBound, "snapshot-1", cluster2),
-				setDeletionTimeStampForBinding(generateReadyClusterResourceBinding(placementv1beta1.BindingStateUnscheduled, "snapshot-1", cluster3)),
-				generateReadyClusterResourceBinding(placementv1beta1.BindingStateUnscheduled, "snapshot-1", cluster4),
+			allBindingsFunc: func() []*placementv1beta1.ClusterResourceBinding {
+				return []*placementv1beta1.ClusterResourceBinding{
+					generateReadyClusterResourceBinding(placementv1beta1.BindingStateBound, "snapshot-1", cluster1),
+					generateReadyClusterResourceBinding(placementv1beta1.BindingStateBound, "snapshot-1", cluster2),
+					setDeletionTimeStampForBinding(generateReadyClusterResourceBinding(placementv1beta1.BindingStateUnscheduled, "snapshot-1", cluster3)),
+					generateReadyClusterResourceBinding(placementv1beta1.BindingStateUnscheduled, "snapshot-1", cluster4),
+				}
 			},
 			latestResourceSnapshotName: "snapshot-1",
 			crp: clusterResourcePlacementForTest("test",
@@ -2290,11 +2349,13 @@ func TestPickBindingsToRoll(t *testing.T) {
 			wantWaitTime:                0,
 		},
 		"test downscale, evict resources from ready bound binding - rollout allowed for two unscheduled bindings to be deleted": {
-			allBindings: []*placementv1beta1.ClusterResourceBinding{
-				setDeletionTimeStampForBinding(generateReadyClusterResourceBinding(placementv1beta1.BindingStateBound, "snapshot-1", cluster1)),
-				generateReadyClusterResourceBinding(placementv1beta1.BindingStateBound, "snapshot-1", cluster2),
-				generateReadyClusterResourceBinding(placementv1beta1.BindingStateUnscheduled, "snapshot-1", cluster3),
-				generateReadyClusterResourceBinding(placementv1beta1.BindingStateUnscheduled, "snapshot-1", cluster4),
+			allBindingsFunc: func() []*placementv1beta1.ClusterResourceBinding {
+				return []*placementv1beta1.ClusterResourceBinding{
+					setDeletionTimeStampForBinding(generateReadyClusterResourceBinding(placementv1beta1.BindingStateBound, "snapshot-1", cluster1)),
+					generateReadyClusterResourceBinding(placementv1beta1.BindingStateBound, "snapshot-1", cluster2),
+					generateReadyClusterResourceBinding(placementv1beta1.BindingStateUnscheduled, "snapshot-1", cluster3),
+					generateReadyClusterResourceBinding(placementv1beta1.BindingStateUnscheduled, "snapshot-1", cluster4),
+				}
 			},
 			latestResourceSnapshotName: "snapshot-1",
 			crp: clusterResourcePlacementForTest("test",
@@ -2323,13 +2384,15 @@ func TestPickBindingsToRoll(t *testing.T) {
 			wantWaitTime:                0,
 		},
 		"test downscale with policy change, evict unscheduled ready binding - rollout allowed for one unscheduled binding": {
-			allBindings: []*placementv1beta1.ClusterResourceBinding{
-				setDeletionTimeStampForBinding(generateReadyClusterResourceBinding(placementv1beta1.BindingStateUnscheduled, "snapshot-1", cluster1)),
-				generateReadyClusterResourceBinding(placementv1beta1.BindingStateUnscheduled, "snapshot-1", cluster2),
-				generateReadyClusterResourceBinding(placementv1beta1.BindingStateUnscheduled, "snapshot-1", cluster3),
-				generateReadyClusterResourceBinding(placementv1beta1.BindingStateUnscheduled, "snapshot-1", cluster4),
-				generateClusterResourceBinding(placementv1beta1.BindingStateScheduled, "snapshot-1", cluster5),
-				generateClusterResourceBinding(placementv1beta1.BindingStateScheduled, "snapshot-1", cluster6),
+			allBindingsFunc: func() []*placementv1beta1.ClusterResourceBinding {
+				return []*placementv1beta1.ClusterResourceBinding{
+					setDeletionTimeStampForBinding(generateReadyClusterResourceBinding(placementv1beta1.BindingStateUnscheduled, "snapshot-1", cluster1)),
+					generateReadyClusterResourceBinding(placementv1beta1.BindingStateUnscheduled, "snapshot-1", cluster2),
+					generateReadyClusterResourceBinding(placementv1beta1.BindingStateUnscheduled, "snapshot-1", cluster3),
+					generateReadyClusterResourceBinding(placementv1beta1.BindingStateUnscheduled, "snapshot-1", cluster4),
+					generateClusterResourceBinding(placementv1beta1.BindingStateScheduled, "snapshot-1", cluster5),
+					generateClusterResourceBinding(placementv1beta1.BindingStateScheduled, "snapshot-1", cluster6),
+				}
 			},
 			latestResourceSnapshotName: "snapshot-1",
 			crp: clusterResourcePlacementForTest("test",
@@ -2367,13 +2430,15 @@ func TestPickBindingsToRoll(t *testing.T) {
 			wantWaitTime:                0,
 		},
 		"test downscale with policy change, evict unscheduled failed to apply binding - rollout allowed for new scheduled bindings": {
-			allBindings: []*placementv1beta1.ClusterResourceBinding{
-				setDeletionTimeStampForBinding(generateFailedToApplyClusterResourceBinding(placementv1beta1.BindingStateUnscheduled, "snapshot-1", cluster1)),
-				generateFailedToApplyClusterResourceBinding(placementv1beta1.BindingStateUnscheduled, "snapshot-1", cluster2),
-				generateFailedToApplyClusterResourceBinding(placementv1beta1.BindingStateUnscheduled, "snapshot-1", cluster3),
-				generateFailedToApplyClusterResourceBinding(placementv1beta1.BindingStateUnscheduled, "snapshot-1", cluster4),
-				generateClusterResourceBinding(placementv1beta1.BindingStateScheduled, "snapshot-1", cluster5),
-				generateClusterResourceBinding(placementv1beta1.BindingStateScheduled, "snapshot-1", cluster6),
+			allBindingsFunc: func() []*placementv1beta1.ClusterResourceBinding {
+				return []*placementv1beta1.ClusterResourceBinding{
+					setDeletionTimeStampForBinding(generateFailedToApplyClusterResourceBinding(placementv1beta1.BindingStateUnscheduled, "snapshot-1", cluster1)),
+					generateFailedToApplyClusterResourceBinding(placementv1beta1.BindingStateUnscheduled, "snapshot-1", cluster2),
+					generateFailedToApplyClusterResourceBinding(placementv1beta1.BindingStateUnscheduled, "snapshot-1", cluster3),
+					generateFailedToApplyClusterResourceBinding(placementv1beta1.BindingStateUnscheduled, "snapshot-1", cluster4),
+					generateClusterResourceBinding(placementv1beta1.BindingStateScheduled, "snapshot-1", cluster5),
+					generateClusterResourceBinding(placementv1beta1.BindingStateScheduled, "snapshot-1", cluster6),
+				}
 			},
 			latestResourceSnapshotName: "snapshot-1",
 			crp: clusterResourcePlacementForTest("test",
@@ -2411,11 +2476,13 @@ func TestPickBindingsToRoll(t *testing.T) {
 			wantWaitTime:                defaultUnavailablePeriod * time.Second,
 		},
 		"test downscale with resource snapshot change, evict ready bound binding - rollout allowed for one unscheduled binding": {
-			allBindings: []*placementv1beta1.ClusterResourceBinding{
-				setDeletionTimeStampForBinding(generateReadyClusterResourceBinding(placementv1beta1.BindingStateBound, "snapshot-1", cluster1)),
-				generateReadyClusterResourceBinding(placementv1beta1.BindingStateBound, "snapshot-1", cluster2),
-				generateReadyClusterResourceBinding(placementv1beta1.BindingStateUnscheduled, "snapshot-1", cluster3),
-				generateReadyClusterResourceBinding(placementv1beta1.BindingStateUnscheduled, "snapshot-1", cluster4),
+			allBindingsFunc: func() []*placementv1beta1.ClusterResourceBinding {
+				return []*placementv1beta1.ClusterResourceBinding{
+					setDeletionTimeStampForBinding(generateReadyClusterResourceBinding(placementv1beta1.BindingStateBound, "snapshot-1", cluster1)),
+					generateReadyClusterResourceBinding(placementv1beta1.BindingStateBound, "snapshot-1", cluster2),
+					generateReadyClusterResourceBinding(placementv1beta1.BindingStateUnscheduled, "snapshot-1", cluster3),
+					generateReadyClusterResourceBinding(placementv1beta1.BindingStateUnscheduled, "snapshot-1", cluster4),
+				}
 			},
 			latestResourceSnapshotName: "snapshot-2",
 			crp: clusterResourcePlacementForTest("test",
@@ -2455,11 +2522,13 @@ func TestPickBindingsToRoll(t *testing.T) {
 			wantWaitTime:                0,
 		},
 		"test downscale with resource snapshot change, evict ready unscheduled binding - rollout allowed for one unscheduled binding, one bound binding": {
-			allBindings: []*placementv1beta1.ClusterResourceBinding{
-				generateReadyClusterResourceBinding(placementv1beta1.BindingStateBound, "snapshot-1", cluster1),
-				generateReadyClusterResourceBinding(placementv1beta1.BindingStateBound, "snapshot-1", cluster2),
-				setDeletionTimeStampForBinding(generateReadyClusterResourceBinding(placementv1beta1.BindingStateUnscheduled, "snapshot-1", cluster3)),
-				generateReadyClusterResourceBinding(placementv1beta1.BindingStateUnscheduled, "snapshot-1", cluster4),
+			allBindingsFunc: func() []*placementv1beta1.ClusterResourceBinding {
+				return []*placementv1beta1.ClusterResourceBinding{
+					generateReadyClusterResourceBinding(placementv1beta1.BindingStateBound, "snapshot-1", cluster1),
+					generateReadyClusterResourceBinding(placementv1beta1.BindingStateBound, "snapshot-1", cluster2),
+					setDeletionTimeStampForBinding(generateReadyClusterResourceBinding(placementv1beta1.BindingStateUnscheduled, "snapshot-1", cluster3)),
+					generateReadyClusterResourceBinding(placementv1beta1.BindingStateUnscheduled, "snapshot-1", cluster4),
+				}
 			},
 			latestResourceSnapshotName: "snapshot-2",
 			crp: clusterResourcePlacementForTest("test",
@@ -2519,7 +2588,8 @@ func TestPickBindingsToRoll(t *testing.T) {
 					Name: tt.latestResourceSnapshotName,
 				},
 			}
-			gotUpdatedBindings, gotStaleUnselectedBindings, gotUpToDateBoundBindings, gotNeedRoll, gotWaitTime, err := r.pickBindingsToRoll(context.Background(), controller.ConvertCRBArrayToBindingObjs(tt.allBindings), resourceSnapshot, tt.crp, tt.matchedCROs, tt.matchedROs)
+			allBindings := tt.allBindingsFunc()
+			gotUpdatedBindings, gotStaleUnselectedBindings, gotUpToDateBoundBindings, gotNeedRoll, gotWaitTime, err := r.pickBindingsToRoll(context.Background(), controller.ConvertCRBArrayToBindingObjs(tt.allBindingsFunc()), resourceSnapshot, tt.crp, tt.matchedCROs, tt.matchedROs)
 			if (err != nil) != (tt.wantErr != nil) || err != nil && !errors.Is(err, tt.wantErr) {
 				t.Fatalf("pickBindingsToRoll() error = %v, wantErr %v", err, tt.wantErr)
 			}
@@ -2530,30 +2600,30 @@ func TestPickBindingsToRoll(t *testing.T) {
 			wantTobeUpdatedBindings := make([]toBeUpdatedBinding, len(tt.wantTobeUpdatedBindings))
 			for i, index := range tt.wantTobeUpdatedBindings {
 				// Unscheduled bindings are only removed in a single rollout cycle.
-				bindingSpec := tt.allBindings[index].GetBindingSpec()
+				bindingSpec := allBindings[index].GetBindingSpec()
 				if bindingSpec.State != placementv1beta1.BindingStateUnscheduled {
-					wantTobeUpdatedBindings[i].currentBinding = tt.allBindings[index]
-					wantTobeUpdatedBindings[i].desiredBinding = tt.allBindings[index].DeepCopy()
+					wantTobeUpdatedBindings[i].currentBinding = allBindings[index]
+					wantTobeUpdatedBindings[i].desiredBinding = allBindings[index].DeepCopy()
 					wantTobeUpdatedBindings[i].desiredBinding.SetBindingSpec(tt.wantDesiredBindingsSpec[index])
 				} else {
-					wantTobeUpdatedBindings[i].currentBinding = tt.allBindings[index]
+					wantTobeUpdatedBindings[i].currentBinding = allBindings[index]
 				}
 			}
 			wantStaleUnselectedBindings := make([]toBeUpdatedBinding, len(tt.wantStaleUnselectedBindings))
 			for i, index := range tt.wantStaleUnselectedBindings {
 				// Unscheduled bindings are only removed in a single rollout cycle.
-				bindingSpec := tt.allBindings[index].GetBindingSpec()
+				bindingSpec := allBindings[index].GetBindingSpec()
 				if bindingSpec.State != placementv1beta1.BindingStateUnscheduled {
-					wantStaleUnselectedBindings[i].currentBinding = tt.allBindings[index]
-					wantStaleUnselectedBindings[i].desiredBinding = tt.allBindings[index].DeepCopy()
+					wantStaleUnselectedBindings[i].currentBinding = allBindings[index]
+					wantStaleUnselectedBindings[i].desiredBinding = allBindings[index].DeepCopy()
 					wantStaleUnselectedBindings[i].desiredBinding.SetBindingSpec(tt.wantDesiredBindingsSpec[index])
 				} else {
-					wantStaleUnselectedBindings[i].currentBinding = tt.allBindings[index]
+					wantStaleUnselectedBindings[i].currentBinding = allBindings[index]
 				}
 			}
 			wantUpToDateBoundBindings := make([]toBeUpdatedBinding, len(tt.wantUpToDateBoundBindings))
 			for i, index := range tt.wantUpToDateBoundBindings {
-				wantUpToDateBoundBindings[i].currentBinding = tt.allBindings[index]
+				wantUpToDateBoundBindings[i].currentBinding = allBindings[index]
 			}
 
 			if diff := cmp.Diff(wantTobeUpdatedBindings, gotUpdatedBindings, cmpOptions...); diff != "" {

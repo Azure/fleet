@@ -156,7 +156,10 @@ const (
 	UpdateRunFinalizer = FleetPrefix + "stagedupdaterun-finalizer"
 
 	// TargetUpdateRunLabel indicates the target update run on a staged run related object.
-	TargetUpdateRunLabel = FleetPrefix + "targetupdaterun"
+	TargetUpdateRunLabel = FleetPrefix + "targetUpdateRun"
+
+	// TaskTypeLabel indicates the task type (before-stage or after-stage) on a staged run related object.
+	TaskTypeLabel = FleetPrefix + "taskType"
 
 	// UpdateRunDeleteStageName is the name of delete stage in the staged update run.
 	UpdateRunDeleteStageName = FleetPrefix + "deleteStage"
@@ -167,8 +170,17 @@ const (
 	// TargetUpdatingStageNameLabel indicates the updating stage name on a staged run related object.
 	TargetUpdatingStageNameLabel = FleetPrefix + "targetUpdatingStage"
 
-	// ApprovalTaskNameFmt is the format of the approval task name.
-	ApprovalTaskNameFmt = "%s-%s"
+	// BeforeStageTaskLabelValue is the before stage task label value.
+	BeforeStageTaskLabelValue = "beforeStage"
+
+	// AfterStageTaskLabelValue is the after stage task label value.
+	AfterStageTaskLabelValue = "afterStage"
+
+	// BeforeStageApprovalTaskNameFmt is the format of the before stage approval task name.
+	BeforeStageApprovalTaskNameFmt = "%s-before-%s"
+
+	// AfterStageApprovalTaskNameFmt is the format of the after stage approval task name.
+	AfterStageApprovalTaskNameFmt = "%s-after-%s"
 )
 
 var (

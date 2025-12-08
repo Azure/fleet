@@ -26,15 +26,19 @@ var (
 )
 
 type memberClusterValidator struct {
-	client  client.Client
-	decoder webhook.AdmissionDecoder
+	client                  client.Client
+	decoder                 webhook.AdmissionDecoder
+	networkingAgentsEnabled bool
 }
 
 // Add registers the webhook for K8s bulit-in object types.
-func Add(mgr manager.Manager) error {
+func Add(mgr manager.Manager, networkingAgentsEnabled bool) {
 	hookServer := mgr.GetWebhookServer()
-	hookServer.Register(ValidationPath, &webhook.Admission{Handler: &memberClusterValidator{client: mgr.GetClient(), decoder: admission.NewDecoder(mgr.GetScheme())}})
-	return nil
+	hookServer.Register(ValidationPath, &webhook.Admission{Handler: &memberClusterValidator{
+		client:                  mgr.GetClient(),
+		decoder:                 admission.NewDecoder(mgr.GetScheme()),
+		networkingAgentsEnabled: networkingAgentsEnabled,
+	}})
 }
 
 // Handle memberClusterValidator checks to see if member cluster has valid fields.
@@ -50,8 +54,12 @@ func (v *memberClusterValidator) Handle(ctx context.Context, req admission.Reque
 		}
 
 		if mc.Spec.DeleteOptions != nil && mc.Spec.DeleteOptions.ValidationMode == clusterv1beta1.DeleteValidationModeSkip {
-			klog.V(2).InfoS("Skipping validation for member cluster DELETE", "memberCluster", mcObjectName)
-			return admission.Allowed("Skipping validation for member cluster DELETE")
+			klog.V(2).InfoS("Skipping validation for member cluster DELETE when the validation mode is set to skip", "memberCluster", mcObjectName)
+			return admission.Allowed("Skipping validation for member cluster DELETE when the validation mode is set to skip")
+		}
+		if !v.networkingAgentsEnabled {
+			klog.V(2).InfoS("Networking agents disabled; skipping ServiceExport validation", "memberCluster", mcObjectName)
+			return admission.Allowed("Networking agents disabled; skipping ServiceExport validation")
 		}
 
 		klog.V(2).InfoS("Validating webhook member cluster DELETE", "memberCluster", mcObjectName)

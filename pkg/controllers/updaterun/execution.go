@@ -62,34 +62,78 @@ func (r *Reconciler) execute(
 	updateRun placementv1beta1.UpdateRunObj,
 	updatingStageIndex int,
 	toBeUpdatedBindings, toBeDeletedBindings []placementv1beta1.BindingObj,
-) (bool, time.Duration, error) {
+) (finished bool, waitTime time.Duration, err error) {
+	updateRunStatus := updateRun.GetUpdateRunStatus()
+	var updatingStageStatus *placementv1beta1.StageUpdatingStatus
+
+	// Set up defer function to handle errStagedUpdatedAborted.
+	defer func() {
+		if errors.Is(err, errStagedUpdatedAborted) {
+			if updatingStageStatus != nil {
+				markStageUpdatingFailed(updatingStageStatus, updateRun.GetGeneration(), err.Error())
+			} else {
+				// Handle deletion stage case.
+				markStageUpdatingFailed(updateRunStatus.DeletionStageStatus, updateRun.GetGeneration(), err.Error())
+			}
+		}
+	}()
+
 	// Mark updateRun as progressing if it's not already marked as waiting or stuck.
 	// This avoids triggering an unnecessary in-memory transition from stuck (waiting) -> progressing -> stuck (waiting),
 	// which would update the lastTransitionTime even though the status hasn't effectively changed.
 	markUpdateRunProgressingIfNotWaitingOrStuck(updateRun)
-
-	updateRunStatus := updateRun.GetUpdateRunStatus()
 	if updatingStageIndex < len(updateRunStatus.StagesStatus) {
+		updatingStageStatus = &updateRunStatus.StagesStatus[updatingStageIndex]
+		approved, err := r.checkBeforeStageTasksStatus(ctx, updatingStageIndex, updateRun)
+		if err != nil {
+			return false, 0, err
+		}
+		if !approved {
+			markStageUpdatingWaiting(updatingStageStatus, updateRun.GetGeneration(), "Not all before-stage tasks are completed, waiting for approval")
+			markUpdateRunWaiting(updateRun, fmt.Sprintf(condition.UpdateRunWaitingMessageFmt, "before-stage", updatingStageStatus.StageName))
+			return false, stageUpdatingWaitTime, nil
+		}
 		maxConcurrency, err := calculateMaxConcurrencyValue(updateRunStatus, updatingStageIndex)
 		if err != nil {
 			return false, 0, err
 		}
-		updatingStage := &updateRunStatus.StagesStatus[updatingStageIndex]
-		waitTime, execErr := r.executeUpdatingStage(ctx, updateRun, updatingStageIndex, toBeUpdatedBindings, maxConcurrency)
-		if errors.Is(execErr, errStagedUpdatedAborted) {
-			markStageUpdatingFailed(updatingStage, updateRun.GetGeneration(), execErr.Error())
-			return true, waitTime, execErr
-		}
+		waitTime, err = r.executeUpdatingStage(ctx, updateRun, updatingStageIndex, toBeUpdatedBindings, maxConcurrency)
 		// The execution has not finished yet.
-		return false, waitTime, execErr
+		return false, waitTime, err
 	}
 	// All the stages have finished, now start the delete stage.
-	finished, execErr := r.executeDeleteStage(ctx, updateRun, toBeDeletedBindings)
-	if errors.Is(execErr, errStagedUpdatedAborted) {
-		markStageUpdatingFailed(updateRunStatus.DeletionStageStatus, updateRun.GetGeneration(), execErr.Error())
-		return true, 0, execErr
+	finished, err = r.executeDeleteStage(ctx, updateRun, toBeDeletedBindings)
+	return finished, clusterUpdatingWaitTime, err
+}
+
+// checkBeforeStageTasksStatus checks if the before stage tasks have finished.
+// It returns if the before stage tasks have finished or error if the before stage tasks failed.
+func (r *Reconciler) checkBeforeStageTasksStatus(ctx context.Context, updatingStageIndex int, updateRun placementv1beta1.UpdateRunObj) (bool, error) {
+	updateRunRef := klog.KObj(updateRun)
+	updateRunStatus := updateRun.GetUpdateRunStatus()
+	updatingStage := &updateRunStatus.UpdateStrategySnapshot.Stages[updatingStageIndex]
+	if updatingStage.BeforeStageTasks == nil {
+		klog.V(2).InfoS("There is no before stage task for this stage", "stage", updatingStage.Name, "updateRun", updateRunRef)
+		return true, nil
 	}
-	return finished, clusterUpdatingWaitTime, execErr
+
+	updatingStageStatus := &updateRunStatus.StagesStatus[updatingStageIndex]
+	for i, task := range updatingStage.BeforeStageTasks {
+		switch task.Type {
+		case placementv1beta1.StageTaskTypeApproval:
+			approved, err := r.handleStageApprovalTask(ctx, &updatingStageStatus.BeforeStageTaskStatus[i], updatingStage, updateRun, placementv1beta1.BeforeStageTaskLabelValue)
+			if err != nil {
+				return false, err
+			}
+			return approved, nil // Ideally there should be only one approval task in before stage tasks.
+		default:
+			// Approval is the only supported before stage task.
+			unexpectedErr := controller.NewUnexpectedBehaviorError(fmt.Errorf("found unsupported task type in before stage tasks: %s", task.Type))
+			klog.ErrorS(unexpectedErr, "Task type is not supported in before stage tasks", "stage", updatingStage.Name, "updateRun", updateRunRef, "taskType", task.Type)
+			return false, fmt.Errorf("%w: %s", errStagedUpdatedAborted, unexpectedErr.Error())
+		}
+	}
+	return true, nil
 }
 
 // executeUpdatingStage executes a single updating stage by updating the bindings.
@@ -241,29 +285,43 @@ func (r *Reconciler) executeUpdatingStage(
 	}
 
 	if finishedClusterCount == len(updatingStageStatus.Clusters) {
-		// All the clusters in the stage have been updated.
-		markUpdateRunWaiting(updateRun, updatingStageStatus.StageName)
-		markStageUpdatingWaiting(updatingStageStatus, updateRun.GetGeneration())
-		klog.V(2).InfoS("The stage has finished all cluster updating", "stage", updatingStageStatus.StageName, "updateRun", updateRunRef)
-		// Check if the after stage tasks are ready.
-		approved, waitTime, err := r.checkAfterStageTasksStatus(ctx, updatingStageIndex, updateRun)
-		if err != nil {
-			return 0, err
-		}
-		if approved {
-			markUpdateRunProgressing(updateRun)
-			markStageUpdatingSucceeded(updatingStageStatus, updateRun.GetGeneration())
-			// No need to wait to get to the next stage.
-			return 0, nil
-		}
-		// The after stage tasks are not ready yet.
-		if waitTime < 0 {
-			waitTime = stageUpdatingWaitTime
-		}
-		return waitTime, nil
+		return r.handleStageCompletion(ctx, updatingStageIndex, updateRun, updatingStageStatus)
 	}
+
 	// Some clusters are still updating.
 	return clusterUpdatingWaitTime, nil
+}
+
+// handleStageCompletion handles the completion logic when all clusters in a stage are finished.
+// Returns the wait time and any error encountered.
+func (r *Reconciler) handleStageCompletion(
+	ctx context.Context,
+	updatingStageIndex int,
+	updateRun placementv1beta1.UpdateRunObj,
+	updatingStageStatus *placementv1beta1.StageUpdatingStatus,
+) (time.Duration, error) {
+	updateRunRef := klog.KObj(updateRun)
+
+	// All the clusters in the stage have been updated.
+	markUpdateRunWaiting(updateRun, fmt.Sprintf(condition.UpdateRunWaitingMessageFmt, "after-stage", updatingStageStatus.StageName))
+	markStageUpdatingWaiting(updatingStageStatus, updateRun.GetGeneration(), "All clusters in the stage are updated, waiting for after-stage tasks to complete")
+	klog.V(2).InfoS("The stage has finished all cluster updating", "stage", updatingStageStatus.StageName, "updateRun", updateRunRef)
+	// Check if the after stage tasks are ready.
+	approved, waitTime, err := r.checkAfterStageTasksStatus(ctx, updatingStageIndex, updateRun)
+	if err != nil {
+		return 0, err
+	}
+	if approved {
+		markUpdateRunProgressing(updateRun)
+		markStageUpdatingSucceeded(updatingStageStatus, updateRun.GetGeneration())
+		// No need to wait to get to the next stage.
+		return 0, nil
+	}
+	// The after stage tasks are not ready yet.
+	if waitTime < 0 {
+		waitTime = stageUpdatingWaitTime
+	}
+	return waitTime, nil
 }
 
 // executeDeleteStage executes the delete stage by deleting the bindings.
@@ -360,59 +418,11 @@ func (r *Reconciler) checkAfterStageTasksStatus(ctx context.Context, updatingSta
 				klog.V(2).InfoS("The after stage wait task has completed", "stage", updatingStage.Name, "updateRun", updateRunRef)
 			}
 		case placementv1beta1.StageTaskTypeApproval:
-			afterStageTaskApproved := condition.IsConditionStatusTrue(meta.FindStatusCondition(updatingStageStatus.AfterStageTaskStatus[i].Conditions, string(placementv1beta1.StageTaskConditionApprovalRequestApproved)), updateRun.GetGeneration())
-			if afterStageTaskApproved {
-				// The afterStageTask has been approved.
-				continue
+			approved, err := r.handleStageApprovalTask(ctx, &updatingStageStatus.AfterStageTaskStatus[i], updatingStage, updateRun, placementv1beta1.AfterStageTaskLabelValue)
+			if err != nil {
+				return false, -1, err
 			}
-			// Check if the approval request has been created.
-			approvalRequest := buildApprovalRequestObject(types.NamespacedName{Name: updatingStageStatus.AfterStageTaskStatus[i].ApprovalRequestName, Namespace: updateRun.GetNamespace()}, updatingStage.Name, updateRun.GetName())
-			requestRef := klog.KObj(approvalRequest)
-			if err := r.Client.Create(ctx, approvalRequest); err != nil {
-				if apierrors.IsAlreadyExists(err) {
-					// The approval task already exists.
-					markAfterStageRequestCreated(&updatingStageStatus.AfterStageTaskStatus[i], updateRun.GetGeneration())
-					if err = r.Client.Get(ctx, client.ObjectKeyFromObject(approvalRequest), approvalRequest); err != nil {
-						klog.ErrorS(err, "Failed to get the already existing approval request", "approvalRequest", requestRef, "stage", updatingStage.Name, "updateRun", updateRunRef)
-						return false, -1, controller.NewAPIServerError(true, err)
-					}
-					approvalRequestSpec := approvalRequest.GetApprovalRequestSpec()
-					if approvalRequestSpec.TargetStage != updatingStage.Name || approvalRequestSpec.TargetUpdateRun != updateRun.GetName() {
-						unexpectedErr := controller.NewUnexpectedBehaviorError(fmt.Errorf("the approval request task `%s/%s` is targeting update run `%s/%s` and stage `%s`", approvalRequest.GetNamespace(), approvalRequest.GetName(), approvalRequest.GetNamespace(), approvalRequestSpec.TargetUpdateRun, approvalRequestSpec.TargetStage))
-						klog.ErrorS(unexpectedErr, "Found an approval request targeting wrong stage", "approvalRequestTask", requestRef, "stage", updatingStage.Name, "updateRun", updateRunRef)
-						return false, -1, fmt.Errorf("%w: %s", errStagedUpdatedAborted, unexpectedErr.Error())
-					}
-					approvalRequestStatus := approvalRequest.GetApprovalRequestStatus()
-					approvalAccepted := condition.IsConditionStatusTrue(meta.FindStatusCondition(approvalRequestStatus.Conditions, string(placementv1beta1.ApprovalRequestConditionApprovalAccepted)), approvalRequest.GetGeneration())
-					approved := condition.IsConditionStatusTrue(meta.FindStatusCondition(approvalRequestStatus.Conditions, string(placementv1beta1.ApprovalRequestConditionApproved)), approvalRequest.GetGeneration())
-					if !approvalAccepted && !approved {
-						klog.V(2).InfoS("The approval request has not been approved yet", "approvalRequestTask", requestRef, "stage", updatingStage.Name, "updateRun", updateRunRef)
-						passed = false
-						continue
-					}
-					if approved {
-						klog.V(2).InfoS("The approval request has been approved", "approvalRequestTask", requestRef, "stage", updatingStage.Name, "updateRun", updateRunRef)
-						if !approvalAccepted {
-							if err = r.updateApprovalRequestAccepted(ctx, approvalRequest); err != nil {
-								klog.ErrorS(err, "Failed to accept the approved approval request", "approvalRequest", requestRef, "stage", updatingStage.Name, "updateRun", updateRunRef)
-								// retriable err
-								return false, -1, err
-							}
-						}
-					} else {
-						// Approved state should not change once the approval is accepted.
-						klog.V(2).InfoS("The approval request has been approval-accepted, ignoring changing back to unapproved", "approvalRequestTask", requestRef, "stage", updatingStage.Name, "updateRun", updateRunRef)
-					}
-					markAfterStageRequestApproved(&updatingStageStatus.AfterStageTaskStatus[i], updateRun.GetGeneration())
-				} else {
-					// retriable error
-					klog.ErrorS(err, "Failed to create the approval request", "approvalRequest", requestRef, "stage", updatingStage.Name, "updateRun", updateRunRef)
-					return false, -1, controller.NewAPIServerError(false, err)
-				}
-			} else {
-				// The approval request has been created for the first time.
-				klog.V(2).InfoS("The approval request has been created", "approvalRequestTask", requestRef, "stage", updatingStage.Name, "updateRun", updateRunRef)
-				markAfterStageRequestCreated(&updatingStageStatus.AfterStageTaskStatus[i], updateRun.GetGeneration())
+			if !approved {
 				passed = false
 			}
 		}
@@ -421,6 +431,75 @@ func (r *Reconciler) checkAfterStageTasksStatus(ctx context.Context, updatingSta
 		afterStageWaitTime = 0
 	}
 	return passed, afterStageWaitTime, nil
+}
+
+// handleStageApprovalTask handles the approval task logic for before or after stage tasks.
+// It returns true if the task is approved, false otherwise, and any error encountered.
+func (r *Reconciler) handleStageApprovalTask(
+	ctx context.Context,
+	stageTaskStatus *placementv1beta1.StageTaskStatus,
+	updatingStage *placementv1beta1.StageConfig,
+	updateRun placementv1beta1.UpdateRunObj,
+	stageTaskType string,
+) (bool, error) {
+	updateRunRef := klog.KObj(updateRun)
+
+	stageTaskApproved := condition.IsConditionStatusTrue(meta.FindStatusCondition(stageTaskStatus.Conditions, string(placementv1beta1.StageTaskConditionApprovalRequestApproved)), updateRun.GetGeneration())
+	if stageTaskApproved {
+		// The stageTask has been approved.
+		return true, nil
+	}
+
+	// Check if the approval request has been created.
+	approvalRequest := buildApprovalRequestObject(types.NamespacedName{Name: stageTaskStatus.ApprovalRequestName, Namespace: updateRun.GetNamespace()}, updatingStage.Name, updateRun.GetName(), stageTaskType)
+	requestRef := klog.KObj(approvalRequest)
+	if err := r.Client.Create(ctx, approvalRequest); err != nil {
+		if apierrors.IsAlreadyExists(err) {
+			// The approval task already exists.
+			markStageTaskRequestCreated(stageTaskStatus, updateRun.GetGeneration())
+			if err = r.Client.Get(ctx, client.ObjectKeyFromObject(approvalRequest), approvalRequest); err != nil {
+				klog.ErrorS(err, "Failed to get the already existing approval request", "approvalRequest", requestRef, "stage", updatingStage.Name, "updateRun", updateRunRef)
+				return false, controller.NewAPIServerError(true, err)
+			}
+			approvalRequestSpec := approvalRequest.GetApprovalRequestSpec()
+			if approvalRequestSpec.TargetStage != updatingStage.Name || approvalRequestSpec.TargetUpdateRun != updateRun.GetName() {
+				unexpectedErr := controller.NewUnexpectedBehaviorError(fmt.Errorf("the approval request task `%s/%s` is targeting update run `%s/%s` and stage `%s`, want target update run `%s/%s and stage `%s`", approvalRequest.GetNamespace(), approvalRequest.GetName(), approvalRequest.GetNamespace(), approvalRequestSpec.TargetUpdateRun, approvalRequestSpec.TargetStage, approvalRequest.GetNamespace(), updateRun.GetName(), updatingStage.Name))
+				klog.ErrorS(unexpectedErr, "Found an approval request targeting wrong stage", "approvalRequestTask", requestRef, "stage", updatingStage.Name, "updateRun", updateRunRef)
+				return false, fmt.Errorf("%w: %s", errStagedUpdatedAborted, unexpectedErr.Error())
+			}
+			approvalRequestStatus := approvalRequest.GetApprovalRequestStatus()
+			approvalAccepted := condition.IsConditionStatusTrue(meta.FindStatusCondition(approvalRequestStatus.Conditions, string(placementv1beta1.ApprovalRequestConditionApprovalAccepted)), approvalRequest.GetGeneration())
+			approved := condition.IsConditionStatusTrue(meta.FindStatusCondition(approvalRequestStatus.Conditions, string(placementv1beta1.ApprovalRequestConditionApproved)), approvalRequest.GetGeneration())
+			if !approvalAccepted && !approved {
+				klog.V(2).InfoS("The approval request has not been approved yet", "approvalRequestTask", requestRef, "stage", updatingStage.Name, "updateRun", updateRunRef)
+				return false, nil
+			}
+			if approved {
+				klog.V(2).InfoS("The approval request has been approved", "approvalRequestTask", requestRef, "stage", updatingStage.Name, "updateRun", updateRunRef)
+				if !approvalAccepted {
+					if err = r.updateApprovalRequestAccepted(ctx, approvalRequest); err != nil {
+						klog.ErrorS(err, "Failed to accept the approved approval request", "approvalRequest", requestRef, "stage", updatingStage.Name, "updateRun", updateRunRef)
+						// retriable err
+						return false, err
+					}
+				}
+			} else {
+				// Approved state should not change once the approval is accepted.
+				klog.V(2).InfoS("The approval request has been approval-accepted, ignoring changing back to unapproved", "approvalRequestTask", requestRef, "stage", updatingStage.Name, "updateRun", updateRunRef)
+			}
+			markStageTaskRequestApproved(stageTaskStatus, updateRun.GetGeneration())
+		} else {
+			// retriable error
+			klog.ErrorS(err, "Failed to create the approval request", "approvalRequest", requestRef, "stage", updatingStage.Name, "updateRun", updateRunRef)
+			return false, controller.NewAPIServerError(false, err)
+		}
+	} else {
+		// The approval request has been created for the first time.
+		klog.V(2).InfoS("The approval request has been created", "approvalRequestTask", requestRef, "stage", updatingStage.Name, "updateRun", updateRunRef)
+		markStageTaskRequestCreated(stageTaskStatus, updateRun.GetGeneration())
+		return false, nil
+	}
+	return true, nil
 }
 
 // updateBindingRolloutStarted updates the binding status to indicate the rollout has started.
@@ -540,9 +619,9 @@ func checkClusterUpdateResult(
 	return false, nil
 }
 
-// buildApprovalRequestObject creates an approval request object for after-stage tasks.
+// buildApprovalRequestObject creates an approval request object for before-stage or after-stage tasks.
 // It returns a ClusterApprovalRequest if namespace is empty, otherwise returns an ApprovalRequest.
-func buildApprovalRequestObject(namespacedName types.NamespacedName, stageName, updateRunName string) placementv1beta1.ApprovalRequestObj {
+func buildApprovalRequestObject(namespacedName types.NamespacedName, stageName, updateRunName, stageTaskType string) placementv1beta1.ApprovalRequestObj {
 	var approvalRequest placementv1beta1.ApprovalRequestObj
 	if namespacedName.Namespace == "" {
 		approvalRequest = &placementv1beta1.ClusterApprovalRequest{
@@ -551,6 +630,7 @@ func buildApprovalRequestObject(namespacedName types.NamespacedName, stageName, 
 				Labels: map[string]string{
 					placementv1beta1.TargetUpdatingStageNameLabel:   stageName,
 					placementv1beta1.TargetUpdateRunLabel:           updateRunName,
+					placementv1beta1.TaskTypeLabel:                  stageTaskType,
 					placementv1beta1.IsLatestUpdateRunApprovalLabel: "true",
 				},
 			},
@@ -567,6 +647,7 @@ func buildApprovalRequestObject(namespacedName types.NamespacedName, stageName, 
 				Labels: map[string]string{
 					placementv1beta1.TargetUpdatingStageNameLabel:   stageName,
 					placementv1beta1.TargetUpdateRunLabel:           updateRunName,
+					placementv1beta1.TaskTypeLabel:                  stageTaskType,
 					placementv1beta1.IsLatestUpdateRunApprovalLabel: "true",
 				},
 			},
@@ -616,14 +697,14 @@ func markUpdateRunStuck(updateRun placementv1beta1.UpdateRunObj, stageName, clus
 }
 
 // markUpdateRunWaiting marks the updateRun as waiting in memory.
-func markUpdateRunWaiting(updateRun placementv1beta1.UpdateRunObj, stageName string) {
+func markUpdateRunWaiting(updateRun placementv1beta1.UpdateRunObj, message string) {
 	updateRunStatus := updateRun.GetUpdateRunStatus()
 	meta.SetStatusCondition(&updateRunStatus.Conditions, metav1.Condition{
 		Type:               string(placementv1beta1.StagedUpdateRunConditionProgressing),
 		Status:             metav1.ConditionFalse,
 		ObservedGeneration: updateRun.GetGeneration(),
 		Reason:             condition.UpdateRunWaitingReason,
-		Message:            fmt.Sprintf("The updateRun is waiting for after-stage tasks in stage %s to complete", stageName),
+		Message:            message,
 	})
 }
 
@@ -642,13 +723,13 @@ func markStageUpdatingStarted(stageUpdatingStatus *placementv1beta1.StageUpdatin
 }
 
 // markStageUpdatingWaiting marks the stage updating status as waiting in memory.
-func markStageUpdatingWaiting(stageUpdatingStatus *placementv1beta1.StageUpdatingStatus, generation int64) {
+func markStageUpdatingWaiting(stageUpdatingStatus *placementv1beta1.StageUpdatingStatus, generation int64, message string) {
 	meta.SetStatusCondition(&stageUpdatingStatus.Conditions, metav1.Condition{
 		Type:               string(placementv1beta1.StageUpdatingConditionProgressing),
 		Status:             metav1.ConditionFalse,
 		ObservedGeneration: generation,
 		Reason:             condition.StageUpdatingWaitingReason,
-		Message:            "All clusters in the stage are updated, waiting for after-stage tasks to complete",
+		Message:            message,
 	})
 }
 
@@ -727,24 +808,24 @@ func markClusterUpdatingFailed(clusterUpdatingStatus *placementv1beta1.ClusterUp
 	})
 }
 
-// markAfterStageRequestCreated marks the Approval after stage task as ApprovalRequestCreated in memory.
-func markAfterStageRequestCreated(afterStageTaskStatus *placementv1beta1.StageTaskStatus, generation int64) {
-	meta.SetStatusCondition(&afterStageTaskStatus.Conditions, metav1.Condition{
+// markStageTaskRequestCreated marks the Approval for the before or after stage task as ApprovalRequestCreated in memory.
+func markStageTaskRequestCreated(stageTaskStatus *placementv1beta1.StageTaskStatus, generation int64) {
+	meta.SetStatusCondition(&stageTaskStatus.Conditions, metav1.Condition{
 		Type:               string(placementv1beta1.StageTaskConditionApprovalRequestCreated),
 		Status:             metav1.ConditionTrue,
 		ObservedGeneration: generation,
-		Reason:             condition.AfterStageTaskApprovalRequestCreatedReason,
+		Reason:             condition.StageTaskApprovalRequestCreatedReason,
 		Message:            "ApprovalRequest object is created",
 	})
 }
 
-// markAfterStageRequestApproved marks the Approval after stage task as Approved in memory.
-func markAfterStageRequestApproved(afterStageTaskStatus *placementv1beta1.StageTaskStatus, generation int64) {
-	meta.SetStatusCondition(&afterStageTaskStatus.Conditions, metav1.Condition{
+// markStageTaskRequestApproved marks the Approval for the before or after stage task as Approved in memory.
+func markStageTaskRequestApproved(stageTaskStatus *placementv1beta1.StageTaskStatus, generation int64) {
+	meta.SetStatusCondition(&stageTaskStatus.Conditions, metav1.Condition{
 		Type:               string(placementv1beta1.StageTaskConditionApprovalRequestApproved),
 		Status:             metav1.ConditionTrue,
 		ObservedGeneration: generation,
-		Reason:             condition.AfterStageTaskApprovalRequestApprovedReason,
+		Reason:             condition.StageTaskApprovalRequestApprovedReason,
 		Message:            "ApprovalRequest object is approved",
 	})
 }

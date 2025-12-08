@@ -54,6 +54,10 @@ const (
 	// WorkConditionTypeDiffReported reports whether Fleet has successfully reported the
 	// configuration difference between the states in the hub cluster and a member cluster.
 	WorkConditionTypeDiffReported = "DiffReported"
+
+	// WorkConditionTypeStatusTrimmed reports whether the member agent has to trim
+	// the status data in the Work object due to size constraints.
+	WorkConditionTypeStatusTrimmed = "StatusTrimmed"
 )
 
 // This api is copied from https://github.com/kubernetes-sigs/work-api/blob/master/pkg/apis/v1alpha1/work_types.go.
