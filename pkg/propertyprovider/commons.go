@@ -24,6 +24,15 @@ const (
 	// NodeCountProperty is a property that describes the number of nodes in the cluster.
 	NodeCountProperty = "kubernetes-fleet.io/node-count"
 
+	// K8sVersionProperty is a property that describes the Kubernetes version of the cluster.
+	K8sVersionProperty = "k8s.io/k8s-version"
+
+	// ClusterEntryPointProperty is a property that describes the cluster entry point (API server endpoint).
+	ClusterEntryPointProperty = "k8s.io/cluster-entrypoint"
+
+	// ClusterCertificateAuthorityProperty is a property that describes the cluster's certificate authority data (base64 encoded).
+	ClusterCertificateAuthorityProperty = "k8s.io/cluster-certificate-authority-data"
+
 	// The resource properties.
 	// Total and allocatable CPU resource properties.
 	TotalCPUCapacityProperty       = "resources.kubernetes-fleet.io/total-cpu"

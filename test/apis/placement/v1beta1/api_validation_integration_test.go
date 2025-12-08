@@ -1282,6 +1282,86 @@ var _ = Describe("Test placement v1beta1 API validation", func() {
 			Expect(strategy.Spec.Stages[0].BeforeStageTasks[0].WaitTime).Should(BeNil())
 			Expect(hubClient.Delete(ctx, &strategy)).Should(Succeed())
 		})
+
+		It("Should allow creation of ClusterStagedUpdateStrategy with MaxConcurrency as integer between 1-100", func() {
+			maxConcurrency := intstr.FromInt(70)
+			strategy := placementv1beta1.ClusterStagedUpdateStrategy{
+				ObjectMeta: metav1.ObjectMeta{
+					Name: fmt.Sprintf(updateRunStrategyNameTemplate, GinkgoParallelProcess()),
+				},
+				Spec: placementv1beta1.UpdateStrategySpec{
+					Stages: []placementv1beta1.StageConfig{
+						{
+							Name:           fmt.Sprintf(updateRunStageNameTemplate, GinkgoParallelProcess(), 1),
+							MaxConcurrency: &maxConcurrency,
+						},
+					},
+				},
+			}
+			Expect(hubClient.Create(ctx, &strategy)).Should(Succeed())
+			Expect(*strategy.Spec.Stages[0].MaxConcurrency).Should(Equal(maxConcurrency))
+			Expect(hubClient.Delete(ctx, &strategy)).Should(Succeed())
+		})
+
+		It("Should allow creation of ClusterStagedUpdateStrategy with MaxConcurrency as integer greater than 100", func() {
+			maxConcurrency := intstr.FromInt(150)
+			strategy := placementv1beta1.ClusterStagedUpdateStrategy{
+				ObjectMeta: metav1.ObjectMeta{
+					Name: fmt.Sprintf(updateRunStrategyNameTemplate, GinkgoParallelProcess()),
+				},
+				Spec: placementv1beta1.UpdateStrategySpec{
+					Stages: []placementv1beta1.StageConfig{
+						{
+							Name:           fmt.Sprintf(updateRunStageNameTemplate, GinkgoParallelProcess(), 1),
+							MaxConcurrency: &maxConcurrency,
+						},
+					},
+				},
+			}
+			Expect(hubClient.Create(ctx, &strategy)).Should(Succeed())
+			Expect(*strategy.Spec.Stages[0].MaxConcurrency).Should(Equal(maxConcurrency))
+			Expect(hubClient.Delete(ctx, &strategy)).Should(Succeed())
+		})
+
+		It("Should allow creation of ClusterStagedUpdateStrategy with MaxConcurrency as 1%", func() {
+			maxConcurrency := intstr.FromString("1%")
+			strategy := placementv1beta1.ClusterStagedUpdateStrategy{
+				ObjectMeta: metav1.ObjectMeta{
+					Name: fmt.Sprintf(updateRunStrategyNameTemplate, GinkgoParallelProcess()),
+				},
+				Spec: placementv1beta1.UpdateStrategySpec{
+					Stages: []placementv1beta1.StageConfig{
+						{
+							Name:           fmt.Sprintf(updateRunStageNameTemplate, GinkgoParallelProcess(), 1),
+							MaxConcurrency: &maxConcurrency,
+						},
+					},
+				},
+			}
+			Expect(hubClient.Create(ctx, &strategy)).Should(Succeed())
+			Expect(*strategy.Spec.Stages[0].MaxConcurrency).Should(Equal(maxConcurrency))
+			Expect(hubClient.Delete(ctx, &strategy)).Should(Succeed())
+		})
+
+		It("Should allow creation of ClusterStagedUpdateStrategy with MaxConcurrency as 100%", func() {
+			maxConcurrency := intstr.FromString("100%")
+			strategy := placementv1beta1.ClusterStagedUpdateStrategy{
+				ObjectMeta: metav1.ObjectMeta{
+					Name: fmt.Sprintf(updateRunStrategyNameTemplate, GinkgoParallelProcess()),
+				},
+				Spec: placementv1beta1.UpdateStrategySpec{
+					Stages: []placementv1beta1.StageConfig{
+						{
+							Name:           fmt.Sprintf(updateRunStageNameTemplate, GinkgoParallelProcess(), 1),
+							MaxConcurrency: &maxConcurrency,
+						},
+					},
+				},
+			}
+			Expect(hubClient.Create(ctx, &strategy)).Should(Succeed())
+			Expect(*strategy.Spec.Stages[0].MaxConcurrency).Should(Equal(maxConcurrency))
+			Expect(hubClient.Delete(ctx, &strategy)).Should(Succeed())
+		})
 	})
 
 	Context("Test ClusterStagedUpdateStrategy API validation - invalid cases", func() {
@@ -1567,6 +1647,132 @@ var _ = Describe("Test placement v1beta1 API validation", func() {
 			Expect(errors.As(err, &statusErr)).To(BeTrue(), fmt.Sprintf("Create updateRunStrategy call produced error %s. Error type wanted is %s.", reflect.TypeOf(err), reflect.TypeOf(&k8sErrors.StatusError{})))
 			Expect(statusErr.ErrStatus.Message).Should(MatchRegexp("Too many: 2: must have at most 1 items"))
 		})
+
+		It("Should deny creation of ClusterStagedUpdateStrategy with MaxConcurrency set to a negative value", func() {
+			maxConcurrency := intstr.FromInt(-1)
+			strategy := placementv1beta1.ClusterStagedUpdateStrategy{
+				ObjectMeta: metav1.ObjectMeta{
+					Name: fmt.Sprintf(updateRunStrategyNameTemplate, GinkgoParallelProcess()),
+				},
+				Spec: placementv1beta1.UpdateStrategySpec{
+					Stages: []placementv1beta1.StageConfig{
+						{
+							Name:           fmt.Sprintf(updateRunStageNameTemplate, GinkgoParallelProcess(), 1),
+							MaxConcurrency: &maxConcurrency,
+						},
+					},
+				},
+			}
+			err := hubClient.Create(ctx, &strategy)
+			var statusErr *k8sErrors.StatusError
+			Expect(errors.As(err, &statusErr)).To(BeTrue(), fmt.Sprintf("Create updateRunStrategy call produced error %s. Error type wanted is %s.", reflect.TypeOf(err), reflect.TypeOf(&k8sErrors.StatusError{})))
+			Expect(statusErr.ErrStatus.Message).Should(MatchRegexp("maxConcurrency must be at least 1"))
+		})
+
+		It("Should deny creation of ClusterStagedUpdateStrategy with MaxConcurrency set to 0", func() {
+			maxConcurrency := intstr.FromInt(0)
+			strategy := placementv1beta1.ClusterStagedUpdateStrategy{
+				ObjectMeta: metav1.ObjectMeta{
+					Name: fmt.Sprintf(updateRunStrategyNameTemplate, GinkgoParallelProcess()),
+				},
+				Spec: placementv1beta1.UpdateStrategySpec{
+					Stages: []placementv1beta1.StageConfig{
+						{
+							Name:           fmt.Sprintf(updateRunStageNameTemplate, GinkgoParallelProcess(), 1),
+							MaxConcurrency: &maxConcurrency,
+						},
+					},
+				},
+			}
+			err := hubClient.Create(ctx, &strategy)
+			var statusErr *k8sErrors.StatusError
+			Expect(errors.As(err, &statusErr)).To(BeTrue(), fmt.Sprintf("Create updateRunStrategy call produced error %s. Error type wanted is %s.", reflect.TypeOf(err), reflect.TypeOf(&k8sErrors.StatusError{})))
+			Expect(statusErr.ErrStatus.Message).Should(MatchRegexp("maxConcurrency must be at least 1"))
+		})
+
+		It("Should deny creation of ClusterStagedUpdateStrategy with MaxConcurrency set to '0'", func() {
+			maxConcurrency := intstr.FromString("0")
+			strategy := placementv1beta1.ClusterStagedUpdateStrategy{
+				ObjectMeta: metav1.ObjectMeta{
+					Name: fmt.Sprintf(updateRunStrategyNameTemplate, GinkgoParallelProcess()),
+				},
+				Spec: placementv1beta1.UpdateStrategySpec{
+					Stages: []placementv1beta1.StageConfig{
+						{
+							Name:           fmt.Sprintf(updateRunStageNameTemplate, GinkgoParallelProcess(), 1),
+							MaxConcurrency: &maxConcurrency,
+						},
+					},
+				},
+			}
+			err := hubClient.Create(ctx, &strategy)
+			var statusErr *k8sErrors.StatusError
+			Expect(errors.As(err, &statusErr)).To(BeTrue(), fmt.Sprintf("Create updateRunStrategy call produced error %s. Error type wanted is %s.", reflect.TypeOf(err), reflect.TypeOf(&k8sErrors.StatusError{})))
+			Expect(statusErr.ErrStatus.Message).Should(MatchRegexp("spec.stages\\[0\\].maxConcurrency in body should match"))
+		})
+
+		It("Should deny creation of ClusterStagedUpdateStrategy with MaxConcurrency set to '50'", func() {
+			maxConcurrency := intstr.FromString("50")
+			strategy := placementv1beta1.ClusterStagedUpdateStrategy{
+				ObjectMeta: metav1.ObjectMeta{
+					Name: fmt.Sprintf(updateRunStrategyNameTemplate, GinkgoParallelProcess()),
+				},
+				Spec: placementv1beta1.UpdateStrategySpec{
+					Stages: []placementv1beta1.StageConfig{
+						{
+							Name:           fmt.Sprintf(updateRunStageNameTemplate, GinkgoParallelProcess(), 1),
+							MaxConcurrency: &maxConcurrency,
+						},
+					},
+				},
+			}
+			err := hubClient.Create(ctx, &strategy)
+			var statusErr *k8sErrors.StatusError
+			Expect(errors.As(err, &statusErr)).To(BeTrue(), fmt.Sprintf("Create updateRunStrategy call produced error %s. Error type wanted is %s.", reflect.TypeOf(err), reflect.TypeOf(&k8sErrors.StatusError{})))
+			Expect(statusErr.ErrStatus.Message).Should(MatchRegexp("spec.stages\\[0\\].maxConcurrency in body should match"))
+		})
+
+		It("Should deny creation of ClusterStagedUpdateStrategy with MaxConcurrency set to 0%", func() {
+			maxConcurrency := intstr.FromString("0%")
+			strategy := placementv1beta1.ClusterStagedUpdateStrategy{
+				ObjectMeta: metav1.ObjectMeta{
+					Name: fmt.Sprintf(updateRunStrategyNameTemplate, GinkgoParallelProcess()),
+				},
+				Spec: placementv1beta1.UpdateStrategySpec{
+					Stages: []placementv1beta1.StageConfig{
+						{
+							Name:           fmt.Sprintf(updateRunStageNameTemplate, GinkgoParallelProcess(), 1),
+							MaxConcurrency: &maxConcurrency,
+						},
+					},
+				},
+			}
+			err := hubClient.Create(ctx, &strategy)
+			var statusErr *k8sErrors.StatusError
+			Expect(errors.As(err, &statusErr)).To(BeTrue(), fmt.Sprintf("Create updateRunStrategy call produced error %s. Error type wanted is %s.", reflect.TypeOf(err), reflect.TypeOf(&k8sErrors.StatusError{})))
+			Expect(statusErr.ErrStatus.Message).Should(MatchRegexp("spec.stages\\[0\\].maxConcurrency in body should match"))
+		})
+
+		It("Should deny creation of ClusterStagedUpdateStrategy with MaxConcurrency set to 101%", func() {
+			maxConcurrency := intstr.FromString("101%")
+			strategy := placementv1beta1.ClusterStagedUpdateStrategy{
+				ObjectMeta: metav1.ObjectMeta{
+					Name: fmt.Sprintf(updateRunStrategyNameTemplate, GinkgoParallelProcess()),
+				},
+				Spec: placementv1beta1.UpdateStrategySpec{
+					Stages: []placementv1beta1.StageConfig{
+						{
+							Name:           fmt.Sprintf(updateRunStageNameTemplate, GinkgoParallelProcess(), 1),
+							MaxConcurrency: &maxConcurrency,
+						},
+					},
+				},
+			}
+			err := hubClient.Create(ctx, &strategy)
+			var statusErr *k8sErrors.StatusError
+			Expect(errors.As(err, &statusErr)).To(BeTrue(), fmt.Sprintf("Create updateRunStrategy call produced error %s. Error type wanted is %s.", reflect.TypeOf(err), reflect.TypeOf(&k8sErrors.StatusError{})))
+			Expect(statusErr.ErrStatus.Message).Should(MatchRegexp("spec.stages\\[0\\].maxConcurrency in body should match"))
+		})
 	})
 
 	Context("Test ClusterApprovalRequest API validation - valid cases", func() {
@@ -1607,7 +1813,7 @@ var _ = Describe("Test placement v1beta1 API validation", func() {
 		})
 	})
 
-	Context("Test ClusterStagedUpdateRun State API validation - valid NotStarted state transitions", func() {
+	Context("Test ClusterStagedUpdateRun State API validation - valid Initialize state transitions", func() {
 		var updateRun *placementv1beta1.ClusterStagedUpdateRun
 		updateRunName := fmt.Sprintf(validupdateRunNameTemplate, GinkgoParallelProcess())
 
@@ -1633,7 +1839,7 @@ var _ = Describe("Test placement v1beta1 API validation", func() {
 					Name: "unspecfied-state-update-run-" + fmt.Sprintf("%d", GinkgoParallelProcess()),
 				},
 				Spec: placementv1beta1.UpdateRunSpec{
-					// State not specified - should default to NotStarted
+					// State not specified - should default to Initialize
 				},
 			}
 			Expect(hubClient.Create(ctx, updateRunWithDefaultState)).Should(Succeed())
@@ -1641,7 +1847,7 @@ var _ = Describe("Test placement v1beta1 API validation", func() {
 			Expect(hubClient.Delete(ctx, updateRunWithDefaultState)).Should(Succeed())
 		})
 
-		It("should allow creation of ClusterStagedUpdateRun with empty state (defaults to NotStarted)", func() {
+		It("should allow creation of ClusterStagedUpdateRun with empty state (defaults to Initialize)", func() {
 			updateRun := &placementv1beta1.ClusterStagedUpdateRun{
 				ObjectMeta: metav1.ObjectMeta{
 					Name: "empty-state-update-run-" + fmt.Sprintf("%d", GinkgoParallelProcess()),
@@ -1655,18 +1861,18 @@ var _ = Describe("Test placement v1beta1 API validation", func() {
 			Expect(hubClient.Delete(ctx, updateRun)).Should(Succeed())
 		})
 
-		It("should allow transition from NotStarted to Started", func() {
+		It("should allow transition from Initialize to Execute", func() {
 			updateRun.Spec.State = placementv1beta1.StateStarted
 			Expect(hubClient.Update(ctx, updateRun)).Should(Succeed())
 		})
 
-		It("should allow transition from NotStarted to Abandoned", func() {
+		It("should allow transition from Initialize to Abandon", func() {
 			updateRun.Spec.State = placementv1beta1.StateAbandoned
 			Expect(hubClient.Update(ctx, updateRun)).Should(Succeed())
 		})
 	})
 
-	Context("Test ClusterStagedUpdateRun State API validation - valid Started state transitions", func() {
+	Context("Test ClusterStagedUpdateRun State API validation - valid Execute state transitions", func() {
 		var updateRun *placementv1beta1.ClusterStagedUpdateRun
 		updateRunName := fmt.Sprintf(validupdateRunNameTemplate, GinkgoParallelProcess())
 
@@ -1686,18 +1892,18 @@ var _ = Describe("Test placement v1beta1 API validation", func() {
 			Expect(hubClient.Delete(ctx, updateRun)).Should(Succeed())
 		})
 
-		It("should allow transition from Started to Stopped", func() {
+		It("should allow transition from Execute to Pause", func() {
 			updateRun.Spec.State = placementv1beta1.StateStopped
 			Expect(hubClient.Update(ctx, updateRun)).Should(Succeed())
 		})
 
-		It("should allow transition from Started to Abandoned", func() {
+		It("should allow transition from Execute to Abandon", func() {
 			updateRun.Spec.State = placementv1beta1.StateAbandoned
 			Expect(hubClient.Update(ctx, updateRun)).Should(Succeed())
 		})
 	})
 
-	Context("Test ClusterStagedUpdateRun State API validation - valid Stopped state transitions", func() {
+	Context("Test ClusterStagedUpdateRun State API validation - valid Pause state transitions", func() {
 		var updateRun *placementv1beta1.ClusterStagedUpdateRun
 		updateRunName := fmt.Sprintf(validupdateRunNameTemplate, GinkgoParallelProcess())
 
@@ -1711,7 +1917,7 @@ var _ = Describe("Test placement v1beta1 API validation", func() {
 				},
 			}
 			Expect(hubClient.Create(ctx, updateRun)).Should(Succeed())
-			// Transition to Stopped state first
+			// Transition to Pause state first
 			updateRun.Spec.State = placementv1beta1.StateStopped
 			Expect(hubClient.Update(ctx, updateRun)).Should(Succeed())
 		})
@@ -1720,12 +1926,12 @@ var _ = Describe("Test placement v1beta1 API validation", func() {
 			Expect(hubClient.Delete(ctx, updateRun)).Should(Succeed())
 		})
 
-		It("should allow transition from Stopped to Started", func() {
+		It("should allow transition from Pause to Execute", func() {
 			updateRun.Spec.State = placementv1beta1.StateStarted
 			Expect(hubClient.Update(ctx, updateRun)).Should(Succeed())
 		})
 
-		It("should allow transition from Stopped to Abandoned", func() {
+		It("should allow transition from Pause to Abandon", func() {
 			updateRun.Spec.State = placementv1beta1.StateAbandoned
 			Expect(hubClient.Update(ctx, updateRun)).Should(Succeed())
 		})
@@ -1741,7 +1947,7 @@ var _ = Describe("Test placement v1beta1 API validation", func() {
 			}
 		})
 
-		It("should deny transition from NotStarted to Stopped", func() {
+		It("should deny transition from Initialize to Pause", func() {
 			updateRun = &placementv1beta1.ClusterStagedUpdateRun{
 				ObjectMeta: metav1.ObjectMeta{
 					Name: updateRunName,
@@ -1756,10 +1962,10 @@ var _ = Describe("Test placement v1beta1 API validation", func() {
 			err := hubClient.Update(ctx, updateRun)
 			var statusErr *k8sErrors.StatusError
 			Expect(errors.As(err, &statusErr)).To(BeTrue(), fmt.Sprintf("Update ClusterStagedUpdateRun call produced error %s. Error type wanted is %s.", reflect.TypeOf(err), reflect.TypeOf(&k8sErrors.StatusError{})))
-			Expect(statusErr.ErrStatus.Message).Should(MatchRegexp("invalid state transition: cannot transition from NotStarted to Stopped"))
+			Expect(statusErr.ErrStatus.Message).Should(MatchRegexp("invalid state transition: cannot transition from Initialize to Pause"))
 		})
 
-		It("should deny transition from Started to NotStarted", func() {
+		It("should deny transition from Execute to Initialize", func() {
 			updateRun = &placementv1beta1.ClusterStagedUpdateRun{
 				ObjectMeta: metav1.ObjectMeta{
 					Name: updateRunName,
@@ -1774,10 +1980,10 @@ var _ = Describe("Test placement v1beta1 API validation", func() {
 			err := hubClient.Update(ctx, updateRun)
 			var statusErr *k8sErrors.StatusError
 			Expect(errors.As(err, &statusErr)).To(BeTrue(), fmt.Sprintf("Update ClusterStagedUpdateRun call produced error %s. Error type wanted is %s.", reflect.TypeOf(err), reflect.TypeOf(&k8sErrors.StatusError{})))
-			Expect(statusErr.ErrStatus.Message).Should(MatchRegexp("invalid state transition: cannot transition from Started to NotStarted"))
+			Expect(statusErr.ErrStatus.Message).Should(MatchRegexp("invalid state transition: cannot transition from Execute to Initialize"))
 		})
 
-		It("should deny transition from Stopped to NotStarted", func() {
+		It("should deny transition from Pause to Initialize", func() {
 			updateRun = &placementv1beta1.ClusterStagedUpdateRun{
 				ObjectMeta: metav1.ObjectMeta{
 					Name: updateRunName,
@@ -1788,19 +1994,19 @@ var _ = Describe("Test placement v1beta1 API validation", func() {
 			}
 			Expect(hubClient.Create(ctx, updateRun)).Should(Succeed())
 
-			// Transition to Stopped first
+			// Transition to Pause first
 			updateRun.Spec.State = placementv1beta1.StateStopped
 			Expect(hubClient.Update(ctx, updateRun)).Should(Succeed())
 
-			// Try to transition back to NotStarted
+			// Try to transition back to Initialize
 			updateRun.Spec.State = placementv1beta1.StateNotStarted
 			err := hubClient.Update(ctx, updateRun)
 			var statusErr *k8sErrors.StatusError
 			Expect(errors.As(err, &statusErr)).To(BeTrue(), fmt.Sprintf("Update ClusterStagedUpdateRun call produced error %s. Error type wanted is %s.", reflect.TypeOf(err), reflect.TypeOf(&k8sErrors.StatusError{})))
-			Expect(statusErr.ErrStatus.Message).Should(MatchRegexp("invalid state transition: cannot transition from Stopped to NotStarted"))
+			Expect(statusErr.ErrStatus.Message).Should(MatchRegexp("invalid state transition: cannot transition from Pause to Initialize"))
 		})
 
-		It("should deny transition from Abandoned to NotStarted", func() {
+		It("should deny transition from Abandon to Initialize", func() {
 			updateRun = &placementv1beta1.ClusterStagedUpdateRun{
 				ObjectMeta: metav1.ObjectMeta{
 					Name: updateRunName,
@@ -1815,10 +2021,10 @@ var _ = Describe("Test placement v1beta1 API validation", func() {
 			err := hubClient.Update(ctx, updateRun)
 			var statusErr *k8sErrors.StatusError
 			Expect(errors.As(err, &statusErr)).To(BeTrue(), fmt.Sprintf("Update ClusterStagedUpdateRun call produced error %s. Error type wanted is %s.", reflect.TypeOf(err), reflect.TypeOf(&k8sErrors.StatusError{})))
-			Expect(statusErr.ErrStatus.Message).Should(MatchRegexp("invalid state transition: Abandoned is a terminal state and cannot transition to any other state"))
+			Expect(statusErr.ErrStatus.Message).Should(MatchRegexp("invalid state transition: Abandon is a terminal state and cannot transition to any other state"))
 		})
 
-		It("should deny transition from Abandoned to Started", func() {
+		It("should deny transition from Abandon to Execute", func() {
 			updateRun = &placementv1beta1.ClusterStagedUpdateRun{
 				ObjectMeta: metav1.ObjectMeta{
 					Name: updateRunName,
@@ -1833,10 +2039,10 @@ var _ = Describe("Test placement v1beta1 API validation", func() {
 			err := hubClient.Update(ctx, updateRun)
 			var statusErr *k8sErrors.StatusError
 			Expect(errors.As(err, &statusErr)).To(BeTrue(), fmt.Sprintf("Update ClusterStagedUpdateRun call produced error %s. Error type wanted is %s.", reflect.TypeOf(err), reflect.TypeOf(&k8sErrors.StatusError{})))
-			Expect(statusErr.ErrStatus.Message).Should(MatchRegexp("invalid state transition: Abandoned is a terminal state and cannot transition to any other state"))
+			Expect(statusErr.ErrStatus.Message).Should(MatchRegexp("invalid state transition: Abandon is a terminal state and cannot transition to any other state"))
 		})
 
-		It("should deny transition from Abandoned to Stopped", func() {
+		It("should deny transition from Abandon to Pause", func() {
 			updateRun = &placementv1beta1.ClusterStagedUpdateRun{
 				ObjectMeta: metav1.ObjectMeta{
 					Name: updateRunName,
@@ -1851,7 +2057,7 @@ var _ = Describe("Test placement v1beta1 API validation", func() {
 			err := hubClient.Update(ctx, updateRun)
 			var statusErr *k8sErrors.StatusError
 			Expect(errors.As(err, &statusErr)).To(BeTrue(), fmt.Sprintf("Update ClusterStagedUpdateRun call produced error %s. Error type wanted is %s.", reflect.TypeOf(err), reflect.TypeOf(&k8sErrors.StatusError{})))
-			Expect(statusErr.ErrStatus.Message).Should(MatchRegexp("invalid state transition: Abandoned is a terminal state and cannot transition to any other state"))
+			Expect(statusErr.ErrStatus.Message).Should(MatchRegexp("invalid state transition: Abandon is a terminal state and cannot transition to any other state"))
 		})
 	})
 
@@ -1871,7 +2077,7 @@ var _ = Describe("Test placement v1beta1 API validation", func() {
 			err := hubClient.Create(ctx, updateRun)
 			var statusErr *k8sErrors.StatusError
 			Expect(errors.As(err, &statusErr)).To(BeTrue(), fmt.Sprintf("Create ClusterStagedUpdateRun call produced error %s. Error type wanted is %s.", reflect.TypeOf(err), reflect.TypeOf(&k8sErrors.StatusError{})))
-			Expect(statusErr.ErrStatus.Message).Should(MatchRegexp("supported values: \"NotStarted\", \"Started\", \"Stopped\", \"Abandoned\""))
+			Expect(statusErr.ErrStatus.Message).Should(MatchRegexp("supported values: \"Initialize\", \"Execute\", \"Pause\", \"Abandon\""))
 		})
 	})
 
