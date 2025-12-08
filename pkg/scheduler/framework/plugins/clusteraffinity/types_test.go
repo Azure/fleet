@@ -1356,7 +1356,23 @@ func TestClusterRequirementMatches_WithPropertyChecker(t *testing.T) {
 			},
 			cluster:        cluster,
 			sku:            "Standard_D2s_v3",
-			targetCapacity: 0,
+			targetCapacity: 1,
+			want:           true,
+		},
+		{
+			name: "op >=, matched (min limit)",
+			matchExpression: []placementv1beta1.PropertySelectorRequirement{
+				{
+					Name:     validPropertyName,
+					Operator: placementv1beta1.PropertySelectorGreaterThanOrEqualTo,
+					Values: []string{
+						"1",
+					},
+				},
+			},
+			cluster:        cluster,
+			sku:            "Standard_D2s_v3",
+			targetCapacity: 1,
 			want:           true,
 		},
 		{
@@ -1372,7 +1388,7 @@ func TestClusterRequirementMatches_WithPropertyChecker(t *testing.T) {
 			},
 			cluster:        cluster,
 			sku:            "Standard_D4s_v3",
-			targetCapacity: 8,
+			targetCapacity: 9,
 		},
 		{
 			name: "op >=, matched (max limit)",
@@ -1387,7 +1403,7 @@ func TestClusterRequirementMatches_WithPropertyChecker(t *testing.T) {
 			},
 			cluster:        cluster,
 			sku:            "Standard_D2s_v3",
-			targetCapacity: 199,
+			targetCapacity: 200,
 			want:           true,
 		},
 		{
@@ -1403,7 +1419,7 @@ func TestClusterRequirementMatches_WithPropertyChecker(t *testing.T) {
 			},
 			cluster:        cluster,
 			sku:            "Standard_D4s_v3",
-			targetCapacity: 79,
+			targetCapacity: 80,
 		},
 	}
 

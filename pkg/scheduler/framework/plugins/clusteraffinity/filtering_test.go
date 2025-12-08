@@ -831,7 +831,7 @@ func TestFilter_PropertyChecker(t *testing.T) {
 				},
 			},
 			vmSize:         "Standard_D2s_v3",
-			targetCapacity: 1,
+			targetCapacity: 2,
 		},
 		{
 			name: "single cluster capacity based term, not matched",
@@ -878,7 +878,7 @@ func TestFilter_PropertyChecker(t *testing.T) {
 				},
 			},
 			vmSize:         "Standard_B2ms",
-			targetCapacity: 3,
+			targetCapacity: 4,
 			wantStatus:     framework.NewNonErrorStatus(framework.ClusterUnschedulable, p.Name(), "cluster does not match with any of the required cluster affinity terms"),
 		},
 	}
