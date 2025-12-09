@@ -1,6 +1,7 @@
 package memberagentarc
 
 import (
+	"encoding/base64"
 	"os"
 	"path/filepath"
 	"strings"
@@ -15,7 +16,6 @@ import (
 // TestHelmChartTemplatesRenderValidYAML tests that Helm chart templates render
 // to valid YAML with maximal configuration values that activate all conditional paths.
 func TestHelmChartTemplatesRenderValidYAML(t *testing.T) {
-	g := NewWithT(t)
 	// Maximal configuration to activate all conditional template paths
 	values := map[string]interface{}{
 		"memberagent": map[string]interface{}{
@@ -82,53 +82,54 @@ func TestHelmChartTemplatesRenderValidYAML(t *testing.T) {
 		},
 	}
 
-	templatesDir := "templates"
-	entries, err := os.ReadDir(templatesDir)
-	g.Expect(err).ToNot(HaveOccurred(), "Failed to read templates directory")
-
-	validatedCount := 0
-	for _, entry := range entries {
-		// Skip directories and helper templates
-		if entry.IsDir() || strings.HasPrefix(entry.Name(), "_") {
-			continue
-		}
-
-		templatePath := filepath.Join(templatesDir, entry.Name())
-		templateBytes, err := os.ReadFile(templatePath)
-		g.Expect(err).ToNot(HaveOccurred(), "Failed to read template %s", entry.Name())
-
-		// Parse and render the Go template
-		tmpl := template.New(entry.Name()).Funcs(helmFuncMap())
-		tmpl, err = tmpl.Parse(string(templateBytes))
-		g.Expect(err).ToNot(HaveOccurred(), "Failed to parse template %s", entry.Name())
-
-		var rendered strings.Builder
-		err = tmpl.Execute(&rendered, context)
-		g.Expect(err).ToNot(HaveOccurred(), "Failed to render template %s. Err :s", entry.Name(), err)
-
-		renderedContent := strings.TrimSpace(rendered.String())
-		g.Expect(renderedContent).ToNot(BeEmpty(), "Rendered template %s is empty", entry.Name())
-
-		// Validate each YAML document in multi-doc files
-		docs := strings.Split(renderedContent, "\n---\n")
-		validDocsCount := 0
-		for i, doc := range docs {
-			doc = strings.TrimSpace(doc)
-			if doc == "" {
-				continue
-			}
-
-			var obj interface{}
-			err := yaml.Unmarshal([]byte(doc), &obj)
-			g.Expect(err).ToNot(HaveOccurred(), "Template %s doc %d is invalid YAML: %v\nContent:\n%s",
-				entry.Name(), i+1, err, doc)
-			validDocsCount++
-		}
-
-		validatedCount++
+	// Table-driven test for each template file
+	tests := []struct {
+		name         string
+		templateFile string
+	}{
+		{name: "deployment template", templateFile: "deployment.yaml"},
+		{name: "rbac template", templateFile: "rbac.yaml"},
+		{name: "serviceaccount template", templateFile: "serviceaccount.yaml"},
+		{name: "azure-proxy-secrets template", templateFile: "azure-proxy-secrets.yaml"},
 	}
 
-	g.Expect(validatedCount).ToNot(BeZero(), "No templates were validated")
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			g := NewWithT(t)
+
+			templatePath := filepath.Join("templates", tt.templateFile)
+			templateBytes, err := os.ReadFile(templatePath)
+			g.Expect(err).ToNot(HaveOccurred(), "Failed to read template %s. Err %s", tt.templateFile, err)
+
+			// Parse and render the Go template
+			tmpl := template.New(tt.templateFile).Funcs(helmFuncMap())
+			tmpl, err = tmpl.Parse(string(templateBytes))
+			g.Expect(err).ToNot(HaveOccurred(), "Failed to parse template %s. Err %s", tt.templateFile, err)
+
+			var rendered strings.Builder
+			err = tmpl.Execute(&rendered, context)
+			g.Expect(err).ToNot(HaveOccurred(), "Failed to render template %s. Err %s", tt.templateFile, err)
+			renderedContent := strings.TrimSpace(rendered.String())
+
+			// Validate each YAML document in multi-doc files
+			docs := strings.Split(renderedContent, "\n---\n")
+			validDocsCount := 0
+			for i, doc := range docs {
+				doc = strings.TrimSpace(doc)
+				if doc == "" {
+					continue
+				}
+
+				var obj interface{}
+				err := yaml.Unmarshal([]byte(doc), &obj)
+				g.Expect(err).ToNot(HaveOccurred(), "Template %s doc %d is invalid YAML\nContent:\n%s",
+					tt.templateFile, i+1, doc)
+				validDocsCount++
+			}
+
+			g.Expect(validDocsCount).To(BeNumerically(">", 0), "Template %s rendered but produced no valid YAML documents", tt.templateFile)
+		})
+	}
 }
 
 // helmFuncMap returns template functions that mimic Helm's template functions
@@ -151,12 +152,10 @@ func helmFuncMap() template.FuncMap {
 			return `"` + toString(s) + `"`
 		},
 		"b64enc": func(s string) string {
-			// Simple mock - just return the string for testing purposes
-			return s
+			return base64.StdEncoding.EncodeToString([]byte(s))
 		},
 		"include": func(name string, data interface{}) string {
-			// Simple mock - return empty string for testing
-			return ""
+			return "<included: " + name + ">"
 		},
 	}
 }
