@@ -1189,14 +1189,12 @@ spec:
                 description: |-
                   State indicates the desired state of the update run.
                   Initialize: The update run should be initialized but execution should not start (default).
-                  Execute: The update run should execute or resume execution.
-                  Pause: The update run should pause execution.
-                  Abandon: The update run should be abandoned and terminated.
+                  Run: The update run should execute or resume execution.
+                  Stop: The update run should stop execution.
                 enum:
                 - Initialize
-                - Execute
-                - Pause
-                - Abandon
+                - Run
+                - Stop
                 type: string
             required:
             - placementName
@@ -1204,21 +1202,15 @@ spec:
             type: object
             x-kubernetes-validations:
             - message: 'invalid state transition: cannot transition from Initialize
-                to Pause'
+                to Stop'
               rule: '!(has(oldSelf.state) && oldSelf.state == ''Initialize'' && self.state
-                == ''Pause'')'
-            - message: 'invalid state transition: cannot transition from Execute to
-                Initialize'
-              rule: '!(has(oldSelf.state) && oldSelf.state == ''Execute'' && self.state
+                == ''Stop'')'
+            - message: 'invalid state transition: cannot transition from Run to Initialize'
+              rule: '!(has(oldSelf.state) && oldSelf.state == ''Run'' && self.state
                 == ''Initialize'')'
-            - message: 'invalid state transition: cannot transition from Pause to
-                Initialize'
-              rule: '!(has(oldSelf.state) && oldSelf.state == ''Pause'' && self.state
+            - message: 'invalid state transition: cannot transition from Stop to Initialize'
+              rule: '!(has(oldSelf.state) && oldSelf.state == ''Stop'' && self.state
                 == ''Initialize'')'
-            - message: 'invalid state transition: Abandon is a terminal state and
-                cannot transition to any other state'
-              rule: '!has(oldSelf.state) || oldSelf.state != ''Abandon'' || self.state
-                == ''Abandon'''
           status:
             description: The observed status of ClusterStagedUpdateRun.
             properties:

@@ -40,14 +40,16 @@ var (
 )
 
 type resourceOverrideValidator struct {
-	client  client.Client
+	// Note: we have to use the uncached client here to avoid getting stale data
+	// since we need to guarantee that a resource cannot be selected by multiple overrides.
+	client  client.Reader
 	decoder webhook.AdmissionDecoder
 }
 
 // Add registers the webhook for K8s bulit-in object types.
 func Add(mgr manager.Manager) error {
 	hookServer := mgr.GetWebhookServer()
-	hookServer.Register(ValidationPath, &webhook.Admission{Handler: &resourceOverrideValidator{mgr.GetClient(), admission.NewDecoder(mgr.GetScheme())}})
+	hookServer.Register(ValidationPath, &webhook.Admission{Handler: &resourceOverrideValidator{mgr.GetAPIReader(), admission.NewDecoder(mgr.GetScheme())}})
 	return nil
 }
 

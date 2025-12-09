@@ -23,16 +23,6 @@ import (
 )
 
 var (
-	// These 2 metrics are used in v1alpha1 controller, should be soon deprecated.
-	PlacementApplyFailedCount = prometheus.NewCounterVec(prometheus.CounterOpts{
-		Name: "placement_apply_failed_counter",
-		Help: "Number of failed to apply cluster resource placement",
-	}, []string{"name"})
-	PlacementApplySucceedCount = prometheus.NewCounterVec(prometheus.CounterOpts{
-		Name: "placement_apply_succeed_counter",
-		Help: "Number of successfully applied cluster resource placement",
-	}, []string{"name"})
-
 	// FleetPlacementStatusLastTimeStampSeconds is a prometheus metric which keeps track of the last placement status.
 	FleetPlacementStatusLastTimeStampSeconds = prometheus.NewGaugeVec(prometheus.GaugeOpts{
 		Name: "fleet_workload_placement_status_last_timestamp_seconds",
@@ -81,8 +71,6 @@ var (
 
 func init() {
 	metrics.Registry.MustRegister(
-		PlacementApplyFailedCount,
-		PlacementApplySucceedCount,
 		FleetPlacementStatusLastTimeStampSeconds,
 		FleetEvictionStatus,
 		FleetUpdateRunStatusLastTimestampSeconds,

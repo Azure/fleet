@@ -19,6 +19,7 @@ package updaterun
 import (
 	"context"
 	"errors"
+	"fmt"
 	"strings"
 	"testing"
 	"time"
@@ -345,22 +346,25 @@ func TestBuildApprovalRequestObject(t *testing.T) {
 		namespacedName types.NamespacedName
 		stageName      string
 		updateRunName  string
+		stageTaskType  string
 		want           placementv1beta1.ApprovalRequestObj
 	}{
 		{
 			name: "should create ClusterApprovalRequest when namespace is empty",
 			namespacedName: types.NamespacedName{
-				Name:      "test-approval-request",
+				Name:      fmt.Sprintf(placementv1beta1.BeforeStageApprovalTaskNameFmt, "test-update-run", "test-stage"),
 				Namespace: "",
 			},
 			stageName:     "test-stage",
 			updateRunName: "test-update-run",
+			stageTaskType: placementv1beta1.BeforeStageTaskLabelValue,
 			want: &placementv1beta1.ClusterApprovalRequest{
 				ObjectMeta: metav1.ObjectMeta{
-					Name: "test-approval-request",
+					Name: fmt.Sprintf(placementv1beta1.BeforeStageApprovalTaskNameFmt, "test-update-run", "test-stage"),
 					Labels: map[string]string{
 						placementv1beta1.TargetUpdatingStageNameLabel:   "test-stage",
 						placementv1beta1.TargetUpdateRunLabel:           "test-update-run",
+						placementv1beta1.TaskTypeLabel:                  placementv1beta1.BeforeStageTaskLabelValue,
 						placementv1beta1.IsLatestUpdateRunApprovalLabel: "true",
 					},
 				},
@@ -373,18 +377,20 @@ func TestBuildApprovalRequestObject(t *testing.T) {
 		{
 			name: "should create namespaced ApprovalRequest when namespace is provided",
 			namespacedName: types.NamespacedName{
-				Name:      "test-approval-request",
+				Name:      fmt.Sprintf(placementv1beta1.AfterStageApprovalTaskNameFmt, "test-update-run", "test-stage"),
 				Namespace: "test-namespace",
 			},
 			stageName:     "test-stage",
 			updateRunName: "test-update-run",
+			stageTaskType: placementv1beta1.AfterStageTaskLabelValue,
 			want: &placementv1beta1.ApprovalRequest{
 				ObjectMeta: metav1.ObjectMeta{
-					Name:      "test-approval-request",
+					Name:      fmt.Sprintf(placementv1beta1.AfterStageApprovalTaskNameFmt, "test-update-run", "test-stage"),
 					Namespace: "test-namespace",
 					Labels: map[string]string{
 						placementv1beta1.TargetUpdatingStageNameLabel:   "test-stage",
 						placementv1beta1.TargetUpdateRunLabel:           "test-update-run",
+						placementv1beta1.TaskTypeLabel:                  placementv1beta1.AfterStageTaskLabelValue,
 						placementv1beta1.IsLatestUpdateRunApprovalLabel: "true",
 					},
 				},
@@ -398,7 +404,7 @@ func TestBuildApprovalRequestObject(t *testing.T) {
 
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {
-			got := buildApprovalRequestObject(test.namespacedName, test.stageName, test.updateRunName)
+			got := buildApprovalRequestObject(test.namespacedName, test.stageName, test.updateRunName, test.stageTaskType)
 
 			// Compare the whole objects using cmp.Diff with ignore options
 			if diff := cmp.Diff(test.want, got); diff != "" {
@@ -939,6 +945,262 @@ func TestCalculateMaxConcurrencyValue(t *testing.T) {
 
 			if gotValue != tt.wantValue {
 				t.Fatalf("calculateMaxConcurrencyValue() = %v, want %v", gotValue, tt.wantValue)
+			}
+		})
+	}
+}
+
+func TestCheckBeforeStageTasksStatus_NegativeCases(t *testing.T) {
+	stageName := "stage-0"
+	testUpdateRunName = "test-update-run"
+	approvalRequestName := fmt.Sprintf(placementv1beta1.BeforeStageApprovalTaskNameFmt, testUpdateRunName, stageName)
+	tests := []struct {
+		name            string
+		stageIndex      int
+		updateRun       *placementv1beta1.ClusterStagedUpdateRun
+		approvalRequest *placementv1beta1.ClusterApprovalRequest
+		wantErrMsg      string
+		wantErrAborted  bool
+	}{
+		// Negative test cases only
+		{
+			name:       "should return err if before stage task is TimedWait",
+			stageIndex: 0,
+			updateRun: &placementv1beta1.ClusterStagedUpdateRun{
+				Status: placementv1beta1.UpdateRunStatus{
+					UpdateStrategySnapshot: &placementv1beta1.UpdateStrategySpec{
+						Stages: []placementv1beta1.StageConfig{
+							{
+								Name: stageName,
+								BeforeStageTasks: []placementv1beta1.StageTask{
+									{
+										Type: placementv1beta1.StageTaskTypeTimedWait,
+									},
+								},
+							},
+						},
+					},
+					StagesStatus: []placementv1beta1.StageUpdatingStatus{
+						{
+							StageName: stageName,
+							BeforeStageTaskStatus: []placementv1beta1.StageTaskStatus{
+								{
+									Type: placementv1beta1.StageTaskTypeTimedWait,
+								},
+							},
+						},
+					},
+				},
+			},
+			wantErrMsg:     fmt.Sprintf("found unsupported task type in before stage tasks: %s", placementv1beta1.StageTaskTypeTimedWait),
+			wantErrAborted: true,
+		},
+		{
+			name:       "should return err if Approval request has wrong target stage in spec",
+			stageIndex: 0,
+			updateRun: &placementv1beta1.ClusterStagedUpdateRun{
+				ObjectMeta: metav1.ObjectMeta{
+					Name: testUpdateRunName,
+				},
+				Status: placementv1beta1.UpdateRunStatus{
+					UpdateStrategySnapshot: &placementv1beta1.UpdateStrategySpec{
+						Stages: []placementv1beta1.StageConfig{
+							{
+								Name: stageName,
+								BeforeStageTasks: []placementv1beta1.StageTask{
+									{
+										Type: placementv1beta1.StageTaskTypeApproval,
+									},
+								},
+							},
+						},
+					},
+					StagesStatus: []placementv1beta1.StageUpdatingStatus{
+						{
+							StageName: stageName,
+							BeforeStageTaskStatus: []placementv1beta1.StageTaskStatus{
+								{
+									Type:                placementv1beta1.StageTaskTypeApproval,
+									ApprovalRequestName: fmt.Sprintf(placementv1beta1.BeforeStageApprovalTaskNameFmt, testUpdateRunName, stageName),
+									Conditions: []metav1.Condition{
+										{
+											Type:   string(placementv1beta1.StageTaskConditionApprovalRequestCreated),
+											Status: metav1.ConditionTrue,
+										},
+									},
+								},
+							},
+						},
+					},
+				},
+			},
+			approvalRequest: &placementv1beta1.ClusterApprovalRequest{
+				ObjectMeta: metav1.ObjectMeta{
+					Name: approvalRequestName,
+					Labels: map[string]string{
+						placementv1beta1.TargetUpdatingStageNameLabel:   stageName,
+						placementv1beta1.TargetUpdateRunLabel:           testUpdateRunName,
+						placementv1beta1.TaskTypeLabel:                  placementv1beta1.BeforeStageTaskLabelValue,
+						placementv1beta1.IsLatestUpdateRunApprovalLabel: "true",
+					},
+				},
+				Spec: placementv1beta1.ApprovalRequestSpec{
+					TargetUpdateRun: testUpdateRunName,
+					TargetStage:     "stage-1",
+				},
+			},
+			wantErrMsg:     fmt.Sprintf("the approval request task `/%s` is targeting update run `/%s` and stage `stage-1`", approvalRequestName, testUpdateRunName),
+			wantErrAborted: true,
+		},
+		{
+			name:       "should return err if Approval request has wrong target update run in spec",
+			stageIndex: 0,
+			updateRun: &placementv1beta1.ClusterStagedUpdateRun{
+				ObjectMeta: metav1.ObjectMeta{
+					Name: testUpdateRunName,
+				},
+				Status: placementv1beta1.UpdateRunStatus{
+					UpdateStrategySnapshot: &placementv1beta1.UpdateStrategySpec{
+						Stages: []placementv1beta1.StageConfig{
+							{
+								Name: stageName,
+								BeforeStageTasks: []placementv1beta1.StageTask{
+									{
+										Type: placementv1beta1.StageTaskTypeApproval,
+									},
+								},
+							},
+						},
+					},
+					StagesStatus: []placementv1beta1.StageUpdatingStatus{
+						{
+							StageName: stageName,
+							BeforeStageTaskStatus: []placementv1beta1.StageTaskStatus{
+								{
+									Type:                placementv1beta1.StageTaskTypeApproval,
+									ApprovalRequestName: fmt.Sprintf(placementv1beta1.BeforeStageApprovalTaskNameFmt, testUpdateRunName, stageName),
+									Conditions: []metav1.Condition{
+										{
+											Type:   string(placementv1beta1.StageTaskConditionApprovalRequestCreated),
+											Status: metav1.ConditionTrue,
+										},
+									},
+								},
+							},
+						},
+					},
+				},
+			},
+			approvalRequest: &placementv1beta1.ClusterApprovalRequest{
+				ObjectMeta: metav1.ObjectMeta{
+					Name: fmt.Sprintf(placementv1beta1.BeforeStageApprovalTaskNameFmt, testUpdateRunName, stageName),
+					Labels: map[string]string{
+						placementv1beta1.TargetUpdatingStageNameLabel:   stageName,
+						placementv1beta1.TargetUpdateRunLabel:           testUpdateRunName,
+						placementv1beta1.TaskTypeLabel:                  placementv1beta1.BeforeStageTaskLabelValue,
+						placementv1beta1.IsLatestUpdateRunApprovalLabel: "true",
+					},
+				},
+				Spec: placementv1beta1.ApprovalRequestSpec{
+					TargetUpdateRun: "wrong-update-run",
+					TargetStage:     stageName,
+				},
+			},
+			wantErrMsg:     fmt.Sprintf("the approval request task `/%s` is targeting update run `/wrong-update-run` and stage `%s`", approvalRequestName, stageName),
+			wantErrAborted: true,
+		},
+		{
+			name:       "should return err if cannot update Approval request that is approved as accepted",
+			stageIndex: 0,
+			updateRun: &placementv1beta1.ClusterStagedUpdateRun{
+				ObjectMeta: metav1.ObjectMeta{
+					Name: testUpdateRunName,
+				},
+				Status: placementv1beta1.UpdateRunStatus{
+					UpdateStrategySnapshot: &placementv1beta1.UpdateStrategySpec{
+						Stages: []placementv1beta1.StageConfig{
+							{
+								Name: stageName,
+								BeforeStageTasks: []placementv1beta1.StageTask{
+									{
+										Type: placementv1beta1.StageTaskTypeApproval,
+									},
+								},
+							},
+						},
+					},
+					StagesStatus: []placementv1beta1.StageUpdatingStatus{
+						{
+							StageName: stageName,
+							BeforeStageTaskStatus: []placementv1beta1.StageTaskStatus{
+								{
+									Type:                placementv1beta1.StageTaskTypeApproval,
+									ApprovalRequestName: fmt.Sprintf(placementv1beta1.BeforeStageApprovalTaskNameFmt, testUpdateRunName, stageName),
+									Conditions: []metav1.Condition{
+										{
+											Type:   string(placementv1beta1.StageTaskConditionApprovalRequestCreated),
+											Status: metav1.ConditionTrue,
+										},
+									},
+								},
+							},
+						},
+					},
+				},
+			},
+			approvalRequest: &placementv1beta1.ClusterApprovalRequest{
+				ObjectMeta: metav1.ObjectMeta{
+					Name: fmt.Sprintf(placementv1beta1.BeforeStageApprovalTaskNameFmt, testUpdateRunName, stageName),
+					Labels: map[string]string{
+						placementv1beta1.TargetUpdatingStageNameLabel:   stageName,
+						placementv1beta1.TargetUpdateRunLabel:           testUpdateRunName,
+						placementv1beta1.TaskTypeLabel:                  placementv1beta1.BeforeStageTaskLabelValue,
+						placementv1beta1.IsLatestUpdateRunApprovalLabel: "true",
+					},
+				},
+				Spec: placementv1beta1.ApprovalRequestSpec{
+					TargetUpdateRun: testUpdateRunName,
+					TargetStage:     stageName,
+				},
+				Status: placementv1beta1.ApprovalRequestStatus{
+					Conditions: []metav1.Condition{
+						{
+							Type:   string(placementv1beta1.ApprovalRequestConditionApproved),
+							Status: metav1.ConditionTrue,
+						},
+					},
+				},
+			},
+			wantErrMsg: fmt.Sprintf("error returned by the API server: clusterapprovalrequests.placement.kubernetes-fleet.io \"%s\" not found", approvalRequestName),
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			objects := []client.Object{tt.updateRun}
+			if tt.approvalRequest != nil {
+				objects = append(objects, tt.approvalRequest)
+			}
+			objectsWithStatus := []client.Object{tt.updateRun}
+			scheme := runtime.NewScheme()
+			_ = placementv1beta1.AddToScheme(scheme)
+			fakeClient := fake.NewClientBuilder().
+				WithScheme(scheme).
+				WithObjects(objects...).
+				WithStatusSubresource(objectsWithStatus...).
+				Build()
+			r := Reconciler{
+				Client: fakeClient,
+			}
+			ctx := context.Background()
+			_, gotErr := r.checkBeforeStageTasksStatus(ctx, tt.stageIndex, tt.updateRun)
+			if gotErr == nil {
+				t.Fatalf("checkBeforeStageTasksStatus() want error but got nil")
+			}
+			if !strings.Contains(gotErr.Error(), tt.wantErrMsg) {
+				t.Fatalf("checkBeforeStageTasksStatus() error = %v, wantErr %v", gotErr, tt.wantErrMsg)
+			}
+			if tt.wantErrAborted && !errors.Is(gotErr, errStagedUpdatedAborted) {
+				t.Fatalf("checkBeforeStageTasksStatus() want aborted error but got different error: %v", gotErr)
 			}
 		})
 	}
