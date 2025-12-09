@@ -28,9 +28,17 @@ import (
 	fleetv1beta1 "go.goms.io/fleet/apis/placement/v1beta1"
 	"go.goms.io/fleet/pkg/utils/condition"
 	"go.goms.io/fleet/pkg/utils/controller"
+	"go.goms.io/fleet/pkg/utils/resource"
+)
+
+const (
+	WorkStatusTrimmedDueToOversizedStatusReason  = "Oversized"
+	WorkStatusTrimmedDueToOversizedStatusMsgTmpl = "The status data (drift/diff details and back-reported status) has been trimmed due to size constraints (%d bytes over limit %d)"
 )
 
 // refreshWorkStatus refreshes the status of a Work object based on the processing results of its manifests.
+//
+// TO-DO (chenyu1): refactor this method a bit to reduce its complexity and enable parallelization.
 func (r *Reconciler) refreshWorkStatus(
 	ctx context.Context,
 	work *fleetv1beta1.Work,
@@ -183,6 +191,47 @@ func (r *Reconciler) refreshWorkStatus(
 	setWorkAvailableCondition(work, manifestCount, availableAppliedObjectsCount, untrackableAppliedObjectsCount)
 	setWorkDiffReportedCondition(work, manifestCount, diffReportedObjectsCount)
 	work.Status.ManifestConditions = rebuiltManifestConds
+
+	// Perform a size check before the status update. If the Work object goes over the size limit, trim
+	// some data from its status to ensure that update ops can go through.
+	//
+	// Note (chenyu1): at this moment, for simplicity reasons, the trimming op follows a very simple logic:
+	// if the size limit is breached, the work applier will summarize all drift/diff details in the status,
+	// and drop all back-reported status data. More sophisticated trimming logic does obviously exist; here
+	// the controller prefers the simple version primarily for two reasons:
+	//
+	// a) in most of the time, it is rare to reach the size limit: KubeFleet's snapshotting mechanism
+	//    tries to keep the total manifest size in a Work object below 800KB (exceptions do exist), which leaves ~600KB
+	//    space for the status data. The work applier reports for each manifest two conditions at most in the
+	//    status (which are all quite small in size), plus the drift/diff details and the back-reported status
+	//    (if applicable); considering the observation that drifts/diffs are not common and their details are usually small
+	//    (just a JSON path plus the before/after values), and the observation that most Kubernetes objects
+	//    only have a few KBs of status data and not all API types need status back-reporting, most of the time
+	//    the Work object should have enough space for status data without trimming;
+	// b) performing more fine-grained, selective trimming can be a very CPU and memory intensive (e.g.
+	//    various serialization calls) and complex process, and it is difficult to yield optimal results
+	//    even with best efforts.
+	//
+	// TO-DO (chenyu1): re-visit this part of the code and evaluate the need for more fine-grained sharding
+	// if we have users that do use placements of a large collection of manifests and/or very large objects
+	// with drift/diff detection and status back-reporting on.
+	//
+	// TO-DO (chenyu1): evaluate if we need to impose more strict size limits on the manifests to ensure that
+	// Work objects (almost) always have enough space for status data.
+	sizeDeltaBytes, err := resource.CalculateSizeDeltaOverLimitFor(work, resource.DefaultObjSizeLimitWithPaddingBytes)
+	if err != nil {
+		// Normally this should never occur.
+		klog.ErrorS(err, "Failed to check Work object size before status update", "work", klog.KObj(work))
+		wrappedErr := fmt.Errorf("failed to check work object size before status update: %w", err)
+		return controller.NewUnexpectedBehaviorError(wrappedErr)
+	}
+	if sizeDeltaBytes > 0 {
+		klog.V(2).InfoS("Must trim status data as the work object has grown over its size limit",
+			"work", klog.KObj(work),
+			"sizeDeltaBytes", sizeDeltaBytes, "sizeLimitBytes", resource.DefaultObjSizeLimitWithPaddingBytes)
+		trimWorkStatusDataWhenOversized(work)
+	}
+	setWorkStatusTrimmedCondition(work, sizeDeltaBytes, resource.DefaultObjSizeLimitWithPaddingBytes)
 
 	// Update the Work object status.
 	if err := r.hubClient.Status().Update(ctx, work); err != nil {
@@ -642,4 +691,79 @@ func prepareRebuiltManifestCondQIdx(bundles []*manifestProcessingBundle) map[str
 		rebuiltManifestCondQIdx[bundle.workResourceIdentifierStr] = idx
 	}
 	return rebuiltManifestCondQIdx
+}
+
+// trimWorkStatusDataWhenOversized trims some data from the Work object status when the object
+// reaches its size limit.
+func trimWorkStatusDataWhenOversized(work *fleetv1beta1.Work) {
+	// Trim drift/diff details + back-reported status from the Work object status.
+	// Replace detailed reportings with a summary if applicable.
+	for idx := range work.Status.ManifestConditions {
+		manifestCond := &work.Status.ManifestConditions[idx]
+
+		// Note (chenyu1): check for the second term will always pass; it is added as a sanity check.
+		if manifestCond.DriftDetails != nil && len(manifestCond.DriftDetails.ObservedDrifts) > 0 {
+			driftCount := len(manifestCond.DriftDetails.ObservedDrifts)
+			firstDriftPath := manifestCond.DriftDetails.ObservedDrifts[0].Path
+			// If there are multiple drifts, report only the path of the first drift plus the count of
+			// other paths. Also, leave out the specific value differences.
+			pathSummary := firstDriftPath
+			if len(manifestCond.DriftDetails.ObservedDrifts) > 1 {
+				pathSummary = fmt.Sprintf("%s and %d more path(s)", firstDriftPath, driftCount-1)
+			}
+			manifestCond.DriftDetails.ObservedDrifts = []fleetv1beta1.PatchDetail{
+				{
+					Path:          pathSummary,
+					ValueInMember: "(omitted)",
+					ValueInHub:    "(omitted)",
+				},
+			}
+		}
+
+		// Note (chenyu1): check for the second term will always pass; it is added as a sanity check.
+		if manifestCond.DiffDetails != nil && len(manifestCond.DiffDetails.ObservedDiffs) > 0 {
+			diffCount := len(manifestCond.DiffDetails.ObservedDiffs)
+			firstDiffPath := manifestCond.DiffDetails.ObservedDiffs[0].Path
+			// If there are multiple drifts, report only the path of the first drift plus the count of
+			// other paths. Also, leave out the specific value differences.
+			pathSummary := firstDiffPath
+			if len(manifestCond.DiffDetails.ObservedDiffs) > 1 {
+				pathSummary = fmt.Sprintf("%s and %d more path(s)", firstDiffPath, diffCount-1)
+			}
+			manifestCond.DiffDetails.ObservedDiffs = []fleetv1beta1.PatchDetail{
+				{
+					Path:          pathSummary,
+					ValueInMember: "(omitted)",
+					ValueInHub:    "(omitted)",
+				},
+			}
+		}
+
+		manifestCond.BackReportedStatus = nil
+	}
+}
+
+// setWorkStatusTrimmedCondition sets or removes the StatusTrimmed condition on a Work object
+// based on whether the status has been trimmed due to it being oversized.
+//
+// Note (chenyu1): at this moment, due to limitations on the hub agent controller side (some
+// controllers assume that placement related conditions are always set in a specific sequence),
+// this StatusTrimmed condition might not be exposed on the placement status properly yet.
+func setWorkStatusTrimmedCondition(work *fleetv1beta1.Work, sizeDeltaBytes, sizeLimitBytes int) {
+	if sizeDeltaBytes <= 0 {
+		// Drop the StatusTrimmed condition if it exists.
+		if isCondRemoved := meta.RemoveStatusCondition(&work.Status.Conditions, fleetv1beta1.WorkConditionTypeStatusTrimmed); isCondRemoved {
+			klog.V(2).InfoS("StatusTrimmed condition removed from Work object status", "work", klog.KObj(work))
+		}
+		return
+	}
+
+	// Set or update the StatusTrimmed condition.
+	meta.SetStatusCondition(&work.Status.Conditions, metav1.Condition{
+		Type:               fleetv1beta1.WorkConditionTypeStatusTrimmed,
+		Status:             metav1.ConditionTrue,
+		Reason:             WorkStatusTrimmedDueToOversizedStatusReason,
+		Message:            fmt.Sprintf(WorkStatusTrimmedDueToOversizedStatusMsgTmpl, sizeDeltaBytes, sizeLimitBytes),
+		ObservedGeneration: work.Generation,
+	})
 }

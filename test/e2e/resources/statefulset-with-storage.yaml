@@ -1,0 +1,28 @@
+apiVersion: apps/v1
+kind: StatefulSet
+metadata:
+  name: test-ss
+spec:
+  selector:
+    matchLabels:
+      app: test-ss
+  serviceName: "test-ss-svc"
+  replicas: 2
+  template:
+    metadata:
+      labels:
+        app: test-ss
+    spec:
+      terminationGracePeriodSeconds: 10
+      containers:
+      - name: pause
+        image: k8s.gcr.io/pause:3.8
+  volumeClaimTemplates:
+  - metadata:
+      name: test-ss-pvc
+    spec:
+      accessModes: [ "ReadWriteOnce" ]
+      storageClassName: "standard"
+      resources:
+        requests:
+          storage: 100Mi
