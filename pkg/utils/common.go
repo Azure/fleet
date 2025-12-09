@@ -47,6 +47,7 @@ import (
 	fleetnetworkingv1alpha1 "go.goms.io/fleet-networking/api/v1alpha1"
 
 	clusterv1beta1 "go.goms.io/fleet/apis/cluster/v1beta1"
+	placementv1 "go.goms.io/fleet/apis/placement/v1"
 	placementv1beta1 "go.goms.io/fleet/apis/placement/v1beta1"
 	"go.goms.io/fleet/pkg/utils/condition"
 	"go.goms.io/fleet/pkg/utils/controller"
@@ -78,6 +79,8 @@ const (
 	ServiceKind     = "Service"
 	NamespaceKind   = "Namespace"
 	JobKind         = "Job"
+	ReplicaSetKind  = "ReplicaSet"
+	PodKind         = "Pod"
 )
 
 const (
@@ -502,17 +505,30 @@ func CheckCRDInstalled(discoveryClient discovery.DiscoveryInterface, gvk schema.
 	return err
 }
 
-// ShouldPropagateObj decides if one should propagate the object
-func ShouldPropagateObj(informerManager informer.Manager, uObj *unstructured.Unstructured) (bool, error) {
+// ShouldPropagateObj decides if one should propagate the object.
+// PVCs are only propagated when enableWorkload is false (workloads not allowed on hub).
+func ShouldPropagateObj(informerManager informer.Manager, uObj *unstructured.Unstructured, enableWorkload bool) (bool, error) {
 	// TODO:  add more special handling for different resource kind
 	switch uObj.GroupVersionKind() {
+	case appv1.SchemeGroupVersion.WithKind(ReplicaSetKind):
+		// Skip ReplicaSets if they are managed by Deployments (have owner references).
+		// Standalone ReplicaSets (without owners) can be propagated.
+		if len(uObj.GetOwnerReferences()) > 0 {
+			return false, nil
+		}
+	case appv1.SchemeGroupVersion.WithKind("ControllerRevision"):
+		// Skip ControllerRevisions if they are managed by DaemonSets/StatefulSets (have owner references).
+		// Standalone ControllerRevisions (without owners) can be propagated.
+		if len(uObj.GetOwnerReferences()) > 0 {
+			return false, nil
+		}
 	case corev1.SchemeGroupVersion.WithKind(ConfigMapKind):
-		// Skip the built-in custom CA certificate created in the namespace
+		// Skip the built-in custom CA certificate created in the namespace.
 		if uObj.GetName() == "kube-root-ca.crt" {
 			return false, nil
 		}
 	case corev1.SchemeGroupVersion.WithKind("ServiceAccount"):
-		// Skip the default service account created in the namespace
+		// Skip the default service account created in the namespace.
 		if uObj.GetName() == "default" {
 			return false, nil
 		}
@@ -524,6 +540,12 @@ func ShouldPropagateObj(informerManager informer.Manager, uObj *unstructured.Uns
 			return false, controller.NewUnexpectedBehaviorError(fmt.Errorf("failed to convert a secret object %s in namespace %s: %w", uObj.GetName(), uObj.GetNamespace(), err))
 		}
 		if secret.Type == corev1.SecretTypeServiceAccountToken {
+			return false, nil
+		}
+	case corev1.SchemeGroupVersion.WithKind("PersistentVolumeClaim"):
+		// Skip PersistentVolumeClaims by default to avoid conflicts with the PVCs created by statefulset controller.
+		// This only happens if the workloads are allowed to run on the hub cluster.
+		if enableWorkload {
 			return false, nil
 		}
 	case corev1.SchemeGroupVersion.WithKind("Endpoints"):
@@ -589,6 +611,12 @@ var LessFuncResourceIdentifier = func(a, b placementv1beta1.ResourceIdentifier) 
 	return aStr < bStr
 }
 
+var LessFuncResourceIdentifierV1 = func(a, b placementv1.ResourceIdentifier) bool {
+	aStr := fmt.Sprintf(ResourceIdentifierStringFormat, a.Group, a.Version, a.Kind, a.Namespace, a.Name)
+	bStr := fmt.Sprintf(ResourceIdentifierStringFormat, b.Group, b.Version, b.Kind, b.Namespace, b.Name)
+	return aStr < bStr
+}
+
 // LessFuncPatchDetail is a less function for sorting patch details
 var LessFuncPatchDetail = func(a, b placementv1beta1.PatchDetail) bool {
 	if a.Path != b.Path {
@@ -602,6 +630,22 @@ var LessFuncPatchDetail = func(a, b placementv1beta1.PatchDetail) bool {
 
 // LessFuncFailedResourcePlacements is a less function for sorting failed resource placements
 var LessFuncFailedResourcePlacements = func(a, b placementv1beta1.FailedResourcePlacement) bool {
+	var aStr, bStr string
+	if a.Envelope != nil {
+		aStr = fmt.Sprintf(ResourceIdentifierWithEnvelopeIdentifierStringFormat, a.Group, a.Version, a.Kind, a.Namespace, a.Name, a.Envelope.Type, a.Envelope.Namespace, a.Envelope.Name)
+	} else {
+		aStr = fmt.Sprintf(ResourceIdentifierStringFormat, a.Group, a.Version, a.Kind, a.Namespace, a.Name)
+	}
+	if b.Envelope != nil {
+		bStr = fmt.Sprintf(ResourceIdentifierWithEnvelopeIdentifierStringFormat, b.Group, b.Version, b.Kind, b.Namespace, b.Name, b.Envelope.Type, b.Envelope.Namespace, b.Envelope.Name)
+	} else {
+		bStr = fmt.Sprintf(ResourceIdentifierStringFormat, b.Group, b.Version, b.Kind, b.Namespace, b.Name)
+
+	}
+	return aStr < bStr
+}
+
+var LessFuncFailedResourcePlacementsV1 = func(a, b placementv1.FailedResourcePlacement) bool {
 	var aStr, bStr string
 	if a.Envelope != nil {
 		aStr = fmt.Sprintf(ResourceIdentifierWithEnvelopeIdentifierStringFormat, a.Group, a.Version, a.Kind, a.Namespace, a.Name, a.Envelope.Type, a.Envelope.Namespace, a.Envelope.Name)
@@ -657,6 +701,22 @@ var LessFuncDriftedResourcePlacements = func(a, b placementv1beta1.DriftedResour
 	return aStr < bStr
 }
 
+var LessFuncDriftedResourcePlacementsV1 = func(a, b placementv1.DriftedResourcePlacement) bool {
+	var aStr, bStr string
+	if a.Envelope != nil {
+		aStr = fmt.Sprintf(ResourceIdentifierWithEnvelopeIdentifierStringFormat, a.Group, a.Version, a.Kind, a.Namespace, a.Name, a.Envelope.Type, a.Envelope.Namespace, a.Envelope.Name)
+	} else {
+		aStr = fmt.Sprintf(ResourceIdentifierStringFormat, a.Group, a.Version, a.Kind, a.Namespace, a.Name)
+	}
+	if b.Envelope != nil {
+		bStr = fmt.Sprintf(ResourceIdentifierWithEnvelopeIdentifierStringFormat, b.Group, b.Version, b.Kind, b.Namespace, b.Name, b.Envelope.Type, b.Envelope.Namespace, b.Envelope.Name)
+	} else {
+		bStr = fmt.Sprintf(ResourceIdentifierStringFormat, b.Group, b.Version, b.Kind, b.Namespace, b.Name)
+
+	}
+	return aStr < bStr
+}
+
 // IsDriftedResourcePlacementsEqual returns true if the two set of drifted resource placements are equal.
 func IsDriftedResourcePlacementsEqual(oldDriftedResourcePlacements, newDriftedResourcePlacements []placementv1beta1.DriftedResourcePlacement) bool {
 	if len(oldDriftedResourcePlacements) != len(newDriftedResourcePlacements) {
@@ -683,6 +743,22 @@ func IsDriftedResourcePlacementsEqual(oldDriftedResourcePlacements, newDriftedRe
 
 // LessFuncDiffedResourcePlacements is a less function for sorting drifted resource placements
 var LessFuncDiffedResourcePlacements = func(a, b placementv1beta1.DiffedResourcePlacement) bool {
+	var aStr, bStr string
+	if a.Envelope != nil {
+		aStr = fmt.Sprintf(ResourceIdentifierWithEnvelopeIdentifierStringFormat, a.Group, a.Version, a.Kind, a.Namespace, a.Name, a.Envelope.Type, a.Envelope.Namespace, a.Envelope.Name)
+	} else {
+		aStr = fmt.Sprintf(ResourceIdentifierStringFormat, a.Group, a.Version, a.Kind, a.Namespace, a.Name)
+	}
+	if b.Envelope != nil {
+		bStr = fmt.Sprintf(ResourceIdentifierWithEnvelopeIdentifierStringFormat, b.Group, b.Version, b.Kind, b.Namespace, b.Name, b.Envelope.Type, b.Envelope.Namespace, b.Envelope.Name)
+	} else {
+		bStr = fmt.Sprintf(ResourceIdentifierStringFormat, b.Group, b.Version, b.Kind, b.Namespace, b.Name)
+
+	}
+	return aStr < bStr
+}
+
+var LessFuncDiffedResourcePlacementsV1 = func(a, b placementv1.DiffedResourcePlacement) bool {
 	var aStr, bStr string
 	if a.Envelope != nil {
 		aStr = fmt.Sprintf(ResourceIdentifierWithEnvelopeIdentifierStringFormat, a.Group, a.Version, a.Kind, a.Namespace, a.Name, a.Envelope.Type, a.Envelope.Namespace, a.Envelope.Name)

@@ -226,7 +226,7 @@ var _ = Describe("placing wrapped resources using a CRP", func() {
 			// read the test resources.
 			readDeploymentTestManifest(&testDeployment)
 			readDaemonSetTestManifest(&testDaemonSet)
-			readStatefulSetTestManifest(&testStatefulSet, true)
+			readStatefulSetTestManifest(&testStatefulSet, StatefulSetInvalidStorage)
 			readEnvelopeResourceTestManifest(&testResourceEnvelope)
 		})
 

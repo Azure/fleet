@@ -294,7 +294,7 @@ func (r *Reconciler) shouldPropagateObj(namespace, placementName string, obj run
 		return false, nil
 	}
 
-	shouldInclude, err := utils.ShouldPropagateObj(r.InformerManager, uObj)
+	shouldInclude, err := utils.ShouldPropagateObj(r.InformerManager, uObj, r.EnableWorkload)
 	if err != nil {
 		klog.ErrorS(err, "Cannot determine if we should propagate an object", "namespace", namespace, "placement", placementName, "object", uObjKObj)
 		return false, err

@@ -17,9 +17,7 @@ limitations under the License.
 package e2e
 
 import (
-	"errors"
 	"fmt"
-	"reflect"
 
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
@@ -29,6 +27,7 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/types"
 	"k8s.io/utils/ptr"
+	clusterinventory "sigs.k8s.io/cluster-inventory-api/apis/v1alpha1"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 
 	fleetnetworkingv1alpha1 "go.goms.io/fleet-networking/api/v1alpha1"
@@ -36,6 +35,7 @@ import (
 	clusterv1beta1 "go.goms.io/fleet/apis/cluster/v1beta1"
 	placementv1beta1 "go.goms.io/fleet/apis/placement/v1beta1"
 	"go.goms.io/fleet/pkg/utils"
+	"go.goms.io/fleet/pkg/utils/controller"
 )
 
 const (
@@ -65,7 +65,6 @@ var _ = Describe("Test member cluster join and leave flow", Label("joinleave"), 
 
 	// Note that this container cannot run in parallel with other containers.
 	Describe("Test member cluster join and leave flow for cluster resource placement", Ordered, Serial, func() {
-
 		BeforeAll(func() {
 			// Create the test resources.
 			wantCRPSelectedResources = []placementv1beta1.ResourceIdentifier{
@@ -162,34 +161,8 @@ var _ = Describe("Test member cluster join and leave flow", Label("joinleave"), 
 				}
 			})
 
-			It("Should fail the unjoin requests", func() {
-				for idx := range allMemberClusters {
-					memberCluster := allMemberClusters[idx]
-					mcObj := &clusterv1beta1.MemberCluster{
-						ObjectMeta: metav1.ObjectMeta{
-							Name: memberCluster.ClusterName,
-						},
-					}
-					err := hubClient.Delete(ctx, mcObj)
-					Expect(err).ShouldNot(Succeed(), "Want the deletion to be denied")
-					var statusErr *apierrors.StatusError
-					Expect(errors.As(err, &statusErr)).To(BeTrue(), fmt.Sprintf("Delete memberCluster call produced error %s. Error type wanted is %s.", reflect.TypeOf(err), reflect.TypeOf(&apierrors.StatusError{})))
-					Expect(statusErr.ErrStatus.Message).Should(MatchRegexp("Please delete serviceExport test-namespace/test-svc in the member cluster before leaving, request is denied"))
-				}
-			})
-
-			It("Deleting the internalServiceExports", func() {
-				for idx := range allMemberClusterNames {
-					memberCluster := allMemberClusters[idx]
-					namespaceName := fmt.Sprintf(utils.NamespaceNameFormat, memberCluster.ClusterName)
-
-					internalSvcExportKey := types.NamespacedName{Namespace: namespaceName, Name: internalServiceExportName}
-					var export fleetnetworkingv1alpha1.InternalServiceExport
-					Expect(hubClient.Get(ctx, internalSvcExportKey, &export)).Should(Succeed(), "Failed to get internalServiceExport")
-					Expect(hubClient.Delete(ctx, &export)).To(Succeed(), "Failed to delete internalServiceExport")
-				}
-			})
-
+			// The network agent is not turned on by default in the e2e so we are still able to leave when we have internalServiceExport
+			// TODO: add a test case for the network agent is turned on in the fleet network repository.
 			It("Should be able to trigger the member cluster DELETE", func() {
 				setAllMemberClustersToLeave()
 			})
@@ -361,22 +334,7 @@ var _ = Describe("Test member cluster join and leave flow", Label("joinleave"), 
 				}
 			})
 
-			It("Should fail the unjoin requests", func() {
-				for idx := range allMemberClusters {
-					memberCluster := allMemberClusters[idx]
-					mcObj := &clusterv1beta1.MemberCluster{
-						ObjectMeta: metav1.ObjectMeta{
-							Name: memberCluster.ClusterName,
-						},
-					}
-					err := hubClient.Delete(ctx, mcObj)
-					Expect(err).ShouldNot(Succeed(), "Want the deletion to be denied")
-					var statusErr *apierrors.StatusError
-					Expect(errors.As(err, &statusErr)).To(BeTrue(), fmt.Sprintf("Delete memberCluster call produced error %s. Error type wanted is %s.", reflect.TypeOf(err), reflect.TypeOf(&apierrors.StatusError{})))
-					Expect(statusErr.ErrStatus.Message).Should(MatchRegexp("Please delete serviceExport test-namespace/test-svc in the member cluster before leaving, request is denied"))
-				}
-			})
-
+			// It does not really matter here as the network agent is not turned on by default in the e2e so we are still able to leave when we have internalServiceExport
 			It("Updating the member cluster to skip validation", func() {
 				for idx := range allMemberClusterNames {
 					memberCluster := allMemberClusters[idx]
@@ -442,7 +400,7 @@ var _ = Describe("Test member cluster join and leave flow", Label("joinleave"), 
 	})
 })
 
-var _ = Describe("Test member cluster force delete flow", Label("joinleave"), Ordered, Serial, func() {
+var _ = Describe("Test member cluster join and leave without placement", Label("joinleave"), Ordered, Serial, func() {
 	Context("Test cluster join and leave flow with member agent down and force delete member cluster", Label("joinleave"), Ordered, Serial, func() {
 		It("Simulate the member agent going down in member cluster", func() {
 			updateMemberAgentDeploymentReplicas(memberCluster3WestProdClient, 0)
@@ -471,6 +429,71 @@ var _ = Describe("Test member cluster force delete flow", Label("joinleave"), Or
 		By("Simulate the member agent coming back up")
 		updateMemberAgentDeploymentReplicas(memberCluster3WestProdClient, 1)
 
+		createMemberCluster(memberCluster3WestProd.ClusterName, memberCluster3WestProd.PresentingServiceAccountInHubClusterName, labelsByClusterName[memberCluster3WestProd.ClusterName], annotationsByClusterName[memberCluster3WestProd.ClusterName])
+		checkIfMemberClusterHasJoined(memberCluster3WestProd)
+	})
+})
+
+var _ = Describe("Test member cluster join and leave with clusterProfile", Label("joinleave"), Ordered, Serial, func() {
+	clusterProfileList := &clusterinventory.ClusterProfileList{}
+	Context("Test cluster profile and ", Label("joinleave"), Ordered, Serial, func() {
+		It("Make sure we have all the cluster profiles", func() {
+			Eventually(func() error {
+				if err := hubClient.List(ctx, clusterProfileList, &client.ListOptions{Namespace: utils.FleetSystemNamespace}); err != nil {
+					return fmt.Errorf("failed to get cluster profiles: %w", err)
+				}
+
+				// create a map for easy lookup
+				cpMap := make(map[string]clusterinventory.ClusterProfile)
+				for idx := range clusterProfileList.Items {
+					cp := clusterProfileList.Items[idx]
+					cpMap[cp.Name] = cp
+				}
+				// make sure all the member clusters have a cluster profile
+				for idx := range allMemberClusterNames {
+					cp, ok := cpMap[allMemberClusterNames[idx]]
+					if !ok {
+						return fmt.Errorf("cluster profile for member cluster %s not found", allMemberClusterNames[idx])
+					}
+					if cp.Status.Version.Kubernetes == "" {
+						return fmt.Errorf("cluster profile %s Kubernetes version should not be empty", cp.Name)
+					}
+					if len(cp.Status.AccessProviders) != 1 {
+						return fmt.Errorf("cluster profile %s has no access providers %+v", cp.Name, cp.Status.AccessProviders)
+					}
+					if cp.Status.AccessProviders[0].Name != controller.ClusterManagerName {
+						return fmt.Errorf("cluster profile %s access provider name %s doesn't match expected %s", cp.Name, cp.Status.AccessProviders[0].Name, controller.ClusterManagerName)
+					}
+					if len(cp.Status.AccessProviders[0].Cluster.CertificateAuthorityData) == 0 {
+						return fmt.Errorf("cluster profile %s access provider certificate authority data should not be empty", allMemberClusterNames[idx])
+					}
+				}
+				return nil
+			}, eventuallyDuration, eventuallyInterval).Should(Succeed(), "Failed to verify cluster profiles")
+		})
+
+		It("Delete member cluster CR associated to the member cluster to simulate member left", func() {
+			markMemberClusterAsLeft(memberCluster3WestProdName)
+		})
+
+		It("Make sure we delete the corresponding cluster profiles", func() {
+			Eventually(func() error {
+				if err := hubClient.List(ctx, clusterProfileList, &client.ListOptions{Namespace: utils.FleetSystemNamespace}); err != nil {
+					return fmt.Errorf("failed to get cluster profiles: %w", err)
+				}
+				for idx := range clusterProfileList.Items {
+					cp := clusterProfileList.Items[idx]
+					if cp.Name == memberCluster3WestProdName {
+						return fmt.Errorf("cluster profile for member cluster %s should be deleted", memberCluster3WestProdName)
+					}
+				}
+				return nil
+			}, eventuallyDuration, eventuallyInterval).Should(Succeed(), "Failed to verify cluster profiles")
+		})
+	})
+
+	AfterAll(func() {
+		By("Add the member cluster back")
 		createMemberCluster(memberCluster3WestProd.ClusterName, memberCluster3WestProd.PresentingServiceAccountInHubClusterName, labelsByClusterName[memberCluster3WestProd.ClusterName], annotationsByClusterName[memberCluster3WestProd.ClusterName])
 		checkIfMemberClusterHasJoined(memberCluster3WestProd)
 	})

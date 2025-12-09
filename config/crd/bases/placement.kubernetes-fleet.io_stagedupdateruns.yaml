@@ -105,40 +105,32 @@ spec:
                 - message: stagedRolloutStrategyName is immutable
                   rule: self == oldSelf
               state:
-                default: NotStarted
+                default: Initialize
                 description: |-
                   State indicates the desired state of the update run.
-                  NotStarted: The update run is initialized but execution has not started (default).
-                  Started: The update run should execute or resume execution.
-                  Stopped: The update run should pause execution.
-                  Abandoned: The update run should be abandoned and terminated.
+                  Initialize: The update run should be initialized but execution should not start (default).
+                  Run: The update run should execute or resume execution.
+                  Stop: The update run should stop execution.
                 enum:
-                - NotStarted
-                - Started
-                - Stopped
-                - Abandoned
+                - Initialize
+                - Run
+                - Stop
                 type: string
             required:
             - placementName
             - stagedRolloutStrategyName
             type: object
             x-kubernetes-validations:
-            - message: 'invalid state transition: cannot transition from NotStarted
-                to Stopped'
-              rule: '!has(oldSelf.state) || oldSelf.state != ''NotStarted'' || self.state
-                != ''Stopped'''
-            - message: 'invalid state transition: cannot transition from Started to
-                NotStarted'
-              rule: '!has(oldSelf.state) || oldSelf.state != ''Started'' || self.state
-                != ''NotStarted'''
-            - message: 'invalid state transition: cannot transition from Stopped to
-                NotStarted'
-              rule: '!has(oldSelf.state) || oldSelf.state != ''Stopped'' || self.state
-                != ''NotStarted'''
-            - message: 'invalid state transition: Abandoned is a terminal state and
-                cannot transition to any other state'
-              rule: '!has(oldSelf.state) || oldSelf.state != ''Abandoned'' || self.state
-                == ''Abandoned'''
+            - message: 'invalid state transition: cannot transition from Initialize
+                to Stop'
+              rule: '!(has(oldSelf.state) && oldSelf.state == ''Initialize'' && self.state
+                == ''Stop'')'
+            - message: 'invalid state transition: cannot transition from Run to Initialize'
+              rule: '!(has(oldSelf.state) && oldSelf.state == ''Run'' && self.state
+                == ''Initialize'')'
+            - message: 'invalid state transition: cannot transition from Stop to Initialize'
+              rule: '!(has(oldSelf.state) && oldSelf.state == ''Stop'' && self.state
+                == ''Initialize'')'
           status:
             description: The observed status of StagedUpdateRun.
             properties:
@@ -964,8 +956,11 @@ spec:
                             Fractional results are rounded down. A minimum of 1 update is enforced.
                             If not specified, all clusters in the stage are updated sequentially (effectively maxConcurrency = 1).
                             Defaults to 1.
-                          pattern: ^((100|[0-9]{1,2})%|[0-9]+)$
+                          pattern: ^(100|[1-9][0-9]?)%$
                           x-kubernetes-int-or-string: true
+                          x-kubernetes-validations:
+                          - message: maxConcurrency must be at least 1
+                            rule: self == null || type(self) != int || self >= 1
                         name:
                           description: The name of the stage. This MUST be unique
                             within the same StagedUpdateStrategy.

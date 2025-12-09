@@ -45,6 +45,7 @@ import (
 	fleetnetworkingv1alpha1 "go.goms.io/fleet-networking/api/v1alpha1"
 
 	clusterv1beta1 "go.goms.io/fleet/apis/cluster/v1beta1"
+	placementv1 "go.goms.io/fleet/apis/placement/v1"
 	placementv1alpha1 "go.goms.io/fleet/apis/placement/v1alpha1"
 	placementv1beta1 "go.goms.io/fleet/apis/placement/v1beta1"
 	"go.goms.io/fleet/pkg/propertyprovider/azure/trackers"
@@ -194,6 +195,9 @@ var (
 	lessFuncPlacementStatus = func(a, b placementv1beta1.PerClusterPlacementStatus) bool {
 		return a.ClusterName < b.ClusterName
 	}
+	lessFuncPlacementStatusV1 = func(a, b placementv1.ResourcePlacementStatus) bool {
+		return a.ClusterName < b.ClusterName
+	}
 	lessFuncPlacementStatusByConditions = func(a, b placementv1beta1.PerClusterPlacementStatus) bool {
 		return len(a.Conditions) < len(b.Conditions)
 	}
@@ -220,7 +224,9 @@ var (
 	})
 	ignoreTimeTypeFields                                      = cmpopts.IgnoreTypes(time.Time{}, metav1.Time{})
 	ignorePlacementStatusDriftedPlacementsTimestampFields     = cmpopts.IgnoreFields(placementv1beta1.DriftedResourcePlacement{}, "ObservationTime", "FirstDriftedObservedTime")
+	ignorePlacementStatusDriftedPlacementsTimestampFieldsV1   = cmpopts.IgnoreFields(placementv1.DriftedResourcePlacement{}, "ObservationTime", "FirstDriftedObservedTime")
 	ignorePlacementStatusDiffedPlacementsTimestampFields      = cmpopts.IgnoreFields(placementv1beta1.DiffedResourcePlacement{}, "ObservationTime", "FirstDiffedObservedTime")
+	ignorePlacementStatusDiffedPlacementsTimestampFieldsV1    = cmpopts.IgnoreFields(placementv1.DiffedResourcePlacement{}, "ObservationTime", "FirstDiffedObservedTime")
 	ignorePerClusterPlacementStatusObservedResourceIndexField = cmpopts.IgnoreFields(placementv1beta1.PerClusterPlacementStatus{}, "ObservedResourceIndex")
 	ignorePlacementStatusObservedResourceIndexField           = cmpopts.IgnoreFields(placementv1beta1.PlacementStatus{}, "ObservedResourceIndex")
 
@@ -283,6 +289,9 @@ func TestMain(m *testing.M) {
 	}
 	if err := placementv1beta1.AddToScheme(scheme); err != nil {
 		log.Fatalf("failed to add custom APIs (placement) to the runtime scheme: %v", err)
+	}
+	if err := placementv1.AddToScheme(scheme); err != nil {
+		log.Fatalf("failed to add custom APIs (placement v1) to the runtime scheme: %v", err)
 	}
 	if err := fleetnetworkingv1alpha1.AddToScheme(scheme); err != nil {
 		log.Fatalf("failed to add custom APIs (networking) to the runtime scheme: %v", err)

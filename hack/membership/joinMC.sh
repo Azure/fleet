@@ -2,6 +2,7 @@
 # AKS Clusters and joins them onto the hub cluster.
 
 # Perform validation to ensure the script can run correctly.
+export REGISTRY="${REGISTRY:-mcr.microsoft.com/aks/fleet}"
 
 if [ "$#" -lt 3 ]; then
   echo "Usage: $0 <FLEET-IMAGE-TAG> <HUB-CLUSTER-NAME> <MEMBER-CLUSTER-NAME-1> [<MEMBER-CLUSTER-NAME-2> ...]"
@@ -9,11 +10,6 @@ if [ "$#" -lt 3 ]; then
 fi
 
 export IMAGE_TAG="$1"
-if [[ $(curl "https://api.github.com/repos/Azure/fleet/tags") != *"$1"* ]] > /dev/null 2>&1; then
-  echo "fleet image tag $1 does not exist"
-  exit 1
-fi
-
 export HUB_CLUSTER="$2"
 if [[ ! $(kubectl config view -o jsonpath="{.contexts[?(@.context.cluster==\"$HUB_CLUSTER\")]}") ]] > /dev/null 2>&1; then
   echo "The cluster named $HUB_CLUSTER does not exist."
@@ -100,13 +96,7 @@ fi
 
 # # Install the member agent helm chart on the member cluster.
 
-# The variables below uses the Fleet images kept in the Microsoft Container Registry (MCR),
-# and will retrieve the latest version from the Fleet GitHub repository.
-#
-# You can, however, build the Fleet images of your own; see the repository README for
-# more information.
 echo "Retrieving image..."
-export REGISTRY="mcr.microsoft.com/aks/fleet"
 export MEMBER_AGENT_IMAGE="member-agent"
 export REFRESH_TOKEN_IMAGE="${REFRESH_TOKEN_NAME:-refresh-token}"
 export OUTPUT_TYPE="${OUTPUT_TYPE:-type=docker}"
@@ -121,11 +111,8 @@ echo "Creating secret..."
 kubectl delete secret hub-kubeconfig-secret --ignore-not-found=true
 kubectl create secret generic hub-kubeconfig-secret --from-literal=token=$TOKEN
 
-echo "Uninstalling member-agent..."
-helm uninstall member-agent --wait
-
 echo "Installing member-agent..."
-helm install member-agent charts/member-agent/ \
+helm upgrade --install member-agent charts/member-agent/ \
         --set config.hubURL=$HUB_CLUSTER_ADDRESS  \
         --set image.repository=$REGISTRY/$MEMBER_AGENT_IMAGE \
         --set image.tag=$IMAGE_TAG \
@@ -134,7 +121,7 @@ helm install member-agent charts/member-agent/ \
         --set image.pullPolicy=Always \
         --set refreshtoken.pullPolicy=Always \
         --set config.memberClusterName=$MEMBER_CLUSTER \
-        --set logVerbosity=8 \
+        --set logVerbosity=5 \
         --set namespace=fleet-system \
         --set enableV1Beta1APIs=true
 

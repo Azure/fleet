@@ -272,6 +272,16 @@ func generateMetricsLabels(
 	}
 }
 
+func generateInitializationSucceededMetric(updateRun *placementv1beta1.ClusterStagedUpdateRun) *prometheusclientmodel.Metric {
+	return &prometheusclientmodel.Metric{
+		Label: generateMetricsLabels(updateRun, string(placementv1beta1.StagedUpdateRunConditionInitialized),
+			string(metav1.ConditionTrue), condition.UpdateRunInitializeSucceededReason),
+		Gauge: &prometheusclientmodel.Gauge{
+			Value: ptr.To(float64(time.Now().UnixNano()) / 1e9),
+		},
+	}
+}
+
 func generateInitializationFailedMetric(updateRun *placementv1beta1.ClusterStagedUpdateRun) *prometheusclientmodel.Metric {
 	return &prometheusclientmodel.Metric{
 		Label: generateMetricsLabels(updateRun, string(placementv1beta1.StagedUpdateRunConditionInitialized),
@@ -341,6 +351,7 @@ func generateTestClusterStagedUpdateRun() *placementv1beta1.ClusterStagedUpdateR
 			PlacementName:            testCRPName,
 			ResourceSnapshotIndex:    testResourceSnapshotIndex,
 			StagedUpdateStrategyName: testUpdateStrategyName,
+			State:                    placementv1beta1.StateRun,
 		},
 	}
 }
@@ -505,6 +516,11 @@ func generateTestClusterStagedUpdateStrategy() *placementv1beta1.ClusterStagedUp
 						},
 					},
 					SortingLabelKey: &sortingKey,
+					BeforeStageTasks: []placementv1beta1.StageTask{
+						{
+							Type: placementv1beta1.StageTaskTypeApproval,
+						},
+					},
 					AfterStageTasks: []placementv1beta1.StageTask{
 						{
 							Type: placementv1beta1.StageTaskTypeTimedWait,
@@ -526,6 +542,11 @@ func generateTestClusterStagedUpdateStrategy() *placementv1beta1.ClusterStagedUp
 						},
 					},
 					// no sortingLabelKey, should sort by cluster name
+					BeforeStageTasks: []placementv1beta1.StageTask{
+						{
+							Type: placementv1beta1.StageTaskTypeApproval,
+						},
+					},
 					AfterStageTasks: []placementv1beta1.StageTask{
 						{
 							Type: placementv1beta1.StageTaskTypeApproval,
@@ -543,7 +564,7 @@ func generateTestClusterStagedUpdateStrategy() *placementv1beta1.ClusterStagedUp
 	}
 }
 
-func generateTestClusterStagedUpdateStrategyWithSingleStage(afterStageTasks []placementv1beta1.StageTask) *placementv1beta1.ClusterStagedUpdateStrategy {
+func generateTestClusterStagedUpdateStrategyWithSingleStage(beforeStageTasks, afterStageTasks []placementv1beta1.StageTask) *placementv1beta1.ClusterStagedUpdateStrategy {
 	return &placementv1beta1.ClusterStagedUpdateStrategy{
 		ObjectMeta: metav1.ObjectMeta{
 			Name: testUpdateStrategyName,
@@ -551,9 +572,10 @@ func generateTestClusterStagedUpdateStrategyWithSingleStage(afterStageTasks []pl
 		Spec: placementv1beta1.UpdateStrategySpec{
 			Stages: []placementv1beta1.StageConfig{
 				{
-					Name:            "stage1",
-					LabelSelector:   &metav1.LabelSelector{}, // Select all clusters.
-					AfterStageTasks: afterStageTasks,
+					Name:             "stage1",
+					LabelSelector:    &metav1.LabelSelector{}, // Select all clusters.
+					BeforeStageTasks: beforeStageTasks,
+					AfterStageTasks:  afterStageTasks,
 				},
 			},
 		},
@@ -724,9 +746,9 @@ func generateTrueCondition(obj client.Object, condType any) metav1.Condition {
 		case placementv1beta1.StageTaskConditionWaitTimeElapsed:
 			reason = condition.AfterStageTaskWaitTimeElapsedReason
 		case placementv1beta1.StageTaskConditionApprovalRequestCreated:
-			reason = condition.AfterStageTaskApprovalRequestCreatedReason
+			reason = condition.StageTaskApprovalRequestCreatedReason
 		case placementv1beta1.StageTaskConditionApprovalRequestApproved:
-			reason = condition.AfterStageTaskApprovalRequestApprovedReason
+			reason = condition.StageTaskApprovalRequestApprovedReason
 		}
 		typeStr = string(cond)
 	case placementv1beta1.ApprovalRequestConditionType:
@@ -796,23 +818,8 @@ func generateFalseCondition(obj client.Object, condType any) metav1.Condition {
 	}
 }
 
-func generateFalseProgressingCondition(obj client.Object, condType any, succeeded bool) metav1.Condition {
+func generateFalseProgressingCondition(obj client.Object, condType any, reason string) metav1.Condition {
 	falseCond := generateFalseCondition(obj, condType)
-	reason := ""
-	switch condType {
-	case placementv1beta1.StagedUpdateRunConditionProgressing:
-		if succeeded {
-			reason = condition.UpdateRunSucceededReason
-		} else {
-			reason = condition.UpdateRunFailedReason
-		}
-	case placementv1beta1.StageUpdatingConditionProgressing:
-		if succeeded {
-			reason = condition.StageUpdatingSucceededReason
-		} else {
-			reason = condition.StageUpdatingFailedReason
-		}
-	}
 	falseCond.Reason = reason
 	return falseCond
 }

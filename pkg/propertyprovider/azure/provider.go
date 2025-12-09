@@ -20,7 +20,10 @@ package azure
 import (
 	"context"
 	"fmt"
+	"os"
 	"regexp"
+	"sync"
+	"time"
 
 	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/api/resource"
@@ -28,6 +31,7 @@ import (
 	"k8s.io/apimachinery/pkg/fields"
 	"k8s.io/apimachinery/pkg/labels"
 	"k8s.io/apimachinery/pkg/selection"
+	"k8s.io/client-go/discovery"
 	"k8s.io/client-go/kubernetes/scheme"
 	"k8s.io/client-go/rest"
 	"k8s.io/klog/v2"
@@ -68,6 +72,9 @@ const (
 )
 
 var (
+	// k8sVersionCacheTTL is the TTL for the cached Kubernetes version.
+	k8sVersionCacheTTL = 15 * time.Minute
+
 	// CapacityPerSKUPropertyRegex extracts SKU name from capacity property names.
 	// Based on SKUCapacityPropertyTmpl = "kubernetes.azure.com/vm-sizes/%s/capacity"
 	CapacityPerSKUPropertyRegex = regexp.MustCompile(`^` + regexp.QuoteMeta(skuPropertyPrefix) + `/([^/]+)/capacity$`)
@@ -90,6 +97,9 @@ type PropertyProvider struct {
 	podTracker  *trackers.PodTracker
 	nodeTracker *trackers.NodeTracker
 
+	// The discovery client to get k8s cluster version.
+	discoveryClient discovery.ServerVersionInterface
+
 	// The region where the Azure property provider resides.
 	//
 	// This is necessary as the pricing client requires that a region to be specified; it can
@@ -107,6 +117,15 @@ type PropertyProvider struct {
 	// to avoid name conflicts, though at this moment are mostly reserved for testing purposes.
 	nodeControllerName string
 	podControllerName  string
+
+	// Cache for Kubernetes version information with TTL.
+	k8sVersionMutex              sync.Mutex
+	cachedK8sVersion             string
+	cachedK8sVersionObservedTime time.Time
+
+	// Cached cluster certificate authority data (base64 encoded).
+	clusterCertificateAuthority             []byte
+	clusterCertificateAuthorityObservedTime time.Time
 }
 
 // Verify that the Azure property provider implements the MetricProvider interface at compile time.
@@ -195,12 +214,11 @@ func (p *PropertyProvider) Start(ctx context.Context, config *rest.Config) error
 		// in a passive manner with no need for any centralized state.
 		LeaderElection: false,
 	})
-	p.mgr = mgr
-
 	if err != nil {
 		klog.ErrorS(err, "Failed to start Azure property provider")
 		return err
 	}
+	p.mgr = mgr
 
 	switch {
 	case p.nodeTracker != nil:
@@ -233,6 +251,33 @@ func (p *PropertyProvider) Start(ctx context.Context, config *rest.Config) error
 		// with no pricing provider.
 		klog.V(2).Info("Building a node tracker with no pricing provider")
 		p.nodeTracker = trackers.NewNodeTracker(nil)
+	}
+
+	p.discoveryClient = discovery.NewDiscoveryClientForConfigOrDie(config)
+	// Fetch the k8s version from the discovery client.
+	klog.V(2).Info("Fetching Kubernetes version from discovery client")
+	serverVersion, err := p.discoveryClient.ServerVersion()
+	if err != nil {
+		klog.ErrorS(err, "Failed to get Kubernetes server version from discovery client")
+		return err
+	}
+	// Update the cache with the new version.
+	p.cachedK8sVersion = serverVersion.GitVersion
+	p.cachedK8sVersionObservedTime = time.Now()
+
+	// Cache the cluster certificate authority data (base64 encoded).
+	if len(config.CAFile) > 0 {
+		cadata, err := os.ReadFile(config.CAFile)
+		if err != nil {
+			klog.ErrorS(err, "Failed to read cluster certificate authority data from file")
+			return err
+		}
+		p.clusterCertificateAuthority = cadata
+		p.clusterCertificateAuthorityObservedTime = time.Now()
+		klog.V(2).Info("Cached cluster certificate authority data")
+	} else {
+		err := fmt.Errorf("rest.Config CAFile empty: %s", config.CAFile)
+		klog.ErrorS(err, "No certificate authority data available in rest.Config")
 	}
 
 	// Set up the node reconciler.
@@ -306,6 +351,9 @@ func (p *PropertyProvider) Collect(ctx context.Context) propertyprovider.Propert
 	// Collect node-count related properties.
 	p.collectNodeCountRelatedProperties(ctx, properties)
 
+	// Collect the Kubernetes version.
+	p.collectK8sVersion(ctx, properties)
+
 	// Collect the cost properties (if enabled).
 	if p.isCostCollectionEnabled {
 		costConds := p.collectCosts(ctx, properties)
@@ -322,6 +370,14 @@ func (p *PropertyProvider) Collect(ctx context.Context) propertyprovider.Propert
 	// Collect the available resource properties (if enabled).
 	if p.isAvailableResourcesCollectionEnabled {
 		p.collectAvailableResource(ctx, &resources)
+	}
+
+	// insert the cluster certificate authority property (if available)
+	if len(p.clusterCertificateAuthority) > 0 {
+		properties[propertyprovider.ClusterCertificateAuthorityProperty] = clusterv1beta1.PropertyValue{
+			Value:           string(p.clusterCertificateAuthority),
+			ObservationTime: metav1.NewTime(p.clusterCertificateAuthorityObservedTime),
+		}
 	}
 
 	// Return the collection response.
@@ -436,6 +492,42 @@ func (p *PropertyProvider) collectAvailableResource(_ context.Context, usage *cl
 		available[rn] = left
 	}
 	usage.Available = available
+}
+
+// collectK8sVersion collects the Kubernetes server version information.
+// It uses a cache with a 15-minute TTL to minimize API calls to the discovery client.
+func (p *PropertyProvider) collectK8sVersion(_ context.Context, properties map[clusterv1beta1.PropertyName]clusterv1beta1.PropertyValue) {
+	now := time.Now()
+
+	// Check if we have a cached version that is still valid.
+	p.k8sVersionMutex.Lock()
+	defer p.k8sVersionMutex.Unlock()
+	if p.cachedK8sVersion != "" && now.Sub(p.cachedK8sVersionObservedTime) < k8sVersionCacheTTL {
+		// Cache is still valid, use the cached version.
+		properties[propertyprovider.K8sVersionProperty] = clusterv1beta1.PropertyValue{
+			Value:           p.cachedK8sVersion,
+			ObservationTime: metav1.NewTime(p.cachedK8sVersionObservedTime),
+		}
+		klog.V(2).InfoS("Using cached Kubernetes version", "version", p.cachedK8sVersion, "cacheAge", now.Sub(p.cachedK8sVersionObservedTime))
+		return
+	}
+
+	// Cache is expired or empty, fetch the version from the discovery client.
+	klog.V(2).Info("Fetching Kubernetes version from discovery client")
+	serverVersion, err := p.discoveryClient.ServerVersion()
+	if err != nil {
+		klog.ErrorS(err, "Failed to get Kubernetes server version from discovery client")
+		return
+	}
+
+	// Update the cache with the new version.
+	p.cachedK8sVersion = serverVersion.GitVersion
+	p.cachedK8sVersionObservedTime = now
+	properties[propertyprovider.K8sVersionProperty] = clusterv1beta1.PropertyValue{
+		Value:           p.cachedK8sVersion,
+		ObservationTime: metav1.NewTime(now),
+	}
+	klog.V(2).InfoS("Collected Kubernetes version", "version", p.cachedK8sVersion)
 }
 
 // autoDiscoverRegionAndSetupTrackers auto-discovers the region of the AKS cluster.

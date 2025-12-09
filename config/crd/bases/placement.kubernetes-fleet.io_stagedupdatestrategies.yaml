@@ -177,8 +177,11 @@ spec:
                         Fractional results are rounded down. A minimum of 1 update is enforced.
                         If not specified, all clusters in the stage are updated sequentially (effectively maxConcurrency = 1).
                         Defaults to 1.
-                      pattern: ^((100|[0-9]{1,2})%|[0-9]+)$
+                      pattern: ^(100|[1-9][0-9]?)%$
                       x-kubernetes-int-or-string: true
+                      x-kubernetes-validations:
+                      - message: maxConcurrency must be at least 1
+                        rule: self == null || type(self) != int || self >= 1
                     name:
                       description: The name of the stage. This MUST be unique within
                         the same StagedUpdateStrategy.

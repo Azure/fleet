@@ -40,8 +40,8 @@ jobs:
           go-version: ${{ env.GO_VERSION }}
 
       - name: Check out code into the Go module directory
-        uses: actions/checkout@v6
-
+        uses: actions/checkout@v6.0.1
+              
       - name: Set up Ginkgo CLI
         run: |
           go install github.com/onsi/ginkgo/v2/ginkgo@v2.19.1
@@ -90,7 +90,7 @@ jobs:
           go-version: ${{ env.GO_VERSION }}
 
       - name: Check out code into the Go module directory
-        uses: actions/checkout@v6
+        uses: actions/checkout@v6.0.1
       
       - name: Move Docker data directory to /mnt
         # The default storage device on GitHub-hosted runners is running low during e2e tests.

@@ -479,18 +479,26 @@ func (r *Reconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.Resu
 	// c) report configuration differences if applicable;
 	// d) check for configuration drifts if applicable;
 	// e) apply each manifest.
-	r.processManifests(ctx, bundles, work, expectedAppliedWorkOwnerRef)
+	if err := r.processManifests(ctx, bundles, work, expectedAppliedWorkOwnerRef); err != nil {
+		klog.ErrorS(err, "Failed to process the manifests", "work", workRef)
+		return ctrl.Result{}, err
+	}
 
 	// Track the availability information.
-	r.trackInMemberClusterObjAvailability(ctx, bundles, workRef)
+	if err := r.trackInMemberClusterObjAvailability(ctx, bundles, workRef); err != nil {
+		klog.ErrorS(err, "Failed to check for object availability", "work", workRef)
+		return ctrl.Result{}, err
+	}
 
 	// Refresh the status of the Work object.
 	if err := r.refreshWorkStatus(ctx, work, bundles); err != nil {
+		klog.ErrorS(err, "Failed to refresh work object status", "work", workRef)
 		return ctrl.Result{}, err
 	}
 
 	// Refresh the status of the AppliedWork object.
 	if err := r.refreshAppliedWorkStatus(ctx, appliedWork, bundles); err != nil {
+		klog.ErrorS(err, "Failed to refresh appliedWork object status", "appliedWork", klog.KObj(appliedWork))
 		return ctrl.Result{}, err
 	}
 

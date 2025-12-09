@@ -384,7 +384,7 @@ func TestSetFleetLastAppliedAnnotation(t *testing.T) {
 	nsManifestObj1 := ns.DeepCopy()
 	wantNSManifestObj1 := ns.DeepCopy()
 	wantNSManifestObj1.SetAnnotations(map[string]string{
-		fleetv1beta1.LastAppliedConfigAnnotation: string("{\"apiVersion\":\"v1\",\"kind\":\"Namespace\",\"metadata\":{\"annotations\":{},\"creationTimestamp\":null,\"name\":\"ns-1\"},\"spec\":{},\"status\":{}}\n"),
+		fleetv1beta1.LastAppliedConfigAnnotation: string("{\"apiVersion\":\"v1\",\"kind\":\"Namespace\",\"metadata\":{\"annotations\":{},\"name\":\"ns-1\"},\"spec\":{},\"status\":{}}\n"),
 	})
 
 	nsManifestObj2 := ns.DeepCopy()
@@ -393,7 +393,7 @@ func TestSetFleetLastAppliedAnnotation(t *testing.T) {
 	})
 	wantNSManifestObj2 := ns.DeepCopy()
 	wantNSManifestObj2.SetAnnotations(map[string]string{
-		fleetv1beta1.LastAppliedConfigAnnotation: string("{\"apiVersion\":\"v1\",\"kind\":\"Namespace\",\"metadata\":{\"annotations\":{},\"creationTimestamp\":null,\"name\":\"ns-1\"},\"spec\":{},\"status\":{}}\n"),
+		fleetv1beta1.LastAppliedConfigAnnotation: string("{\"apiVersion\":\"v1\",\"kind\":\"Namespace\",\"metadata\":{\"annotations\":{},\"name\":\"ns-1\"},\"spec\":{},\"status\":{}}\n"),
 	})
 
 	// Annotation size limit is 262144 bytes.
