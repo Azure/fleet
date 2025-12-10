@@ -33,3 +33,22 @@ The KubeFleet project has adopted the CNCF Code of Conduct. Refer to our [Commun
 ## Issue and pull request management
 
 Anyone can comment on issues and submit reviews for pull requests. In order to be assigned an issue or pull request, you can leave a `/assign <your Github ID>` comment on the issue or pull request.
+
+## Automated Workflows
+
+### Backport from Upstream
+
+The repository includes an automated backport workflow that syncs changes from the upstream repository (kubefleet-dev/kubefleet).
+
+**Triggering the workflow:**
+- **Manual trigger**: Go to Actions → Backport from Upstream → Run workflow
+- **Scheduled**: Runs automatically every Monday at 00:00 UTC
+
+**What it does:**
+1. Fetches changes from `cncf/main` (kubefleet-dev/kubefleet)
+2. Merges using `-X theirs` strategy (upstream takes precedence on conflicts)
+3. Updates module paths from `github.com/kubefleet-dev/kubefleet` to `go.goms.io/fleet`
+4. Runs `make reviewable` for formatting and linting
+5. Creates a PR with a list of backported commits
+
+**Note**: If merge conflicts occur that cannot be resolved automatically, the workflow will fail with instructions for manual resolution.

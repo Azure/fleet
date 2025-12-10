@@ -1,0 +1,186 @@
+name: Backport from Upstream
+
+on:
+  workflow_dispatch: {}
+  schedule:
+    # Run weekly on Monday at 00:00 UTC
+    - cron: '0 0 * * 1'
+
+env:
+  GO_VERSION: '1.24.9'
+
+jobs:
+  backport:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+      pull-requests: write
+    steps:
+      - name: Check out code
+        uses: actions/checkout@v6.0.1
+        with:
+          fetch-depth: 0
+          token: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Set up Go
+        uses: actions/setup-go@v6
+        with:
+          go-version: ${{ env.GO_VERSION }}
+
+      - name: Configure Git
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+
+      - name: Add upstream remote
+        run: |
+          if ! git remote | grep -q "^cncf$"; then
+            git remote add cncf https://github.com/kubefleet-dev/kubefleet.git
+          fi
+          git fetch cncf main
+
+      - name: Check if changes exist
+        id: commits
+        run: |
+          # Get the last commit on current branch
+          LAST_COMMIT=$(git rev-parse HEAD)
+          
+          # Check if there are any new commits
+          COMMITS=$(git log --oneline ${LAST_COMMIT}..cncf/main)
+          
+          if [ -z "$COMMITS" ]; then
+            echo "has_changes=false" >> $GITHUB_OUTPUT
+            echo "No new commits to backport"
+          else
+            echo "has_changes=true" >> $GITHUB_OUTPUT
+            echo "Found changes to backport"
+          fi
+
+      - name: Create backport branch
+        if: steps.commits.outputs.has_changes == 'true'
+        run: |
+          BRANCH_NAME="backport/cncf-main-$(date +%Y%m%d-%H%M%S)"
+          echo "BRANCH_NAME=$BRANCH_NAME" >> $GITHUB_ENV
+          git checkout -b $BRANCH_NAME
+
+      - name: Merge upstream, replace module paths, and run make reviewable
+        if: steps.commits.outputs.has_changes == 'true'
+        id: merge
+        continue-on-error: true
+        run: |
+          git merge -X theirs cncf/main --no-commit
+          if [ $? -ne 0 ]; then
+            echo "merge_status=conflict" >> $GITHUB_OUTPUT
+            echo "reviewable_status=failed" >> $GITHUB_OUTPUT
+            echo "Merge conflicts detected"
+            exit 1
+          fi
+          
+          echo "Replacing github.com/kubefleet-dev/kubefleet with go.goms.io/fleet"
+          
+          # Replace in all files
+          find . -type f ! -path "*/vendor/*" ! -path "*/.*" ! -path "*/.git/*" -exec sed -i 's|github.com/kubefleet-dev/kubefleet|go.goms.io/fleet|g' {} +
+          
+          # Run make reviewable
+          echo "Running make reviewable"
+          make reviewable
+          if [ $? -ne 0 ]; then
+            echo "reviewable_status=failed" >> $GITHUB_OUTPUT
+            echo "make reviewable failed, but continuing..."
+          else
+            echo "reviewable_status=success" >> $GITHUB_OUTPUT
+          fi
+          
+          # Stage all changes and create single merge commit
+          git add .
+          git commit -m "chore: backport changes from cncf/main, update module paths, and run make reviewable"
+          
+          # Get commit range for PR description
+          COMMITS=$(git log --oneline --decorate HEAD~1^2..HEAD^2)
+          echo "$COMMITS" > /tmp/commit_list.txt
+          
+          echo "merge_status=success" >> $GITHUB_OUTPUT
+          echo "Merge, module path replacement, and make reviewable completed"
+
+      - name: Push branch
+        if: steps.commits.outputs.has_changes == 'true' && steps.merge.outputs.merge_status == 'success'
+        run: |
+          git push origin $BRANCH_NAME
+
+      - name: Create Pull Request
+        if: steps.commits.outputs.has_changes == 'true' && steps.merge.outputs.merge_status == 'success'
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          # Prepare PR body
+          cat > /tmp/pr_body.md <<'EOF'
+          ## Backport from upstream (cncf/main)
+
+          This PR backports changes from the upstream repository (kubefleet-dev/kubefleet) to our fork.
+
+          ### Changes included
+
+          The following commits are included in this backport:
+
+          ```
+          EOF
+          
+          cat /tmp/commit_list.txt >> /tmp/pr_body.md
+          
+          cat >> /tmp/pr_body.md <<'EOF'
+          ```
+
+          ### Automated changes
+
+          - ✅ Merged with `-X theirs` strategy
+          - ✅ Updated module paths: `github.com/kubefleet-dev/kubefleet` → `go.goms.io/fleet`
+          EOF
+          
+          if [ "${{ steps.merge.outputs.reviewable_status }}" == "success" ]; then
+            echo "- ✅ Ran \`make reviewable\` successfully" >> /tmp/pr_body.md
+          else
+            echo "- ⚠️ \`make reviewable\` had issues - manual review needed" >> /tmp/pr_body.md
+          fi
+          
+          cat >> /tmp/pr_body.md <<'EOF'
+
+          ### Review notes
+
+          Please review the changes carefully, especially:
+          - Any merge conflicts that were resolved automatically
+          - Module path replacements
+          - Build and test results
+
+          ---
+          *This PR was automatically created by the backport workflow*
+          EOF
+          
+          # Create PR
+          gh pr create \
+            --title "chore: backport changes from cncf/main ($(date +%Y-%m-%d))" \
+            --body-file /tmp/pr_body.md \
+            --base "main" \
+            --head "$BRANCH_NAME" \
+            --label "automated,backport"
+
+      - name: Handle merge conflicts
+        if: steps.commits.outputs.has_changes == 'true' && steps.merge.outputs.merge_status == 'conflict'
+        run: |
+          echo "::error::Merge conflicts detected during backport"
+          echo "Manual intervention required to resolve conflicts"
+          echo "Please run the following commands locally:"
+          echo "  git checkout main"
+          echo "  git pull"
+          echo "  git fetch cncf main"
+          echo "  git merge -X theirs cncf/main"
+          echo "  # Resolve conflicts manually"
+          echo "  git add ."
+          echo "  git commit"
+          echo "  git push"
+          exit 1
+
+      - name: No changes to backport
+        if: steps.commits.outputs.has_changes == 'false'
+        run: |
+          echo "No new commits to backport from cncf/main"
+          echo "Repository is up to date with upstream"
