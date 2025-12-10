@@ -164,7 +164,7 @@ jobs:
             --body-file /tmp/pr_body.md \
             --base "main" \
             --head "$BRANCH_NAME" \
-            --label "automated,backport"
+            --label "github_actions"
 
       - name: Handle merge conflicts
         if: steps.commits.outputs.has_changes == 'true' && steps.merge.outputs.merge_status == 'conflict'
