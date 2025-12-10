@@ -18,6 +18,7 @@ package controller
 
 import (
 	"context"
+	"sort"
 
 	"k8s.io/apimachinery/pkg/types"
 	"sigs.k8s.io/controller-runtime/pkg/client"
@@ -67,7 +68,19 @@ func ListBindingsFromKey(ctx context.Context, c client.Reader, placementKey type
 		return nil, NewAPIServerError(false, err)
 	}
 
-	return bindingList.GetBindingObjs(), nil
+	bindingObjs := bindingList.GetBindingObjs()
+
+	// Sort the list of bindings.
+	//
+	// This is needed to ensure deterministic decision output from the scheduler.
+	sort.Slice(bindingObjs, func(i, j int) bool {
+		A, B := bindingObjs[i], bindingObjs[j]
+		// Sort the bindings only by their names; for ClusterResourceBindings, their namespaces are always empty;
+		// for ResourceBindings, in this case they all come from the same namespace.
+		return A.GetName() < B.GetName()
+	})
+
+	return bindingObjs, nil
 }
 
 // ConvertCRBObjsToBindingObjs converts a slice of ClusterResourceBinding items to BindingObj array.

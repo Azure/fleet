@@ -23,9 +23,11 @@ import (
 	"log"
 	"os"
 	"strings"
+	"sync/atomic"
 	"testing"
 	"time"
 
+	crossplanetest "github.com/crossplane/crossplane-runtime/v2/pkg/test"
 	"github.com/google/go-cmp/cmp"
 	"github.com/google/go-cmp/cmp/cmpopts"
 	k8serrors "k8s.io/apimachinery/pkg/api/errors"
@@ -2734,7 +2736,7 @@ func TestUpdatePolicySnapshotStatusFromBindings(t *testing.T) {
 				{
 					cluster: &clusterv1beta1.MemberCluster{
 						ObjectMeta: metav1.ObjectMeta{
-							Name: altClusterName,
+							Name: anotherClusterName,
 						},
 					},
 					status: filteredStatus,
@@ -2742,7 +2744,7 @@ func TestUpdatePolicySnapshotStatusFromBindings(t *testing.T) {
 				{
 					cluster: &clusterv1beta1.MemberCluster{
 						ObjectMeta: metav1.ObjectMeta{
-							Name: anotherClusterName,
+							Name: altClusterName,
 						},
 					},
 					status: filteredStatus,
@@ -2760,7 +2762,7 @@ func TestUpdatePolicySnapshotStatusFromBindings(t *testing.T) {
 					Reason: fmt.Sprintf(resourceScheduleSucceededWithScoreMessageFormat, clusterName, affinityScore1, topologySpreadScore1),
 				},
 				{
-					ClusterName: altClusterName,
+					ClusterName: anotherClusterName,
 					Selected:    false,
 					Reason:      filteredStatus.String(),
 				},
@@ -6534,5 +6536,177 @@ func TestUpdatePolicySnapshotStatusForPickFixedPlacementType(t *testing.T) {
 				t.Errorf("policy snapshot observed CRP generation: got %d, want %d", updatedPolicy.Status.ObservedCRPGeneration, tc.wantObservedCRPGeneration)
 			}
 		})
+	}
+}
+
+// TestRunSchedulingCycleForPickAllPlacementType_StableStatusOutputInLargeFleet tests the
+// runSchedulingCycleForPickAllPlacementType method, specifically to ensure that the status output
+// remains consistent when running the scheduling cycle in a large fleet (i.e., the scheduler
+// will not constantly refresh the status across scheduling cycles).
+func TestRunSchedulingCycleForPickAllPlacementType_StableStatusOutputInLargeFleet(t *testing.T) {
+	ctx := context.Background()
+
+	// Set up the scheduler profile with a label-based dummy filter plugin.
+	profile := NewProfile("TestOnly")
+
+	dummyLabelBasedFilterPluginName := fmt.Sprintf(dummyAllPurposePluginNameFormat, 0)
+	wantLabelKey := "pre-selected"
+	wantLabelValue := "true"
+	wantLabels := map[string]string{
+		wantLabelKey: wantLabelValue,
+	}
+	dummyLabelBasedFilterPlugin := &DummyAllPurposePlugin{
+		name: dummyLabelBasedFilterPluginName,
+		filterRunner: func(ctx context.Context, state CycleStatePluginReadWriter, policy placementv1beta1.PolicySnapshotObj, cluster *clusterv1beta1.MemberCluster) (status *Status) {
+			memberClusterLabels := cluster.GetLabels()
+			for wk, wv := range wantLabels {
+				if v, ok := memberClusterLabels[wk]; !ok || v != wv {
+					return NewNonErrorStatus(ClusterUnschedulable, dummyLabelBasedFilterPluginName)
+				}
+			}
+			return nil
+		},
+	}
+	profile.WithFilterPlugin(dummyLabelBasedFilterPlugin)
+
+	mockClientStatusUpdateCount := atomic.Int32{}
+	mockClient := crossplanetest.MockClient{
+		MockCreate: func(ctx context.Context, obj client.Object, opts ...client.CreateOption) error {
+			return nil
+		},
+		MockStatusUpdate: func(ctx context.Context, obj client.Object, opts ...client.SubResourceUpdateOption) error {
+			_ = mockClientStatusUpdateCount.Add(1)
+			return nil
+		},
+	}
+
+	f := &framework{
+		profile:                           profile,
+		client:                            &mockClient,
+		uncachedReader:                    &mockClient,
+		manager:                           nil,
+		eventRecorder:                     nil,
+		parallelizer:                      parallelizer.NewParallelizer(parallelizer.DefaultNumOfWorkers),
+		maxUnselectedClusterDecisionCount: 3,
+		// The cluster eligibility checker is not invoked in this test spec.
+		clusterEligibilityChecker: clustereligibilitychecker.New(),
+	}
+	// No need to set up plugins with the framework.
+
+	clusters := []clusterv1beta1.MemberCluster{
+		{
+			ObjectMeta: metav1.ObjectMeta{
+				Name: fmt.Sprintf(clusterNameTemplate, 1),
+			},
+		},
+		{
+			ObjectMeta: metav1.ObjectMeta{
+				Name: fmt.Sprintf(clusterNameTemplate, 2),
+			},
+		},
+		{
+			ObjectMeta: metav1.ObjectMeta{
+				Name: fmt.Sprintf(clusterNameTemplate, 3),
+			},
+		},
+		{
+			ObjectMeta: metav1.ObjectMeta{
+				Name: fmt.Sprintf(clusterNameTemplate, 4),
+			},
+		},
+		{
+			ObjectMeta: metav1.ObjectMeta{
+				Name: fmt.Sprintf(clusterNameTemplate, 5),
+			},
+		},
+		{
+			ObjectMeta: metav1.ObjectMeta{
+				Name: fmt.Sprintf(clusterNameTemplate, 6),
+			},
+		},
+		{
+			ObjectMeta: metav1.ObjectMeta{
+				Name: fmt.Sprintf(clusterNameTemplate, 7),
+			},
+		},
+		{
+			ObjectMeta: metav1.ObjectMeta{
+				Name: fmt.Sprintf(clusterNameTemplate, 8),
+			},
+		},
+		{
+			ObjectMeta: metav1.ObjectMeta{
+				Name: fmt.Sprintf(clusterNameTemplate, 9),
+			},
+		},
+	}
+	state := NewCycleState(clusters, nil, nil)
+	placementKey := queue.PlacementKey(crpName)
+	wantClusterUnschedulableReason := "ClusterUnschedulable"
+	policy := &placementv1beta1.ClusterSchedulingPolicySnapshot{
+		ObjectMeta: metav1.ObjectMeta{
+			Name: policyName,
+			Annotations: map[string]string{
+				placementv1beta1.CRPGenerationAnnotation: "0",
+			},
+		},
+		Spec: placementv1beta1.SchedulingPolicySnapshotSpec{
+			Policy: &placementv1beta1.PlacementPolicy{
+				PlacementType: placementv1beta1.PickAllPlacementType,
+				Affinity: &placementv1beta1.Affinity{
+					ClusterAffinity: &placementv1beta1.ClusterAffinity{
+						RequiredDuringSchedulingIgnoredDuringExecution: &placementv1beta1.ClusterSelector{
+							ClusterSelectorTerms: []placementv1beta1.ClusterSelectorTerm{
+								{
+									LabelSelector: &metav1.LabelSelector{
+										MatchLabels: map[string]string{
+											wantLabelKey: wantLabelValue,
+										},
+									},
+								},
+							},
+						},
+					},
+				},
+			},
+		},
+		Status: placementv1beta1.SchedulingPolicySnapshotStatus{
+			Conditions: []metav1.Condition{
+				{
+					Type:    string(placementv1beta1.PolicySnapshotScheduled),
+					Status:  metav1.ConditionTrue,
+					Reason:  FullyScheduledReason,
+					Message: fmt.Sprintf(fullyScheduledMessage, 1),
+				},
+			},
+			ObservedCRPGeneration: 0,
+			ClusterDecisions: []placementv1beta1.ClusterDecision{
+				{
+					ClusterName: fmt.Sprintf(clusterNameTemplate, 1),
+					Reason:      wantClusterUnschedulableReason,
+				},
+				{
+					ClusterName: fmt.Sprintf(clusterNameTemplate, 2),
+					Reason:      wantClusterUnschedulableReason,
+				},
+				{
+					ClusterName: fmt.Sprintf(clusterNameTemplate, 3),
+					Reason:      wantClusterUnschedulableReason,
+				},
+			},
+		},
+	}
+
+	// Simulate 100 consecutive scheduling cycles.
+	for i := 0; i < 100; i++ {
+		_, err := f.runSchedulingCycleForPickAllPlacementType(ctx, state, placementKey, policy, clusters, nil, nil, nil, nil)
+		if err != nil {
+			t.Fatalf("runSchedulingCycleForPickAllPlacementType() = %v, want no error", err)
+		}
+	}
+
+	// Check if any status update was attempted; all should be skipped as there is no status change.
+	if mockClientStatusUpdateCount.Load() != 0 {
+		t.Errorf("runSchedulingCycleForPickAllPlacementType() status update attempt count = %d, want 0", mockClientStatusUpdateCount.Load())
 	}
 }
