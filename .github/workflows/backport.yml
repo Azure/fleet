@@ -2,6 +2,9 @@ name: Backport from Upstream
 
 on:
   workflow_dispatch: {}
+  push:
+    branches:
+      - weiweng/automate-backport
   schedule:
     # Run weekly on Monday at 00:00 UTC
     - cron: '0 0 * * 1'
