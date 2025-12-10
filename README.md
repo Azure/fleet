@@ -10,9 +10,9 @@ Azure Fleet repo contains the code that the [Azure Kubernetes Fleet Manager](htt
 It follows the CNCF sandbox project [KubeFleet](https://github.com/kubefleet-dev/) and most of the development is done in the [KubeFleet](https://github.com/kubefleet-dev/).
 
 ## Get Involved 
-For any questions, please see the [KubeFleet discussion board](https://github.com/kubefleet-dev/kubefleet/discussions). 
+For any questions, please see the [KubeFleet discussion board](https://go.goms.io/fleet/discussions). 
 
-For any issues, please open an issue in the [KubeFleet](https://github.com/kubefleet-dev/kubefleet/issues)
+For any issues, please open an issue in the [KubeFleet](https://go.goms.io/fleet/issues)
 
 
 ## Quickstart
@@ -27,7 +27,7 @@ To learn more about KubeFleet go to the [KubeFleet documentation](https://kubefl
 
 You can reach the KubeFleet community and developers via the following channels:
 
-* Q & A: [GitHub Discussions](https://github.com/kubefleet-dev/kubefleet/discussions)
+* Q & A: [GitHub Discussions](https://go.goms.io/fleet/discussions)
 * Slack: [The #KubeFleet Slack channel](https://cloud-native.slack.com/archives/C08KR7589R8) 
 * Mailing list: [mailing list](https://groups.google.com/g/kubefleet-dev)
 

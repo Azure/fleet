@@ -18,10 +18,13 @@ package workapplier
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 
 	"k8s.io/apimachinery/pkg/api/meta"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
+	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/klog/v2"
 	"k8s.io/utils/ptr"
 
@@ -94,7 +97,9 @@ func (r *Reconciler) refreshWorkStatus(
 		}
 	}
 
+	// Set the two flags here as they are per-work-object settings.
 	isReportDiffModeOn := work.Spec.ApplyStrategy != nil && work.Spec.ApplyStrategy.Type == fleetv1beta1.ApplyStrategyTypeReportDiff
+	isStatusBackReportingOn := work.Spec.ReportBackStrategy != nil && work.Spec.ReportBackStrategy.Type == fleetv1beta1.ReportBackStrategyTypeMirror
 	for idx := range bundles {
 		bundle := bundles[idx]
 
@@ -159,9 +164,18 @@ func (r *Reconciler) refreshWorkStatus(
 			}
 		}
 
-		// Tally the stats.
+		// Tally the stats, and perform status back-reporting if applicable.
 		if isManifestObjectApplied(bundle.applyOrReportDiffResTyp) {
 			appliedManifestsCount++
+
+			if isStatusBackReportingOn {
+				// Back-report the status from the member cluster side, if applicable.
+				//
+				// Back-reporting is only performed when:
+				// a) the ReportBackStrategy is of the type Mirror; and
+				// b) the manifest object has been applied successfully.
+				backReportStatus(bundle.inMemberClusterObj, manifestCond, now, klog.KObj(work))
+			}
 		}
 		if isAppliedObjectAvailable(bundle.availabilityResTyp) {
 			availableAppliedObjectsCount++
@@ -691,6 +705,57 @@ func prepareRebuiltManifestCondQIdx(bundles []*manifestProcessingBundle) map[str
 		rebuiltManifestCondQIdx[bundle.workResourceIdentifierStr] = idx
 	}
 	return rebuiltManifestCondQIdx
+}
+
+// backReportStatus writes the status field of an object applied on the member cluster side in
+// the status of the Work object.
+func backReportStatus(
+	inMemberClusterObj *unstructured.Unstructured,
+	manifestCond *fleetv1beta1.ManifestCondition,
+	now metav1.Time,
+	workRef klog.ObjectRef,
+) {
+	if inMemberClusterObj == nil || inMemberClusterObj.Object == nil {
+		// Do a sanity check; normally this will never occur (as status back-reporting
+		// only applies to objects that have been successfully applied).
+		//
+		// Should this unexpected situation occurs, the work applier does not register
+		// it as an error; the object shall be ignored for the status back-reporting
+		// part of the reconciliation loop.
+		wrapperErr := fmt.Errorf("attempted to back-report status for a manifest that has not been applied yet or cannot be found on the member cluster side")
+		_ = controller.NewUnexpectedBehaviorError(wrapperErr)
+		klog.ErrorS(wrapperErr, "Failed to back-report status", "work", workRef, "resourceIdentifier", manifestCond.Identifier)
+		return
+	}
+	if _, ok := inMemberClusterObj.Object["status"]; !ok {
+		// The object from the member cluster side does not have a status subresource; this
+		// is not considered as an error.
+		klog.V(2).InfoS("cannot back-report status as the applied resource on the member cluster side does not have a status subresource", "work", workRef, "resourceIdentifier", manifestCond.Identifier)
+		return
+	}
+
+	statusBackReportingWrapper := make(map[string]interface{})
+	// The TypeMeta fields must be added in the wrapper, otherwise the client libraries would
+	// have trouble serializing/deserializing the wrapper object when it's written/read to/from
+	// the API server.
+	statusBackReportingWrapper["apiVersion"] = inMemberClusterObj.GetAPIVersion()
+	statusBackReportingWrapper["kind"] = inMemberClusterObj.GetKind()
+	statusBackReportingWrapper["status"] = inMemberClusterObj.Object["status"]
+	statusData, err := json.Marshal(statusBackReportingWrapper)
+	if err != nil {
+		// This normally should never occur.
+		wrappedErr := fmt.Errorf("failed to marshal wrapped back-reported status: %w", err)
+		_ = controller.NewUnexpectedBehaviorError(wrappedErr)
+		klog.ErrorS(wrappedErr, "Failed to prepare status wrapper", "work", workRef, "resourceIdentifier", manifestCond.Identifier)
+		return
+	}
+
+	manifestCond.BackReportedStatus = &fleetv1beta1.BackReportedStatus{
+		ObservedStatus: runtime.RawExtension{
+			Raw: statusData,
+		},
+		ObservationTime: now,
+	}
 }
 
 // trimWorkStatusDataWhenOversized trims some data from the Work object status when the object

@@ -20,10 +20,13 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"sync/atomic"
 	"testing"
 
+	crossplanetest "github.com/crossplane/crossplane-runtime/v2/pkg/test"
 	"github.com/google/go-cmp/cmp"
 	"github.com/google/go-cmp/cmp/cmpopts"
+	"k8s.io/apimachinery/pkg/api/meta"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/types"
@@ -31,6 +34,12 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/client/fake"
 
 	placementv1beta1 "go.goms.io/fleet/apis/placement/v1beta1"
+)
+
+const (
+	bindingName1 = "binding-1"
+	bindingName2 = "binding-2"
+	bindingName3 = "binding-3"
 )
 
 func TestListBindingsFromKey(t *testing.T) {
@@ -425,6 +434,83 @@ func TestListBindingsFromKey(t *testing.T) {
 				t.Errorf("ListBindingsFromKey() diff (-got +want):\n%s", diff)
 			}
 		})
+	}
+}
+
+// TestListBindingsFromKey_Sorted verifies that the returned bindings are always sorted by their names.
+func TestListBindingsFromKey_Sorted(t *testing.T) {
+	ctx := context.Background()
+
+	// Set a mode variable to control the behavior of list ops.
+	mockMode := atomic.Int32{}
+	mockMode.Store(0)
+
+	// Use the mock client from the crossplane package rather than the commonly used fake.Client to
+	// better manipulate the list op results.
+	mockClient := crossplanetest.MockClient{
+		MockList: func(ctx context.Context, list client.ObjectList, opts ...client.ListOption) error {
+			mode := mockMode.Load()
+			switch mode {
+			case 0:
+				if err := meta.SetList(list, []runtime.Object{
+					&placementv1beta1.ClusterResourceBinding{
+						ObjectMeta: metav1.ObjectMeta{
+							Name: bindingName1,
+						},
+					},
+					&placementv1beta1.ClusterResourceBinding{
+						ObjectMeta: metav1.ObjectMeta{
+							Name: bindingName2,
+						},
+					},
+					&placementv1beta1.ClusterResourceBinding{
+						ObjectMeta: metav1.ObjectMeta{
+							Name: bindingName3,
+						},
+					},
+				}); err != nil {
+					return fmt.Errorf("cannot set list results: %w", err)
+				}
+			case 1:
+				if err := meta.SetList(list, []runtime.Object{
+					&placementv1beta1.ClusterResourceBinding{
+						ObjectMeta: metav1.ObjectMeta{
+							Name: bindingName3,
+						},
+					},
+					&placementv1beta1.ClusterResourceBinding{
+						ObjectMeta: metav1.ObjectMeta{
+							Name: bindingName2,
+						},
+					},
+					&placementv1beta1.ClusterResourceBinding{
+						ObjectMeta: metav1.ObjectMeta{
+							Name: bindingName1,
+						},
+					},
+				}); err != nil {
+					return fmt.Errorf("cannot set list results: %w", err)
+				}
+			default:
+				return fmt.Errorf("unexpected mock mode: %d", mode)
+			}
+			return nil
+		},
+	}
+
+	bindingsInMode0, err := ListBindingsFromKey(ctx, &mockClient, types.NamespacedName{Name: "placeholder"})
+	if err != nil {
+		t.Fatalf("ListBindingsFromKey() in mode 0 returned error: %v", err)
+	}
+
+	mockMode.Store(1)
+	bindingsInMode1, err := ListBindingsFromKey(ctx, &mockClient, types.NamespacedName{Name: "placeholder"})
+	if err != nil {
+		t.Fatalf("ListBindingsFromKey() in mode 1 returned error: %v", err)
+	}
+
+	if diff := cmp.Diff(bindingsInMode0, bindingsInMode1); diff != "" {
+		t.Errorf("ListBindingsFromKey() returned different results in different modes (-mode0, +mode1):\n%s", diff)
 	}
 }
 
