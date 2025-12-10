@@ -18,18 +18,23 @@ package workapplier
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 	"testing"
 	"time"
 
 	"github.com/google/go-cmp/cmp"
 	"github.com/google/go-cmp/cmp/cmpopts"
+	appsv1 "k8s.io/api/apps/v1"
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/types"
 	"k8s.io/client-go/kubernetes/scheme"
+	"k8s.io/klog/v2"
 	"k8s.io/utils/ptr"
+	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/client/fake"
 
 	fleetv1beta1 "github.com/kubefleet-dev/kubefleet/apis/placement/v1beta1"
@@ -2027,6 +2032,169 @@ func TestSetWorkDiffReportedCondition(t *testing.T) {
 				ignoreFieldConditionLTTMsg, cmpopts.EquateEmpty(),
 			); diff != "" {
 				t.Errorf("set work status conditions mismatches (-got, +want):\n%s", diff)
+			}
+		})
+	}
+}
+
+// TestBackReportStatus tests the backReportStatus method.
+func TestBackReportStatus(t *testing.T) {
+	workRef := klog.ObjectRef{
+		Name:      workName,
+		Namespace: memberReservedNSName1,
+	}
+	now := metav1.Now()
+
+	deployWithStatus := deploy.DeepCopy()
+	deployWithStatus.Status = appsv1.DeploymentStatus{
+		ObservedGeneration:  2,
+		Replicas:            5,
+		UpdatedReplicas:     5,
+		ReadyReplicas:       5,
+		AvailableReplicas:   5,
+		UnavailableReplicas: 0,
+		Conditions: []appsv1.DeploymentCondition{
+			{
+				Type:   appsv1.DeploymentAvailable,
+				Status: corev1.ConditionTrue,
+			},
+		},
+	}
+	deployStatusWrapperMap := map[string]interface{}{
+		"apiVersion": "apps/v1",
+		"kind":       "Deployment",
+		"status":     deployWithStatus.Status,
+	}
+	deployStatusWrapperBytes, _ := json.Marshal(deployStatusWrapperMap)
+
+	deployWithStatusBfr := deploy.DeepCopy()
+	deployWithStatusBfr.Status = appsv1.DeploymentStatus{
+		ObservedGeneration:  1,
+		Replicas:            4,
+		UpdatedReplicas:     1,
+		ReadyReplicas:       1,
+		AvailableReplicas:   1,
+		UnavailableReplicas: 3,
+		Conditions: []appsv1.DeploymentCondition{
+			{
+				Type:   appsv1.DeploymentAvailable,
+				Status: corev1.ConditionFalse,
+			},
+			{
+				Type:   appsv1.DeploymentProgressing,
+				Status: corev1.ConditionTrue,
+			},
+		},
+	}
+	deployStatusWrapperMapBfr := map[string]interface{}{
+		"apiVersion": "apps/v1",
+		"kind":       "Deployment",
+		"status":     deployWithStatusBfr.Status,
+	}
+	deployStatusWrapperBytesBfr, _ := json.Marshal(deployStatusWrapperMapBfr)
+
+	testCases := []struct {
+		name               string
+		manifestCond       *fleetv1beta1.ManifestCondition
+		inMemberClusterObj *unstructured.Unstructured
+		// The placeholder is added here to help verify the integrity of backported
+		// status by unmarshalling the data into its original data structure (e.g.,
+		// a Kubernetes Deployment).
+		objPlaceholder   client.Object
+		wantManifestCond *fleetv1beta1.ManifestCondition
+		wantIgnored      bool
+	}{
+		{
+			name:               "object with status",
+			manifestCond:       &fleetv1beta1.ManifestCondition{},
+			inMemberClusterObj: toUnstructured(t, deployWithStatus),
+			objPlaceholder:     deploy.DeepCopy(),
+			wantManifestCond: &fleetv1beta1.ManifestCondition{
+				BackReportedStatus: &fleetv1beta1.BackReportedStatus{
+					ObservedStatus: runtime.RawExtension{
+						Raw: deployStatusWrapperBytes,
+					},
+					ObservationTime: now,
+				},
+			},
+		},
+		{
+			name: "object with status, overwriting previous back-reported status",
+			manifestCond: &fleetv1beta1.ManifestCondition{
+				BackReportedStatus: &fleetv1beta1.BackReportedStatus{
+					ObservedStatus: runtime.RawExtension{
+						Raw: deployStatusWrapperBytesBfr,
+					},
+					ObservationTime: metav1.Time{
+						Time: now.Add(-1 * time.Minute),
+					},
+				},
+			},
+			inMemberClusterObj: toUnstructured(t, deployWithStatus),
+			objPlaceholder:     deploy.DeepCopy(),
+			wantManifestCond: &fleetv1beta1.ManifestCondition{
+				BackReportedStatus: &fleetv1beta1.BackReportedStatus{
+					ObservedStatus: runtime.RawExtension{
+						Raw: deployStatusWrapperBytes,
+					},
+					ObservationTime: now,
+				},
+			},
+		},
+		{
+			name:               "object with no status",
+			manifestCond:       &fleetv1beta1.ManifestCondition{},
+			inMemberClusterObj: toUnstructured(t, configMap.DeepCopy()),
+			wantManifestCond:   &fleetv1beta1.ManifestCondition{},
+			wantIgnored:        true,
+		},
+		// Normally this case will never occur.
+		{
+			name:             "no object found on the member cluster side",
+			manifestCond:     &fleetv1beta1.ManifestCondition{},
+			wantManifestCond: &fleetv1beta1.ManifestCondition{},
+			wantIgnored:      true,
+		},
+		// Normally this case will never occur.
+		{
+			name:               "object found on the member cluster side but has no data",
+			manifestCond:       &fleetv1beta1.ManifestCondition{},
+			inMemberClusterObj: &unstructured.Unstructured{},
+			wantManifestCond:   &fleetv1beta1.ManifestCondition{},
+			wantIgnored:        true,
+		},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			backReportStatus(tc.inMemberClusterObj, tc.manifestCond, now, workRef)
+
+			if tc.wantIgnored {
+				if tc.manifestCond.BackReportedStatus != nil {
+					t.Fatalf("backReportStatus() reported status data unexpectedly")
+					return
+				}
+				return
+			}
+
+			// The test spec here attempts to re-build the status instead of directly
+			// comparing the Raw bytes, as the JSON marshalling ops are not guaranteed
+			// to produce deterministic results (e.g., the order of object keys might vary
+			// on different unmarshalling attempts, even though the data remains the same).
+			backReportedStatusBytes := tc.manifestCond.BackReportedStatus.ObservedStatus.Raw
+			if err := json.Unmarshal(backReportedStatusBytes, tc.objPlaceholder); err != nil {
+				t.Fatalf("back reported data unmarshalling err: %v", err)
+			}
+			backReportedStatusUnstructured := toUnstructured(t, tc.objPlaceholder)
+			// The test spec here does not verify the API version and Kind info as they
+			// are tracked just for structural integrity reasons; the information is not
+			// actually in use.
+			if diff := cmp.Diff(backReportedStatusUnstructured.Object["status"], tc.inMemberClusterObj.Object["status"]); diff != "" {
+				t.Errorf("backReportStatus() manifestCond diffs (-got, +want):\n%s", diff)
+			}
+
+			if !cmp.Equal(tc.manifestCond.BackReportedStatus.ObservationTime, now) {
+				t.Errorf("backReportStatus() observed timestamp not equal, got %v, want %v", tc.manifestCond.BackReportedStatus.ObservationTime, now)
 			}
 		})
 	}

@@ -505,6 +505,9 @@ func (r *Reconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.Resu
 	trackWorkAndManifestProcessingRequestMetrics(work)
 
 	// Requeue the Work object with a delay based on the requeue rate limiter.
+	//
+	// Note (chenyu1): at this moment the work applier does not register changes on back-reported
+	// status as a trigger for resetting the rate limiter.
 	requeueDelay := r.requeueRateLimiter.When(work, bundles)
 	klog.V(2).InfoS("Requeue the Work object for re-processing", "work", workRef, "delaySeconds", requeueDelay.Seconds())
 	return ctrl.Result{RequeueAfter: requeueDelay}, nil
