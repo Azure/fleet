@@ -66,7 +66,6 @@ jobs:
       - name: Merge upstream, replace module paths, and run make reviewable
         if: steps.commits.outputs.has_changes == 'true'
         id: merge
-        continue-on-error: true
         run: |
           git merge -X theirs cncf/main --no-commit
           if [ $? -ne 0 ]; then
@@ -93,7 +92,7 @@ jobs:
           
           # Stage all changes and create single merge commit
           git add .
-          git commit -m "chore: backport changes from cncf/main, update module paths, and run make reviewable"
+          git commit -s -m "chore: backport changes from cncf/main, update module paths, and run make reviewable"
           
           # Get commit range for PR description
           COMMITS=$(git log --oneline --decorate HEAD~1^2..HEAD^2)
@@ -175,7 +174,7 @@ jobs:
           echo "  git merge -X theirs cncf/main"
           echo "  # Resolve conflicts manually"
           echo "  git add ."
-          echo "  git commit"
+          echo "  git commit -s"
           echo "  git push"
           exit 1
 
