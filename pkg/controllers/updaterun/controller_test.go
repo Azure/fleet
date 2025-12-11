@@ -1079,3 +1079,295 @@ func TestRemoveWaitTimeFromUpdateRunStatus(t *testing.T) {
 		})
 	}
 }
+
+func TestUpdateAllStatusConditionsGeneration(t *testing.T) {
+	tests := map[string]struct {
+		status     *placementv1beta1.UpdateRunStatus
+		generation int64
+		wantStatus *placementv1beta1.UpdateRunStatus
+	}{
+		"should update ObservedGeneration for main conditions": {
+			status: &placementv1beta1.UpdateRunStatus{
+				Conditions: []metav1.Condition{
+					{
+						Type:               string(placementv1beta1.StagedUpdateRunConditionInitialized),
+						Status:             metav1.ConditionTrue,
+						ObservedGeneration: 4,
+					},
+					{
+						Type:               string(placementv1beta1.StagedUpdateRunConditionProgressing),
+						Status:             metav1.ConditionTrue,
+						ObservedGeneration: 4,
+					},
+				},
+			},
+			generation: 5,
+			wantStatus: &placementv1beta1.UpdateRunStatus{
+				Conditions: []metav1.Condition{
+					{
+						Type:               string(placementv1beta1.StagedUpdateRunConditionInitialized),
+						Status:             metav1.ConditionTrue,
+						ObservedGeneration: 5,
+					},
+					{
+						Type:               string(placementv1beta1.StagedUpdateRunConditionProgressing),
+						Status:             metav1.ConditionTrue,
+						ObservedGeneration: 5,
+					},
+				},
+			},
+		},
+		"should update ObservedGeneration for stage conditions": {
+			status: &placementv1beta1.UpdateRunStatus{
+				Conditions: []metav1.Condition{
+					{
+						Type:               string(placementv1beta1.StagedUpdateRunConditionInitialized),
+						Status:             metav1.ConditionTrue,
+						ObservedGeneration: 2,
+					},
+					{
+						Type:               string(placementv1beta1.StagedUpdateRunConditionProgressing),
+						Status:             metav1.ConditionTrue,
+						ObservedGeneration: 2,
+					},
+				},
+				StagesStatus: []placementv1beta1.StageUpdatingStatus{
+					{
+						Conditions: []metav1.Condition{
+							{
+								Type:               string(placementv1beta1.StageUpdatingConditionProgressing),
+								Status:             metav1.ConditionTrue,
+								ObservedGeneration: 2,
+							},
+						},
+					},
+				},
+			},
+			generation: 3,
+			wantStatus: &placementv1beta1.UpdateRunStatus{
+				Conditions: []metav1.Condition{
+					{
+						Type:               string(placementv1beta1.StagedUpdateRunConditionInitialized),
+						Status:             metav1.ConditionTrue,
+						ObservedGeneration: 3,
+					},
+					{
+						Type:               string(placementv1beta1.StagedUpdateRunConditionProgressing),
+						Status:             metav1.ConditionTrue,
+						ObservedGeneration: 3,
+					},
+				},
+				StagesStatus: []placementv1beta1.StageUpdatingStatus{
+					{
+						Conditions: []metav1.Condition{
+							{
+								Type:               string(placementv1beta1.StageUpdatingConditionProgressing),
+								Status:             metav1.ConditionTrue,
+								ObservedGeneration: 3,
+							},
+						},
+					},
+				},
+			},
+		},
+		"should handle empty status": {
+			status:     &placementv1beta1.UpdateRunStatus{},
+			generation: 2,
+			wantStatus: &placementv1beta1.UpdateRunStatus{},
+		},
+		"should handle complex nested structure": {
+			status: &placementv1beta1.UpdateRunStatus{
+				Conditions: []metav1.Condition{
+					{
+						Type:               string(placementv1beta1.StagedUpdateRunConditionInitialized),
+						Status:             metav1.ConditionTrue,
+						ObservedGeneration: 7,
+					},
+					{
+						Type:               string(placementv1beta1.StagedUpdateRunConditionProgressing),
+						Status:             metav1.ConditionTrue,
+						ObservedGeneration: 7,
+					},
+				},
+				StagesStatus: []placementv1beta1.StageUpdatingStatus{
+					{
+						Conditions: []metav1.Condition{
+							{
+								Type:               string(placementv1beta1.StageUpdatingConditionProgressing),
+								Status:             metav1.ConditionTrue,
+								ObservedGeneration: 7,
+							},
+							{
+								Type:               string(placementv1beta1.StageUpdatingConditionSucceeded),
+								Status:             metav1.ConditionTrue,
+								ObservedGeneration: 7,
+							},
+						},
+						BeforeStageTaskStatus: []placementv1beta1.StageTaskStatus{
+							{
+								Conditions: []metav1.Condition{
+									{
+										Type:               string(placementv1beta1.StageTaskConditionWaitTimeElapsed),
+										Status:             metav1.ConditionTrue,
+										ObservedGeneration: 7,
+									},
+								},
+							},
+						},
+						Clusters: []placementv1beta1.ClusterUpdatingStatus{
+							{
+								Conditions: []metav1.Condition{
+									{
+										Type:               string(placementv1beta1.ClusterUpdatingConditionStarted),
+										Status:             metav1.ConditionTrue,
+										ObservedGeneration: 7,
+									},
+									{
+										Type:               string(placementv1beta1.ClusterUpdatingConditionSucceeded),
+										Status:             metav1.ConditionTrue,
+										ObservedGeneration: 7,
+									},
+								},
+							},
+							{
+								Conditions: []metav1.Condition{
+									{
+										Type:               string(placementv1beta1.ClusterUpdatingConditionStarted),
+										Status:             metav1.ConditionTrue,
+										ObservedGeneration: 7,
+									},
+									{
+										Type:               string(placementv1beta1.ClusterUpdatingConditionSucceeded),
+										Status:             metav1.ConditionTrue,
+										ObservedGeneration: 7,
+									},
+								},
+							},
+						},
+					},
+				},
+				DeletionStageStatus: &placementv1beta1.StageUpdatingStatus{
+					Conditions: []metav1.Condition{
+						{
+							Type:               string(placementv1beta1.StagedUpdateRunConditionProgressing),
+							Status:             metav1.ConditionTrue,
+							ObservedGeneration: 7,
+						},
+					},
+					Clusters: []placementv1beta1.ClusterUpdatingStatus{
+						{
+							Conditions: []metav1.Condition{
+								{
+									Type:               string(placementv1beta1.ClusterUpdatingConditionStarted),
+									Status:             metav1.ConditionTrue,
+									ObservedGeneration: 7,
+								},
+							},
+						},
+					},
+				},
+			},
+			generation: 8,
+			wantStatus: &placementv1beta1.UpdateRunStatus{
+				Conditions: []metav1.Condition{
+					{
+						Type:               string(placementv1beta1.StagedUpdateRunConditionInitialized),
+						Status:             metav1.ConditionTrue,
+						ObservedGeneration: 8,
+					},
+					{
+						Type:               string(placementv1beta1.StagedUpdateRunConditionProgressing),
+						Status:             metav1.ConditionTrue,
+						ObservedGeneration: 8,
+					},
+				},
+				StagesStatus: []placementv1beta1.StageUpdatingStatus{
+					{
+						Conditions: []metav1.Condition{
+							{
+								Type:               string(placementv1beta1.StageUpdatingConditionProgressing),
+								Status:             metav1.ConditionTrue,
+								ObservedGeneration: 8,
+							},
+							{
+								Type:               string(placementv1beta1.StageUpdatingConditionSucceeded),
+								Status:             metav1.ConditionTrue,
+								ObservedGeneration: 8,
+							},
+						},
+						BeforeStageTaskStatus: []placementv1beta1.StageTaskStatus{
+							{
+								Conditions: []metav1.Condition{
+									{
+										Type:               string(placementv1beta1.StageTaskConditionWaitTimeElapsed),
+										Status:             metav1.ConditionTrue,
+										ObservedGeneration: 8,
+									},
+								},
+							},
+						},
+						Clusters: []placementv1beta1.ClusterUpdatingStatus{
+							{
+								Conditions: []metav1.Condition{
+									{
+										Type:               string(placementv1beta1.ClusterUpdatingConditionStarted),
+										Status:             metav1.ConditionTrue,
+										ObservedGeneration: 8,
+									},
+									{
+										Type:               string(placementv1beta1.ClusterUpdatingConditionSucceeded),
+										Status:             metav1.ConditionTrue,
+										ObservedGeneration: 8,
+									},
+								},
+							},
+							{
+								Conditions: []metav1.Condition{
+									{
+										Type:               string(placementv1beta1.ClusterUpdatingConditionStarted),
+										Status:             metav1.ConditionTrue,
+										ObservedGeneration: 8,
+									},
+									{
+										Type:               string(placementv1beta1.ClusterUpdatingConditionSucceeded),
+										Status:             metav1.ConditionTrue,
+										ObservedGeneration: 8,
+									},
+								},
+							},
+						},
+					},
+				},
+				DeletionStageStatus: &placementv1beta1.StageUpdatingStatus{
+					Conditions: []metav1.Condition{
+						{
+							Type:               string(placementv1beta1.StagedUpdateRunConditionProgressing),
+							Status:             metav1.ConditionTrue,
+							ObservedGeneration: 8,
+						},
+					},
+					Clusters: []placementv1beta1.ClusterUpdatingStatus{
+						{
+							Conditions: []metav1.Condition{
+								{
+									Type:               string(placementv1beta1.ClusterUpdatingConditionStarted),
+									Status:             metav1.ConditionTrue,
+									ObservedGeneration: 8,
+								},
+							},
+						},
+					},
+				},
+			},
+		},
+	}
+
+	for name, tt := range tests {
+		t.Run(name, func(t *testing.T) {
+			updateAllStatusConditionsGeneration(tt.status, tt.generation)
+			if diff := cmp.Diff(tt.wantStatus, tt.status); diff != "" {
+				t.Errorf("updateAllStatusConditionsGeneration() mismatch (-want +got):\n%s", diff)
+			}
+		})
+	}
+}

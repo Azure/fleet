@@ -2068,16 +2068,12 @@ func updateRunStageTaskSucceedConditions(generation int64, taskType placementv1b
 }
 
 func updateRunSucceedConditions(generation int64) []metav1.Condition {
-	initializeCondGeneration := generation
-	if generation > 1 {
-		initializeCondGeneration = 1
-	}
 	return []metav1.Condition{
 		{
 			Type:               string(placementv1beta1.StagedUpdateRunConditionInitialized),
 			Status:             metav1.ConditionTrue,
 			Reason:             condition.UpdateRunInitializeSucceededReason,
-			ObservedGeneration: initializeCondGeneration,
+			ObservedGeneration: generation,
 		},
 		{
 			Type:               string(placementv1beta1.StagedUpdateRunConditionProgressing),

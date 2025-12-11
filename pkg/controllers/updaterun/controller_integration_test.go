@@ -26,6 +26,7 @@ import (
 	"github.com/google/go-cmp/cmp"
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
+	"github.com/prometheus/client_golang/prometheus"
 	prometheusclientmodel "github.com/prometheus/client_model/go"
 
 	corev1 "k8s.io/api/core/v1"
@@ -332,6 +333,16 @@ func generateFailedMetric(updateRun *placementv1beta1.ClusterStagedUpdateRun) *p
 	}
 }
 
+func generateStoppedMetric(updateRun *placementv1beta1.ClusterStagedUpdateRun) *prometheusclientmodel.Metric {
+	return &prometheusclientmodel.Metric{
+		Label: generateMetricsLabels(updateRun, string(placementv1beta1.StagedUpdateRunConditionProgressing),
+			string(metav1.ConditionFalse), condition.UpdateRunStoppedReason),
+		Gauge: &prometheusclientmodel.Gauge{
+			Value: ptr.To(float64(time.Now().UnixNano()) / 1e9),
+		},
+	}
+}
+
 func generateSucceededMetric(updateRun *placementv1beta1.ClusterStagedUpdateRun) *prometheusclientmodel.Metric {
 	return &prometheusclientmodel.Metric{
 		Label: generateMetricsLabels(updateRun, string(placementv1beta1.StagedUpdateRunConditionSucceeded),
@@ -340,6 +351,24 @@ func generateSucceededMetric(updateRun *placementv1beta1.ClusterStagedUpdateRun)
 			Value: ptr.To(float64(time.Now().UnixNano()) / 1e9),
 		},
 	}
+}
+
+func labelPairsToMap(pairs []*prometheusclientmodel.LabelPair) prometheus.Labels {
+	m := prometheus.Labels{}
+	for _, p := range pairs {
+		m[p.GetName()] = p.GetValue()
+	}
+	return m
+}
+
+func removeMetricFromMetricList(metricList []*prometheusclientmodel.Metric, metricToRemove *prometheusclientmodel.Metric) []*prometheusclientmodel.Metric {
+	var result []*prometheusclientmodel.Metric
+	for _, metric := range metricList {
+		if !cmp.Equal(labelPairsToMap(metric.Label), labelPairsToMap(metricToRemove.Label)) {
+			result = append(result, metric)
+		}
+	}
+	return result
 }
 
 func generateTestClusterStagedUpdateRun() *placementv1beta1.ClusterStagedUpdateRun {
@@ -819,6 +848,12 @@ func generateFalseCondition(obj client.Object, condType any) metav1.Condition {
 }
 
 func generateFalseProgressingCondition(obj client.Object, condType any, reason string) metav1.Condition {
+	falseCond := generateFalseCondition(obj, condType)
+	falseCond.Reason = reason
+	return falseCond
+}
+
+func generateFalseConditionWithReason(obj client.Object, condType any, reason string) metav1.Condition {
 	falseCond := generateFalseCondition(obj, condType)
 	falseCond.Reason = reason
 	return falseCond
