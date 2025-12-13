@@ -61,6 +61,9 @@ type Manager interface {
 	// GetNameSpaceScopedResources returns the list of namespace scoped resources we are watching.
 	GetNameSpaceScopedResources() []schema.GroupVersionResource
 
+	// GetAllResources returns the list of all resources (both cluster-scoped and namespace-scoped) we are watching.
+	GetAllResources() []schema.GroupVersionResource
+
 	// IsClusterScopedResources returns if a resource is cluster scoped.
 	IsClusterScopedResources(resource schema.GroupVersionKind) bool
 
@@ -218,6 +221,19 @@ func (s *informerManagerImpl) GetNameSpaceScopedResources() []schema.GroupVersio
 	res := make([]schema.GroupVersionResource, 0, len(s.apiResources))
 	for _, resource := range s.apiResources {
 		if resource.isPresent && !resource.isStaticResource && !resource.IsClusterScoped {
+			res = append(res, resource.GroupVersionResource)
+		}
+	}
+	return res
+}
+
+func (s *informerManagerImpl) GetAllResources() []schema.GroupVersionResource {
+	s.resourcesLock.RLock()
+	defer s.resourcesLock.RUnlock()
+
+	res := make([]schema.GroupVersionResource, 0, len(s.apiResources))
+	for _, resource := range s.apiResources {
+		if resource.isPresent {
 			res = append(res, resource.GroupVersionResource)
 		}
 	}

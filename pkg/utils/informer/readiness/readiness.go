@@ -1,0 +1,60 @@
+/*
+Copyright 2025 The KubeFleet Authors.
+
+Licensed under the Apache License, Version 2.0 (the "License");
+you may not use this file except in compliance with the License.
+You may obtain a copy of the License at
+
+    http://www.apache.org/licenses/LICENSE-2.0
+
+Unless required by applicable law or agreed to in writing, software
+distributed under the License is distributed on an "AS IS" BASIS,
+WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+See the License for the specific language governing permissions and
+limitations under the License.
+*/
+
+package readiness
+
+import (
+	"fmt"
+	"net/http"
+
+	"github.com/kubefleet-dev/kubefleet/pkg/utils/informer"
+	"k8s.io/apimachinery/pkg/runtime/schema"
+	"k8s.io/klog/v2"
+)
+
+// InformerReadinessChecker creates a readiness check function that verifies
+// all resource informer caches are synced before marking the pod as ready.
+// This prevents components from processing requests before the discovery cache is populated.
+func InformerReadinessChecker(resourceInformer informer.Manager) func(*http.Request) error {
+	return func(_ *http.Request) error {
+		if resourceInformer == nil {
+			return fmt.Errorf("resource informer not initialized")
+		}
+
+		// Require ALL informer caches to be synced before marking ready
+		allResources := resourceInformer.GetAllResources()
+		if len(allResources) == 0 {
+			// This can happen during startup when the ResourceInformer is created but the ChangeDetector
+			// hasn't discovered and registered any resources yet via AddDynamicResources().
+			return fmt.Errorf("resource informer not ready: no resources registered")
+		}
+
+		// Check that ALL informers have synced
+		unsyncedResources := []schema.GroupVersionResource{}
+		for _, gvr := range allResources {
+			if !resourceInformer.IsInformerSynced(gvr) {
+				unsyncedResources = append(unsyncedResources, gvr)
+			}
+		}
+
+		if len(unsyncedResources) > 0 {
+			return fmt.Errorf("resource informer not ready: %d/%d informers not synced yet", len(unsyncedResources), len(allResources))
+		}
+
+		klog.V(5).InfoS("All resource informers synced", "totalInformers", len(allResources))
+		return nil
+	}
+}
