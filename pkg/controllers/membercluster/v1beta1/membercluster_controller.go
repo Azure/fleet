@@ -515,8 +515,18 @@ func (r *Reconciler) syncInternalMemberClusterStatus(imc *clusterv1beta1.Interna
 	}
 
 	// TODO: We didn't handle condition type: clusterv1beta1.ConditionTypeMemberClusterHealthy.
-	// Copy Agent status.
-	mc.Status.AgentStatus = imc.Status.AgentStatus
+	// Copy Agent status and set ObservedGeneration for agent conditions.
+	if len(imc.Status.AgentStatus) > 0 {
+		mc.Status.AgentStatus = make([]clusterv1beta1.AgentStatus, len(imc.Status.AgentStatus))
+	}
+	for i := range imc.Status.AgentStatus {
+		mc.Status.AgentStatus[i] = *imc.Status.AgentStatus[i].DeepCopy()
+		// Set ObservedGeneration for each agent condition.
+		for j := range mc.Status.AgentStatus[i].Conditions {
+			mc.Status.AgentStatus[i].Conditions[j].ObservedGeneration = mc.GetGeneration()
+		}
+	}
+
 	r.aggregateJoinedCondition(mc)
 	// Copy resource usages.
 	mc.Status.ResourceUsage = imc.Status.ResourceUsage
