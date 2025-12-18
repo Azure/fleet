@@ -333,6 +333,16 @@ func generateFailedMetric(updateRun *placementv1beta1.ClusterStagedUpdateRun) *p
 	}
 }
 
+func generateStoppingMetric(updateRun *placementv1beta1.ClusterStagedUpdateRun) *prometheusclientmodel.Metric {
+	return &prometheusclientmodel.Metric{
+		Label: generateMetricsLabels(updateRun, string(placementv1beta1.StagedUpdateRunConditionProgressing),
+			string(metav1.ConditionUnknown), condition.UpdateRunStoppingReason),
+		Gauge: &prometheusclientmodel.Gauge{
+			Value: ptr.To(float64(time.Now().UnixNano()) / 1e9),
+		},
+	}
+}
+
 func generateStoppedMetric(updateRun *placementv1beta1.ClusterStagedUpdateRun) *prometheusclientmodel.Metric {
 	return &prometheusclientmodel.Metric{
 		Label: generateMetricsLabels(updateRun, string(placementv1beta1.StagedUpdateRunConditionProgressing),
@@ -857,4 +867,13 @@ func generateFalseConditionWithReason(obj client.Object, condType any, reason st
 	falseCond := generateFalseCondition(obj, condType)
 	falseCond.Reason = reason
 	return falseCond
+}
+
+func generateProgressingUnknownConditionWithReason(obj client.Object, reason string) metav1.Condition {
+	return metav1.Condition{
+		Status:             metav1.ConditionUnknown,
+		Type:               string(placementv1beta1.StageUpdatingConditionProgressing),
+		ObservedGeneration: obj.GetGeneration(),
+		Reason:             reason,
+	}
 }

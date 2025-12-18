@@ -164,7 +164,7 @@ func (r *Reconciler) Reconcile(ctx context.Context, req runtime.Request) (runtim
 		klog.V(2).InfoS("The updateRun is initialized but not executed, waiting to execute", "state", state, "updateRun", runObjRef)
 	case placementv1beta1.StateRun:
 		// Execute the updateRun.
-		klog.InfoS("Continue to execute the updateRun", "updatingStageIndex", updatingStageIndex, "updateRun", runObjRef)
+		klog.V(2).InfoS("Continue to execute the updateRun", "updatingStageIndex", updatingStageIndex, "updateRun", runObjRef)
 		finished, waitTime, execErr := r.execute(ctx, updateRun, updatingStageIndex, toBeUpdatedBindings, toBeDeletedBindings)
 		if errors.Is(execErr, errStagedUpdatedAborted) {
 			// errStagedUpdatedAborted cannot be retried.
@@ -176,23 +176,23 @@ func (r *Reconciler) Reconcile(ctx context.Context, req runtime.Request) (runtim
 			return runtime.Result{}, r.recordUpdateRunSucceeded(ctx, updateRun)
 		}
 
-		// The execution is not finished yet or it encounters a retriable error.
-		// We need to record the status and requeue.
-		if updateErr := r.recordUpdateRunStatus(ctx, updateRun); updateErr != nil {
-			return runtime.Result{}, updateErr
-		}
-		klog.V(2).InfoS("The updateRun is not finished yet", "requeueWaitTime", waitTime, "execErr", execErr, "updateRun", runObjRef)
-		if execErr != nil {
-			return runtime.Result{}, execErr
-		}
-		return runtime.Result{Requeue: true, RequeueAfter: waitTime}, nil
+		return r.handleIncompleteUpdateRun(ctx, updateRun, waitTime, execErr, state, runObjRef)
 	case placementv1beta1.StateStop:
 		// Stop the updateRun.
-		klog.InfoS("Stopping the updateRun", "state", state, "updatingStageIndex", updatingStageIndex, "updateRun", runObjRef)
-		// TODO(britaniar): Implement the stopping logic for in-progress stages.
+		klog.V(2).InfoS("Stopping the updateRun", "state", state, "updatingStageIndex", updatingStageIndex, "updateRun", runObjRef)
+		finished, waitTime, stopErr := r.stop(updateRun, updatingStageIndex, toBeUpdatedBindings, toBeDeletedBindings)
+		if errors.Is(stopErr, errStagedUpdatedAborted) {
+			// errStagedUpdatedAborted cannot be retried.
+			return runtime.Result{}, r.recordUpdateRunFailed(ctx, updateRun, stopErr.Error())
+		}
 
-		klog.V(2).InfoS("The updateRun is stopped", "updateRun", runObjRef)
-		return runtime.Result{}, r.recordUpdateRunStopped(ctx, updateRun)
+		if finished {
+			klog.V(2).InfoS("The updateRun is stopped", "updateRun", runObjRef)
+			return runtime.Result{}, r.recordUpdateRunStopped(ctx, updateRun)
+		}
+
+		return r.handleIncompleteUpdateRun(ctx, updateRun, waitTime, stopErr, state, runObjRef)
+
 	default:
 		// Initialize, Run, or Stop are the only supported states.
 		unexpectedErr := controller.NewUnexpectedBehaviorError(fmt.Errorf("found unsupported updateRun state: %s", state))
@@ -200,6 +200,22 @@ func (r *Reconciler) Reconcile(ctx context.Context, req runtime.Request) (runtim
 		return runtime.Result{}, r.recordUpdateRunFailed(ctx, updateRun, unexpectedErr.Error())
 	}
 	return runtime.Result{}, nil
+}
+
+func (r *Reconciler) handleIncompleteUpdateRun(ctx context.Context, updateRun placementv1beta1.UpdateRunObj, waitTime time.Duration, err error, state placementv1beta1.State, runObjRef klog.ObjectRef) (runtime.Result, error) {
+	// The execution or stopping is not finished yet or it encounters a retriable error.
+	// We need to record the status and requeue.
+	if updateErr := r.recordUpdateRunStatus(ctx, updateRun); updateErr != nil {
+		return runtime.Result{}, updateErr
+	}
+
+	klog.V(2).InfoS("The updateRun is not finished yet", "state", state, "requeueWaitTime", waitTime, "err", err, "updateRun", runObjRef)
+
+	// Return execution or stopping retriable error if any.
+	if err != nil {
+		return runtime.Result{}, err
+	}
+	return runtime.Result{Requeue: true, RequeueAfter: waitTime}, nil
 }
 
 // handleDelete handles the deletion of the updateRun object.
