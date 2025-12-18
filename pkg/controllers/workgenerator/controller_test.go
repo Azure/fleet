@@ -3751,6 +3751,176 @@ func TestSyncApplyStrategy(t *testing.T) {
 	}
 }
 
+func TestAreAllWorkSynced(t *testing.T) {
+	tests := map[string]struct {
+		existingWorks   map[string]*fleetv1beta1.Work
+		resourceBinding fleetv1beta1.BindingObj
+		want            bool
+	}{
+		"returns false when no existing works": {
+			existingWorks: map[string]*fleetv1beta1.Work{},
+			resourceBinding: &fleetv1beta1.ClusterResourceBinding{
+				Spec: fleetv1beta1.ResourceBindingSpec{
+					ResourceSnapshotName: "snapshot-1",
+				},
+			},
+			want: false,
+		},
+		"returns true when all works are synced with annotation": {
+			existingWorks: map[string]*fleetv1beta1.Work{
+				"work1": {
+					ObjectMeta: metav1.ObjectMeta{
+						Name: "work1",
+						Annotations: map[string]string{
+							fleetv1beta1.ParentResourceSnapshotNameAnnotation: "snapshot-1",
+						},
+					},
+				},
+				"work2": {
+					ObjectMeta: metav1.ObjectMeta{
+						Name: "work2",
+						Annotations: map[string]string{
+							fleetv1beta1.ParentResourceSnapshotNameAnnotation: "snapshot-1",
+						},
+					},
+				},
+			},
+			resourceBinding: &fleetv1beta1.ClusterResourceBinding{
+				Spec: fleetv1beta1.ResourceBindingSpec{
+					ResourceSnapshotName: "snapshot-1",
+				},
+			},
+			want: true,
+		},
+		"returns false when works have different snapshot names": {
+			existingWorks: map[string]*fleetv1beta1.Work{
+				"work1": {
+					ObjectMeta: metav1.ObjectMeta{
+						Name: "work1",
+						Annotations: map[string]string{
+							fleetv1beta1.ParentResourceSnapshotNameAnnotation: "snapshot-1",
+						},
+					},
+				},
+				"work2": {
+					ObjectMeta: metav1.ObjectMeta{
+						Name: "work2",
+						Annotations: map[string]string{
+							fleetv1beta1.ParentResourceSnapshotNameAnnotation: "snapshot-2",
+						},
+					},
+				},
+			},
+			resourceBinding: &fleetv1beta1.ClusterResourceBinding{
+				Spec: fleetv1beta1.ResourceBindingSpec{
+					ResourceSnapshotName: "snapshot-1",
+				},
+			},
+			want: false,
+		},
+		"returns true when works are synced via label construction (fallback)": {
+			existingWorks: map[string]*fleetv1beta1.Work{
+				"work1": {
+					ObjectMeta: metav1.ObjectMeta{
+						Name: "work1",
+						Labels: map[string]string{
+							fleetv1beta1.ParentResourceSnapshotIndexLabel: "1",
+						},
+					},
+				},
+			},
+			resourceBinding: &fleetv1beta1.ClusterResourceBinding{
+				ObjectMeta: metav1.ObjectMeta{
+					Labels: map[string]string{
+						fleetv1beta1.PlacementTrackingLabel: "test-placement",
+					},
+				},
+				Spec: fleetv1beta1.ResourceBindingSpec{
+					ResourceSnapshotName: "test-placement-1-snapshot",
+				},
+			},
+			want: true,
+		},
+		"returns false when label construction fallback fails": {
+			existingWorks: map[string]*fleetv1beta1.Work{
+				"work1": {
+					ObjectMeta: metav1.ObjectMeta{
+						Name: "work1",
+						Labels: map[string]string{
+							fleetv1beta1.ParentResourceSnapshotIndexLabel: "2",
+						},
+					},
+				},
+			},
+			resourceBinding: &fleetv1beta1.ClusterResourceBinding{
+				ObjectMeta: metav1.ObjectMeta{
+					Labels: map[string]string{
+						fleetv1beta1.PlacementTrackingLabel: "test-placement",
+					},
+				},
+				Spec: fleetv1beta1.ResourceBindingSpec{
+					ResourceSnapshotName: "test-placement-1-snapshot",
+				},
+			},
+			want: false,
+		},
+		"returns false when works have no annotation and invalid label": {
+			existingWorks: map[string]*fleetv1beta1.Work{
+				"work1": {
+					ObjectMeta: metav1.ObjectMeta{
+						Name: "work1",
+						Labels: map[string]string{
+							fleetv1beta1.ParentResourceSnapshotIndexLabel: "invalid",
+						},
+					},
+				},
+			},
+			resourceBinding: &fleetv1beta1.ClusterResourceBinding{
+				ObjectMeta: metav1.ObjectMeta{
+					Labels: map[string]string{
+						fleetv1beta1.PlacementTrackingLabel: "test-placement",
+					},
+				},
+				Spec: fleetv1beta1.ResourceBindingSpec{
+					ResourceSnapshotName: "test-placement-1-snapshot",
+				},
+			},
+			want: false,
+		},
+		"returns true for ResourceBinding (namespaced) with annotation": {
+			existingWorks: map[string]*fleetv1beta1.Work{
+				"work1": {
+					ObjectMeta: metav1.ObjectMeta{
+						Name: "work1",
+						Annotations: map[string]string{
+							fleetv1beta1.ParentResourceSnapshotNameAnnotation: "test-snapshot-1",
+						},
+					},
+				},
+			},
+			resourceBinding: &fleetv1beta1.ResourceBinding{
+				ObjectMeta: metav1.ObjectMeta{
+					Name:      "test-binding",
+					Namespace: "test-namespace",
+				},
+				Spec: fleetv1beta1.ResourceBindingSpec{
+					ResourceSnapshotName: "test-snapshot-1",
+				},
+			},
+			want: true,
+		},
+	}
+
+	for name, tt := range tests {
+		t.Run(name, func(t *testing.T) {
+			got := areAllWorkSynced(tt.existingWorks, tt.resourceBinding, "", "")
+			if got != tt.want {
+				t.Errorf("areAllWorkSynced() = %v, want %v", got, tt.want)
+			}
+		})
+	}
+}
+
 func TestShouldIgnoreWork(t *testing.T) {
 	tests := map[string]struct {
 		enqueueCRP          bool
