@@ -96,7 +96,7 @@ type UpdateRunObjList interface {
 // +kubebuilder:printcolumn:JSONPath=`.status.conditions[?(@.type=="Succeeded")].status`,name="Succeeded",type=string
 // +kubebuilder:printcolumn:JSONPath=`.metadata.creationTimestamp`,name="Age",type=date
 // +kubebuilder:printcolumn:JSONPath=`.spec.stagedRolloutStrategyName`,name="Strategy",priority=1,type=string
-// +kubebuilder:validation:XValidation:rule="size(self.metadata.name) < 128",message="metadata.name max length is 127"
+// +kubebuilder:validation:XValidation:rule="size(self.metadata.name) < 64",message="metadata.name max length is 63"
 
 // ClusterStagedUpdateRun represents a stage by stage update process that applies ClusterResourcePlacement
 // selected resources to specified clusters.
@@ -791,7 +791,7 @@ func (c *ClusterApprovalRequestList) GetApprovalRequestObjs() []ApprovalRequestO
 // +kubebuilder:printcolumn:JSONPath=`.status.conditions[?(@.type=="Succeeded")].status`,name="Succeeded",type=string
 // +kubebuilder:printcolumn:JSONPath=`.metadata.creationTimestamp`,name="Age",type=date
 // +kubebuilder:printcolumn:JSONPath=`.spec.stagedRolloutStrategyName`,name="Strategy",priority=1,type=string
-// +kubebuilder:validation:XValidation:rule="size(self.metadata.name) < 128",message="metadata.name max length is 127"
+// +kubebuilder:validation:XValidation:rule="size(self.metadata.name) < 64",message="metadata.name max length is 63"
 
 // StagedUpdateRun represents a stage by stage update process that applies ResourcePlacement
 // selected resources to specified clusters.
