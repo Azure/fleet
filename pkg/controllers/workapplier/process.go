@@ -229,7 +229,7 @@ func (r *Reconciler) findInMemberClusterObjectFor(
 		return false
 	default:
 		// An unexpected error has occurred.
-		wrappedErr := controller.NewAPIServerError(true, err)
+		wrappedErr := controller.NewAPIServerError(false, err) // false as dynamic client is non-caching.
 		bundle.applyOrReportDiffErr = fmt.Errorf("failed to find the corresponding object for the manifest object in the member cluster: %w", wrappedErr)
 		bundle.applyOrReportDiffResTyp = ApplyOrReportDiffResTypeFailedToFindObjInMemberCluster
 		klog.ErrorS(wrappedErr,
