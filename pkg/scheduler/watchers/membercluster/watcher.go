@@ -171,7 +171,10 @@ func (r *Reconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.Resu
 			"Enqueueing placement for scheduler processing",
 			"memberCluster", memberClusterRef,
 			"placement", klog.KObj(placement))
-		r.SchedulerWorkQueue.Add(controller.GetObjectKeyFromObj(placement))
+		// TO-DO (chenyu1): at this moment, the scheduler still uses a simple queue implementation; as a result,
+		// the placement keys will be added to the queue immediately even with the AddBatched() call. Switch
+		// to a batched processing queue implementation later to take advantage of the batched processing feature.
+		r.SchedulerWorkQueue.AddBatched(controller.GetObjectKeyFromObj(placement))
 	}
 
 	// The reconciliation loop completes.

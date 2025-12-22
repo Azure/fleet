@@ -358,7 +358,7 @@ func SetupControllers(ctx context.Context, wg *sync.WaitGroup, mgr ctrl.Manager,
 		defaultProfile := profile.NewDefaultProfile()
 		defaultFramework := framework.NewFramework(defaultProfile, mgr)
 		defaultSchedulingQueue := queue.NewSimplePlacementSchedulingQueue(
-			queue.WithName(schedulerQueueName),
+			schedulerQueueName, nil,
 		)
 		// we use one scheduler for every 10 concurrent placement
 		defaultScheduler := scheduler.NewScheduler("DefaultScheduler", defaultFramework, defaultSchedulingQueue, mgr,

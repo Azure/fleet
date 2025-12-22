@@ -571,7 +571,7 @@ func beforeSuiteForProcess1() []byte {
 	Expect(err).NotTo(HaveOccurred(), "Failed to create controller manager")
 
 	// Spin up a scheduler work queue.
-	schedulerWorkQueue := queue.NewSimplePlacementSchedulingQueue()
+	schedulerWorkQueue := queue.NewSimplePlacementSchedulingQueue("", nil)
 
 	// Build a custom cluster eligibility checker.
 	clusterEligibilityChecker := clustereligibilitychecker.New(
