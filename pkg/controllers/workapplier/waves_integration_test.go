@@ -47,6 +47,7 @@ import (
 	fleetv1beta1 "github.com/kubefleet-dev/kubefleet/apis/placement/v1beta1"
 	"github.com/kubefleet-dev/kubefleet/pkg/utils"
 	"github.com/kubefleet-dev/kubefleet/pkg/utils/condition"
+	testutilsactuals "github.com/kubefleet-dev/kubefleet/test/utils/actuals"
 )
 
 // Note (chenyu1): all test cases in this file use a separate test environment
@@ -199,7 +200,7 @@ var _ = Describe("parallel processing with waves", func() {
 			appliedWorkRemovedActual := appliedWorkRemovedActual(workName, nsName)
 			Eventually(appliedWorkRemovedActual, eventuallyDuration, eventuallyInterval).Should(Succeed(), "Failed to remove the AppliedWork object")
 
-			workRemovedActual := workRemovedActual(workName)
+			workRemovedActual := testutilsactuals.WorkObjectRemovedActual(ctx, hubClient, workName, memberReservedNSName3)
 			Eventually(workRemovedActual, eventuallyDuration, eventuallyInterval).Should(Succeed(), "Failed to remove the Work object")
 			// The environment prepared by the envtest package does not support namespace
 			// deletion; consequently this test suite would not attempt to verify its deletion.
@@ -332,7 +333,7 @@ var _ = Describe("parallel processing with waves", func() {
 			appliedWorkRemovedActual := appliedWorkRemovedActual(workName, nsName)
 			Eventually(appliedWorkRemovedActual, eventuallyDuration, eventuallyInterval).Should(Succeed(), "Failed to remove the AppliedWork object")
 
-			workRemovedActual := workRemovedActual(workName)
+			workRemovedActual := testutilsactuals.WorkObjectRemovedActual(ctx, hubClient, workName, memberReservedNSName3)
 			Eventually(workRemovedActual, eventuallyDuration, eventuallyInterval).Should(Succeed(), "Failed to remove the Work object")
 			// The environment prepared by the envtest package does not support namespace
 			// deletion; consequently this test suite would not attempt to verify its deletion.
@@ -491,7 +492,7 @@ var _ = Describe("parallel processing with waves", func() {
 			appliedWorkRemovedActual := appliedWorkRemovedActual(workName, nsName)
 			Eventually(appliedWorkRemovedActual, eventuallyDuration, eventuallyInterval).Should(Succeed(), "Failed to remove the AppliedWork object")
 
-			workRemovedActual := workRemovedActual(workName)
+			workRemovedActual := testutilsactuals.WorkObjectRemovedActual(ctx, hubClient, workName, memberReservedNSName3)
 			Eventually(workRemovedActual, eventuallyDuration, eventuallyInterval).Should(Succeed(), "Failed to remove the Work object")
 			// The environment prepared by the envtest package does not support namespace
 			// deletion; consequently this test suite would not attempt to verify its deletion.
@@ -1260,7 +1261,7 @@ var _ = Describe("parallel processing with waves", func() {
 			appliedWorkRemovedActual := appliedWorkRemovedActual(workName, nsName)
 			Eventually(appliedWorkRemovedActual, eventuallyDuration, eventuallyInterval).Should(Succeed(), "Failed to remove the AppliedWork object")
 
-			workRemovedActual := workRemovedActual(workName)
+			workRemovedActual := testutilsactuals.WorkObjectRemovedActual(ctx, hubClient, workName, memberReservedNSName3)
 			Eventually(workRemovedActual, eventuallyDuration, eventuallyInterval).Should(Succeed(), "Failed to remove the Work object")
 			// The environment prepared by the envtest package does not support namespace
 			// deletion; consequently this test suite would not attempt to verify its deletion.

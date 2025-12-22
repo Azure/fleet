@@ -19,6 +19,7 @@ package resource
 
 import (
 	"encoding/json"
+	"fmt"
 	"testing"
 
 	appsv1 "k8s.io/api/apps/v1"
@@ -243,4 +244,58 @@ func CreateResourceContentForTest(t *testing.T, obj interface{}) *fleetv1beta1.R
 			Raw: rawWant,
 		},
 	}
+}
+
+// MarshalRuntimeObjToJSON marshals a runtime.Object to JSON bytes.
+func MarshalRuntimeObjToJSONForTest(obj runtime.Object) ([]byte, error) {
+	unstructuredObjMap, err := runtime.DefaultUnstructuredConverter.ToUnstructured(obj)
+	if err != nil {
+		return nil, fmt.Errorf("failed to convert runtime object to an unstructured object: %w", err)
+	}
+	unstructuredObj := &unstructured.Unstructured{Object: unstructuredObjMap}
+	json, err := unstructuredObj.MarshalJSON()
+	if err != nil {
+		return nil, fmt.Errorf("failed to marshal the unstructured object to JSON: %w", err)
+	}
+	return json, nil
+}
+
+// WorkObjectForTest creates a Work object for testing.
+func WorkObjectForTest(
+	workName, memberClusterReservedNSName, placementObjName, placementObjNSName string,
+	applyStrategy *fleetv1beta1.ApplyStrategy,
+	reportBackStrategy *fleetv1beta1.ReportBackStrategy,
+	rawManifestJSON ...[]byte,
+) *fleetv1beta1.Work {
+	manifests := make([]fleetv1beta1.Manifest, len(rawManifestJSON))
+	for idx := range rawManifestJSON {
+		manifests[idx] = fleetv1beta1.Manifest{
+			RawExtension: runtime.RawExtension{
+				Raw: rawManifestJSON[idx],
+			},
+		}
+	}
+
+	work := &fleetv1beta1.Work{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      workName,
+			Namespace: memberClusterReservedNSName,
+			Labels:    make(map[string]string),
+		},
+		Spec: fleetv1beta1.WorkSpec{
+			Workload: fleetv1beta1.WorkloadTemplate{
+				Manifests: manifests,
+			},
+			ApplyStrategy:      applyStrategy,
+			ReportBackStrategy: reportBackStrategy,
+		},
+	}
+	if len(placementObjName) > 0 {
+		work.Labels[fleetv1beta1.PlacementTrackingLabel] = placementObjName
+	}
+	if len(placementObjNSName) > 0 {
+		work.Labels[fleetv1beta1.ParentNamespaceLabel] = placementObjNSName
+	}
+
+	return work
 }
