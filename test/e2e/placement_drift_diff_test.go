@@ -1383,6 +1383,10 @@ var _ = Describe("report diff mode", func() {
 				}
 			}
 
+			// With workapplier's backoff requeue enabled, it takes longer to report the new diff results.
+			// The backoff logic is: 1 attempt after 5s (fixed delay), 2nd attempt after 2s (initial delay for slow backoff),
+			// fast backoff with exponential rate of 1.5x (as diff report succeeded).
+			// The test takes ~25s to reach this point, so workloadEventuallyDuration (45s) should be enough to cover the backoff delays.
 			Eventually(func() error {
 				crp := &placementv1beta1.ClusterResourcePlacement{}
 				if err := hubClient.Get(ctx, types.NamespacedName{Name: crpName}, crp); err != nil {
@@ -1394,7 +1398,7 @@ var _ = Describe("report diff mode", func() {
 					return fmt.Errorf("CRP status diff (-got, +want): %s", diff)
 				}
 				return nil
-			}, eventuallyDuration, eventuallyInterval).Should(Succeed(), "Failed to update CRP status as expected")
+			}, workloadEventuallyDuration, eventuallyInterval).Should(Succeed(), "Failed to update CRP status as expected")
 		})
 
 		AfterAll(func() {
