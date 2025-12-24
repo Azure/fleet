@@ -142,6 +142,9 @@ var _ = Describe("Test placement v1beta1 API validation", func() {
 						PlacementType: placementv1beta1.PickFixedPlacementType,
 						ClusterNames:  []string{"cluster1", "cluster2"},
 					},
+					Strategy: placementv1beta1.RolloutStrategy{
+						Type: placementv1beta1.ExternalRolloutStrategyType,
+					},
 				},
 			}
 			Expect(hubClient.Create(ctx, &crp)).Should(Succeed())
@@ -165,6 +168,14 @@ var _ = Describe("Test placement v1beta1 API validation", func() {
 			var statusErr *k8sErrors.StatusError
 			Expect(errors.As(err, &statusErr)).To(BeTrue(), fmt.Sprintf("Update CRP call produced error %s. Error type wanted is %s.", reflect.TypeOf(err), reflect.TypeOf(&k8sErrors.StatusError{})))
 			Expect(statusErr.ErrStatus.Message).Should(MatchRegexp("placement type is immutable"))
+		})
+
+		It("should deny update of RolloutStrategy type when External", func() {
+			crp.Spec.Strategy.Type = placementv1beta1.RollingUpdateRolloutStrategyType
+			err := hubClient.Update(ctx, &crp)
+			var statusErr *k8sErrors.StatusError
+			Expect(errors.As(err, &statusErr)).To(BeTrue(), fmt.Sprintf("Update CRP call produced error %s. Error type wanted is %s.", reflect.TypeOf(err), reflect.TypeOf(&k8sErrors.StatusError{})))
+			Expect(statusErr.ErrStatus.Message).Should(MatchRegexp("cannot change rollout strategy type from 'External' to other types"))
 		})
 	})
 

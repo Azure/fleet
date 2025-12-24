@@ -992,6 +992,10 @@ spec:
                     - RollingUpdate
                     - External
                     type: string
+                    x-kubernetes-validations:
+                    - message: cannot change rollout strategy type from 'External'
+                        to other types
+                      rule: '!(self != ''External'' && oldSelf == ''External'')'
                 type: object
             required:
             - resourceSelectors

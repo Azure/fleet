@@ -524,9 +524,9 @@ const (
 type RolloutStrategy struct {
 	// Type of rollout. The only supported types are "RollingUpdate" and "External".
 	// Default is "RollingUpdate".
-	// +kubebuilder:validation:Optional
 	// +kubebuilder:default=RollingUpdate
 	// +kubebuilder:validation:Enum=RollingUpdate;External
+	// +kubebuilder:validation:XValidation:rule="!(self != 'External' && oldSelf == 'External')",message="cannot change rollout strategy type from 'External' to other types"
 	Type RolloutStrategyType `json:"type,omitempty"`
 
 	// Rolling update config params. Present only if RolloutStrategyType = RollingUpdate.

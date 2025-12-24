@@ -178,9 +178,12 @@ var _ = Describe("UpdateRun validation tests", func() {
 			})
 
 			It("Should fail to validate if CRP does not have external rollout strategy type", func() {
-				By("Updating CRP's rollout strategy type")
+				// Re-create the CRP with different strategy type as we cannot update the strategy type directly from `External` to others.
+				By("Re-creating the CRP with rolling update rollout strategy type")
+				Expect(k8sClient.Delete(ctx, crp)).To(Succeed())
+				crp = generateTestClusterResourcePlacement()
 				crp.Spec.Strategy.Type = placementv1beta1.RollingUpdateRolloutStrategyType
-				Expect(k8sClient.Update(ctx, crp)).To(Succeed())
+				Expect(k8sClient.Create(ctx, crp)).To(Succeed())
 
 				By("Validating the validation failed")
 				wantStatus = generateFailedValidationStatus(updateRun, wantStatus)
