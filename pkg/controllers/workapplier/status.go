@@ -21,6 +21,7 @@ import (
 	"encoding/json"
 	"fmt"
 
+	"k8s.io/apimachinery/pkg/api/equality"
 	"k8s.io/apimachinery/pkg/api/meta"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
@@ -42,11 +43,13 @@ const (
 // refreshWorkStatus refreshes the status of a Work object based on the processing results of its manifests.
 //
 // TO-DO (chenyu1): refactor this method a bit to reduce its complexity and enable parallelization.
-func (r *Reconciler) refreshWorkStatus(
+func (r *Reconciler) refreshWorkStatus( //nolint:gocyclo
 	ctx context.Context,
 	work *fleetv1beta1.Work,
 	bundles []*manifestProcessingBundle,
 ) error {
+	originalStatus := work.Status.DeepCopy()
+
 	// Note (chenyu1): this method can run in parallel; however, for simplicity reasons,
 	// considering that in most of the time the count of manifests would be low, currently
 	// Fleet still does the status refresh sequentially.
@@ -100,6 +103,7 @@ func (r *Reconciler) refreshWorkStatus(
 	// Set the two flags here as they are per-work-object settings.
 	isReportDiffModeOn := work.Spec.ApplyStrategy != nil && work.Spec.ApplyStrategy.Type == fleetv1beta1.ApplyStrategyTypeReportDiff
 	isStatusBackReportingOn := work.Spec.ReportBackStrategy != nil && work.Spec.ReportBackStrategy.Type == fleetv1beta1.ReportBackStrategyTypeMirror
+	isDriftedOrDiffed := false
 	for idx := range bundles {
 		bundle := bundles[idx]
 
@@ -128,6 +132,8 @@ func (r *Reconciler) refreshWorkStatus(
 		// Reset the drift details (such details need no port-back).
 		manifestCond.DriftDetails = nil
 		if len(bundle.drifts) > 0 {
+			isDriftedOrDiffed = true
+
 			// Populate drift details if there are drifts found.
 			var observedInMemberClusterGen int64
 			if bundle.inMemberClusterObj != nil {
@@ -150,6 +156,8 @@ func (r *Reconciler) refreshWorkStatus(
 		// Reset the diff details (such details need no port-back).
 		manifestCond.DiffDetails = nil
 		if len(bundle.diffs) > 0 {
+			isDriftedOrDiffed = true
+
 			// Populate diff details if there are diffs found.
 			var observedInMemberClusterGen *int64
 			if bundle.inMemberClusterObj != nil {
@@ -248,8 +256,14 @@ func (r *Reconciler) refreshWorkStatus(
 	setWorkStatusTrimmedCondition(work, sizeDeltaBytes, resource.DefaultObjSizeLimitWithPaddingBytes)
 
 	// Update the Work object status.
-	if err := r.hubClient.Status().Update(ctx, work); err != nil {
-		return controller.NewAPIServerError(false, err)
+	if shouldSkipStatusUpdate(isDriftedOrDiffed, isStatusBackReportingOn, originalStatus, &work.Status) {
+		// No status change found; skip the update.
+		klog.V(2).InfoS("No status change found for Work object; skip the status update", "work", klog.KObj(work))
+	} else {
+		klog.V(2).InfoS("Refreshing work object status", "work", klog.KObj(work), "isDriftedOrDiffed", isDriftedOrDiffed, "isStatusBackReportingOn", isStatusBackReportingOn)
+		if err := r.hubClient.Status().Update(ctx, work); err != nil {
+			return controller.NewAPIServerError(false, err)
+		}
 	}
 	return nil
 }
@@ -260,6 +274,8 @@ func (r *Reconciler) refreshAppliedWorkStatus(
 	appliedWork *fleetv1beta1.AppliedWork,
 	bundles []*manifestProcessingBundle,
 ) error {
+	originalStatus := appliedWork.Status.DeepCopy()
+
 	// Note (chenyu1): this method can run in parallel; however, for simplicity reasons,
 	// considering that in most of the time the count of manifests would be low, currently
 	// Fleet still does the status refresh sequentially.
@@ -284,12 +300,18 @@ func (r *Reconciler) refreshAppliedWorkStatus(
 
 	// Update the AppliedWork object status.
 	appliedWork.Status.AppliedResources = appliedResources
-	if err := r.spokeClient.Status().Update(ctx, appliedWork); err != nil {
-		klog.ErrorS(err, "Failed to update AppliedWork status",
-			"appliedWork", klog.KObj(appliedWork))
-		return controller.NewAPIServerError(false, err)
+
+	// Skip the status update if no change found.
+	if equality.Semantic.DeepEqual(originalStatus, &appliedWork.Status) {
+		klog.V(2).InfoS("No status change found for AppliedWork object; skip the status update", "appliedWork", klog.KObj(appliedWork))
+	} else {
+		klog.V(2).InfoS("Refreshing AppliedWork object status", "appliedWork", klog.KObj(appliedWork))
+		if err := r.spokeClient.Status().Update(ctx, appliedWork); err != nil {
+			klog.ErrorS(err, "Failed to update AppliedWork status",
+				"appliedWork", klog.KObj(appliedWork))
+			return controller.NewAPIServerError(false, err)
+		}
 	}
-	klog.V(2).InfoS("Refreshed AppliedWork object status", "appliedWork", klog.KObj(appliedWork))
 	return nil
 }
 
@@ -831,4 +853,16 @@ func setWorkStatusTrimmedCondition(work *fleetv1beta1.Work, sizeDeltaBytes, size
 		Message:            fmt.Sprintf(WorkStatusTrimmedDueToOversizedStatusMsgTmpl, sizeDeltaBytes, sizeLimitBytes),
 		ObservedGeneration: work.Generation,
 	})
+}
+
+func shouldSkipStatusUpdate(isDriftedOrDiffed, isStatusBackReportingOn bool, originalStatus, currentStatus *fleetv1beta1.WorkStatus) bool {
+	if isDriftedOrDiffed || isStatusBackReportingOn {
+		// Always proceed with status update if there are drifts/diffs detected or if status back-reporting is on.
+		// This is necessary as the drift/diff details and back-reported status data are timestamped and the timestamps are
+		// always refreshed per reconciliation loop.
+		return false
+	}
+
+	// Skip status update if there is no change in the status.
+	return equality.Semantic.DeepEqual(originalStatus, currentStatus)
 }

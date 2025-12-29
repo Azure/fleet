@@ -326,7 +326,7 @@ var _ = Describe("parallel processing with waves", func() {
 			deleteWorkObject(workName, memberReservedNSName3)
 
 			// Remove the ConfigMap object if it still exists.
-			cmRemovedActual := regularConfigMapRemovedActual(nsName, configMapName)
+			cmRemovedActual := regularConfigMapRemovedActual(memberClient3, nsName, configMapName)
 			Eventually(cmRemovedActual, eventuallyDuration, eventuallyInterval).Should(Succeed(), "Failed to remove the ConfigMap object")
 
 			// Ensure that the AppliedWork object has been removed.
