@@ -29,7 +29,6 @@ import (
 	appv1 "k8s.io/api/apps/v1"
 	batchv1 "k8s.io/api/batch/v1"
 	corev1 "k8s.io/api/core/v1"
-	apiextensionsv1 "k8s.io/apiextensions-apiserver/pkg/apis/apiextensions/v1"
 	"k8s.io/apimachinery/pkg/api/meta"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
@@ -1135,29 +1134,6 @@ func waitForTestResourceToBePlaced(memberCluster *framework.Cluster, testResourc
 		By("check the placedTestResource")
 		return memberCluster.KubeClient.Get(ctx, types.NamespacedName{Namespace: testResource.Namespace, Name: testResource.Name}, &testv1alpha1.TestResource{})
 	}
-}
-
-func waitForCRDToBeReady(crdName string) {
-	Eventually(func() error { // wait for CRD to be created
-		crd := &apiextensionsv1.CustomResourceDefinition{}
-		if err := hubClient.Get(ctx, types.NamespacedName{Name: crdName}, crd); err != nil {
-			return err
-		}
-		if crd.Status.Conditions == nil {
-			return fmt.Errorf("CRD status conditions are nil for %s", crdName)
-		}
-
-		for _, cond := range crd.Status.Conditions {
-			if cond.Type == apiextensionsv1.Established && cond.Status != apiextensionsv1.ConditionTrue {
-				return fmt.Errorf("CRD is not established: %s", crdName)
-			}
-			if cond.Type == apiextensionsv1.NamesAccepted && cond.Status != apiextensionsv1.ConditionTrue {
-				return fmt.Errorf("CRD names are not accepted: %s", crdName)
-			}
-		}
-
-		return nil
-	}, eventuallyDuration, eventuallyInterval).Should(Succeed(), "CRD failed to be ready %s", crdName)
 }
 
 func buildCRPForSafeRollout() *placementv1beta1.ClusterResourcePlacement {

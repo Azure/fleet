@@ -23,7 +23,6 @@ import (
 	"golang.org/x/sync/errgroup"
 	"k8s.io/apimachinery/pkg/api/meta"
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
-	"k8s.io/apimachinery/pkg/runtime/schema"
 	"k8s.io/apimachinery/pkg/util/wait"
 	"k8s.io/client-go/discovery"
 	"k8s.io/client-go/tools/cache"
@@ -45,7 +44,7 @@ var (
 // ChangeDetector is a resource watcher which watches all types of resources in the cluster and reconcile the events.
 type ChangeDetector struct {
 	// DiscoveryClient is used to do resource discovery.
-	DiscoveryClient *discovery.DiscoveryClient
+	DiscoveryClient discovery.DiscoveryInterface
 
 	// RESTMapper is used to convert between GVK and GVR
 	RESTMapper meta.RESTMapper
@@ -137,43 +136,20 @@ func (d *ChangeDetector) discoverAPIResourcesLoop(ctx context.Context, period ti
 	}, period)
 }
 
-// discoverResources goes through all the api resources in the cluster and create informers on selected types
+// discoverResources goes through all the api resources in the cluster and adds event handlers to informers
 func (d *ChangeDetector) discoverResources(dynamicResourceEventHandler cache.ResourceEventHandler) {
-	newResources, err := d.getWatchableResources()
-	var dynamicResources []informer.APIResourceMeta
-	if err != nil {
-		klog.ErrorS(err, "Failed to get all the api resources from the cluster")
+	resourcesToWatch := discoverWatchableResources(d.DiscoveryClient, d.RESTMapper, d.ResourceConfig)
+
+	// On the leader, add event handlers to informers that were already created by InformerPopulator
+	// The informers exist on all pods, but only the leader adds handlers and processes events
+	for _, res := range resourcesToWatch {
+		d.InformerManager.AddEventHandlerToInformer(res.GroupVersionResource, dynamicResourceEventHandler)
 	}
-	for _, res := range newResources {
-		// all the static resources are disabled by default
-		if d.shouldWatchResource(res.GroupVersionResource) {
-			dynamicResources = append(dynamicResources, res)
-		}
-	}
-	d.InformerManager.AddDynamicResources(dynamicResources, dynamicResourceEventHandler, err == nil)
+
 	// this will start the newly added informers if there is any
 	d.InformerManager.Start()
-}
 
-// gvrDisabled returns whether GroupVersionResource is disabled.
-func (d *ChangeDetector) shouldWatchResource(gvr schema.GroupVersionResource) bool {
-	// By default, all of the APIs are allowed.
-	if d.ResourceConfig == nil {
-		return true
-	}
-
-	gvks, err := d.RESTMapper.KindsFor(gvr)
-	if err != nil {
-		klog.ErrorS(err, "gvr transform failed", "gvr", gvr.String())
-		return false
-	}
-	for _, gvk := range gvks {
-		if d.ResourceConfig.IsResourceDisabled(gvk) {
-			klog.V(4).InfoS("Skip watch resource", "group version kind", gvk.String())
-			return false
-		}
-	}
-	return true
+	klog.V(2).InfoS("Change detector: discovered resources", "count", len(resourcesToWatch))
 }
 
 // dynamicResourceFilter filters out resources that we don't want to watch

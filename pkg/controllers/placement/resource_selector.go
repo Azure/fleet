@@ -380,7 +380,7 @@ func (r *Reconciler) fetchAllResourcesInOneNamespace(namespaceName string, place
 
 	trackedResource := r.InformerManager.GetNameSpaceScopedResources()
 	for _, gvr := range trackedResource {
-		if !r.shouldSelectResource(gvr) {
+		if !utils.ShouldProcessResource(gvr, r.RestMapper, r.ResourceConfig) {
 			continue
 		}
 		if !r.InformerManager.IsInformerSynced(gvr) {
@@ -404,26 +404,6 @@ func (r *Reconciler) fetchAllResourcesInOneNamespace(namespaceName string, place
 	}
 
 	return resources, nil
-}
-
-// shouldSelectResource returns whether a resource should be selected for propagation.
-func (r *Reconciler) shouldSelectResource(gvr schema.GroupVersionResource) bool {
-	// By default, all of the APIs are allowed.
-	if r.ResourceConfig == nil {
-		return true
-	}
-	gvks, err := r.RestMapper.KindsFor(gvr)
-	if err != nil {
-		klog.ErrorS(err, "gvr(%s) transform failed: %v", gvr.String(), err)
-		return false
-	}
-	for _, gvk := range gvks {
-		if r.ResourceConfig.IsResourceDisabled(gvk) {
-			klog.V(2).InfoS("Skip watch resource", "group version kind", gvk.String())
-			return false
-		}
-	}
-	return true
 }
 
 // generateRawContent strips all the unnecessary fields to prepare the objects for dispatch.

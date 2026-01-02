@@ -496,7 +496,23 @@ func SetupControllers(ctx context.Context, wg *sync.WaitGroup, mgr ctrl.Manager,
 	}
 	resourceChangeController := controller.NewController(resourceChangeControllerName, controller.ClusterWideKeyFunc, rcr.Reconcile, rateLimiter)
 
+	// Set up the InformerPopulator that runs on ALL pods (leader and followers)
+	// This ensures all pods have synced informer caches for webhook validation
+	klog.Info("Setting up informer populator")
+	informerPopulator := &resourcewatcher.InformerPopulator{
+		DiscoveryClient: discoverClient,
+		RESTMapper:      mgr.GetRESTMapper(),
+		InformerManager: dynamicInformerManager,
+		ResourceConfig:  resourceConfig,
+	}
+
+	if err := mgr.Add(informerPopulator); err != nil {
+		klog.ErrorS(err, "Failed to setup informer populator")
+		return err
+	}
+
 	// Set up a runner that starts all the custom controllers we created above
+	// This runs ONLY on the leader and adds event handlers to the informers created by InformerPopulator
 	resourceChangeDetector := &resourcewatcher.ChangeDetector{
 		DiscoveryClient: discoverClient,
 		RESTMapper:      mgr.GetRESTMapper(),

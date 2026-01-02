@@ -22,6 +22,9 @@ import (
 	"k8s.io/apimachinery/pkg/runtime/schema"
 	"k8s.io/client-go/dynamic/fake"
 	"k8s.io/client-go/kubernetes/scheme"
+
+	testhandler "github.com/kubefleet-dev/kubefleet/test/utils/handler"
+	testresource "github.com/kubefleet-dev/kubefleet/test/utils/resource"
 )
 
 func TestGetAllResources(t *testing.T) {
@@ -37,61 +40,29 @@ func TestGetAllResources(t *testing.T) {
 			name: "mixed cluster and namespace scoped resources",
 			namespaceScopedResources: []APIResourceMeta{
 				{
-					GroupVersionKind: schema.GroupVersionKind{
-						Group:   "",
-						Version: "v1",
-						Kind:    "ConfigMap",
-					},
-					GroupVersionResource: schema.GroupVersionResource{
-						Group:    "",
-						Version:  "v1",
-						Resource: "configmaps",
-					},
-					IsClusterScoped: false,
+					GroupVersionKind:     testresource.GVKConfigMap(),
+					GroupVersionResource: testresource.GVRConfigMap(),
+					IsClusterScoped:      false,
 				},
 				{
-					GroupVersionKind: schema.GroupVersionKind{
-						Group:   "",
-						Version: "v1",
-						Kind:    "Secret",
-					},
-					GroupVersionResource: schema.GroupVersionResource{
-						Group:    "",
-						Version:  "v1",
-						Resource: "secrets",
-					},
-					IsClusterScoped: false,
+					GroupVersionKind:     testresource.GVKSecret(),
+					GroupVersionResource: testresource.GVRSecret(),
+					IsClusterScoped:      false,
 				},
 			},
 			clusterScopedResources: []APIResourceMeta{
 				{
-					GroupVersionKind: schema.GroupVersionKind{
-						Group:   "",
-						Version: "v1",
-						Kind:    "Namespace",
-					},
-					GroupVersionResource: schema.GroupVersionResource{
-						Group:    "",
-						Version:  "v1",
-						Resource: "namespaces",
-					},
-					IsClusterScoped: true,
+					GroupVersionKind:     testresource.GVKNamespace(),
+					GroupVersionResource: testresource.GVRNamespace(),
+					IsClusterScoped:      true,
 				},
 			},
 			staticResources: []APIResourceMeta{
 				{
-					GroupVersionKind: schema.GroupVersionKind{
-						Group:   "",
-						Version: "v1",
-						Kind:    "Node",
-					},
-					GroupVersionResource: schema.GroupVersionResource{
-						Group:    "",
-						Version:  "v1",
-						Resource: "nodes",
-					},
-					IsClusterScoped:  true,
-					isStaticResource: true,
+					GroupVersionKind:     testresource.GVKNode(),
+					GroupVersionResource: testresource.GVRNode(),
+					IsClusterScoped:      true,
+					isStaticResource:     true,
 				},
 			},
 			expectedResourceCount:   4, // All resources including static
@@ -106,17 +77,9 @@ func TestGetAllResources(t *testing.T) {
 			name: "only namespace scoped resources",
 			namespaceScopedResources: []APIResourceMeta{
 				{
-					GroupVersionKind: schema.GroupVersionKind{
-						Group:   "apps",
-						Version: "v1",
-						Kind:    "Deployment",
-					},
-					GroupVersionResource: schema.GroupVersionResource{
-						Group:    "apps",
-						Version:  "v1",
-						Resource: "deployments",
-					},
-					IsClusterScoped: false,
+					GroupVersionKind:     testresource.GVKDeployment(),
+					GroupVersionResource: testresource.GVRDeployment(),
+					IsClusterScoped:      false,
 				},
 			},
 			expectedResourceCount:   1,
@@ -126,17 +89,9 @@ func TestGetAllResources(t *testing.T) {
 			name: "only cluster scoped resources",
 			clusterScopedResources: []APIResourceMeta{
 				{
-					GroupVersionKind: schema.GroupVersionKind{
-						Group:   "rbac.authorization.k8s.io",
-						Version: "v1",
-						Kind:    "ClusterRole",
-					},
-					GroupVersionResource: schema.GroupVersionResource{
-						Group:    "rbac.authorization.k8s.io",
-						Version:  "v1",
-						Resource: "clusterroles",
-					},
-					IsClusterScoped: true,
+					GroupVersionKind:     testresource.GVKClusterRole(),
+					GroupVersionResource: testresource.GVRClusterRole(),
+					IsClusterScoped:      true,
 				},
 			},
 			expectedResourceCount:   1,
@@ -247,35 +202,19 @@ func TestGetAllResources_NotPresent(t *testing.T) {
 
 	// Add a resource that is present
 	presentRes := APIResourceMeta{
-		GroupVersionKind: schema.GroupVersionKind{
-			Group:   "",
-			Version: "v1",
-			Kind:    "ConfigMap",
-		},
-		GroupVersionResource: schema.GroupVersionResource{
-			Group:    "",
-			Version:  "v1",
-			Resource: "configmaps",
-		},
-		IsClusterScoped: false,
-		isPresent:       true,
+		GroupVersionKind:     testresource.GVKConfigMap(),
+		GroupVersionResource: testresource.GVRConfigMap(),
+		IsClusterScoped:      false,
+		isPresent:            true,
 	}
 	implMgr.apiResources[presentRes.GroupVersionKind] = &presentRes
 
 	// Add a resource that is NOT present (deleted)
 	notPresentRes := APIResourceMeta{
-		GroupVersionKind: schema.GroupVersionKind{
-			Group:   "",
-			Version: "v1",
-			Kind:    "Secret",
-		},
-		GroupVersionResource: schema.GroupVersionResource{
-			Group:    "",
-			Version:  "v1",
-			Resource: "secrets",
-		},
-		IsClusterScoped: false,
-		isPresent:       false,
+		GroupVersionKind:     testresource.GVKSecret(),
+		GroupVersionResource: testresource.GVRSecret(),
+		IsClusterScoped:      false,
+		isPresent:            false,
 	}
 	implMgr.apiResources[notPresentRes.GroupVersionKind] = &notPresentRes
 
@@ -285,5 +224,185 @@ func TestGetAllResources_NotPresent(t *testing.T) {
 	}
 	if got := allResources[0]; got != presentRes.GroupVersionResource {
 		t.Errorf("GetAllResources()[0] = %v, want %v", got, presentRes.GroupVersionResource)
+	}
+}
+
+func TestAddEventHandlerToInformer(t *testing.T) {
+	tests := []struct {
+		name     string
+		gvr      schema.GroupVersionResource
+		addTwice bool // Test adding handler twice to same informer
+	}{
+		{
+			name:     "add handler to new informer",
+			gvr:      testresource.GVRConfigMap(),
+			addTwice: false,
+		},
+		{
+			name:     "add multiple handlers to same informer",
+			gvr:      testresource.GVRDeployment(),
+			addTwice: true,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			fakeClient := fake.NewSimpleDynamicClient(scheme.Scheme)
+			stopCh := make(chan struct{})
+			defer close(stopCh)
+
+			mgr := NewInformerManager(fakeClient, 0, stopCh)
+
+			// Track handler calls
+			callCount := 0
+			handler := &testhandler.TestHandler{
+				OnAddFunc: func() { callCount++ },
+			}
+
+			// Add the handler
+			mgr.AddEventHandlerToInformer(tt.gvr, handler)
+
+			// Verify informer was created
+			implMgr := mgr.(*informerManagerImpl)
+			informer := implMgr.informerFactory.ForResource(tt.gvr).Informer()
+			if informer == nil {
+				t.Fatal("Expected informer to be created")
+			}
+
+			if tt.addTwice {
+				// Add another handler to the same informer
+				handler2 := &testhandler.TestHandler{
+					OnAddFunc: func() { callCount++ },
+				}
+				mgr.AddEventHandlerToInformer(tt.gvr, handler2)
+			}
+
+			// Test is successful if no panic occurred and informer exists
+		})
+	}
+}
+
+func TestCreateInformerForResource(t *testing.T) {
+	tests := []struct {
+		name           string
+		resource       APIResourceMeta
+		createTwice    bool
+		markNotPresent bool // Mark resource as not present before second create
+	}{
+		{
+			name: "create new informer",
+			resource: APIResourceMeta{
+				GroupVersionKind:     testresource.GVKConfigMap(),
+				GroupVersionResource: testresource.GVRConfigMap(),
+				IsClusterScoped:      false,
+			},
+			createTwice: false,
+		},
+		{
+			name: "create informer twice (idempotent)",
+			resource: APIResourceMeta{
+				GroupVersionKind:     testresource.GVKDeployment(),
+				GroupVersionResource: testresource.GVRDeployment(),
+				IsClusterScoped:      false,
+			},
+			createTwice: true,
+		},
+		{
+			name: "recreate informer for reappeared resource",
+			resource: APIResourceMeta{
+				GroupVersionKind:     testresource.GVKSecret(),
+				GroupVersionResource: testresource.GVRSecret(),
+				IsClusterScoped:      false,
+			},
+			createTwice:    true,
+			markNotPresent: true,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			fakeClient := fake.NewSimpleDynamicClient(scheme.Scheme)
+			stopCh := make(chan struct{})
+			defer close(stopCh)
+
+			mgr := NewInformerManager(fakeClient, 0, stopCh)
+			implMgr := mgr.(*informerManagerImpl)
+
+			// Create the informer
+			mgr.CreateInformerForResource(tt.resource)
+
+			// Verify resource is tracked
+			resMeta, exists := implMgr.apiResources[tt.resource.GroupVersionKind]
+			if !exists {
+				t.Fatal("Expected resource to be tracked in apiResources map")
+			}
+			if !resMeta.isPresent {
+				t.Error("Expected resource to be marked as present")
+			}
+			if resMeta.IsClusterScoped != tt.resource.IsClusterScoped {
+				t.Errorf("IsClusterScoped = %v, want %v", resMeta.IsClusterScoped, tt.resource.IsClusterScoped)
+			}
+
+			// Verify informer was created
+			informer := implMgr.informerFactory.ForResource(tt.resource.GroupVersionResource).Informer()
+			if informer == nil {
+				t.Fatal("Expected informer to be created")
+			}
+
+			if tt.createTwice {
+				if tt.markNotPresent {
+					// Mark as not present (simulating resource deletion)
+					resMeta.isPresent = false
+				}
+
+				// Create again
+				mgr.CreateInformerForResource(tt.resource)
+
+				// Verify it's marked as present again
+				if !resMeta.isPresent {
+					t.Error("Expected resource to be marked as present after recreation")
+				}
+			}
+		})
+	}
+}
+
+func TestCreateInformerForResource_IsIdempotent(t *testing.T) {
+	// Use 3 attempts to verify idempotency works consistently across multiple calls,
+	// not just a single retry scenario
+	const createAttempts = 3
+
+	// Test that creating the same informer multiple times doesn't cause issues
+	fakeClient := fake.NewSimpleDynamicClient(scheme.Scheme)
+	stopCh := make(chan struct{})
+	defer close(stopCh)
+
+	mgr := NewInformerManager(fakeClient, 0, stopCh)
+	implMgr := mgr.(*informerManagerImpl)
+
+	resource := APIResourceMeta{
+		GroupVersionKind:     testresource.GVKPod(),
+		GroupVersionResource: testresource.GVRPod(),
+		IsClusterScoped:      false,
+	}
+
+	// Create multiple times
+	for i := 0; i < createAttempts; i++ {
+		mgr.CreateInformerForResource(resource)
+	}
+
+	// Should only have one entry in apiResources after
+	// we create the same informer multiple times
+	if len(implMgr.apiResources) != 1 {
+		t.Errorf("Expected 1 resource in apiResources, got %d", len(implMgr.apiResources))
+	}
+
+	// Verify resource is still tracked correctly
+	resMeta, exists := implMgr.apiResources[resource.GroupVersionKind]
+	if !exists {
+		t.Fatal("Expected resource to be tracked")
+	}
+	if !resMeta.isPresent {
+		t.Error("Expected resource to be marked as present")
 	}
 }

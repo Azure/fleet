@@ -677,6 +677,29 @@ func deleteTestResourceCRD() {
 	Expect(hubClient.Delete(ctx, &crd)).Should(SatisfyAny(Succeed(), utils.NotFoundMatcher{}))
 }
 
+func waitForCRDToBeReady(crdName string) {
+	Eventually(func() error { // wait for CRD to be created
+		crd := &apiextensionsv1.CustomResourceDefinition{}
+		if err := hubClient.Get(ctx, types.NamespacedName{Name: crdName}, crd); err != nil {
+			return err
+		}
+		if crd.Status.Conditions == nil {
+			return fmt.Errorf("CRD status conditions are nil for %s", crdName)
+		}
+
+		for _, cond := range crd.Status.Conditions {
+			if cond.Type == apiextensionsv1.Established && cond.Status != apiextensionsv1.ConditionTrue {
+				return fmt.Errorf("CRD is not established: %s", crdName)
+			}
+			if cond.Type == apiextensionsv1.NamesAccepted && cond.Status != apiextensionsv1.ConditionTrue {
+				return fmt.Errorf("CRD names are not accepted: %s", crdName)
+			}
+		}
+
+		return nil
+	}, eventuallyDuration, eventuallyInterval).Should(Succeed(), "CRD failed to be ready %s", crdName)
+}
+
 func createTestResourceCRD() {
 	var crd apiextensionsv1.CustomResourceDefinition
 	readTestCustomResourceDefinition(&crd)

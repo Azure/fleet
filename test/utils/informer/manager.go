@@ -185,3 +185,10 @@ func (m *FakeManager) WaitForCacheSync() {
 func (m *FakeManager) GetClient() dynamic.Interface {
 	return nil
 }
+func (m *FakeManager) AddEventHandlerToInformer(_ schema.GroupVersionResource, _ cache.ResourceEventHandler) {
+	// No-op for testing
+}
+
+func (m *FakeManager) CreateInformerForResource(_ informer.APIResourceMeta) {
+	// No-op for testing
+}

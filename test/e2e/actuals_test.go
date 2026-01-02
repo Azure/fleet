@@ -26,6 +26,8 @@ import (
 	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
+	"k8s.io/apimachinery/pkg/runtime/schema"
 	"k8s.io/apimachinery/pkg/types"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 
@@ -106,6 +108,26 @@ func validateConfigMapOnCluster(cluster *framework.Cluster, name types.Namespace
 		ignoreObjectMetaAnnotationField,
 	); diff != "" {
 		return fmt.Errorf("app config map diff (-got, +want): %s", diff)
+	}
+
+	return nil
+}
+
+func validateCustomResourceOnCluster(cluster *framework.Cluster, name types.NamespacedName, gvk schema.GroupVersionKind) error {
+	clusterCR := &unstructured.Unstructured{}
+	clusterCR.SetGroupVersionKind(gvk)
+	if err := cluster.KubeClient.Get(ctx, name, clusterCR); err != nil {
+		return fmt.Errorf("custom resource not found on cluster: %w", err)
+	}
+
+	hubCR := &unstructured.Unstructured{}
+	hubCR.SetGroupVersionKind(gvk)
+	if err := hubClient.Get(ctx, name, hubCR); err != nil {
+		return fmt.Errorf("custom resource not found on hub: %w", err)
+	}
+
+	if diff := cmp.Diff(hubCR.Object["spec"], clusterCR.Object["spec"]); diff != "" {
+		return fmt.Errorf("custom resource spec mismatch (-hub +cluster):\n%s", diff)
 	}
 
 	return nil
