@@ -47,7 +47,8 @@ func FetchBindingFromKey(ctx context.Context, c client.Reader, bindingKey types.
 // that belong to the specified binding key.
 // The binding key format determines whether to list ClusterResourceBindings (cluster-scoped)
 // or ResourceBindings (namespaced). For namespaced resources, the key format has a namespace.
-func ListBindingsFromKey(ctx context.Context, c client.Reader, placementKey types.NamespacedName) ([]placementv1beta1.BindingObj, error) {
+// The fromCache parameter indicates whether the client is a cached client (true) or an uncached client (false).
+func ListBindingsFromKey(ctx context.Context, c client.Reader, placementKey types.NamespacedName, fromCache bool) ([]placementv1beta1.BindingObj, error) {
 	// Extract namespace and name from the binding key
 	namespace := placementKey.Namespace
 	name := placementKey.Name
@@ -65,7 +66,7 @@ func ListBindingsFromKey(ctx context.Context, c client.Reader, placementKey type
 		bindingList = &placementv1beta1.ClusterResourceBindingList{}
 	}
 	if err := c.List(ctx, bindingList, listOptions...); err != nil {
-		return nil, NewAPIServerError(false, err)
+		return nil, NewAPIServerError(fromCache, err)
 	}
 
 	bindingObjs := bindingList.GetBindingObjs()

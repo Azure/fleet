@@ -101,7 +101,7 @@ func (r *Reconciler) Reconcile(ctx context.Context, req runtime.Request) (runtim
 
 	// list all the bindings associated with the placement
 	// we read from the API server directly to avoid the repeated reconcile loop due to cache inconsistency
-	allBindings, err := controller.ListBindingsFromKey(ctx, r.UncachedReader, placementKey)
+	allBindings, err := controller.ListBindingsFromKey(ctx, r.UncachedReader, placementKey, false)
 	if err != nil {
 		klog.ErrorS(err, "Failed to list all the bindings associated with the placement",
 			"placement", placementObjRef)

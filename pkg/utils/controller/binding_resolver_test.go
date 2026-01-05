@@ -408,7 +408,7 @@ func TestListBindingsFromKey(t *testing.T) {
 				WithObjects(tt.objects...).
 				Build()
 
-			got, err := ListBindingsFromKey(ctx, fakeClient, tt.placementKey)
+			got, err := ListBindingsFromKey(ctx, fakeClient, tt.placementKey, true)
 
 			if tt.wantErr {
 				if err == nil {
@@ -498,13 +498,13 @@ func TestListBindingsFromKey_Sorted(t *testing.T) {
 		},
 	}
 
-	bindingsInMode0, err := ListBindingsFromKey(ctx, &mockClient, types.NamespacedName{Name: "placeholder"})
+	bindingsInMode0, err := ListBindingsFromKey(ctx, &mockClient, types.NamespacedName{Name: "placeholder"}, true)
 	if err != nil {
 		t.Fatalf("ListBindingsFromKey() in mode 0 returned error: %v", err)
 	}
 
 	mockMode.Store(1)
-	bindingsInMode1, err := ListBindingsFromKey(ctx, &mockClient, types.NamespacedName{Name: "placeholder"})
+	bindingsInMode1, err := ListBindingsFromKey(ctx, &mockClient, types.NamespacedName{Name: "placeholder"}, true)
 	if err != nil {
 		t.Fatalf("ListBindingsFromKey() in mode 1 returned error: %v", err)
 	}
@@ -517,23 +517,38 @@ func TestListBindingsFromKey_Sorted(t *testing.T) {
 func TestListBindingsFromKey_ClientError(t *testing.T) {
 	ctx := context.Background()
 
-	// Create a client that will return an error
-	scheme := runtime.NewScheme()
-	_ = placementv1beta1.AddToScheme(scheme)
-
-	// Use a fake client but override List to return error
-	fakeClient := &failingListClient{
-		Client: fake.NewClientBuilder().WithScheme(scheme).Build(),
+	tests := []struct {
+		name      string
+		fromCache bool
+		wantErr   error
+	}{
+		{
+			name:      "uncached client returns ErrAPIServerError",
+			fromCache: false,
+			wantErr:   ErrAPIServerError,
+		},
+		{
+			name:      "cached client returns ErrUnexpectedBehavior as cached List should not fail",
+			fromCache: true,
+			wantErr:   ErrUnexpectedBehavior,
+		},
 	}
 
-	_, err := ListBindingsFromKey(ctx, fakeClient, types.NamespacedName{Name: "test-placement"})
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			// Create a client that will return an error
+			scheme := runtime.NewScheme()
+			_ = placementv1beta1.AddToScheme(scheme)
 
-	if err == nil {
-		t.Fatalf("Expected error but got nil")
-	}
+			// Use a fake client but override List to return error
+			fakeClient := &failingListClient{
+				Client: fake.NewClientBuilder().WithScheme(scheme).Build(),
+			}
 
-	if !errors.Is(err, ErrAPIServerError) {
-		t.Errorf("Expected ErrAPIServerError but got: %v", err)
+			if _, err := ListBindingsFromKey(ctx, fakeClient, types.NamespacedName{Name: "test-placement"}, tt.fromCache); !errors.Is(err, tt.wantErr) {
+				t.Errorf("ListBindingsFromKey() got err %v, want error %v", err, tt.wantErr)
+			}
+		})
 	}
 }
 

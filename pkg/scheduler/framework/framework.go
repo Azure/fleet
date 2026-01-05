@@ -289,7 +289,7 @@ func (f *framework) RunSchedulingCycleFor(ctx context.Context, placementKey queu
 	// overloading). In the long run we might still want to resort to a cached situation.
 	//
 	// TO-DO (chenyu1): explore the possibilities of using a mutation cache for better performance.
-	bindings, err := controller.ListBindingsFromKey(ctx, f.uncachedReader, types.NamespacedName{Namespace: namespace, Name: name})
+	bindings, err := controller.ListBindingsFromKey(ctx, f.uncachedReader, types.NamespacedName{Namespace: namespace, Name: name}, false)
 	if err != nil {
 		klog.ErrorS(err, "Failed to collect bindings", "policySnapshot", policyRef)
 		return ctrl.Result{}, err

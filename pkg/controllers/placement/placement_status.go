@@ -265,7 +265,7 @@ func setPlacementConditions(
 func (r *Reconciler) buildClusterToBindingMap(ctx context.Context, placementObj fleetv1beta1.PlacementObj, latestSchedulingPolicySnapshot fleetv1beta1.PolicySnapshotObj) (map[string]fleetv1beta1.BindingObj, error) {
 	placementKObj := klog.KObj(placementObj)
 	// List all bindings for the placement object.
-	bindings, err := controller.ListBindingsFromKey(ctx, r.Client, types.NamespacedName{Namespace: placementObj.GetNamespace(), Name: placementObj.GetName()})
+	bindings, err := controller.ListBindingsFromKey(ctx, r.Client, types.NamespacedName{Namespace: placementObj.GetNamespace(), Name: placementObj.GetName()}, true)
 	if err != nil {
 		klog.ErrorS(err, "Failed to list bindings for placement", "placement", placementKObj)
 		return nil, controller.NewAPIServerError(true, err)
