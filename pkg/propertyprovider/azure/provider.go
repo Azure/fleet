@@ -261,9 +261,13 @@ func (p *PropertyProvider) Start(ctx context.Context, config *rest.Config) error
 		}
 		p.clusterCertificateAuthority = cadata
 		p.clusterCertificateAuthorityObservedTime = time.Now()
+		klog.V(2).Info("Cached cluster certificate authority data from file")
+	} else if len(config.CAData) > 0 {
+		p.clusterCertificateAuthority = config.CAData
+		p.clusterCertificateAuthorityObservedTime = time.Now()
 		klog.V(2).Info("Cached cluster certificate authority data")
 	} else {
-		err := fmt.Errorf("rest.Config CAFile empty: %s", config.CAFile)
+		err := fmt.Errorf("rest.Config has empty CAFile and CAData")
 		klog.ErrorS(err, "No certificate authority data available in rest.Config")
 	}
 
