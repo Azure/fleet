@@ -268,6 +268,7 @@ func (w *Config) Start(ctx context.Context) error {
 		klog.ErrorS(err, "unable to setup webhook configurations in apiserver")
 		return err
 	}
+	klog.V(2).InfoS("webhook configurations created successfully")
 	return nil
 }
 

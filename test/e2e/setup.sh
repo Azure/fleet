@@ -151,7 +151,9 @@ helm install hub-agent ../../charts/hub-agent/ \
     --set logFileMaxSize=100000 \
     --set MaxConcurrentClusterPlacement=200 \
     --set resourceSnapshotCreationMinimumInterval=$RESOURCE_SNAPSHOT_CREATION_MINIMUM_INTERVAL \
-    --set resourceChangesCollectionDuration=$RESOURCE_CHANGES_COLLECTION_DURATION
+    --set resourceChangesCollectionDuration=$RESOURCE_CHANGES_COLLECTION_DURATION \
+    --wait \
+    --timeout=2m
 
 # Download CRDs from Fleet networking repo
 export ENDPOINT_SLICE_EXPORT_CRD_URL=https://raw.githubusercontent.com/Azure/fleet-networking/v0.2.7/config/crd/bases/networking.fleet.azure.com_endpointsliceexports.yaml

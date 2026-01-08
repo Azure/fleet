@@ -197,6 +197,14 @@ func main() {
 			exitWithErrorFunc()
 		}
 
+		// Add webhook server readiness check to ensure the pod is not marked ready until
+		// the webhook HTTPS listener is actually serving. This uses controller-runtime's
+		// built-in StartedChecker which verifies the server is listening on the port.
+		if err := mgr.AddReadyzCheck("webhook-server", mgr.GetWebhookServer().StartedChecker()); err != nil {
+			klog.ErrorS(err, "unable to set up webhook server readiness check")
+			exitWithErrorFunc()
+		}
+
 		// When using cert-manager, add a readiness check to ensure CA bundles are injected before marking ready.
 		// This prevents the pod from accepting traffic before cert-manager has populated the webhook CA bundles,
 		// which would cause webhook calls to fail.
