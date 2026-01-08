@@ -1039,6 +1039,7 @@ func generateSucceededInitializationStatusForSmallClusters(
 	resourceSnapshotIndex string,
 	policySnapshot *placementv1beta1.ClusterSchedulingPolicySnapshot,
 	updateStrategy *placementv1beta1.ClusterStagedUpdateStrategy,
+	numUnscheduledClusters int,
 ) *placementv1beta1.UpdateRunStatus {
 	status := &placementv1beta1.UpdateRunStatus{
 		PolicySnapshotIndexUsed:    policySnapshot.Labels[placementv1beta1.PolicyIndexLabel],
@@ -1064,6 +1065,10 @@ func generateSucceededInitializationStatusForSmallClusters(
 			// initialization should succeed!
 			generateTrueCondition(updateRun, placementv1beta1.StagedUpdateRunConditionInitialized),
 		},
+	}
+	for i := range numUnscheduledClusters {
+		status.DeletionStageStatus.Clusters = append(status.DeletionStageStatus.Clusters,
+			placementv1beta1.ClusterUpdatingStatus{ClusterName: fmt.Sprintf("unscheduled-cluster-%d", i)})
 	}
 	for i := range status.StagesStatus {
 		var beforeTasks []placementv1beta1.StageTaskStatus

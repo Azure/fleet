@@ -26,7 +26,6 @@ import (
 	"github.com/google/go-cmp/cmp"
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
-	"github.com/prometheus/client_golang/prometheus"
 	prometheusclientmodel "github.com/prometheus/client_model/go"
 
 	corev1 "k8s.io/api/core/v1"
@@ -363,24 +362,6 @@ func generateSucceededMetric(updateRun *placementv1beta1.ClusterStagedUpdateRun)
 	}
 }
 
-func labelPairsToMap(pairs []*prometheusclientmodel.LabelPair) prometheus.Labels {
-	m := prometheus.Labels{}
-	for _, p := range pairs {
-		m[p.GetName()] = p.GetValue()
-	}
-	return m
-}
-
-func removeMetricFromMetricList(metricList []*prometheusclientmodel.Metric, metricToRemove *prometheusclientmodel.Metric) []*prometheusclientmodel.Metric {
-	var result []*prometheusclientmodel.Metric
-	for _, metric := range metricList {
-		if !cmp.Equal(labelPairsToMap(metric.Label), labelPairsToMap(metricToRemove.Label)) {
-			result = append(result, metric)
-		}
-	}
-	return result
-}
-
 func generateTestClusterStagedUpdateRun() *placementv1beta1.ClusterStagedUpdateRun {
 	return &placementv1beta1.ClusterStagedUpdateRun{
 		ObjectMeta: metav1.ObjectMeta{
@@ -460,30 +441,19 @@ func generateTestClusterResourceBindingsAndClusters(policySnapshotIndex int) ([]
 		if i%2 == 0 {
 			region = regionWestus
 		}
-		// reserse the order of the clusters by index
+		// reverse the order of the clusters by index
 		targetClusters[i] = generateTestMemberCluster(numTargetClusters-1-i, "cluster-"+strconv.Itoa(i), map[string]string{"group": "prod", "region": region})
 		resourceBindings[i] = generateTestClusterResourceBinding(policySnapshotName, targetClusters[i].Name, placementv1beta1.BindingStateScheduled)
 	}
 
-	unscheduledClusters := make([]*clusterv1beta1.MemberCluster, numUnscheduledClusters)
-	// Half of the unscheduled clusters have old policy snapshot.
-	for i := range numUnscheduledClusters / 2 {
-		unscheduledClusters[i] = generateTestMemberCluster(i, "unscheduled-cluster-"+strconv.Itoa(i), map[string]string{"group": "staging"})
-		// Update the policySnapshot name so that these clusters are considered to-be-deleted.
-		resourceBindings[numTargetClusters+i] = generateTestClusterResourceBinding(policySnapshotName+"a", unscheduledClusters[i].Name, placementv1beta1.BindingStateUnscheduled)
-	}
-	// The other half of the unscheduled clusters have latest policy snapshot but still unscheduled.
-	for i := numUnscheduledClusters / 2; i < numUnscheduledClusters; i++ {
-		unscheduledClusters[i] = generateTestMemberCluster(i, "unscheduled-cluster-"+strconv.Itoa(i), map[string]string{"group": "staging"})
-		resourceBindings[numTargetClusters+i] = generateTestClusterResourceBinding(policySnapshotName, unscheduledClusters[i].Name, placementv1beta1.BindingStateUnscheduled)
-	}
+	resourceBindings, unscheduledClusters := generateTestUnscheduledClusterResourceBindingsAndClusters(policySnapshotName, numUnscheduledClusters, resourceBindings)
 	return resourceBindings, targetClusters, unscheduledClusters
 }
 
-func generateSmallTestClusterResourceBindingsAndClusters(policySnapshotIndex int) ([]*placementv1beta1.ClusterResourceBinding, []*clusterv1beta1.MemberCluster, []*clusterv1beta1.MemberCluster) {
+func generateSmallTestClusterResourceBindingsAndClusters(policySnapshotIndex int, numUnscheduledClusters int) ([]*placementv1beta1.ClusterResourceBinding, []*clusterv1beta1.MemberCluster, []*clusterv1beta1.MemberCluster) {
 	numTargetClusters := 3
 	policySnapshotName := fmt.Sprintf(placementv1beta1.PolicySnapshotNameFmt, testCRPName, policySnapshotIndex)
-	resourceBindings := make([]*placementv1beta1.ClusterResourceBinding, numTargetClusters)
+	resourceBindings := make([]*placementv1beta1.ClusterResourceBinding, numTargetClusters+numUnscheduledClusters)
 	targetClusters := make([]*clusterv1beta1.MemberCluster, numTargetClusters)
 	for i := range targetClusters {
 		// split the clusters into 2 regions
@@ -491,12 +461,31 @@ func generateSmallTestClusterResourceBindingsAndClusters(policySnapshotIndex int
 		if i%2 == 0 {
 			region = regionWestus
 		}
-		// reserse the order of the clusters by index
+		// reverse the order of the clusters by index
 		targetClusters[i] = generateTestMemberCluster(numTargetClusters-1-i, "cluster-"+strconv.Itoa(i), map[string]string{"group": "prod", "region": region})
 		resourceBindings[i] = generateTestClusterResourceBinding(policySnapshotName, targetClusters[i].Name, placementv1beta1.BindingStateScheduled)
 	}
-	unscheduledClusters := make([]*clusterv1beta1.MemberCluster, 0)
+
+	resourceBindings, unscheduledClusters := generateTestUnscheduledClusterResourceBindingsAndClusters(policySnapshotName, numUnscheduledClusters, resourceBindings)
 	return resourceBindings, targetClusters, unscheduledClusters
+}
+
+func generateTestUnscheduledClusterResourceBindingsAndClusters(policySnapshotName string, numUnscheduledClusters int, bindings []*placementv1beta1.ClusterResourceBinding) ([]*placementv1beta1.ClusterResourceBinding, []*clusterv1beta1.MemberCluster) {
+	targetClusters := len(bindings) - numUnscheduledClusters
+	unscheduledClusters := make([]*clusterv1beta1.MemberCluster, numUnscheduledClusters)
+	unscheduledClusterName := "unscheduled-cluster-%d"
+	// Half of the unscheduled clusters have old policy snapshot.
+	for i := range numUnscheduledClusters / 2 {
+		unscheduledClusters[i] = generateTestMemberCluster(i, fmt.Sprintf(unscheduledClusterName, i), map[string]string{"group": "staging"})
+		// Update the policySnapshot name so that these clusters are considered to-be-deleted.
+		bindings[targetClusters+i] = generateTestClusterResourceBinding(policySnapshotName+"old", unscheduledClusters[i].Name, placementv1beta1.BindingStateUnscheduled)
+	}
+	// The other half of the unscheduled clusters have latest policy snapshot but still unscheduled.
+	for i := numUnscheduledClusters / 2; i < numUnscheduledClusters; i++ {
+		unscheduledClusters[i] = generateTestMemberCluster(i, fmt.Sprintf(unscheduledClusterName, i), map[string]string{"group": "staging"})
+		bindings[targetClusters+i] = generateTestClusterResourceBinding(policySnapshotName, unscheduledClusters[i].Name, placementv1beta1.BindingStateUnscheduled)
+	}
+	return bindings, unscheduledClusters
 }
 
 func generateTestClusterResourceBinding(policySnapshotName, targetCluster string, state placementv1beta1.BindingState) *placementv1beta1.ClusterResourceBinding {
