@@ -87,7 +87,7 @@ func (r *Reconciler) execute(
 		}
 		maxConcurrency, err := calculateMaxConcurrencyValue(updateRunStatus, updatingStageIndex)
 		if err != nil {
-			return false, 0, err
+			return false, 0, fmt.Errorf("%w: %s", errStagedUpdatedAborted, err.Error())
 		}
 		waitTime, err = r.executeUpdatingStage(ctx, updateRun, updatingStageIndex, toBeUpdatedBindings, maxConcurrency)
 		// The execution has not finished yet.

@@ -40,6 +40,7 @@ func TestValidateClusterUpdatingStatus(t *testing.T) {
 		updatingStageIndex         int
 		lastFinishedStageIndex     int
 		stageStatus                *placementv1beta1.StageUpdatingStatus
+		maxConcurrency             int
 		wantErr                    error
 		wantUpdatingStageIndex     int
 		wantLastFinishedStageIndex int
@@ -145,6 +146,28 @@ func TestValidateClusterUpdatingStatus(t *testing.T) {
 			wantLastFinishedStageIndex: -1,
 		},
 		{
+			name:                   "determineUpdatignStage should not return error if there are multiple clusters in an updating stage with no condition set (execution not started)",
+			curStage:               0,
+			updatingStageIndex:     -1,
+			lastFinishedStageIndex: -1,
+			stageStatus: &placementv1beta1.StageUpdatingStatus{
+				StageName:  "test-stage",
+				Conditions: []metav1.Condition{generateTrueCondition(updateRun, placementv1beta1.StageUpdatingConditionProgressing)},
+				Clusters: []placementv1beta1.ClusterUpdatingStatus{
+					{
+						ClusterName: "cluster-1",
+					},
+					{
+						ClusterName: "cluster-2",
+					},
+				},
+			},
+			maxConcurrency:             1,
+			wantErr:                    nil,
+			wantUpdatingStageIndex:     0,
+			wantLastFinishedStageIndex: -1,
+		},
+		{
 			name:                   "determineUpdatignStage should not return error if there are multiple clusters updating in an updating stage",
 			curStage:               0,
 			updatingStageIndex:     -1,
@@ -159,12 +182,65 @@ func TestValidateClusterUpdatingStatus(t *testing.T) {
 					},
 					{
 						ClusterName: "cluster-2",
-						Conditions:  []metav1.Condition{generateTrueCondition(updateRun, placementv1beta1.ClusterUpdatingConditionStarted)},
+						Conditions:  []metav1.Condition{generateTrueCondition(updateRun, placementv1beta1.ClusterUpdatingConditionStarted), generateFalseCondition(updateRun, placementv1beta1.ClusterUpdatingConditionSucceeded)},
 					},
 				},
 			},
+			maxConcurrency:             2,
 			wantErr:                    nil,
 			wantUpdatingStageIndex:     0,
+			wantLastFinishedStageIndex: -1,
+		},
+		{
+			name:                   "determineUpdatignStage should not return error if multiple clusters have succeeded in an updating stage",
+			curStage:               0,
+			updatingStageIndex:     -1,
+			lastFinishedStageIndex: -1,
+			stageStatus: &placementv1beta1.StageUpdatingStatus{
+				StageName:  "test-stage",
+				Conditions: []metav1.Condition{generateTrueCondition(updateRun, placementv1beta1.StageUpdatingConditionProgressing)},
+				Clusters: []placementv1beta1.ClusterUpdatingStatus{
+					{
+						ClusterName: "cluster-1",
+						Conditions:  []metav1.Condition{generateTrueCondition(updateRun, placementv1beta1.ClusterUpdatingConditionStarted), generateTrueCondition(updateRun, placementv1beta1.ClusterUpdatingConditionSucceeded)},
+					},
+					{
+						ClusterName: "cluster-2",
+						Conditions:  []metav1.Condition{generateTrueCondition(updateRun, placementv1beta1.ClusterUpdatingConditionStarted), generateTrueCondition(updateRun, placementv1beta1.ClusterUpdatingConditionSucceeded)},
+					},
+				},
+			},
+			maxConcurrency:             1,
+			wantErr:                    nil,
+			wantUpdatingStageIndex:     0,
+			wantLastFinishedStageIndex: -1,
+		},
+		{
+			name:                   "validateClusterUpdatingStatus should return error if number of updating clusters exceeds maxConcurrency",
+			curStage:               0,
+			updatingStageIndex:     -1,
+			lastFinishedStageIndex: -1,
+			stageStatus: &placementv1beta1.StageUpdatingStatus{
+				StageName:  "test-stage",
+				Conditions: []metav1.Condition{generateTrueCondition(updateRun, placementv1beta1.StageUpdatingConditionProgressing)},
+				Clusters: []placementv1beta1.ClusterUpdatingStatus{
+					{
+						ClusterName: "cluster-1",
+						Conditions:  []metav1.Condition{generateTrueCondition(updateRun, placementv1beta1.ClusterUpdatingConditionStarted)},
+					},
+					{
+						ClusterName: "cluster-2",
+						Conditions:  []metav1.Condition{generateTrueCondition(updateRun, placementv1beta1.ClusterUpdatingConditionStarted), generateFalseCondition(updateRun, placementv1beta1.ClusterUpdatingConditionSucceeded)},
+					},
+					{
+						ClusterName: "cluster-3",
+						Conditions:  []metav1.Condition{generateTrueCondition(updateRun, placementv1beta1.ClusterUpdatingConditionStarted), generateFalseCondition(updateRun, placementv1beta1.ClusterUpdatingConditionSucceeded)},
+					},
+				},
+			},
+			maxConcurrency:             1,
+			wantErr:                    wrapErr(true, fmt.Errorf("the number of updating clusters `3` in the updating stage `test-stage` exceeds maxConcurrency `1`")),
+			wantUpdatingStageIndex:     -1,
 			wantLastFinishedStageIndex: -1,
 		},
 		{
@@ -188,6 +264,7 @@ func TestValidateClusterUpdatingStatus(t *testing.T) {
 				StageName:  "test-stage",
 				Conditions: []metav1.Condition{generateTrueCondition(updateRun, placementv1beta1.StageUpdatingConditionProgressing)},
 			},
+			maxConcurrency:             1,
 			wantErr:                    nil,
 			wantUpdatingStageIndex:     2,
 			wantLastFinishedStageIndex: 1,
@@ -213,7 +290,7 @@ func TestValidateClusterUpdatingStatus(t *testing.T) {
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {
 			gotUpdatingStageIndex, gotLastFinishedStageIndex, err :=
-				validateClusterUpdatingStatus(test.curStage, test.updatingStageIndex, test.lastFinishedStageIndex, test.stageStatus, updateRun)
+				validateClusterUpdatingStatus(test.curStage, test.updatingStageIndex, test.lastFinishedStageIndex, test.stageStatus, test.maxConcurrency, updateRun)
 			if test.wantErr == nil {
 				if err != nil {
 					t.Fatalf("validateClusterUpdatingStatus() got error = %+v, want error = nil", err)
