@@ -229,19 +229,19 @@ func TestGetAllResources_NotPresent(t *testing.T) {
 
 func TestAddEventHandlerToInformer(t *testing.T) {
 	tests := []struct {
-		name     string
-		gvr      schema.GroupVersionResource
-		addTwice bool // Test adding handler twice to same informer
+		name              string
+		gvr               schema.GroupVersionResource
+		callMultipleTimes bool
 	}{
 		{
-			name:     "add handler to new informer",
-			gvr:      testresource.GVRConfigMap(),
-			addTwice: false,
+			name:              "add handler to new informer",
+			gvr:               testresource.GVRConfigMap(),
+			callMultipleTimes: false,
 		},
 		{
-			name:     "add multiple handlers to same informer",
-			gvr:      testresource.GVRDeployment(),
-			addTwice: true,
+			name:              "calling multiple times is idempotent - only registers once",
+			gvr:               testresource.GVRDeployment(),
+			callMultipleTimes: true,
 		},
 	}
 
@@ -252,33 +252,39 @@ func TestAddEventHandlerToInformer(t *testing.T) {
 			defer close(stopCh)
 
 			mgr := NewInformerManager(fakeClient, 0, stopCh)
+			implMgr := mgr.(*informerManagerImpl)
 
-			// Track handler calls
-			callCount := 0
 			handler := &testhandler.TestHandler{
-				OnAddFunc: func() { callCount++ },
+				OnAddFunc: func() {},
 			}
 
-			// Add the handler
+			// Add the handler first time
 			mgr.AddEventHandlerToInformer(tt.gvr, handler)
 
-			// Verify informer was created
-			implMgr := mgr.(*informerManagerImpl)
-			informer := implMgr.informerFactory.ForResource(tt.gvr).Informer()
-			if informer == nil {
-				t.Fatal("Expected informer to be created")
-			}
+			// Verify handler is tracked as registered
+			implMgr.resourcesLock.RLock()
+			checkHandler(t, implMgr, tt.gvr)
+			implMgr.resourcesLock.RUnlock()
 
-			if tt.addTwice {
-				// Add another handler to the same informer
-				handler2 := &testhandler.TestHandler{
-					OnAddFunc: func() { callCount++ },
-				}
-				mgr.AddEventHandlerToInformer(tt.gvr, handler2)
+			if tt.callMultipleTimes {
+				// Call again with same GVR - should be idempotent
+				mgr.AddEventHandlerToInformer(tt.gvr, handler)
+				mgr.AddEventHandlerToInformer(tt.gvr, handler)
+				checkHandler(t, implMgr, tt.gvr)
 			}
-
-			// Test is successful if no panic occurred and informer exists
 		})
+	}
+}
+
+func checkHandler(t *testing.T, implMgr *informerManagerImpl, gvr schema.GroupVersionResource) {
+	t.Helper()
+	implMgr.resourcesLock.RLock()
+	defer implMgr.resourcesLock.RUnlock()
+	if !implMgr.registeredHandlers[gvr] {
+		t.Errorf("Expected handler for %v to be registered", gvr)
+	}
+	if len(implMgr.registeredHandlers) != 1 {
+		t.Errorf("Expected 1 registered handler, got %d", len(implMgr.registeredHandlers))
 	}
 }
 

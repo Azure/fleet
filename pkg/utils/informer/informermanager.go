@@ -85,11 +85,12 @@ func NewInformerManager(client dynamic.Interface, defaultResync time.Duration, p
 	// TODO: replace this with plain context
 	ctx, cancel := ContextForChannel(parentCh)
 	return &informerManagerImpl{
-		dynamicClient:   client,
-		ctx:             ctx,
-		cancel:          cancel,
-		informerFactory: dynamicinformer.NewDynamicSharedInformerFactory(client, defaultResync),
-		apiResources:    make(map[schema.GroupVersionKind]*APIResourceMeta),
+		dynamicClient:      client,
+		ctx:                ctx,
+		cancel:             cancel,
+		informerFactory:    dynamicinformer.NewDynamicSharedInformerFactory(client, defaultResync),
+		apiResources:       make(map[schema.GroupVersionKind]*APIResourceMeta),
+		registeredHandlers: make(map[schema.GroupVersionResource]bool),
 	}
 }
 
@@ -127,6 +128,10 @@ type informerManagerImpl struct {
 	// the apiResources map collects all the api resources we watch
 	apiResources  map[schema.GroupVersionKind]*APIResourceMeta
 	resourcesLock sync.RWMutex
+
+	// registeredHandlers tracks which GVRs already have event handlers registered
+	// to prevent duplicate registrations and goroutine leaks
+	registeredHandlers map[schema.GroupVersionResource]bool
 }
 
 func (s *informerManagerImpl) AddStaticResource(resource APIResourceMeta, handler cache.ResourceEventHandler) {
@@ -208,8 +213,17 @@ func (s *informerManagerImpl) Stop() {
 // AddEventHandlerToInformer adds an event handler to an existing informer for the given resource.
 // If the informer doesn't exist, it will be created. This is used by the leader's ChangeDetector
 // to add event handlers to informers that were created by the InformerPopulator.
-// This method does not grab any locks because it relies on the informerFactory's internal thread-safety.
+// This method is idempotent - calling it multiple times for the same resource will only register
+// the handler once, preventing goroutine leaks from duplicate registrations.
 func (s *informerManagerImpl) AddEventHandlerToInformer(resource schema.GroupVersionResource, handler cache.ResourceEventHandler) {
+	s.resourcesLock.Lock()
+	defer s.resourcesLock.Unlock()
+
+	// Check if handler already registered for this resource
+	if s.registeredHandlers[resource] {
+		return
+	}
+
 	informer := s.getOrCreateInformerWithTransform(resource)
 
 	// AddEventHandler returns (ResourceEventHandlerRegistration, error). The registration handle
@@ -219,6 +233,8 @@ func (s *informerManagerImpl) AddEventHandlerToInformer(resource schema.GroupVer
 		klog.Fatal(err, "Failed to add event handler to informer - leader cannot function", "gvr", resource)
 	}
 
+	// Mark this resource as having a handler registered
+	s.registeredHandlers[resource] = true
 	klog.V(2).InfoS("Added event handler to informer", "gvr", resource)
 }
 
