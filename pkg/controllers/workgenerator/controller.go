@@ -673,6 +673,13 @@ func (r *Reconciler) syncApplyStrategy(
 
 // areAllWorkSynced checks if all the works are synced with the resource binding.
 func areAllWorkSynced(existingWorks map[string]*fleetv1beta1.Work, resourceBinding fleetv1beta1.BindingObj, _, _ string) bool {
+	// If there is no existing work, they are not synced.
+	// Even for the case where the resource snapshot has no selected resources,
+	// there should be one work created for the empty resource list.
+	if len(existingWorks) == 0 {
+		return false
+	}
+
 	// TODO: check resourceOverrideSnapshotHash and  clusterResourceOverrideSnapshotHash after all the work has the ParentResourceOverrideSnapshotHashAnnotation and ParentClusterResourceOverrideSnapshotHashAnnotation
 	resourceSnapshotName := resourceBinding.GetBindingSpec().ResourceSnapshotName
 	for _, work := range existingWorks {

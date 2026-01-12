@@ -17,6 +17,7 @@ limitations under the License.
 package e2e
 
 import (
+	"context"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -675,6 +676,29 @@ func deleteTestResourceCRD() {
 		},
 	}
 	Expect(hubClient.Delete(ctx, &crd)).Should(SatisfyAny(Succeed(), utils.NotFoundMatcher{}))
+}
+
+func waitForCRDToBeReady(crdName string) {
+	Eventually(func() error { // wait for CRD to be created
+		crd := &apiextensionsv1.CustomResourceDefinition{}
+		if err := hubClient.Get(ctx, types.NamespacedName{Name: crdName}, crd); err != nil {
+			return err
+		}
+		if crd.Status.Conditions == nil {
+			return fmt.Errorf("CRD status conditions are nil for %s", crdName)
+		}
+
+		for _, cond := range crd.Status.Conditions {
+			if cond.Type == apiextensionsv1.Established && cond.Status != apiextensionsv1.ConditionTrue {
+				return fmt.Errorf("CRD is not established: %s", crdName)
+			}
+			if cond.Type == apiextensionsv1.NamesAccepted && cond.Status != apiextensionsv1.ConditionTrue {
+				return fmt.Errorf("CRD names are not accepted: %s", crdName)
+			}
+		}
+
+		return nil
+	}, eventuallyDuration, eventuallyInterval).Should(Succeed(), "CRD failed to be ready %s", crdName)
 }
 
 func createTestResourceCRD() {
@@ -1808,4 +1832,187 @@ func retrievePlacement(placementKey types.NamespacedName) (placementv1beta1.Plac
 		return nil, err
 	}
 	return placement, nil
+}
+
+// ClusterStagedUpdateRunStatusSucceededActual verifies the status of the ClusterStagedUpdateRun.
+func ClusterStagedUpdateRunStatusSucceededActual(
+	ctx context.Context,
+	hubClient client.Client,
+	updateRunName string,
+	wantResourceIndex string,
+	wantPolicyIndex string,
+	wantClusterCount int,
+	wantApplyStrategy *placementv1beta1.ApplyStrategy,
+	wantStrategySpec *placementv1beta1.UpdateStrategySpec,
+	wantSelectedClusters [][]string,
+	wantUnscheduledClusters []string,
+	wantCROs map[string][]string,
+	wantROs map[string][]placementv1beta1.NamespacedName,
+	execute bool,
+) func() error {
+	return func() error {
+		updateRun := &placementv1beta1.ClusterStagedUpdateRun{}
+		if err := hubClient.Get(ctx, types.NamespacedName{Name: updateRunName}, updateRun); err != nil {
+			return err
+		}
+
+		wantStatus := placementv1beta1.UpdateRunStatus{
+			PolicySnapshotIndexUsed:    wantPolicyIndex,
+			ResourceSnapshotIndexUsed:  wantResourceIndex,
+			PolicyObservedClusterCount: wantClusterCount,
+			ApplyStrategy:              wantApplyStrategy.DeepCopy(),
+			UpdateStrategySnapshot:     wantStrategySpec,
+		}
+
+		if execute {
+			wantStatus.StagesStatus = buildStageUpdatingStatuses(wantStrategySpec, wantSelectedClusters, wantCROs, wantROs, updateRun)
+			wantStatus.DeletionStageStatus = buildDeletionStageStatus(wantUnscheduledClusters, updateRun)
+			wantStatus.Conditions = updateRunSucceedConditions(updateRun.Generation)
+		} else {
+			wantStatus.StagesStatus = buildStageUpdatingStatusesForInitialized(wantStrategySpec, wantSelectedClusters, wantCROs, wantROs, updateRun)
+			wantStatus.DeletionStageStatus = buildDeletionStatusWithoutConditions(wantUnscheduledClusters, updateRun)
+			wantStatus.Conditions = updateRunInitializedConditions(updateRun.Generation)
+		}
+		if diff := cmp.Diff(updateRun.Status, wantStatus, updateRunStatusCmpOption...); diff != "" {
+			return fmt.Errorf("UpdateRun status diff (-got, +want): %s", diff)
+		}
+		return nil
+	}
+}
+
+// StagedUpdateRunStatusSucceededActual verifies the status of the StagedUpdateRun.
+func StagedUpdateRunStatusSucceededActual(
+	ctx context.Context,
+	hubClient client.Client,
+	updateRunName, namespace string,
+	wantResourceIndex, wantPolicyIndex string,
+	wantClusterCount int,
+	wantApplyStrategy *placementv1beta1.ApplyStrategy,
+	wantStrategySpec *placementv1beta1.UpdateStrategySpec,
+	wantSelectedClusters [][]string,
+	wantUnscheduledClusters []string,
+	wantCROs map[string][]string,
+	wantROs map[string][]placementv1beta1.NamespacedName,
+	execute bool,
+) func() error {
+	return func() error {
+		updateRun := &placementv1beta1.StagedUpdateRun{}
+		if err := hubClient.Get(ctx, client.ObjectKey{Name: updateRunName, Namespace: namespace}, updateRun); err != nil {
+			return err
+		}
+
+		wantStatus := placementv1beta1.UpdateRunStatus{
+			PolicySnapshotIndexUsed:    wantPolicyIndex,
+			ResourceSnapshotIndexUsed:  wantResourceIndex,
+			PolicyObservedClusterCount: wantClusterCount,
+			ApplyStrategy:              wantApplyStrategy.DeepCopy(),
+			UpdateStrategySnapshot:     wantStrategySpec,
+		}
+
+		if execute {
+			wantStatus.StagesStatus = buildStageUpdatingStatuses(wantStrategySpec, wantSelectedClusters, wantCROs, wantROs, updateRun)
+			wantStatus.DeletionStageStatus = buildDeletionStageStatus(wantUnscheduledClusters, updateRun)
+			wantStatus.Conditions = updateRunSucceedConditions(updateRun.Generation)
+		} else {
+			wantStatus.StagesStatus = buildStageUpdatingStatusesForInitialized(wantStrategySpec, wantSelectedClusters, wantCROs, wantROs, updateRun)
+			wantStatus.DeletionStageStatus = buildDeletionStatusWithoutConditions(wantUnscheduledClusters, updateRun)
+			wantStatus.Conditions = updateRunInitializedConditions(updateRun.Generation)
+		}
+		if diff := cmp.Diff(updateRun.Status, wantStatus, updateRunStatusCmpOption...); diff != "" {
+			return fmt.Errorf("UpdateRun status diff (-got, +want): %s", diff)
+		}
+		return nil
+	}
+}
+
+// UpdateClusterStagedUpdateRunState updates the state of the ClusterStagedUpdateRun with the given name and state.
+func UpdateClusterStagedUpdateRunState(ctx context.Context, hubClient client.Client, updateRunName string, state placementv1beta1.State) {
+	Eventually(func() error {
+		updateRun := &placementv1beta1.ClusterStagedUpdateRun{}
+		if err := hubClient.Get(ctx, types.NamespacedName{Name: updateRunName}, updateRun); err != nil {
+			return fmt.Errorf("failed to get ClusterStagedUpdateRun %s", updateRunName)
+		}
+
+		updateRun.Spec.State = state
+		if err := hubClient.Update(ctx, updateRun); err != nil {
+			return fmt.Errorf("failed to update ClusterStagedUpdateRun %s", updateRunName)
+		}
+		return nil
+	}, eventuallyDuration, eventuallyInterval).Should(Succeed(), "Failed to update ClusterStagedUpdateRun %s state to %s", updateRunName, state)
+}
+
+// ValidateAndApproveClusterApprovalRequests validates and approves the cluster approval request for the given update run, stage based on stage task type.
+func ValidateAndApproveClusterApprovalRequests(ctx context.Context, hubClient client.Client, updateRunName, stageName, approvalRequestNameFmt, stageTaskType string) {
+	Eventually(func() error {
+		appReqList := &placementv1beta1.ClusterApprovalRequestList{}
+		if err := hubClient.List(ctx, appReqList, client.MatchingLabels{
+			placementv1beta1.TargetUpdatingStageNameLabel: stageName,
+			placementv1beta1.TargetUpdateRunLabel:         updateRunName,
+			placementv1beta1.TaskTypeLabel:                stageTaskType,
+		}); err != nil {
+			return fmt.Errorf("failed to list approval requests: %w", err)
+		}
+
+		if len(appReqList.Items) != 1 {
+			return fmt.Errorf("got %d approval requests, want 1", len(appReqList.Items))
+		}
+		appReq := &appReqList.Items[0]
+		approvalRequestName := fmt.Sprintf(approvalRequestNameFmt, updateRunName, stageName)
+		if appReq.Name != approvalRequestName {
+			return fmt.Errorf("got approval request %s, want %s", appReq.Name, approvalRequestName)
+		}
+		meta.SetStatusCondition(&appReq.Status.Conditions, metav1.Condition{
+			Status:             metav1.ConditionTrue,
+			Type:               string(placementv1beta1.ApprovalRequestConditionApproved),
+			ObservedGeneration: appReq.GetGeneration(),
+			Reason:             "lgtm",
+		})
+		return hubClient.Status().Update(ctx, appReq)
+	}, updateRunEventuallyDuration, eventuallyInterval).Should(Succeed(), "Failed to get or approve approval request")
+}
+
+// UpdateStagedUpdateRunState updates the state of the StagedUpdateRun with the given name, namespace and state.
+func UpdateStagedUpdateRunState(ctx context.Context, hubClient client.Client, updateRunName, namespace string, state placementv1beta1.State) {
+	Eventually(func() error {
+		updateRun := &placementv1beta1.StagedUpdateRun{}
+		if err := hubClient.Get(ctx, types.NamespacedName{Name: updateRunName, Namespace: namespace}, updateRun); err != nil {
+			return fmt.Errorf("failed to get StagedUpdateRun %s", updateRunName)
+		}
+
+		updateRun.Spec.State = state
+		if err := hubClient.Update(ctx, updateRun); err != nil {
+			return fmt.Errorf("failed to update StagedUpdateRun %s", updateRunName)
+		}
+		return nil
+	}, eventuallyDuration, eventuallyInterval).Should(Succeed(), "Failed to update StagedUpdateRun %s to state %s", updateRunName, state)
+}
+
+// ValidateAndApproveNamespacedApprovalRequests validates and approves the approval request for the given update run, stage based on stage task type.
+func ValidateAndApproveNamespacedApprovalRequests(ctx context.Context, hubClient client.Client, updateRunName, namespace, stageName, approvalRequestNameFmt, stageTaskType string) {
+	Eventually(func() error {
+		appReqList := &placementv1beta1.ApprovalRequestList{}
+		if err := hubClient.List(ctx, appReqList, client.InNamespace(namespace), client.MatchingLabels{
+			placementv1beta1.TargetUpdatingStageNameLabel: stageName,
+			placementv1beta1.TargetUpdateRunLabel:         updateRunName,
+			placementv1beta1.TaskTypeLabel:                stageTaskType,
+		}); err != nil {
+			return fmt.Errorf("failed to list approval requests: %w", err)
+		}
+
+		if len(appReqList.Items) != 1 {
+			return fmt.Errorf("got %d approval requests, want 1", len(appReqList.Items))
+		}
+		appReq := &appReqList.Items[0]
+		approvalRequestName := fmt.Sprintf(approvalRequestNameFmt, updateRunName, stageName)
+		if appReq.Name != approvalRequestName {
+			return fmt.Errorf("got approval request %s, want %s", appReq.Name, approvalRequestName)
+		}
+		meta.SetStatusCondition(&appReq.Status.Conditions, metav1.Condition{
+			Status:             metav1.ConditionTrue,
+			Type:               string(placementv1beta1.ApprovalRequestConditionApproved),
+			ObservedGeneration: appReq.GetGeneration(),
+			Reason:             "lgtm",
+		})
+		return hubClient.Status().Update(ctx, appReq)
+	}, updateRunEventuallyDuration, eventuallyInterval).Should(Succeed(), "Failed to get or approve approval request")
 }

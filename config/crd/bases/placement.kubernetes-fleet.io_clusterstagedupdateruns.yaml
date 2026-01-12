@@ -2436,8 +2436,8 @@ spec:
         - spec
         type: object
         x-kubernetes-validations:
-        - message: metadata.name max length is 127
-          rule: size(self.metadata.name) < 128
+        - message: metadata.name max length is 63
+          rule: size(self.metadata.name) < 64
     served: true
     storage: true
     subresources:

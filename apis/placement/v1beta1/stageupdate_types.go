@@ -96,7 +96,7 @@ type UpdateRunObjList interface {
 // +kubebuilder:printcolumn:JSONPath=`.status.conditions[?(@.type=="Succeeded")].status`,name="Succeeded",type=string
 // +kubebuilder:printcolumn:JSONPath=`.metadata.creationTimestamp`,name="Age",type=date
 // +kubebuilder:printcolumn:JSONPath=`.spec.stagedRolloutStrategyName`,name="Strategy",priority=1,type=string
-// +kubebuilder:validation:XValidation:rule="size(self.metadata.name) < 128",message="metadata.name max length is 127"
+// +kubebuilder:validation:XValidation:rule="size(self.metadata.name) < 64",message="metadata.name max length is 63"
 
 // ClusterStagedUpdateRun represents a stage by stage update process that applies ClusterResourcePlacement
 // selected resources to specified clusters.
@@ -427,7 +427,7 @@ const (
 	// Its condition status can be one of the following:
 	// - "True": The staged update run is making progress.
 	// - "False": The staged update run is waiting/paused/abandoned.
-	// - "Unknown" means it is unknown.
+	// - "Unknown": The staged update run is in a transitioning state.
 	StagedUpdateRunConditionProgressing StagedUpdateRunConditionType = "Progressing"
 
 	// StagedUpdateRunConditionSucceeded indicates whether the staged update run is completed successfully.
@@ -489,7 +489,8 @@ const (
 	// StageUpdatingConditionProgressing indicates whether the stage updating is making progress.
 	// Its condition status can be one of the following:
 	// - "True": The stage updating is making progress.
-	// - "False": The stage updating is waiting/pausing.
+	// - "False": The stage updating is waiting.
+	// - "Unknown": The staged updating is a transitioning state.
 	StageUpdatingConditionProgressing StageUpdatingConditionType = "Progressing"
 
 	// StageUpdatingConditionSucceeded indicates whether the stage updating is completed successfully.
@@ -790,7 +791,7 @@ func (c *ClusterApprovalRequestList) GetApprovalRequestObjs() []ApprovalRequestO
 // +kubebuilder:printcolumn:JSONPath=`.status.conditions[?(@.type=="Succeeded")].status`,name="Succeeded",type=string
 // +kubebuilder:printcolumn:JSONPath=`.metadata.creationTimestamp`,name="Age",type=date
 // +kubebuilder:printcolumn:JSONPath=`.spec.stagedRolloutStrategyName`,name="Strategy",priority=1,type=string
-// +kubebuilder:validation:XValidation:rule="size(self.metadata.name) < 128",message="metadata.name max length is 127"
+// +kubebuilder:validation:XValidation:rule="size(self.metadata.name) < 64",message="metadata.name max length is 63"
 
 // StagedUpdateRun represents a stage by stage update process that applies ResourcePlacement
 // selected resources to specified clusters.

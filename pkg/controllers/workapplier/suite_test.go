@@ -80,6 +80,15 @@ var (
 	memberDynamicClient3 dynamic.Interface
 	workApplier3         *Reconciler
 
+	memberCfg4                      *rest.Config
+	memberEnv4                      *envtest.Environment
+	hubMgr4                         manager.Manager
+	memberClient4                   client.Client
+	memberClient4Wrapper            *clientWrapperWithStatusUpdateCounter
+	memberDynamicClient4            dynamic.Interface
+	workApplier4                    *Reconciler
+	hubClientWrapperForWorkApplier4 *clientWrapperWithStatusUpdateCounter
+
 	ctx    context.Context
 	cancel context.CancelFunc
 	wg     sync.WaitGroup
@@ -94,6 +103,7 @@ const (
 	memberReservedNSName1 = "fleet-member-experimental-1"
 	memberReservedNSName2 = "fleet-member-experimental-2"
 	memberReservedNSName3 = "fleet-member-experimental-3"
+	memberReservedNSName4 = "fleet-member-experimental-4"
 
 	parallelizerFixedDelay = time.Second * 5
 )
@@ -147,6 +157,13 @@ func setupResources() {
 		},
 	}
 	Expect(hubClient.Create(ctx, ns3)).To(Succeed())
+
+	ns4 := &corev1.Namespace{
+		ObjectMeta: metav1.ObjectMeta{
+			Name: memberReservedNSName4,
+		},
+	}
+	Expect(hubClient.Create(ctx, ns4)).To(Succeed())
 }
 
 var _ = BeforeSuite(func() {
@@ -193,6 +210,14 @@ var _ = BeforeSuite(func() {
 			filepath.Join("../../../", "test", "manifests"),
 		},
 	}
+	// memberEnv4 is the test environment for verifying that work applier can skip status updates as
+	// expected.
+	memberEnv4 = &envtest.Environment{
+		CRDDirectoryPaths: []string{
+			filepath.Join("../../../", "config", "crd", "bases"),
+			filepath.Join("../../../", "test", "manifests"),
+		},
+	}
 
 	var err error
 	hubCfg, err = hubEnv.Start()
@@ -211,9 +236,9 @@ var _ = BeforeSuite(func() {
 	Expect(err).ToNot(HaveOccurred())
 	Expect(memberCfg3).ToNot(BeNil())
 
-	memberCfg2, err = memberEnv2.Start()
+	memberCfg4, err = memberEnv4.Start()
 	Expect(err).ToNot(HaveOccurred())
-	Expect(memberCfg2).ToNot(BeNil())
+	Expect(memberCfg4).ToNot(BeNil())
 
 	err = batchv1.AddToScheme(scheme.Scheme)
 	Expect(err).NotTo(HaveOccurred())
@@ -239,6 +264,10 @@ var _ = BeforeSuite(func() {
 	Expect(err).ToNot(HaveOccurred())
 	Expect(memberClient3).ToNot(BeNil())
 
+	memberClient4, err = client.New(memberCfg4, client.Options{Scheme: scheme.Scheme})
+	Expect(err).ToNot(HaveOccurred())
+	Expect(memberClient4).ToNot(BeNil())
+
 	// This setup also requires a client-go dynamic client for the member cluster.
 	memberDynamicClient1, err = dynamic.NewForConfig(memberCfg1)
 	Expect(err).ToNot(HaveOccurred())
@@ -247,6 +276,9 @@ var _ = BeforeSuite(func() {
 	Expect(err).ToNot(HaveOccurred())
 
 	memberDynamicClient3, err = dynamic.NewForConfig(memberCfg3)
+	Expect(err).ToNot(HaveOccurred())
+
+	memberDynamicClient4, err = dynamic.NewForConfig(memberCfg4)
 	Expect(err).ToNot(HaveOccurred())
 
 	By("Setting up the resources")
@@ -331,7 +363,7 @@ var _ = BeforeSuite(func() {
 		superLongExponentialBackoffRateLimiter,
 	)
 	// Due to name conflicts, the second work applier must be set up manually.
-	err = ctrl.NewControllerManagedBy(hubMgr2).Named("work-applier-controller-duplicate").
+	err = ctrl.NewControllerManagedBy(hubMgr2).Named("work-applier-controller-exponential-backoff").
 		WithOptions(ctrloption.Options{
 			MaxConcurrentReconciles: workApplier2.concurrentReconciles,
 		}).
@@ -383,8 +415,50 @@ var _ = BeforeSuite(func() {
 		Complete(workApplier3)
 	Expect(err).NotTo(HaveOccurred())
 
+	By("Setting up the controller and the controller manager for member cluster 4")
+	hubMgr4, err = ctrl.NewManager(hubCfg, ctrl.Options{
+		Scheme: scheme.Scheme,
+		Metrics: server.Options{
+			BindAddress: "0",
+		},
+		Cache: cache.Options{
+			DefaultNamespaces: map[string]cache.Config{
+				memberReservedNSName4: {},
+			},
+		},
+		Logger: textlogger.NewLogger(textlogger.NewConfig(textlogger.Verbosity(4))),
+	})
+	Expect(err).ToNot(HaveOccurred())
+
+	wrappedHubClient := NewClientWrapperWithStatusUpdateCounter(hubClient)
+	hubClientWrapperForWorkApplier4 = wrappedHubClient.(*clientWrapperWithStatusUpdateCounter)
+	wrappedMemberClient4 := NewClientWrapperWithStatusUpdateCounter(memberClient4)
+	memberClient4Wrapper = wrappedMemberClient4.(*clientWrapperWithStatusUpdateCounter)
+	workApplier4 = NewReconciler(
+		wrappedHubClient,
+		memberReservedNSName4,
+		memberDynamicClient4,
+		wrappedMemberClient4,
+		memberClient4.RESTMapper(),
+		hubMgr4.GetEventRecorderFor("work-applier"),
+		maxConcurrentReconciles,
+		parallelizer.NewParallelizer(workerCount),
+		30*time.Second,
+		true,
+		60,
+		nil, // Use the default backoff rate limiter.
+	)
+	// Due to name conflicts, the third work applier must be set up manually.
+	err = ctrl.NewControllerManagedBy(hubMgr4).Named("work-applier-controller-skipping-status-update").
+		WithOptions(ctrloption.Options{
+			MaxConcurrentReconciles: workApplier4.concurrentReconciles,
+		}).
+		For(&fleetv1beta1.Work{}, builder.WithPredicates(predicate.GenerationChangedPredicate{})).
+		Complete(workApplier4)
+	Expect(err).NotTo(HaveOccurred())
+
 	wg = sync.WaitGroup{}
-	wg.Add(3)
+	wg.Add(4)
 	go func() {
 		defer GinkgoRecover()
 		defer wg.Done()
@@ -405,6 +479,13 @@ var _ = BeforeSuite(func() {
 		Expect(workApplier3.Join(ctx)).To(Succeed())
 		Expect(hubMgr3.Start(ctx)).To(Succeed())
 	}()
+
+	go func() {
+		defer GinkgoRecover()
+		defer wg.Done()
+		Expect(workApplier4.Join(ctx)).To(Succeed())
+		Expect(hubMgr4.Start(ctx)).To(Succeed())
+	}()
 })
 
 var _ = AfterSuite(func() {
@@ -417,4 +498,5 @@ var _ = AfterSuite(func() {
 	Expect(memberEnv1.Stop()).To(Succeed())
 	Expect(memberEnv2.Stop()).To(Succeed())
 	Expect(memberEnv3.Stop()).To(Succeed())
+	Expect(memberEnv4.Stop()).To(Succeed())
 })

@@ -201,7 +201,6 @@ func (r *Reconciler) fillInClusterStatus(mc *clusterv1beta1.MemberCluster, cp *c
 	} else {
 		// throw an alert
 		_ = controller.NewUnexpectedBehaviorError(fmt.Errorf("cluster certificate authority data not found in member cluster %s status", mc.Name))
-		cp.Status.AccessProviders[0].Cluster.InsecureSkipTLSVerify = true
 	}
 }
 

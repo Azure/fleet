@@ -23,7 +23,9 @@ import (
 	coordv1 "k8s.io/api/coordination/v1"
 	corev1 "k8s.io/api/core/v1"
 	eventsv1 "k8s.io/api/events/v1"
+	"k8s.io/apimachinery/pkg/api/meta"
 	"k8s.io/apimachinery/pkg/runtime/schema"
+	"k8s.io/klog/v2"
 	metricsV1beta1 "k8s.io/metrics/pkg/apis/metrics/v1beta1"
 
 	clusterv1beta1 "go.goms.io/fleet/apis/cluster/v1beta1"
@@ -361,4 +363,27 @@ func (r *ResourceConfig) AddGroupKind(gk schema.GroupKind) {
 // AddGroupVersionKind stores a GroupVersionKind in the resource config.
 func (r *ResourceConfig) AddGroupVersionKind(gvk schema.GroupVersionKind) {
 	r.groupVersionKinds[gvk] = struct{}{}
+}
+
+// ShouldProcessResource returns whether a GroupVersionResource should be processed (watched or selected).
+// It checks if the resource is enabled based on the ResourceConfig settings.
+// Returns true if resourceConfig is nil (all APIs allowed by default) or if the resource is not disabled.
+func ShouldProcessResource(gvr schema.GroupVersionResource, restMapper meta.RESTMapper, resourceConfig *ResourceConfig) bool {
+	// By default, all of the APIs are allowed.
+	if resourceConfig == nil {
+		return true
+	}
+
+	gvks, err := restMapper.KindsFor(gvr)
+	if err != nil {
+		klog.ErrorS(err, "gvr transform failed", "gvr", gvr.String())
+		return false
+	}
+	for _, gvk := range gvks {
+		if resourceConfig.IsResourceDisabled(gvk) {
+			klog.V(4).InfoS("Skip processing resource", "group version kind", gvk.String())
+			return false
+		}
+	}
+	return true
 }

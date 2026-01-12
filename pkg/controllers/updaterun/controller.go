@@ -77,6 +77,10 @@ func (r *Reconciler) Reconcile(ctx context.Context, req runtime.Request) (runtim
 		klog.ErrorS(err, "Failed to get updateRun object", "updateRun", req.NamespacedName)
 		return runtime.Result{}, client.IgnoreNotFound(err)
 	}
+
+	// Update all existing conditions' ObservedGeneration to the current generation.
+	updateAllStatusConditionsGeneration(updateRun.GetUpdateRunStatus(), updateRun.GetGeneration())
+
 	runObjRef := klog.KObj(updateRun)
 
 	// Remove waitTime from the updateRun status for BeforeStageTask and AfterStageTask for type Approval.
@@ -110,12 +114,9 @@ func (r *Reconciler) Reconcile(ctx context.Context, req runtime.Request) (runtim
 	var toBeUpdatedBindings, toBeDeletedBindings []placementv1beta1.BindingObj
 	updateRunStatus := updateRun.GetUpdateRunStatus()
 	initCond := meta.FindStatusCondition(updateRunStatus.Conditions, string(placementv1beta1.StagedUpdateRunConditionInitialized))
-	// Check if initialized regardless of generation.
-	// The updateRun spec fields are immutable except for the state field. When the state changes,
-	// the update run generation increments, but we don't need to reinitialize since initialization is a one-time setup.
-	if !(initCond != nil && initCond.Status == metav1.ConditionTrue) {
+	if !condition.IsConditionStatusTrue(initCond, updateRun.GetGeneration()) {
 		// Check if initialization failed for the current generation.
-		if initCond != nil && initCond.Status == metav1.ConditionFalse {
+		if condition.IsConditionStatusFalse(initCond, updateRun.GetGeneration()) {
 			klog.V(2).InfoS("The updateRun has failed to initialize", "errorMsg", initCond.Message, "updateRun", runObjRef)
 			return runtime.Result{}, nil
 		}
@@ -158,9 +159,12 @@ func (r *Reconciler) Reconcile(ctx context.Context, req runtime.Request) (runtim
 		return runtime.Result{}, r.recordUpdateRunSucceeded(ctx, updateRun)
 	}
 
-	// Execute the updateRun.
-	if state == placementv1beta1.StateRun {
-		klog.V(2).InfoS("Continue to execute the updateRun", "state", state, "updatingStageIndex", updatingStageIndex, "updateRun", runObjRef)
+	switch state {
+	case placementv1beta1.StateInitialize:
+		klog.V(2).InfoS("The updateRun is initialized but not executed, waiting to execute", "state", state, "updateRun", runObjRef)
+	case placementv1beta1.StateRun:
+		// Execute the updateRun.
+		klog.V(2).InfoS("Continue to execute the updateRun", "updatingStageIndex", updatingStageIndex, "updateRun", runObjRef)
 		finished, waitTime, execErr := r.execute(ctx, updateRun, updatingStageIndex, toBeUpdatedBindings, toBeDeletedBindings)
 		if errors.Is(execErr, errStagedUpdatedAborted) {
 			// errStagedUpdatedAborted cannot be retried.
@@ -172,19 +176,46 @@ func (r *Reconciler) Reconcile(ctx context.Context, req runtime.Request) (runtim
 			return runtime.Result{}, r.recordUpdateRunSucceeded(ctx, updateRun)
 		}
 
-		// The execution is not finished yet or it encounters a retriable error.
-		// We need to record the status and requeue.
-		if updateErr := r.recordUpdateRunStatus(ctx, updateRun); updateErr != nil {
-			return runtime.Result{}, updateErr
+		return r.handleIncompleteUpdateRun(ctx, updateRun, waitTime, execErr, state, runObjRef)
+	case placementv1beta1.StateStop:
+		// Stop the updateRun.
+		klog.V(2).InfoS("Stopping the updateRun", "state", state, "updatingStageIndex", updatingStageIndex, "updateRun", runObjRef)
+		finished, waitTime, stopErr := r.stop(updateRun, updatingStageIndex, toBeUpdatedBindings, toBeDeletedBindings)
+		if errors.Is(stopErr, errStagedUpdatedAborted) {
+			// errStagedUpdatedAborted cannot be retried.
+			return runtime.Result{}, r.recordUpdateRunFailed(ctx, updateRun, stopErr.Error())
 		}
-		klog.V(2).InfoS("The updateRun is not finished yet", "requeueWaitTime", waitTime, "execErr", execErr, "updateRun", runObjRef)
-		if execErr != nil {
-			return runtime.Result{}, execErr
+
+		if finished {
+			klog.V(2).InfoS("The updateRun is stopped", "updateRun", runObjRef)
+			return runtime.Result{}, r.recordUpdateRunStopped(ctx, updateRun)
 		}
-		return runtime.Result{Requeue: true, RequeueAfter: waitTime}, nil
+
+		return r.handleIncompleteUpdateRun(ctx, updateRun, waitTime, stopErr, state, runObjRef)
+
+	default:
+		// Initialize, Run, or Stop are the only supported states.
+		unexpectedErr := controller.NewUnexpectedBehaviorError(fmt.Errorf("found unsupported updateRun state: %s", state))
+		klog.ErrorS(unexpectedErr, "Invalid updateRun state", "state", state, "updateRun", runObjRef)
+		return runtime.Result{}, r.recordUpdateRunFailed(ctx, updateRun, unexpectedErr.Error())
 	}
-	klog.V(2).InfoS("The updateRun is initialized but not executed, waiting to execute", "state", state, "updateRun", runObjRef)
 	return runtime.Result{}, nil
+}
+
+func (r *Reconciler) handleIncompleteUpdateRun(ctx context.Context, updateRun placementv1beta1.UpdateRunObj, waitTime time.Duration, err error, state placementv1beta1.State, runObjRef klog.ObjectRef) (runtime.Result, error) {
+	// The execution or stopping is not finished yet or it encounters a retriable error.
+	// We need to record the status and requeue.
+	if updateErr := r.recordUpdateRunStatus(ctx, updateRun); updateErr != nil {
+		return runtime.Result{}, updateErr
+	}
+
+	klog.V(2).InfoS("The updateRun is not finished yet", "state", state, "requeueWaitTime", waitTime, "err", err, "updateRun", runObjRef)
+
+	// Return execution or stopping retriable error if any.
+	if err != nil {
+		return runtime.Result{}, err
+	}
+	return runtime.Result{Requeue: true, RequeueAfter: waitTime}, nil
 }
 
 // handleDelete handles the deletion of the updateRun object.
@@ -271,6 +302,25 @@ func (r *Reconciler) recordUpdateRunFailed(ctx context.Context, updateRun placem
 	})
 	if updateErr := r.Client.Status().Update(ctx, updateRun); updateErr != nil {
 		klog.ErrorS(updateErr, "Failed to update the updateRun status as failed", "updateRun", klog.KObj(updateRun))
+		// updateErr can be retried.
+		return controller.NewUpdateIgnoreConflictError(updateErr)
+	}
+	return nil
+}
+
+// recordUpdateRunStopped records the progressing condition as stopped in the updateRun status.
+func (r *Reconciler) recordUpdateRunStopped(ctx context.Context, updateRun placementv1beta1.UpdateRunObj) error {
+	updateRunStatus := updateRun.GetUpdateRunStatus()
+	meta.SetStatusCondition(&updateRunStatus.Conditions, metav1.Condition{
+		Type:               string(placementv1beta1.StagedUpdateRunConditionProgressing),
+		Status:             metav1.ConditionFalse,
+		ObservedGeneration: updateRun.GetGeneration(),
+		Reason:             condition.UpdateRunStoppedReason,
+		Message:            "The update run has been stopped",
+	})
+
+	if updateErr := r.Client.Status().Update(ctx, updateRun); updateErr != nil {
+		klog.ErrorS(updateErr, "Failed to update the updateRun status as stopped", "updateRun", klog.KObj(updateRun))
 		// updateErr can be retried.
 		return controller.NewUpdateIgnoreConflictError(updateErr)
 	}
@@ -481,6 +531,60 @@ func removeWaitTimeFromUpdateRunStatus(updateRun placementv1beta1.UpdateRunObj) 
 					updateRunStatus.UpdateStrategySnapshot.Stages[i].AfterStageTasks[j].WaitTime = nil
 				}
 			}
+		}
+	}
+}
+
+// updateAllStatusConditionsGeneration iterates through all existing conditions in the UpdateRun status
+// and updates their ObservedGeneration field to the current UpdateRun generation.
+func updateAllStatusConditionsGeneration(updateRunStatus *placementv1beta1.UpdateRunStatus, generation int64) {
+	// Update main UpdateRun conditions.
+	for i := range updateRunStatus.Conditions {
+		updateRunStatus.Conditions[i].ObservedGeneration = generation
+	}
+
+	// Update stage-level conditions and nested task conditions if it exists.
+	for i := range updateRunStatus.StagesStatus {
+		stageStatus := &updateRunStatus.StagesStatus[i]
+
+		// Update stage conditions.
+		updateAllStageStatusConditionsGeneration(stageStatus, generation)
+	}
+
+	// Update deletion stage conditions and nested tasks if it exists.
+	if updateRunStatus.DeletionStageStatus != nil {
+		deletionStageStatus := updateRunStatus.DeletionStageStatus
+
+		// Update deletion stage conditions.
+		updateAllStageStatusConditionsGeneration(deletionStageStatus, generation)
+	}
+}
+
+// updateAllStageStatusConditionsGeneration updates all conditions' ObservedGeneration in the given stage status.
+func updateAllStageStatusConditionsGeneration(stageStatus *placementv1beta1.StageUpdatingStatus, generation int64) {
+	// Update stage conditions.
+	for j := range stageStatus.Conditions {
+		stageStatus.Conditions[j].ObservedGeneration = generation
+	}
+
+	// Update before stage task conditions.
+	for j := range stageStatus.BeforeStageTaskStatus {
+		for k := range stageStatus.BeforeStageTaskStatus[j].Conditions {
+			stageStatus.BeforeStageTaskStatus[j].Conditions[k].ObservedGeneration = generation
+		}
+	}
+
+	// Update after stage task conditions.
+	for j := range stageStatus.AfterStageTaskStatus {
+		for k := range stageStatus.AfterStageTaskStatus[j].Conditions {
+			stageStatus.AfterStageTaskStatus[j].Conditions[k].ObservedGeneration = generation
+		}
+	}
+
+	// Update cluster-level conditions.
+	for j := range stageStatus.Clusters {
+		for k := range stageStatus.Clusters[j].Conditions {
+			stageStatus.Clusters[j].Conditions[k].ObservedGeneration = generation
 		}
 	}
 }

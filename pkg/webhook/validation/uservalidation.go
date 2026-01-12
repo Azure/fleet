@@ -14,6 +14,7 @@ import (
 	"k8s.io/apimachinery/pkg/types"
 	"k8s.io/klog/v2"
 	"k8s.io/utils/strings/slices"
+	clusterinventory "sigs.k8s.io/cluster-inventory-api/apis/v1alpha1"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/webhook/admission"
 
@@ -44,7 +45,12 @@ const (
 )
 
 var (
-	fleetCRDGroups = []string{"networking.fleet.azure.com", "cluster.kubernetes-fleet.io", "placement.kubernetes-fleet.io"}
+	fleetManagedCRDGroups = []string{
+		utils.NetworkingGroupName,
+		clusterv1beta1.GroupVersion.Group,
+		placementv1beta1.GroupVersion.Group,
+		clusterinventory.GroupVersion.Group,
+	}
 )
 
 // ValidateUserForFleetCRD checks to see if user is not allowed to modify fleet CRDs.
@@ -255,7 +261,7 @@ func isMemberClusterUpdated(currentObj, oldObj client.Object) (bool, error) {
 
 // checkCRDGroup returns true if the input CRD group is a fleet CRD group.
 func checkCRDGroup(group string) bool {
-	return slices.Contains(fleetCRDGroups, group)
+	return slices.Contains(fleetManagedCRDGroups, group)
 }
 
 // ValidateMCIdentity returns admission allowed/denied based on the member cluster's identity.

@@ -289,7 +289,7 @@ func (f *framework) RunSchedulingCycleFor(ctx context.Context, placementKey queu
 	// overloading). In the long run we might still want to resort to a cached situation.
 	//
 	// TO-DO (chenyu1): explore the possibilities of using a mutation cache for better performance.
-	bindings, err := controller.ListBindingsFromKey(ctx, f.uncachedReader, types.NamespacedName{Namespace: namespace, Name: name})
+	bindings, err := controller.ListBindingsFromKey(ctx, f.uncachedReader, types.NamespacedName{Namespace: namespace, Name: name}, false)
 	if err != nil {
 		klog.ErrorS(err, "Failed to collect bindings", "policySnapshot", policyRef)
 		return ctrl.Result{}, err
@@ -607,7 +607,7 @@ type filteredClusterWithStatus struct {
 	status  *Status
 }
 
-// helper type to pretty print a list of filteredClusterWithStatus
+// filteredClusterWithStatusList is a list of filteredClusterWithStatus.
 type filteredClusterWithStatusList []*filteredClusterWithStatus
 
 func (cs filteredClusterWithStatusList) String() string {
@@ -619,6 +619,15 @@ func (cs filteredClusterWithStatusList) String() string {
 		filteredClusters = append(filteredClusters, fmt.Sprintf("{cluster: %s, status: %s}", fc.cluster.Name, fc.status))
 	}
 	return fmt.Sprintf("filteredClusters[%s]", strings.Join(filteredClusters, ", "))
+}
+
+// Implement sort.Interface for filteredClusterWithStatusList.
+func (f filteredClusterWithStatusList) Len() int { return len(f) }
+func (f filteredClusterWithStatusList) Less(i, j int) bool {
+	return f[i].cluster.Name < f[j].cluster.Name
+}
+func (f filteredClusterWithStatusList) Swap(i, j int) {
+	f[i], f[j] = f[j], f[i]
 }
 
 // runFilterPlugins runs filter plugins on clusters in parallel.
@@ -786,6 +795,14 @@ func (f *framework) updatePolicySnapshotStatusFromBindings(
 		klog.ErrorS(err, "Failed to retrieve placement generation from annotation", "schedulingPolicySnapshot", policyRef)
 		return controller.NewUnexpectedBehaviorError(err)
 	}
+
+	// Sort all filtered clusters.
+	//
+	// This step is needed to produce deterministic decision outputs. If there are enough slots,
+	// the scheduler will try to explain why some clusters are filtered out in the decision list; to ensure
+	// that the list will not change across scheduling cycles without actual scheduling policy
+	// refreshes, the filtered clusters need to be sorted.
+	sort.Sort(filteredClusterWithStatusList(filtered))
 
 	// Prepare new scheduling decisions.
 	newDecisions := newSchedulingDecisionsFromBindings(f.maxUnselectedClusterDecisionCount, notPicked, filtered, existing...)

@@ -18,7 +18,6 @@ package updaterun
 
 import (
 	"context"
-	"errors"
 	"fmt"
 	"reflect"
 	"strconv"
@@ -68,14 +67,7 @@ func (r *Reconciler) execute(
 
 	// Set up defer function to handle errStagedUpdatedAborted.
 	defer func() {
-		if errors.Is(err, errStagedUpdatedAborted) {
-			if updatingStageStatus != nil {
-				markStageUpdatingFailed(updatingStageStatus, updateRun.GetGeneration(), err.Error())
-			} else {
-				// Handle deletion stage case.
-				markStageUpdatingFailed(updateRunStatus.DeletionStageStatus, updateRun.GetGeneration(), err.Error())
-			}
-		}
+		checkIfErrorStagedUpdateAborted(err, updateRun, updatingStageStatus)
 	}()
 
 	// Mark updateRun as progressing if it's not already marked as waiting or stuck.
@@ -95,7 +87,7 @@ func (r *Reconciler) execute(
 		}
 		maxConcurrency, err := calculateMaxConcurrencyValue(updateRunStatus, updatingStageIndex)
 		if err != nil {
-			return false, 0, err
+			return false, 0, fmt.Errorf("%w: %s", errStagedUpdatedAborted, err.Error())
 		}
 		waitTime, err = r.executeUpdatingStage(ctx, updateRun, updatingStageIndex, toBeUpdatedBindings, maxConcurrency)
 		// The execution has not finished yet.
@@ -232,9 +224,7 @@ func (r *Reconciler) executeUpdatingStage(
 				}
 			}
 			markClusterUpdatingStarted(clusterStatus, updateRun.GetGeneration())
-			if finishedClusterCount == 0 {
-				markStageUpdatingStarted(updatingStageStatus, updateRun.GetGeneration())
-			}
+			markStageUpdatingProgressStarted(updatingStageStatus, updateRun.GetGeneration())
 			// Need to continue as we need to process at most maxConcurrency number of clusters in parallel.
 			continue
 		}
@@ -338,7 +328,7 @@ func (r *Reconciler) executeDeleteStage(
 		existingDeleteStageClusterMap[existingDeleteStageStatus.Clusters[i].ClusterName] = &existingDeleteStageStatus.Clusters[i]
 	}
 	// Mark the delete stage as started in case it's not.
-	markStageUpdatingStarted(updateRunStatus.DeletionStageStatus, updateRun.GetGeneration())
+	markStageUpdatingProgressStarted(updateRunStatus.DeletionStageStatus, updateRun.GetGeneration())
 	for _, binding := range toBeDeletedBindings {
 		bindingSpec := binding.GetBindingSpec()
 		curCluster, exist := existingDeleteStageClusterMap[bindingSpec.TargetCluster]
@@ -564,7 +554,7 @@ func calculateMaxConcurrencyValue(status *placementv1beta1.UpdateRunStatus, stag
 func aggregateUpdateRunStatus(updateRun placementv1beta1.UpdateRunObj, stageName string, stuckClusterNames []string) {
 	if len(stuckClusterNames) > 0 {
 		markUpdateRunStuck(updateRun, stageName, strings.Join(stuckClusterNames, ", "))
-	} else {
+	} else if updateRun.GetUpdateRunSpec().State == placementv1beta1.StateRun {
 		// If there is no stuck cluster but some progress has been made, mark the update run as progressing.
 		markUpdateRunProgressing(updateRun)
 	}
@@ -672,7 +662,7 @@ func markUpdateRunProgressing(updateRun placementv1beta1.UpdateRunObj) {
 	})
 }
 
-// markUpdateRunProgressingIfNotWaitingOrStuck marks the update run as proegressing in memory if it's not marked as waiting or stuck already.
+// markUpdateRunProgressingIfNotWaitingOrStuck marks the update run as progressing in memory if it's not marked as waiting or stuck already.
 func markUpdateRunProgressingIfNotWaitingOrStuck(updateRun placementv1beta1.UpdateRunObj) {
 	updateRunStatus := updateRun.GetUpdateRunStatus()
 	progressingCond := meta.FindStatusCondition(updateRunStatus.Conditions, string(placementv1beta1.StagedUpdateRunConditionProgressing))
@@ -708,8 +698,8 @@ func markUpdateRunWaiting(updateRun placementv1beta1.UpdateRunObj, message strin
 	})
 }
 
-// markStageUpdatingStarted marks the stage updating status as started in memory.
-func markStageUpdatingStarted(stageUpdatingStatus *placementv1beta1.StageUpdatingStatus, generation int64) {
+// markStageUpdatingProgressStarted marks the stage updating status as started in memory.
+func markStageUpdatingProgressStarted(stageUpdatingStatus *placementv1beta1.StageUpdatingStatus, generation int64) {
 	if stageUpdatingStatus.StartTime == nil {
 		stageUpdatingStatus.StartTime = &metav1.Time{Time: time.Now()}
 	}

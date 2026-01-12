@@ -17,12 +17,14 @@ limitations under the License.
 package resourcewatcher
 
 import (
+	"k8s.io/apimachinery/pkg/api/meta"
 	"k8s.io/apimachinery/pkg/runtime/schema"
 	"k8s.io/apimachinery/pkg/util/errors"
 	"k8s.io/client-go/discovery"
 	"k8s.io/klog/v2"
 	metricsV1beta1 "k8s.io/metrics/pkg/apis/metrics/v1beta1"
 
+	"go.goms.io/fleet/pkg/utils"
 	"go.goms.io/fleet/pkg/utils/informer"
 )
 
@@ -30,10 +32,11 @@ import (
 // More specifically, all api resources which support the 'list', and 'watch' verbs.
 // All discovery errors are considered temporary. Upon encountering any error,
 // getWatchableResources will log and return any discovered resources it was able to process (which may be none).
-func (d *ChangeDetector) getWatchableResources() ([]informer.APIResourceMeta, error) {
+// This is a standalone function that can be used by both ChangeDetector and InformerPopulator.
+func getWatchableResources(discoveryClient discovery.ServerResourcesInterface) ([]informer.APIResourceMeta, error) {
 	// Get all the resources this cluster has. We only need to care about the preferred version as the informers watch
 	// the preferred version will get watch event for resources on the other versions since there is only one version in etcd.
-	allResources, discoverError := d.DiscoveryClient.ServerPreferredResources()
+	allResources, discoverError := discoveryClient.ServerPreferredResources()
 	allErr := make([]error, 0)
 	if discoverError != nil {
 		if discovery.IsGroupDiscoveryFailedError(discoverError) {
@@ -81,4 +84,23 @@ func (d *ChangeDetector) getWatchableResources() ([]informer.APIResourceMeta, er
 	}
 
 	return watchableGroupVersionResources, errors.NewAggregate(allErr)
+}
+
+// discoverWatchableResources discovers all API resources in the cluster and filters them
+// based on the resource configuration. This is a shared helper used by both InformerPopulator
+// and ChangeDetector to ensure consistent resource discovery logic.
+func discoverWatchableResources(discoveryClient discovery.DiscoveryInterface, restMapper meta.RESTMapper, resourceConfig *utils.ResourceConfig) []informer.APIResourceMeta {
+	newResources, err := getWatchableResources(discoveryClient)
+	if err != nil {
+		klog.ErrorS(err, "Failed to get all the api resources from the cluster")
+	}
+
+	var resourcesToWatch []informer.APIResourceMeta
+	for _, res := range newResources {
+		if utils.ShouldProcessResource(res.GroupVersionResource, restMapper, resourceConfig) {
+			resourcesToWatch = append(resourcesToWatch, res)
+		}
+	}
+
+	return resourcesToWatch
 }

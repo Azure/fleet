@@ -305,7 +305,7 @@ func (s *Scheduler) cleanUpAllBindingsFor(ctx context.Context, placement fleetv1
 	// Note that the listing is performed using the uncached client; this is to ensure that all related
 	// bindings can be found, even if they have not been synced to the cache yet.
 	// TO-DO (chenyu1): this is a very expensive op; explore options for optimization.
-	bindings, err := controller.ListBindingsFromKey(ctx, s.uncachedReader, types.NamespacedName{Namespace: placement.GetNamespace(), Name: placement.GetName()})
+	bindings, err := controller.ListBindingsFromKey(ctx, s.uncachedReader, types.NamespacedName{Namespace: placement.GetNamespace(), Name: placement.GetName()}, false)
 	if err != nil {
 		klog.ErrorS(err, "Failed to list all bindings", "placement", placementRef)
 		return err
