@@ -426,6 +426,14 @@ func (r *Reconciler) syncRoleBinding(ctx context.Context, mc *clusterv1beta1.Mem
 			Name:     roleName,
 		},
 	}
+	// For User and Group kind, the APIGroup is defaulted to rbac.authorization.k8s.io if not set.
+	// Reference: https://pkg.go.dev/k8s.io/api/rbac/v1#Subject
+	for i := range expectedRoleBinding.Subjects {
+		subj := &expectedRoleBinding.Subjects[i]
+		if subj.APIGroup == "" && (subj.Kind == rbacv1.GroupKind || subj.Kind == rbacv1.UserKind) {
+			subj.APIGroup = rbacv1.GroupName
+		}
+	}
 
 	// Creates role binding if not found.
 	var currentRoleBinding rbacv1.RoleBinding

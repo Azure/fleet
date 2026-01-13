@@ -355,6 +355,11 @@ func TestSyncRole(t *testing.T) {
 
 func TestSyncRoleBinding(t *testing.T) {
 	identity := rbacv1.Subject{
+		APIGroup: "rbac.authorization.k8s.io",
+		Kind:     "User",
+		Name:     "MemberClusterIdentity",
+	}
+	identityWithoutGroup := rbacv1.Subject{
 		Kind: "User",
 		Name: "MemberClusterIdentity",
 	}
@@ -423,6 +428,40 @@ func TestSyncRoleBinding(t *testing.T) {
 			memberCluster: &clusterv1beta1.MemberCluster{
 				ObjectMeta: metav1.ObjectMeta{Name: "mc1"},
 				Spec:       clusterv1beta1.MemberClusterSpec{Identity: identity},
+			},
+			namespaceName: namespace1,
+			roleName:      "fleet-role-mc1",
+			wantedError:   "",
+		},
+		"identity without APIGroup should not trigger roleBinding reconcile": {
+			r: &Reconciler{
+				Client: &test.MockClient{
+					MockGet: func(ctx context.Context, key client.ObjectKey, obj client.Object) error {
+						roleRef := rbacv1.RoleRef{
+							APIGroup: rbacv1.GroupName,
+							Kind:     "Role",
+							Name:     "fleet-role-mc1",
+						}
+						o := obj.(*rbacv1.RoleBinding)
+						*o = rbacv1.RoleBinding{
+							TypeMeta: metav1.TypeMeta{
+								Kind:       "RoleBinding",
+								APIVersion: rbacv1.SchemeGroupVersion.String(),
+							},
+							ObjectMeta: metav1.ObjectMeta{
+								Name:      "fleet-rolebinding-mc1",
+								Namespace: namespace1,
+							},
+							Subjects: []rbacv1.Subject{identity}, // Returned roleBinding has APIGroup set.
+							RoleRef:  roleRef,
+						}
+						return nil
+					},
+				},
+			},
+			memberCluster: &clusterv1beta1.MemberCluster{
+				ObjectMeta: metav1.ObjectMeta{Name: "mc1"},
+				Spec:       clusterv1beta1.MemberClusterSpec{Identity: identityWithoutGroup},
 			},
 			namespaceName: namespace1,
 			roleName:      "fleet-role-mc1",
