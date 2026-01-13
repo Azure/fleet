@@ -19,7 +19,12 @@ package utils
 import (
 	"testing"
 
+	"k8s.io/apimachinery/pkg/api/meta"
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime/schema"
+	"k8s.io/client-go/restmapper"
+
+	"go.goms.io/fleet/test/utils/resource"
 )
 
 func TestResourceConfigGVKParse(t *testing.T) {
@@ -607,5 +612,151 @@ func checkIfResourcesAreEnabledInConfig(t *testing.T, r *ResourceConfig, resourc
 		if ok := r.IsResourceDisabled(o); ok {
 			t.Errorf("IsResourceDisabled(%v) = true, want false", o)
 		}
+	}
+}
+
+// testResource represents a simplified API resource for testing
+type testResource struct {
+	Group    string
+	Version  string
+	Resource string
+	Kind     string
+}
+
+// newTestRESTMapper creates a RESTMapper with the specified resources for testing.
+// Each resource is configured with standard settings (namespaced, standard verbs).
+// Assumes input resources are valid and well-formed.
+func newTestRESTMapper(resources ...testResource) meta.RESTMapper {
+	groupMap := make(map[string]*restmapper.APIGroupResources)
+
+	for _, res := range resources {
+		groupVersion := res.Version
+		if res.Group != "" {
+			groupVersion = res.Group + "/" + res.Version
+		}
+
+		// Initialize group if not exists
+		if groupMap[res.Group] == nil {
+			groupMap[res.Group] = &restmapper.APIGroupResources{
+				Group: metav1.APIGroup{
+					Name: res.Group,
+					Versions: []metav1.GroupVersionForDiscovery{
+						{GroupVersion: groupVersion, Version: res.Version},
+					},
+					PreferredVersion: metav1.GroupVersionForDiscovery{
+						GroupVersion: groupVersion,
+						Version:      res.Version,
+					},
+				},
+				VersionedResources: make(map[string][]metav1.APIResource),
+			}
+		}
+
+		// Add resource to the version
+		groupMap[res.Group].VersionedResources[res.Version] = append(
+			groupMap[res.Group].VersionedResources[res.Version],
+			metav1.APIResource{
+				Name:       res.Resource,
+				Kind:       res.Kind,
+				Namespaced: true,
+				Verbs:      resource.VerbsAll,
+			},
+		)
+	}
+
+	// Convert map to slice
+	groupResources := make([]*restmapper.APIGroupResources, 0, len(groupMap))
+	for _, group := range groupMap {
+		groupResources = append(groupResources, group)
+	}
+
+	return restmapper.NewDiscoveryRESTMapper(groupResources)
+}
+
+func TestShouldProcessResource(t *testing.T) {
+	tests := []struct {
+		name           string
+		gvr            schema.GroupVersionResource
+		resourceConfig *ResourceConfig
+		setupMapper    func() meta.RESTMapper
+		expected       bool
+	}{
+		{
+			name:           "returns true when resourceConfig is nil",
+			gvr:            schema.GroupVersionResource{Group: "", Version: "v1", Resource: "configmaps"},
+			resourceConfig: nil,
+			setupMapper: func() meta.RESTMapper {
+				return newTestRESTMapper(
+					testResource{Group: "", Version: "v1", Resource: "configmaps", Kind: "ConfigMap"},
+				)
+			},
+			expected: true,
+		},
+		{
+			name: "returns true when resource is not disabled",
+			gvr:  schema.GroupVersionResource{Group: "", Version: "v1", Resource: "configmaps"},
+			resourceConfig: func() *ResourceConfig {
+				rc := NewResourceConfig(false)
+				// Disable secrets, but not configmaps
+				_ = rc.Parse("v1/Secret")
+				return rc
+			}(),
+			setupMapper: func() meta.RESTMapper {
+				return newTestRESTMapper(
+					testResource{Group: "", Version: "v1", Resource: "configmaps", Kind: "ConfigMap"},
+				)
+			},
+			expected: true,
+		},
+		{
+			name: "returns false when resource is disabled",
+			gvr:  schema.GroupVersionResource{Group: "", Version: "v1", Resource: "secrets"},
+			resourceConfig: func() *ResourceConfig {
+				rc := NewResourceConfig(false)
+				_ = rc.Parse("v1/Secret")
+				return rc
+			}(),
+			setupMapper: func() meta.RESTMapper {
+				return newTestRESTMapper(
+					testResource{Group: "", Version: "v1", Resource: "secrets", Kind: "Secret"},
+				)
+			},
+			expected: false,
+		},
+		{
+			name: "returns false when GVR mapping fails",
+			gvr: schema.GroupVersionResource{
+				Group:    "invalid.group",
+				Version:  "v1",
+				Resource: "nonexistent",
+			},
+			resourceConfig: NewResourceConfig(false),
+			setupMapper: func() meta.RESTMapper {
+				// Empty mapper - will fail to map the GVR
+				return newTestRESTMapper()
+			},
+			expected: false,
+		},
+		{
+			name:           "handles apps group resources correctly",
+			gvr:            schema.GroupVersionResource{Group: "apps", Version: "v1", Resource: "deployments"},
+			resourceConfig: nil,
+			setupMapper: func() meta.RESTMapper {
+				return newTestRESTMapper(
+					testResource{Group: "apps", Version: "v1", Resource: "deployments", Kind: "Deployment"},
+				)
+			},
+			expected: true,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			restMapper := tt.setupMapper()
+			result := ShouldProcessResource(tt.gvr, restMapper, tt.resourceConfig)
+			if result != tt.expected {
+				t.Errorf("ShouldProcessResource() = %v, want %v", result, tt.expected)
+			}
+		})
 	}
 }

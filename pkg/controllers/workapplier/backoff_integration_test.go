@@ -32,6 +32,7 @@ import (
 	fleetv1beta1 "go.goms.io/fleet/apis/placement/v1beta1"
 	"go.goms.io/fleet/pkg/utils"
 	"go.goms.io/fleet/pkg/utils/condition"
+	testutilsactuals "go.goms.io/fleet/test/utils/actuals"
 )
 
 // Note (chenyu1): all test cases in this file use a separate test environment
@@ -178,7 +179,7 @@ var _ = Describe("exponential backoff", func() {
 			applyStrategy := &fleetv1beta1.ApplyStrategy{
 				WhenToTakeOver: fleetv1beta1.WhenToTakeOverTypeIfNoDiff,
 			}
-			createWorkObject(workName, memberReservedNSName2, applyStrategy, regularNSJSON)
+			createWorkObject(workName, memberReservedNSName2, applyStrategy, nil, regularNSJSON)
 		})
 
 		// For simplicity reasons, this test case will skip some of the regular apply op result verification
@@ -295,10 +296,10 @@ var _ = Describe("exponential backoff", func() {
 			deleteWorkObject(workName, memberReservedNSName2)
 
 			// Ensure that the AppliedWork object has been removed.
-			appliedWorkRemovedActual := appliedWorkRemovedActual(workName, nsName)
+			appliedWorkRemovedActual := appliedWorkRemovedActual(memberClient2, workName)
 			Eventually(appliedWorkRemovedActual, eventuallyDuration, eventuallyInterval).Should(Succeed(), "Failed to remove the AppliedWork object")
 
-			workRemovedActual := workRemovedActual(workName)
+			workRemovedActual := testutilsactuals.WorkObjectRemovedActual(ctx, hubClient, workName, memberReservedNSName2)
 			Eventually(workRemovedActual, eventuallyDuration, eventuallyInterval).Should(Succeed(), "Failed to remove the Work object")
 			// The environment prepared by the envtest package does not support namespace
 			// deletion; consequently this test suite would not attempt to verify its deletion.
@@ -395,7 +396,7 @@ var _ = Describe("exponential backoff", func() {
 				WhenToTakeOver:   fleetv1beta1.WhenToTakeOverTypeAlways,
 				WhenToApply:      fleetv1beta1.WhenToApplyTypeAlways,
 			}
-			createWorkObject(workName, memberReservedNSName2, applyStrategy, regularNSJSON)
+			createWorkObject(workName, memberReservedNSName2, applyStrategy, nil, regularNSJSON)
 		})
 
 		// For simplicity reasons, this test case will skip some of the regular apply op result verification
@@ -512,10 +513,10 @@ var _ = Describe("exponential backoff", func() {
 			deleteWorkObject(workName, memberReservedNSName2)
 
 			// Ensure that the AppliedWork object has been removed.
-			appliedWorkRemovedActual := appliedWorkRemovedActual(workName, nsName)
+			appliedWorkRemovedActual := appliedWorkRemovedActual(memberClient2, workName)
 			Eventually(appliedWorkRemovedActual, eventuallyDuration, eventuallyInterval).Should(Succeed(), "Failed to remove the AppliedWork object")
 
-			workRemovedActual := workRemovedActual(workName)
+			workRemovedActual := testutilsactuals.WorkObjectRemovedActual(ctx, hubClient, workName, memberReservedNSName2)
 			Eventually(workRemovedActual, eventuallyDuration, eventuallyInterval).Should(Succeed(), "Failed to remove the Work object")
 			// The environment prepared by the envtest package does not support namespace
 			// deletion; consequently this test suite would not attempt to verify its deletion.

@@ -170,6 +170,12 @@ const (
 	// UpdateRunWaitingReason is the reason string of condition if the staged update run is waiting for an after-stage task to complete.
 	UpdateRunWaitingReason = "UpdateRunWaiting"
 
+	// UpdateRunStoppingReason is the reason string of condition if the staged update run stopping.
+	UpdateRunStoppingReason = "UpdateRunStopping"
+
+	// UpdateRunStoppedReason is the reason string of condition if the staged update run stopped.
+	UpdateRunStoppedReason = "UpdateRunStopped"
+
 	// UpdateRunSucceededReason is the reason string of condition if the staged update run succeeded.
 	UpdateRunSucceededReason = "UpdateRunSucceeded"
 
@@ -178,6 +184,12 @@ const (
 
 	// StageUpdatingWaitingReason is the reason string of condition if the stage updating is waiting.
 	StageUpdatingWaitingReason = "StageUpdatingWaiting"
+
+	// StageUpdatingStoppingReason is the reason string of condition if the stage updating is stopping.
+	StageUpdatingStoppingReason = "StageUpdatingStopping"
+
+	// StageUpdatingStoppedReason is the reason string of condition if the stage updating is stopped.
+	StageUpdatingStoppedReason = "StageUpdatingStopped"
 
 	// StageUpdatingFailedReason is the reason string of condition if the stage updating failed.
 	StageUpdatingFailedReason = "StageUpdatingFailed"

@@ -22,10 +22,10 @@ import (
 	"github.com/google/go-cmp/cmp"
 )
 
-// TestSimplePlacementSchedulingQueueBasicOps tests the basic ops
+// TestSimplePlacementSchedulingQueue_BasicOps tests the basic ops
 // (Add, Next, Done) of a simpleClusterResourcePlacementSchedulingQueue.
-func TestSimplePlacementSchedulingQueueBasicOps(t *testing.T) {
-	sq := NewSimplePlacementSchedulingQueue()
+func TestSimplePlacementSchedulingQueue_BasicOps(t *testing.T) {
+	sq := NewSimplePlacementSchedulingQueue("", nil)
 	sq.Run()
 
 	keysToAdd := []PlacementKey{"A", "B", "C", "D", "E"}

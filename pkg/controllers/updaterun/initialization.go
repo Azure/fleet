@@ -201,7 +201,7 @@ func (r *Reconciler) collectScheduledClusters(
 	updateRunRef := klog.KObj(updateRun)
 	policySnapshotRef := klog.KObj(latestPolicySnapshot)
 
-	bindingObjs, err := controller.ListBindingsFromKey(ctx, r.Client, placementKey)
+	bindingObjs, err := controller.ListBindingsFromKey(ctx, r.Client, placementKey, true)
 	if err != nil {
 		klog.ErrorS(err, "Failed to list bindings", "placement", placementKey, "policySnapshot", policySnapshotRef, "updateRun", updateRunRef)
 		// list err can be retried.

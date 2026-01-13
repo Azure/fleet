@@ -33,11 +33,6 @@ import (
 // InformerManager manages dynamic shared informer for all resources, include Kubernetes resource and
 // custom resources defined by CustomResourceDefinition.
 type Manager interface {
-	// AddDynamicResources builds a dynamicInformer for each resource in the resources list with the event handler.
-	// A resource is dynamic if its definition can be created/deleted/updated during runtime.
-	// Normally, it is a custom resource that is installed by users. The handler should not be nil.
-	AddDynamicResources(resources []APIResourceMeta, handler cache.ResourceEventHandler, listComplete bool)
-
 	// AddStaticResource creates a dynamicInformer for the static 'resource' and set its event handler.
 	// A resource is static if its definition is pre-determined and immutable during runtime.
 	// Normally, it is a resource that is pre-installed by the system.
@@ -61,6 +56,9 @@ type Manager interface {
 	// GetNameSpaceScopedResources returns the list of namespace scoped resources we are watching.
 	GetNameSpaceScopedResources() []schema.GroupVersionResource
 
+	// GetAllResources returns the list of all resources (both cluster-scoped and namespace-scoped) we are watching.
+	GetAllResources() []schema.GroupVersionResource
+
 	// IsClusterScopedResources returns if a resource is cluster scoped.
 	IsClusterScopedResources(resource schema.GroupVersionKind) bool
 
@@ -69,6 +67,16 @@ type Manager interface {
 
 	// GetClient returns the dynamic dynamicClient.
 	GetClient() dynamic.Interface
+
+	// AddEventHandlerToInformer adds an event handler to an existing informer for the given resource.
+	// If the informer doesn't exist, it will be created. This is used by the leader's ChangeDetector
+	// to add event handlers to informers that were created by the InformerPopulator.
+	AddEventHandlerToInformer(resource schema.GroupVersionResource, handler cache.ResourceEventHandler)
+
+	// CreateInformerForResource creates an informer for the given resource without adding any event handlers.
+	// This is used by InformerPopulator to create informers on all pods (leader and followers) so they have
+	// synced caches for webhook validation. The leader's ChangeDetector will add event handlers later.
+	CreateInformerForResource(resource APIResourceMeta)
 }
 
 // NewInformerManager constructs a new instance of informerManagerImpl.
@@ -77,11 +85,12 @@ func NewInformerManager(client dynamic.Interface, defaultResync time.Duration, p
 	// TODO: replace this with plain context
 	ctx, cancel := ContextForChannel(parentCh)
 	return &informerManagerImpl{
-		dynamicClient:   client,
-		ctx:             ctx,
-		cancel:          cancel,
-		informerFactory: dynamicinformer.NewDynamicSharedInformerFactory(client, defaultResync),
-		apiResources:    make(map[schema.GroupVersionKind]*APIResourceMeta),
+		dynamicClient:      client,
+		ctx:                ctx,
+		cancel:             cancel,
+		informerFactory:    dynamicinformer.NewDynamicSharedInformerFactory(client, defaultResync),
+		apiResources:       make(map[schema.GroupVersionKind]*APIResourceMeta),
+		registeredHandlers: make(map[schema.GroupVersionResource]bool),
 	}
 }
 
@@ -119,61 +128,10 @@ type informerManagerImpl struct {
 	// the apiResources map collects all the api resources we watch
 	apiResources  map[schema.GroupVersionKind]*APIResourceMeta
 	resourcesLock sync.RWMutex
-}
 
-func (s *informerManagerImpl) AddDynamicResources(dynResources []APIResourceMeta, handler cache.ResourceEventHandler, listComplete bool) {
-	newGVKs := make(map[schema.GroupVersionKind]bool, len(dynResources))
-
-	addInformerFunc := func(newRes APIResourceMeta) {
-		dynRes, exist := s.apiResources[newRes.GroupVersionKind]
-		if !exist {
-			newRes.isPresent = true
-			s.apiResources[newRes.GroupVersionKind] = &newRes
-			// TODO (rzhang): remember the ResourceEventHandlerRegistration and remove it when the resource is deleted
-			// TODO: handle error which only happens if the informer is stopped
-			informer := s.informerFactory.ForResource(newRes.GroupVersionResource).Informer()
-			// Strip away the ManagedFields info from objects to save memory.
-			//
-			// TO-DO (chenyu1): evaluate if there are other fields, e.g., owner refs, status, that can also be stripped
-			// away to save memory.
-			if err := informer.SetTransform(ctrlcache.TransformStripManagedFields()); err != nil {
-				// The SetTransform func would only fail if the informer has already started. In this case,
-				// no further action is needed.
-				klog.ErrorS(err, "Failed to set transform func for informer", "gvr", newRes.GroupVersionResource)
-			}
-			_, _ = informer.AddEventHandler(handler)
-			klog.InfoS("Added an informer for a new resource", "res", newRes)
-		} else if !dynRes.isPresent {
-			// we just mark it as enabled as we should not add another eventhandler to the informer as it's still
-			// in the informerFactory
-			// TODO: add the Event handler back
-			dynRes.isPresent = true
-			klog.InfoS("Reactivated an informer for a reappeared resource", "res", dynRes)
-		}
-	}
-
-	s.resourcesLock.Lock()
-	defer s.resourcesLock.Unlock()
-
-	// Add the new dynResources that do not exist yet while build a map to speed up lookup
-	for _, newRes := range dynResources {
-		newGVKs[newRes.GroupVersionKind] = true
-		addInformerFunc(newRes)
-	}
-
-	if !listComplete {
-		// do not disable any informer if we know the resource list is not complete
-		return
-	}
-
-	// mark the disappeared dynResources from the handler map
-	for gvk, dynRes := range s.apiResources {
-		if !newGVKs[gvk] && !dynRes.isStaticResource && dynRes.isPresent {
-			// TODO: Remove the Event handler from the informer using the resourceEventHandlerRegistration during creat
-			dynRes.isPresent = false
-			klog.InfoS("Disabled an informer for a disappeared resource", "res", dynRes)
-		}
-	}
+	// registeredHandlers tracks which GVRs already have event handlers registered
+	// to prevent duplicate registrations and goroutine leaks
+	registeredHandlers map[schema.GroupVersionResource]bool
 }
 
 func (s *informerManagerImpl) AddStaticResource(resource APIResourceMeta, handler cache.ResourceEventHandler) {
@@ -224,6 +182,19 @@ func (s *informerManagerImpl) GetNameSpaceScopedResources() []schema.GroupVersio
 	return res
 }
 
+func (s *informerManagerImpl) GetAllResources() []schema.GroupVersionResource {
+	s.resourcesLock.RLock()
+	defer s.resourcesLock.RUnlock()
+
+	res := make([]schema.GroupVersionResource, 0, len(s.apiResources))
+	for _, resource := range s.apiResources {
+		if resource.isPresent {
+			res = append(res, resource.GroupVersionResource)
+		}
+	}
+	return res
+}
+
 func (s *informerManagerImpl) IsClusterScopedResources(gvk schema.GroupVersionKind) bool {
 	s.resourcesLock.RLock()
 	defer s.resourcesLock.RUnlock()
@@ -237,6 +208,56 @@ func (s *informerManagerImpl) IsClusterScopedResources(gvk schema.GroupVersionKi
 
 func (s *informerManagerImpl) Stop() {
 	s.cancel()
+}
+
+// AddEventHandlerToInformer adds an event handler to an existing informer for the given resource.
+// If the informer doesn't exist, it will be created. This is used by the leader's ChangeDetector
+// to add event handlers to informers that were created by the InformerPopulator.
+// This method is idempotent - calling it multiple times for the same resource will only register
+// the handler once, preventing goroutine leaks from duplicate registrations.
+func (s *informerManagerImpl) AddEventHandlerToInformer(resource schema.GroupVersionResource, handler cache.ResourceEventHandler) {
+	s.resourcesLock.Lock()
+	defer s.resourcesLock.Unlock()
+
+	// Check if handler already registered for this resource
+	if s.registeredHandlers[resource] {
+		return
+	}
+
+	informer := s.getOrCreateInformerWithTransform(resource)
+
+	// AddEventHandler returns (ResourceEventHandlerRegistration, error). The registration handle
+	// can be used to remove the handler later, but we never remove handlers dynamically -
+	// they persist for the lifetime of the informer, so we discard the handle.
+	if _, err := informer.AddEventHandler(handler); err != nil {
+		klog.Fatal(err, "Failed to add event handler to informer - leader cannot function", "gvr", resource)
+	}
+
+	// Mark this resource as having a handler registered
+	s.registeredHandlers[resource] = true
+	klog.V(2).InfoS("Added event handler to informer", "gvr", resource)
+}
+
+func (s *informerManagerImpl) CreateInformerForResource(resource APIResourceMeta) {
+	s.resourcesLock.Lock()
+	defer s.resourcesLock.Unlock()
+
+	dynRes, exist := s.apiResources[resource.GroupVersionKind]
+	if !exist {
+		// Register this resource in our tracking map
+		resource.isPresent = true
+		resource.isStaticResource = false
+		s.apiResources[resource.GroupVersionKind] = &resource
+
+		// Create the informer without adding any event handler, with transform set
+		_ = s.getOrCreateInformerWithTransform(resource.GroupVersionResource)
+
+		klog.V(3).InfoS("Created informer without handler", "res", resource)
+	} else if !dynRes.isPresent {
+		// Mark it as present again (resource reappeared)
+		dynRes.isPresent = true
+		klog.V(3).InfoS("Reactivated informer for reappeared resource", "res", dynRes)
+	}
 }
 
 // ContextForChannel derives a child context from a parent channel.
@@ -256,4 +277,23 @@ func ContextForChannel(parentCh <-chan struct{}) (context.Context, context.Cance
 		}
 	}()
 	return ctx, cancel
+}
+
+// getOrCreateInformerWithTransform gets or creates an informer for the given resource and ensures
+// the ManagedFields transform is set. This is idempotent - if the informer exists, we get the same
+// instance.
+func (s *informerManagerImpl) getOrCreateInformerWithTransform(resource schema.GroupVersionResource) cache.SharedIndexInformer {
+	// Get or create the informer (this is idempotent - if it exists, we get the same instance)
+	// The idempotent behavior is important because this method may be called multiple times,
+	// potentially concurrently, and relies on the shared informer instance from the factory.
+	informer := s.informerFactory.ForResource(resource).Informer()
+
+	// Set the transform to strip ManagedFields. This is safe to call even if
+	// already set, since we get the same informer instance. If the informer has already
+	// started, this will fail silently (which is fine).
+	if err := informer.SetTransform(ctrlcache.TransformStripManagedFields()); err != nil {
+		klog.V(4).InfoS("Transform already set or informer started", "gvr", resource, "err", err)
+	}
+
+	return informer
 }

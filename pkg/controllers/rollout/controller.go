@@ -101,7 +101,7 @@ func (r *Reconciler) Reconcile(ctx context.Context, req runtime.Request) (runtim
 
 	// list all the bindings associated with the placement
 	// we read from the API server directly to avoid the repeated reconcile loop due to cache inconsistency
-	allBindings, err := controller.ListBindingsFromKey(ctx, r.UncachedReader, placementKey)
+	allBindings, err := controller.ListBindingsFromKey(ctx, r.UncachedReader, placementKey, false)
 	if err != nil {
 		klog.ErrorS(err, "Failed to list all the bindings associated with the placement",
 			"placement", placementObjRef)
@@ -145,7 +145,9 @@ func (r *Reconciler) Reconcile(ctx context.Context, req runtime.Request) (runtim
 	}
 
 	// find the master resourceSnapshot.
-	masterResourceSnapshot, err := controller.FetchLatestMasterResourceSnapshot(ctx, r.UncachedReader, placementKey)
+	// Use the cached client so that rollout controller and work-generator have the same view of the
+	// resourceSnapshots in order to reduce the possibility of missing resourceSnapshots in work-generator.
+	masterResourceSnapshot, err := controller.FetchLatestMasterResourceSnapshot(ctx, r.Client, placementKey)
 	if err != nil {
 		klog.ErrorS(err, "Failed to find the masterResourceSnapshot for the placement",
 			"placement", placementObjRef)

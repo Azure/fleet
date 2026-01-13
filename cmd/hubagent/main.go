@@ -46,6 +46,8 @@ import (
 	"go.goms.io/fleet/cmd/hubagent/options"
 	"go.goms.io/fleet/cmd/hubagent/workload"
 	mcv1beta1 "go.goms.io/fleet/pkg/controllers/membercluster/v1beta1"
+	readiness "go.goms.io/fleet/pkg/utils/informer/readiness"
+	"go.goms.io/fleet/pkg/utils/validator"
 	"go.goms.io/fleet/pkg/webhook"
 	"go.goms.io/fleet/pkg/webhook/managedresource"
 	// +kubebuilder:scaffold:imports
@@ -166,7 +168,17 @@ func main() {
 
 	ctx := ctrl.SetupSignalHandler()
 	if err := workload.SetupControllers(ctx, &wg, mgr, config, opts); err != nil {
-		klog.ErrorS(err, "unable to set up ready check")
+		klog.ErrorS(err, "unable to set up controllers")
+		exitWithErrorFunc()
+	}
+
+	// Add readiness check for dynamic informer cache AFTER controllers are set up.
+	// This ensures the discovery cache is populated before the hub agent is marked ready,
+	// which is critical for all controllers that rely on dynamic resource discovery.
+	// AddReadyzCheck adds additional readiness check instead of replacing the one registered earlier provided the name is different.
+	// Both registered checks need to pass for the manager to be considered ready.
+	if err := mgr.AddReadyzCheck("informer-cache", readiness.InformerReadinessChecker(validator.ResourceInformer)); err != nil {
+		klog.ErrorS(err, "unable to set up informer cache readiness check")
 		exitWithErrorFunc()
 	}
 

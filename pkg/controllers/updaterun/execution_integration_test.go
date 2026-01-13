@@ -728,7 +728,7 @@ var _ = Describe("UpdateRun execution tests - single stage", func() {
 
 		updateRun = generateTestClusterStagedUpdateRun()
 		crp = generateTestClusterResourcePlacement()
-		resourceBindings, targetClusters, _ = generateSmallTestClusterResourceBindingsAndClusters(1)
+		resourceBindings, targetClusters, _ = generateSmallTestClusterResourceBindingsAndClusters(1, 0)
 		policySnapshot = generateTestClusterSchedulingPolicySnapshot(1, len(targetClusters))
 		resourceSnapshot = generateTestClusterResourceSnapshot()
 		resourceSnapshot = generateTestClusterResourceSnapshot()
@@ -810,7 +810,7 @@ var _ = Describe("UpdateRun execution tests - single stage", func() {
 			Expect(k8sClient.Create(ctx, updateRun)).To(Succeed())
 
 			By("Validating the initialization succeeded and the execution started")
-			initialized := generateSucceededInitializationStatusForSmallClusters(crp, updateRun, testResourceSnapshotIndex, policySnapshot, updateStrategy)
+			initialized := generateSucceededInitializationStatusForSmallClusters(crp, updateRun, testResourceSnapshotIndex, policySnapshot, updateStrategy, 0)
 			wantStatus = generateExecutionStartedStatus(updateRun, initialized)
 			validateClusterStagedUpdateRunStatus(ctx, updateRun, wantStatus, "")
 
@@ -904,7 +904,7 @@ var _ = Describe("UpdateRun execution tests - single stage", func() {
 			Expect(k8sClient.Create(ctx, updateRun)).To(Succeed())
 
 			By("Validating the initialization succeeded and the execution started")
-			initialized := generateSucceededInitializationStatusForSmallClusters(crp, updateRun, testResourceSnapshotIndex, policySnapshot, updateStrategy)
+			initialized := generateSucceededInitializationStatusForSmallClusters(crp, updateRun, testResourceSnapshotIndex, policySnapshot, updateStrategy, 0)
 			wantStatus = generateExecutionStartedStatus(updateRun, initialized)
 			validateClusterStagedUpdateRunStatus(ctx, updateRun, wantStatus, "")
 
@@ -1013,7 +1013,7 @@ var _ = Describe("UpdateRun execution tests - single stage", func() {
 			Expect(k8sClient.Create(ctx, updateRun)).To(Succeed())
 
 			By("Validating the initialization succeeded and the execution started")
-			initialized := generateSucceededInitializationStatusForSmallClusters(crp, updateRun, testResourceSnapshotIndex, policySnapshot, updateStrategy)
+			initialized := generateSucceededInitializationStatusForSmallClusters(crp, updateRun, testResourceSnapshotIndex, policySnapshot, updateStrategy, 0)
 			wantStatus = generateExecutionStartedStatus(updateRun, initialized)
 			validateClusterStagedUpdateRunStatus(ctx, updateRun, wantStatus, "")
 
@@ -1145,7 +1145,7 @@ var _ = Describe("UpdateRun execution tests - single stage", func() {
 			Expect(k8sClient.Create(ctx, updateRun)).To(Succeed())
 
 			By("Validating the initialization succeeded and the execution started")
-			initialized := generateSucceededInitializationStatusForSmallClusters(crp, updateRun, testResourceSnapshotIndex, policySnapshot, updateStrategy)
+			initialized := generateSucceededInitializationStatusForSmallClusters(crp, updateRun, testResourceSnapshotIndex, policySnapshot, updateStrategy, 0)
 			wantStatus = generateExecutionStartedStatus(updateRun, initialized)
 			validateClusterStagedUpdateRunStatus(ctx, updateRun, wantStatus, "")
 
@@ -1237,7 +1237,7 @@ var _ = Describe("UpdateRun execution tests - single stage", func() {
 			Expect(k8sClient.Create(ctx, updateRun)).To(Succeed())
 
 			By("Validating the initialization succeeded and the execution started")
-			initialized := generateSucceededInitializationStatusForSmallClusters(crp, updateRun, testResourceSnapshotIndex, policySnapshot, updateStrategy)
+			initialized := generateSucceededInitializationStatusForSmallClusters(crp, updateRun, testResourceSnapshotIndex, policySnapshot, updateStrategy, 0)
 			wantStatus = generateExecutionStartedStatus(updateRun, initialized)
 			validateClusterStagedUpdateRunStatus(ctx, updateRun, wantStatus, "")
 
@@ -1300,7 +1300,7 @@ var _ = Describe("UpdateRun execution tests - single stage", func() {
 			Expect(k8sClient.Create(ctx, updateRun)).To(Succeed())
 
 			By("Validating the initialization succeeded and the execution has not started")
-			initialized := generateSucceededInitializationStatusForSmallClusters(crp, updateRun, testResourceSnapshotIndex, policySnapshot, updateStrategy)
+			initialized := generateSucceededInitializationStatusForSmallClusters(crp, updateRun, testResourceSnapshotIndex, policySnapshot, updateStrategy, 0)
 			wantStatus = generateExecutionNotStartedStatus(updateRun, initialized)
 			validateClusterStagedUpdateRunStatus(ctx, updateRun, wantStatus, "")
 
@@ -1534,7 +1534,7 @@ var _ = Describe("UpdateRun execution tests - single stage", func() {
 			Expect(k8sClient.Create(ctx, updateRun)).To(Succeed())
 
 			By("Validating the initialization succeeded and but not execution started")
-			wantStatus = generateSucceededInitializationStatusForSmallClusters(crp, updateRun, testResourceSnapshotIndex, policySnapshot, updateStrategy)
+			wantStatus = generateSucceededInitializationStatusForSmallClusters(crp, updateRun, testResourceSnapshotIndex, policySnapshot, updateStrategy, 0)
 			validateClusterStagedUpdateRunStatus(ctx, updateRun, wantStatus, "")
 
 			By("Checking update run status metrics are emitted")
@@ -1560,8 +1560,9 @@ var _ = Describe("UpdateRun execution tests - single stage", func() {
 
 		It("Should start execution after changing the state to Run", func() {
 			By("Updating the updateRun state to Run")
-			updateRun.Spec.State = placementv1beta1.StateRun
-			Expect(k8sClient.Update(ctx, updateRun)).Should(Succeed(), "failed to update the updateRun state")
+			updateRun = updateClusterStagedUpdateRunState(updateRun.Name, placementv1beta1.StateRun)
+			// Update the test's want status to match the new generation.
+			updateAllStatusConditionsGeneration(wantStatus, updateRun.Generation)
 
 			By("Validating the execution has started")
 			wantStatus = generateExecutionStartedStatus(updateRun, wantStatus)

@@ -184,7 +184,7 @@ var _ = BeforeSuite(func() {
 	})
 	Expect(err).NotTo(HaveOccurred(), "Failed to create controller manager")
 
-	schedulerWorkQueue := queue.NewSimplePlacementSchedulingQueue()
+	schedulerWorkQueue := queue.NewSimplePlacementSchedulingQueue("", nil)
 
 	reconciler := Reconciler{
 		Client:                    hubClient,

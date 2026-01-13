@@ -25,6 +25,7 @@ import (
 	appsv1 "k8s.io/api/apps/v1"
 	corev1 "k8s.io/api/core/v1"
 	discoveryv1 "k8s.io/api/discovery/v1"
+	apiextensionsv1 "k8s.io/apiextensions-apiserver/pkg/apis/apiextensions/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/types"
 	"k8s.io/utils/ptr"
@@ -276,6 +277,47 @@ func endpointSliceExport(name, namespace string) fleetnetworkingv1alpha1.Endpoin
 				Namespace:      "test-ns",
 				Name:           "test-name",
 				NamespacedName: "test-ns/test-name",
+			},
+		},
+	}
+}
+
+func testCRD() apiextensionsv1.CustomResourceDefinition {
+	crdName := fmt.Sprintf("testcrds-%d.kubefleet.test", GinkgoParallelProcess())
+	return apiextensionsv1.CustomResourceDefinition{
+		ObjectMeta: metav1.ObjectMeta{
+			Name: crdName,
+		},
+		Spec: apiextensionsv1.CustomResourceDefinitionSpec{
+			Group: "kubefleet.test",
+			Names: apiextensionsv1.CustomResourceDefinitionNames{
+				Plural:   fmt.Sprintf("testcrds-%d", GinkgoParallelProcess()),
+				Singular: fmt.Sprintf("testcrd-%d", GinkgoParallelProcess()),
+				Kind:     fmt.Sprintf("TestCRD%d", GinkgoParallelProcess()),
+				ListKind: fmt.Sprintf("TestCRD%dList", GinkgoParallelProcess()),
+			},
+			Scope: apiextensionsv1.NamespaceScoped,
+			Versions: []apiextensionsv1.CustomResourceDefinitionVersion{
+				{
+					Name:    "v1",
+					Served:  true,
+					Storage: true,
+					Schema: &apiextensionsv1.CustomResourceValidation{
+						OpenAPIV3Schema: &apiextensionsv1.JSONSchemaProps{
+							Type: "object",
+							Properties: map[string]apiextensionsv1.JSONSchemaProps{
+								"spec": {
+									Type: "object",
+									Properties: map[string]apiextensionsv1.JSONSchemaProps{
+										"field": {
+											Type: "string",
+										},
+									},
+								},
+							},
+						},
+					},
+				},
 			},
 		},
 	}

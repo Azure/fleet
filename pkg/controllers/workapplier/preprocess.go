@@ -489,7 +489,7 @@ func (r *Reconciler) removeOneLeftOverManifest(
 		return nil
 	case err != nil:
 		// Failed to retrieve the object from the member cluster.
-		wrappedErr := controller.NewAPIServerError(true, err)
+		wrappedErr := controller.NewAPIServerError(false, err) // false as dynamic client is non-caching.
 		return fmt.Errorf("failed to retrieve the object from the member cluster (gvr=%+v, manifestObj=%+v): %w", gvr, klog.KRef(manifestNamespace, manifestName), wrappedErr)
 	case inMemberClusterObj.GetDeletionTimestamp() != nil:
 		// The object has been marked for deletion; no further action is needed.
