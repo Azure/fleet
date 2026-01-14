@@ -37,15 +37,12 @@ import (
 	"k8s.io/klog/v2"
 	"k8s.io/klog/v2/textlogger"
 	ctrl "sigs.k8s.io/controller-runtime"
-	"sigs.k8s.io/controller-runtime/pkg/builder"
 	"sigs.k8s.io/controller-runtime/pkg/cache"
 	"sigs.k8s.io/controller-runtime/pkg/client"
-	ctrloption "sigs.k8s.io/controller-runtime/pkg/controller"
 	"sigs.k8s.io/controller-runtime/pkg/envtest"
 	"sigs.k8s.io/controller-runtime/pkg/log/zap"
 	"sigs.k8s.io/controller-runtime/pkg/manager"
 	"sigs.k8s.io/controller-runtime/pkg/metrics/server"
-	"sigs.k8s.io/controller-runtime/pkg/predicate"
 
 	fleetv1beta1 "github.com/kubefleet-dev/kubefleet/apis/placement/v1beta1"
 	"github.com/kubefleet-dev/kubefleet/pkg/utils/parallelizer"
@@ -300,6 +297,7 @@ var _ = BeforeSuite(func() {
 	Expect(err).ToNot(HaveOccurred())
 
 	workApplier1 = NewReconciler(
+		"work-applier",
 		hubClient,
 		memberReservedNSName1,
 		memberDynamicClient1,
@@ -309,9 +307,10 @@ var _ = BeforeSuite(func() {
 		maxConcurrentReconciles,
 		parallelizer.NewParallelizer(workerCount),
 		30*time.Second,
-		true,
-		60,
-		nil, // Use the default backoff rate limiter.
+		nil,   // Use the default backoff rate limiter.
+		false, // Disable priority queueing.
+		nil,   // Use the default priority linear equation coefficients.
+		nil,   // Use the default priority linear equation coefficients.
 	)
 	Expect(workApplier1.SetupWithManager(hubMgr1)).To(Succeed())
 
@@ -349,27 +348,22 @@ var _ = BeforeSuite(func() {
 		true,
 	)
 	workApplier2 = NewReconciler(
+		"work-applier-long-backoff",
 		hubClient,
 		memberReservedNSName2,
 		memberDynamicClient2,
 		memberClient2,
 		memberClient2.RESTMapper(),
-		hubMgr2.GetEventRecorderFor("work-applier"),
+		hubMgr2.GetEventRecorderFor("work-applier-long-backoff"),
 		maxConcurrentReconciles,
 		parallelizer.NewParallelizer(workerCount),
 		30*time.Second,
-		true,
-		60,
 		superLongExponentialBackoffRateLimiter,
+		false, // Disable priority queueing.
+		nil,   // Use the default priority linear equation coefficients.
+		nil,   // Use the default priority linear equation coefficients.
 	)
-	// Due to name conflicts, the second work applier must be set up manually.
-	err = ctrl.NewControllerManagedBy(hubMgr2).Named("work-applier-controller-exponential-backoff").
-		WithOptions(ctrloption.Options{
-			MaxConcurrentReconciles: workApplier2.concurrentReconciles,
-		}).
-		For(&fleetv1beta1.Work{}, builder.WithPredicates(predicate.GenerationChangedPredicate{})).
-		Complete(workApplier2)
-	Expect(err).NotTo(HaveOccurred())
+	Expect(workApplier2.SetupWithManager(hubMgr2)).To(Succeed())
 
 	By("Setting up the controller and the controller manager for member cluster 3")
 	hubMgr3, err = ctrl.NewManager(hubCfg, ctrl.Options{
@@ -393,6 +387,7 @@ var _ = BeforeSuite(func() {
 		delay: parallelizerFixedDelay,
 	}
 	workApplier3 = NewReconciler(
+		"work-applier-waved-parallel-processing",
 		hubClient,
 		memberReservedNSName3,
 		memberDynamicClient3,
@@ -402,18 +397,12 @@ var _ = BeforeSuite(func() {
 		maxConcurrentReconciles,
 		pWithDelay,
 		30*time.Second,
-		true,
-		60,
-		nil, // Use the default backoff rate limiter.
+		nil,   // Use the default backoff rate limiter.
+		false, // Disable priority queueing.
+		nil,   // Use the default priority linear equation coefficients.
+		nil,   // Use the default priority linear equation coefficients.
 	)
-	// Due to name conflicts, the third work applier must be set up manually.
-	err = ctrl.NewControllerManagedBy(hubMgr3).Named("work-applier-controller-waved-parallel-processing").
-		WithOptions(ctrloption.Options{
-			MaxConcurrentReconciles: workApplier3.concurrentReconciles,
-		}).
-		For(&fleetv1beta1.Work{}, builder.WithPredicates(predicate.GenerationChangedPredicate{})).
-		Complete(workApplier3)
-	Expect(err).NotTo(HaveOccurred())
+	Expect(workApplier3.SetupWithManager(hubMgr3)).To(Succeed())
 
 	By("Setting up the controller and the controller manager for member cluster 4")
 	hubMgr4, err = ctrl.NewManager(hubCfg, ctrl.Options{
@@ -435,27 +424,23 @@ var _ = BeforeSuite(func() {
 	wrappedMemberClient4 := NewClientWrapperWithStatusUpdateCounter(memberClient4)
 	memberClient4Wrapper = wrappedMemberClient4.(*clientWrapperWithStatusUpdateCounter)
 	workApplier4 = NewReconciler(
+		"work-applier-wrapped-client",
 		wrappedHubClient,
 		memberReservedNSName4,
 		memberDynamicClient4,
 		wrappedMemberClient4,
 		memberClient4.RESTMapper(),
-		hubMgr4.GetEventRecorderFor("work-applier"),
+		hubMgr4.GetEventRecorderFor("work-applier-wrapped-client"),
 		maxConcurrentReconciles,
 		parallelizer.NewParallelizer(workerCount),
 		30*time.Second,
-		true,
-		60,
-		nil, // Use the default backoff rate limiter.
+		nil,   // Use the default backoff rate limiter.
+		false, // Disable priority queueing.
+		nil,   // Use the default priority linear equation coefficients.
+		nil,   // Use the default priority linear equation coefficients.
 	)
 	// Due to name conflicts, the third work applier must be set up manually.
-	err = ctrl.NewControllerManagedBy(hubMgr4).Named("work-applier-controller-skipping-status-update").
-		WithOptions(ctrloption.Options{
-			MaxConcurrentReconciles: workApplier4.concurrentReconciles,
-		}).
-		For(&fleetv1beta1.Work{}, builder.WithPredicates(predicate.GenerationChangedPredicate{})).
-		Complete(workApplier4)
-	Expect(err).NotTo(HaveOccurred())
+	Expect(workApplier4.SetupWithManager(hubMgr4)).To(Succeed())
 
 	wg = sync.WaitGroup{}
 	wg.Add(4)
