@@ -234,10 +234,10 @@ func (r *Reconciler) executeUpdatingStage(
 		rolloutStarted := condition.IsConditionStatusTrue(meta.FindStatusCondition(binding.GetBindingStatus().Conditions, string(placementv1beta1.ResourceBindingRolloutStarted)), binding.GetGeneration())
 		bindingSpec := binding.GetBindingSpec()
 		if !inSync || !rolloutStarted || bindingSpec.State != placementv1beta1.BindingStateBound {
-			// This issue mostly happens when there are concurrent updateRuns referencing the same clusterResourcePlacement but releasing different versions.
+			// This issue mostly happens when there are concurrent updateRuns referencing the same placement but releasing different versions.
 			// After the 1st updateRun updates the binding, and before the controller re-checks the binding status, the 2nd updateRun updates the same binding, and thus the 1st updateRun is preempted and observes the binding not matching the desired state.
 			preemptedErr := controller.NewUserError(fmt.Errorf("the binding of the updating cluster `%s` in the stage `%s` is not up-to-date with the desired status, "+
-				"please check the status of binding `%s` and see if there is a concurrent updateRun referencing the same clusterResourcePlacement and updating the same cluster",
+				"please check the status of binding `%s` and see if there is a concurrent updateRun referencing the same placement and updating the same cluster",
 				clusterStatus.ClusterName, updatingStageStatus.StageName, klog.KObj(binding)))
 			klog.ErrorS(preemptedErr, "The binding has been changed during updating",
 				"bindingSpecInSync", inSync, "bindingState", bindingSpec.State,
@@ -553,7 +553,7 @@ func calculateMaxConcurrencyValue(status *placementv1beta1.UpdateRunStatus, stag
 // It marks the update run as stuck if any clusters are stuck, or as progressing if some clusters have finished updating.
 func aggregateUpdateRunStatus(updateRun placementv1beta1.UpdateRunObj, stageName string, stuckClusterNames []string) {
 	if len(stuckClusterNames) > 0 {
-		markUpdateRunStuck(updateRun, stageName, strings.Join(stuckClusterNames, ", "))
+		markUpdateRunStuck(updateRun, stageName, stuckClusterNames)
 	} else if updateRun.GetUpdateRunSpec().State == placementv1beta1.StateRun {
 		// If there is no stuck cluster but some progress has been made, mark the update run as progressing.
 		markUpdateRunProgressing(updateRun)
@@ -675,15 +675,30 @@ func markUpdateRunProgressingIfNotWaitingOrStuck(updateRun placementv1beta1.Upda
 }
 
 // markUpdateRunStuck marks the updateRun as stuck in memory.
-func markUpdateRunStuck(updateRun placementv1beta1.UpdateRunObj, stageName, clusterNames string) {
+func markUpdateRunStuck(updateRun placementv1beta1.UpdateRunObj, stageName string, stuckClusterNames []string) {
 	updateRunStatus := updateRun.GetUpdateRunStatus()
 	meta.SetStatusCondition(&updateRunStatus.Conditions, metav1.Condition{
 		Type:               string(placementv1beta1.StagedUpdateRunConditionProgressing),
 		Status:             metav1.ConditionFalse,
 		ObservedGeneration: updateRun.GetGeneration(),
 		Reason:             condition.UpdateRunStuckReason,
-		Message:            fmt.Sprintf("The updateRun is stuck waiting for cluster(s) %s in stage %s to finish updating, please check placement status for potential errors", clusterNames, stageName),
+		Message:            fmt.Sprintf("The updateRun is stuck waiting for %s cluster(s) in stage %s to finish updating, please check placement status for potential errors", generateStuckClustersString(stuckClusterNames), stageName),
 	})
+}
+
+func generateStuckClustersString(stuckClusterNames []string) string {
+	if len(stuckClusterNames) == 0 {
+		return ""
+	}
+	if len(stuckClusterNames) <= 3 {
+		return strings.Join(stuckClusterNames, ", ")
+	}
+	// Print first 3 if more than 3 stuck clusters.
+	clustersToShow := stuckClusterNames
+	if len(stuckClusterNames) > 3 {
+		clustersToShow = stuckClusterNames[:3]
+	}
+	return strings.Join(clustersToShow, ", ") + "..."
 }
 
 // markUpdateRunWaiting marks the updateRun as waiting in memory.

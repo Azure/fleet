@@ -51,9 +51,10 @@ import (
 var (
 	// errStagedUpdatedAborted is the error when the updateRun is aborted.
 	errStagedUpdatedAborted = fmt.Errorf("cannot continue the updateRun")
-	// errInitializedFailed is the error when the updateRun fails to initialize.
-	// It is a wrapped error of errStagedUpdatedAborted, because some initialization functions are reused in the validation step.
-	errInitializedFailed = fmt.Errorf("%w: failed to initialize the updateRun", errStagedUpdatedAborted)
+	// errValidationFailed is the error when the updateRun fails validation.
+	// It is a wrapped error of errStagedUpdatedAborted, because we perform validation during initialization
+	// and subsequent reconciliations where initialization is skipped.
+	errValidationFailed = fmt.Errorf("%w: failed to validate the updateRun", errStagedUpdatedAborted)
 )
 
 // Reconciler reconciles an updateRun object.
@@ -125,8 +126,8 @@ func (r *Reconciler) Reconcile(ctx context.Context, req runtime.Request) (runtim
 		var initErr error
 		if toBeUpdatedBindings, toBeDeletedBindings, initErr = r.initialize(ctx, updateRun); initErr != nil {
 			klog.ErrorS(initErr, "Failed to initialize the updateRun", "updateRun", runObjRef)
-			// errInitializedFailed cannot be retried.
-			if errors.Is(initErr, errInitializedFailed) {
+			// errStagedUpdatedAborted cannot be retried.
+			if errors.Is(initErr, errStagedUpdatedAborted) {
 				return runtime.Result{}, r.recordInitializationFailed(ctx, updateRun, initErr.Error())
 			}
 			return runtime.Result{}, initErr
