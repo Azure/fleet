@@ -270,13 +270,6 @@ var (
 		ignoreClusterNameField,
 		cmpopts.EquateEmpty(),
 	}
-
-	updateRunStatusCmpOption = cmp.Options{
-		cmpopts.SortSlices(lessFuncCondition),
-		utils.IgnoreConditionLTTAndMessageFields,
-		cmpopts.IgnoreFields(placementv1beta1.StageUpdatingStatus{}, "StartTime", "EndTime"),
-		cmpopts.EquateEmpty(),
-	}
 )
 
 // TestMain sets up the E2E test environment.
