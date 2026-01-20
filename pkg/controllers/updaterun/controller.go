@@ -21,7 +21,6 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"strconv"
 	"time"
 
 	"github.com/prometheus/client_golang/prometheus"
@@ -489,26 +488,26 @@ func handleApprovalRequestDelete(obj client.Object, q workqueue.TypedRateLimitin
 // emitUpdateRunStatusMetric emits the update run status metric based on status conditions in the updateRun.
 func emitUpdateRunStatusMetric(updateRun placementv1beta1.UpdateRunObj) {
 	generation := updateRun.GetGeneration()
-	genStr := strconv.FormatInt(generation, 10)
+	state := updateRun.GetUpdateRunSpec().State
 
 	updateRunStatus := updateRun.GetUpdateRunStatus()
 	succeedCond := meta.FindStatusCondition(updateRunStatus.Conditions, string(placementv1beta1.StagedUpdateRunConditionSucceeded))
 	if succeedCond != nil && succeedCond.ObservedGeneration == generation {
-		hubmetrics.FleetUpdateRunStatusLastTimestampSeconds.WithLabelValues(updateRun.GetNamespace(), updateRun.GetName(), genStr,
+		hubmetrics.FleetUpdateRunStatusLastTimestampSeconds.WithLabelValues(updateRun.GetNamespace(), updateRun.GetName(), string(state),
 			string(placementv1beta1.StagedUpdateRunConditionSucceeded), string(succeedCond.Status), succeedCond.Reason).SetToCurrentTime()
 		return
 	}
 
 	progressingCond := meta.FindStatusCondition(updateRunStatus.Conditions, string(placementv1beta1.StagedUpdateRunConditionProgressing))
 	if progressingCond != nil && progressingCond.ObservedGeneration == generation {
-		hubmetrics.FleetUpdateRunStatusLastTimestampSeconds.WithLabelValues(updateRun.GetNamespace(), updateRun.GetName(), genStr,
+		hubmetrics.FleetUpdateRunStatusLastTimestampSeconds.WithLabelValues(updateRun.GetNamespace(), updateRun.GetName(), string(state),
 			string(placementv1beta1.StagedUpdateRunConditionProgressing), string(progressingCond.Status), progressingCond.Reason).SetToCurrentTime()
 		return
 	}
 
 	initializedCond := meta.FindStatusCondition(updateRunStatus.Conditions, string(placementv1beta1.StagedUpdateRunConditionInitialized))
 	if initializedCond != nil && initializedCond.ObservedGeneration == generation {
-		hubmetrics.FleetUpdateRunStatusLastTimestampSeconds.WithLabelValues(updateRun.GetNamespace(), updateRun.GetName(), genStr,
+		hubmetrics.FleetUpdateRunStatusLastTimestampSeconds.WithLabelValues(updateRun.GetNamespace(), updateRun.GetName(), string(state),
 			string(placementv1beta1.StagedUpdateRunConditionInitialized), string(initializedCond.Status), initializedCond.Reason).SetToCurrentTime()
 		return
 	}

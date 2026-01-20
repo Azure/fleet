@@ -258,23 +258,27 @@ func validateUpdateRunMetricsEmitted(wantMetrics ...*prometheusclientmodel.Metri
 	}, timeout, interval).Should(Succeed(), "failed to validate the update run status metrics")
 }
 
+// generateMetricsLabels generates the labels for the update run status metrics.
+// We pass the state explicitly instead of using updateRun.Spec.State because the metric
+// should reflect the state at the time the condition occurred, which may be different from
+// the current updateRun state if the updateRun has transitioned since then.
 func generateMetricsLabels(
 	updateRun *placementv1beta1.ClusterStagedUpdateRun,
-	condition, status, reason string,
+	state, condition, status, reason string,
 ) []*prometheusclientmodel.LabelPair {
 	return []*prometheusclientmodel.LabelPair{
 		{Name: ptr.To("namespace"), Value: &updateRun.Namespace},
 		{Name: ptr.To("name"), Value: &updateRun.Name},
-		{Name: ptr.To("generation"), Value: ptr.To(strconv.FormatInt(updateRun.Generation, 10))},
+		{Name: ptr.To("state"), Value: ptr.To(state)},
 		{Name: ptr.To("condition"), Value: ptr.To(condition)},
 		{Name: ptr.To("status"), Value: ptr.To(status)},
 		{Name: ptr.To("reason"), Value: ptr.To(reason)},
 	}
 }
 
-func generateInitializationSucceededMetric(updateRun *placementv1beta1.ClusterStagedUpdateRun) *prometheusclientmodel.Metric {
+func generateInitializationSucceededMetric(state placementv1beta1.State, updateRun *placementv1beta1.ClusterStagedUpdateRun) *prometheusclientmodel.Metric {
 	return &prometheusclientmodel.Metric{
-		Label: generateMetricsLabels(updateRun, string(placementv1beta1.StagedUpdateRunConditionInitialized),
+		Label: generateMetricsLabels(updateRun, string(state), string(placementv1beta1.StagedUpdateRunConditionInitialized),
 			string(metav1.ConditionTrue), condition.UpdateRunInitializeSucceededReason),
 		Gauge: &prometheusclientmodel.Gauge{
 			Value: ptr.To(float64(time.Now().UnixNano()) / 1e9),
@@ -282,9 +286,9 @@ func generateInitializationSucceededMetric(updateRun *placementv1beta1.ClusterSt
 	}
 }
 
-func generateInitializationFailedMetric(updateRun *placementv1beta1.ClusterStagedUpdateRun) *prometheusclientmodel.Metric {
+func generateInitializationFailedMetric(state placementv1beta1.State, updateRun *placementv1beta1.ClusterStagedUpdateRun) *prometheusclientmodel.Metric {
 	return &prometheusclientmodel.Metric{
-		Label: generateMetricsLabels(updateRun, string(placementv1beta1.StagedUpdateRunConditionInitialized),
+		Label: generateMetricsLabels(updateRun, string(state), string(placementv1beta1.StagedUpdateRunConditionInitialized),
 			string(metav1.ConditionFalse), condition.UpdateRunInitializeFailedReason),
 		Gauge: &prometheusclientmodel.Gauge{
 			Value: ptr.To(float64(time.Now().UnixNano()) / 1e9),
@@ -292,9 +296,9 @@ func generateInitializationFailedMetric(updateRun *placementv1beta1.ClusterStage
 	}
 }
 
-func generateProgressingMetric(updateRun *placementv1beta1.ClusterStagedUpdateRun) *prometheusclientmodel.Metric {
+func generateProgressingMetric(state placementv1beta1.State, updateRun *placementv1beta1.ClusterStagedUpdateRun) *prometheusclientmodel.Metric {
 	return &prometheusclientmodel.Metric{
-		Label: generateMetricsLabels(updateRun, string(placementv1beta1.StagedUpdateRunConditionProgressing),
+		Label: generateMetricsLabels(updateRun, string(state), string(placementv1beta1.StagedUpdateRunConditionProgressing),
 			string(metav1.ConditionTrue), condition.UpdateRunProgressingReason),
 		Gauge: &prometheusclientmodel.Gauge{
 			Value: ptr.To(float64(time.Now().UnixNano()) / 1e9),
@@ -302,9 +306,9 @@ func generateProgressingMetric(updateRun *placementv1beta1.ClusterStagedUpdateRu
 	}
 }
 
-func generateWaitingMetric(updateRun *placementv1beta1.ClusterStagedUpdateRun) *prometheusclientmodel.Metric {
+func generateWaitingMetric(state placementv1beta1.State, updateRun *placementv1beta1.ClusterStagedUpdateRun) *prometheusclientmodel.Metric {
 	return &prometheusclientmodel.Metric{
-		Label: generateMetricsLabels(updateRun, string(placementv1beta1.StagedUpdateRunConditionProgressing),
+		Label: generateMetricsLabels(updateRun, string(state), string(placementv1beta1.StagedUpdateRunConditionProgressing),
 			string(metav1.ConditionFalse), condition.UpdateRunWaitingReason),
 		Gauge: &prometheusclientmodel.Gauge{
 			Value: ptr.To(float64(time.Now().UnixNano()) / 1e9),
@@ -312,9 +316,9 @@ func generateWaitingMetric(updateRun *placementv1beta1.ClusterStagedUpdateRun) *
 	}
 }
 
-func generateStuckMetric(updateRun *placementv1beta1.ClusterStagedUpdateRun) *prometheusclientmodel.Metric {
+func generateStuckMetric(state placementv1beta1.State, updateRun *placementv1beta1.ClusterStagedUpdateRun) *prometheusclientmodel.Metric {
 	return &prometheusclientmodel.Metric{
-		Label: generateMetricsLabels(updateRun, string(placementv1beta1.StagedUpdateRunConditionProgressing),
+		Label: generateMetricsLabels(updateRun, string(state), string(placementv1beta1.StagedUpdateRunConditionProgressing),
 			string(metav1.ConditionFalse), condition.UpdateRunStuckReason),
 		Gauge: &prometheusclientmodel.Gauge{
 			Value: ptr.To(float64(time.Now().UnixNano()) / 1e9),
@@ -322,9 +326,9 @@ func generateStuckMetric(updateRun *placementv1beta1.ClusterStagedUpdateRun) *pr
 	}
 }
 
-func generateFailedMetric(updateRun *placementv1beta1.ClusterStagedUpdateRun) *prometheusclientmodel.Metric {
+func generateFailedMetric(state placementv1beta1.State, updateRun *placementv1beta1.ClusterStagedUpdateRun) *prometheusclientmodel.Metric {
 	return &prometheusclientmodel.Metric{
-		Label: generateMetricsLabels(updateRun, string(placementv1beta1.StagedUpdateRunConditionSucceeded),
+		Label: generateMetricsLabels(updateRun, string(state), string(placementv1beta1.StagedUpdateRunConditionSucceeded),
 			string(metav1.ConditionFalse), condition.UpdateRunFailedReason),
 		Gauge: &prometheusclientmodel.Gauge{
 			Value: ptr.To(float64(time.Now().UnixNano()) / 1e9),
@@ -332,9 +336,9 @@ func generateFailedMetric(updateRun *placementv1beta1.ClusterStagedUpdateRun) *p
 	}
 }
 
-func generateStoppingMetric(updateRun *placementv1beta1.ClusterStagedUpdateRun) *prometheusclientmodel.Metric {
+func generateStoppingMetric(state placementv1beta1.State, updateRun *placementv1beta1.ClusterStagedUpdateRun) *prometheusclientmodel.Metric {
 	return &prometheusclientmodel.Metric{
-		Label: generateMetricsLabels(updateRun, string(placementv1beta1.StagedUpdateRunConditionProgressing),
+		Label: generateMetricsLabels(updateRun, string(state), string(placementv1beta1.StagedUpdateRunConditionProgressing),
 			string(metav1.ConditionUnknown), condition.UpdateRunStoppingReason),
 		Gauge: &prometheusclientmodel.Gauge{
 			Value: ptr.To(float64(time.Now().UnixNano()) / 1e9),
@@ -342,9 +346,9 @@ func generateStoppingMetric(updateRun *placementv1beta1.ClusterStagedUpdateRun) 
 	}
 }
 
-func generateStoppedMetric(updateRun *placementv1beta1.ClusterStagedUpdateRun) *prometheusclientmodel.Metric {
+func generateStoppedMetric(state placementv1beta1.State, updateRun *placementv1beta1.ClusterStagedUpdateRun) *prometheusclientmodel.Metric {
 	return &prometheusclientmodel.Metric{
-		Label: generateMetricsLabels(updateRun, string(placementv1beta1.StagedUpdateRunConditionProgressing),
+		Label: generateMetricsLabels(updateRun, string(state), string(placementv1beta1.StagedUpdateRunConditionProgressing),
 			string(metav1.ConditionFalse), condition.UpdateRunStoppedReason),
 		Gauge: &prometheusclientmodel.Gauge{
 			Value: ptr.To(float64(time.Now().UnixNano()) / 1e9),
@@ -352,9 +356,9 @@ func generateStoppedMetric(updateRun *placementv1beta1.ClusterStagedUpdateRun) *
 	}
 }
 
-func generateSucceededMetric(updateRun *placementv1beta1.ClusterStagedUpdateRun) *prometheusclientmodel.Metric {
+func generateSucceededMetric(state placementv1beta1.State, updateRun *placementv1beta1.ClusterStagedUpdateRun) *prometheusclientmodel.Metric {
 	return &prometheusclientmodel.Metric{
-		Label: generateMetricsLabels(updateRun, string(placementv1beta1.StagedUpdateRunConditionSucceeded),
+		Label: generateMetricsLabels(updateRun, string(state), string(placementv1beta1.StagedUpdateRunConditionSucceeded),
 			string(metav1.ConditionTrue), condition.UpdateRunSucceededReason),
 		Gauge: &prometheusclientmodel.Gauge{
 			Value: ptr.To(float64(time.Now().UnixNano()) / 1e9),
