@@ -22,6 +22,7 @@ import (
 	"fmt"
 	"time"
 
+	"k8s.io/apimachinery/pkg/api/equality"
 	"k8s.io/apimachinery/pkg/api/errors"
 	"k8s.io/apimachinery/pkg/api/meta"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -128,30 +129,25 @@ func (r *Reconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.Resu
 	// Note that if the object already exists and its spec matches with the desired space, no
 	// update op will be performed.
 	createOrUpdateRes, err := controllerutil.CreateOrUpdate(ctx, r, cp, func() error {
-		if cp.CreationTimestamp.IsZero() {
-			// Only set the ClusterManager field if the object is being created; this field
-			// is immutable by definition.
-			cp.Spec = clusterinventory.ClusterProfileSpec{
-				ClusterManager: clusterinventory.ClusterManager{
-					Name: controller.ClusterManagerName,
-				},
+		if !cp.CreationTimestamp.IsZero() {
+			// log an unexpected error if the cluster profile content is modified behind our back
+			if cp.Spec.DisplayName != mc.Name || cp.Labels == nil || cp.Labels[clusterinventory.LabelClusterManagerKey] != controller.ClusterManagerName {
+				klog.ErrorS(controller.NewUnexpectedBehaviorError(fmt.Errorf("found an unexpected cluster profile: spec = `%+v`, label = `%+v`", cp.Spec, cp.Labels)),
+					"Cluster profile is modified behind our back", "memberCluster", mcRef, "clusterProfile", klog.KObj(cp))
 			}
 		}
-		// log an unexpected error if the cluster profile is under the management of a different platform.
-		if cp.Spec.ClusterManager.Name != controller.ClusterManagerName {
-			klog.ErrorS(controller.NewUnexpectedBehaviorError(fmt.Errorf("found another clustrer Manager: `%s`", cp.Spec.ClusterManager.Name)),
-				"Cluster profile is under the management of a different platform", "memberCluster", mcRef, "clusterProfile", klog.KObj(cp))
-			return nil
+		// Set the spec.
+		cp.Spec = clusterinventory.ClusterProfileSpec{
+			ClusterManager: clusterinventory.ClusterManager{
+				Name: controller.ClusterManagerName,
+			},
+			DisplayName: mc.Name,
 		}
-
 		// Set the labels.
 		if cp.Labels == nil {
 			cp.Labels = make(map[string]string)
 		}
 		cp.Labels[clusterinventory.LabelClusterManagerKey] = controller.ClusterManagerName
-
-		// Set the display name.
-		cp.Spec.DisplayName = mc.Name
 		return nil
 	})
 	if err != nil {
@@ -160,9 +156,15 @@ func (r *Reconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.Resu
 	}
 	klog.V(2).InfoS("Cluster profile object is created or updated", "memberCluster", mcRef, "clusterProfile", klog.KObj(cp), "operation", createOrUpdateRes)
 
+	existingCP := cp.DeepCopy()
 	// sync the cluster profile status/condition from the member cluster condition
 	r.fillInClusterStatus(mc, cp)
 	r.syncClusterProfileCondition(mc, cp)
+	// skip status update if nothing changed
+	if equality.Semantic.DeepEqual(existingCP.Status, cp.Status) {
+		klog.V(2).InfoS("No need to update Cluster profile status", "memberCluster", mcRef, "clusterProfile", klog.KObj(cp))
+		return ctrl.Result{}, nil
+	}
 	if err = r.Status().Update(ctx, cp); err != nil {
 		klog.ErrorS(err, "Failed to update cluster profile status", "memberCluster", mcRef, "clusterProfile", klog.KObj(cp))
 		return ctrl.Result{}, err
@@ -306,6 +308,15 @@ func (r *Reconciler) SetupWithManager(mgr ctrl.Manager) error {
 				klog.V(2).InfoS("Handling a clusterProfile delete event", "clusterProfile", klog.KObj(e.Object))
 				q.Add(reconcile.Request{
 					NamespacedName: types.NamespacedName{Name: e.Object.GetName()},
+				})
+			},
+			UpdateFunc: func(ctx context.Context, e event.UpdateEvent, q workqueue.TypedRateLimitingInterface[reconcile.Request]) {
+				if e.ObjectNew.GetGeneration() == e.ObjectOld.GetGeneration() {
+					return
+				}
+				klog.V(2).InfoS("Handling a clusterProfil spec update event", "clusterProfile", klog.KObj(e.ObjectOld))
+				q.Add(reconcile.Request{
+					NamespacedName: types.NamespacedName{Name: e.ObjectOld.GetName()},
 				})
 			},
 		}).

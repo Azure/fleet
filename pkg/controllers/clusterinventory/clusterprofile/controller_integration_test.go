@@ -30,6 +30,7 @@ import (
 	clusterv1beta1 "github.com/kubefleet-dev/kubefleet/apis/cluster/v1beta1"
 	"github.com/kubefleet-dev/kubefleet/pkg/utils"
 	"github.com/kubefleet-dev/kubefleet/pkg/utils/condition"
+	"github.com/kubefleet-dev/kubefleet/pkg/utils/controller"
 )
 
 const (
@@ -88,6 +89,12 @@ var _ = Describe("Test ClusterProfile Controller", func() {
 			if err := k8sClient.Get(ctx, types.NamespacedName{Namespace: clusterProfileNS, Name: testMCName}, &clusterProfile); err != nil {
 				return false
 			}
+			if clusterProfile.Spec.ClusterManager.Name != controller.ClusterManagerName {
+				return false
+			}
+			if clusterProfile.Spec.DisplayName != testMCName {
+				return false
+			}
 			cond := meta.FindStatusCondition(clusterProfile.Status.Conditions, clusterinventory.ClusterConditionControlPlaneHealthy)
 			return condition.IsConditionStatusTrue(cond, clusterProfile.Generation)
 		}, eventuallyTimeout, interval).Should(BeTrue(), "clusterProfile is not created")
@@ -104,6 +111,23 @@ var _ = Describe("Test ClusterProfile Controller", func() {
 		Eventually(func() error {
 			return k8sClient.Get(ctx, types.NamespacedName{Namespace: clusterProfileNS, Name: testMCName}, &clusterProfile)
 		}, eventuallyTimeout, interval).Should(Succeed(), "clusterProfile is not created")
+	})
+
+	It("Should update a clusterProfile when it is modified by the user", func() {
+		By("Check the clusterProfile is created")
+		Eventually(func() error {
+			return k8sClient.Get(ctx, types.NamespacedName{Namespace: clusterProfileNS, Name: testMCName}, &clusterProfile)
+		}, eventuallyTimeout, interval).Should(Succeed(), "clusterProfile is not created")
+		By("Modifying the ClusterProfile")
+		clusterProfile.Spec.DisplayName = "ModifiedMCName"
+		Expect(k8sClient.Update(ctx, &clusterProfile)).Should(Succeed(), "failed to modify clusterProfile")
+		By("Check the clusterProfile is updated back to original state")
+		Eventually(func() bool {
+			if err := k8sClient.Get(ctx, types.NamespacedName{Namespace: clusterProfileNS, Name: testMCName}, &clusterProfile); err != nil {
+				return false
+			}
+			return clusterProfile.Spec.DisplayName == testMCName
+		}, eventuallyTimeout, interval).Should(BeTrue(), "clusterProfile is not updated back to original state")
 	})
 
 	It("Should delete the clusterProfile when the MemberCluster is deleted", func() {
