@@ -1205,3 +1205,47 @@ func TestCheckBeforeStageTasksStatus_NegativeCases(t *testing.T) {
 		})
 	}
 }
+
+func TestGenerateStuckClustersString(t *testing.T) {
+	tests := []struct {
+		name              string
+		stuckClusterNames []string
+		wantClusterString string
+	}{
+		{
+			name:              "empty cluster list",
+			stuckClusterNames: []string{},
+			wantClusterString: "",
+		},
+		{
+			name:              "single cluster",
+			stuckClusterNames: []string{"cluster1"},
+			wantClusterString: "cluster1",
+		},
+		{
+			name:              "two clusters",
+			stuckClusterNames: []string{"cluster1", "cluster2"},
+			wantClusterString: "cluster1, cluster2",
+		},
+		{
+			name:              "three clusters",
+			stuckClusterNames: []string{"cluster1", "cluster2", "cluster3"},
+			wantClusterString: "cluster1, cluster2, cluster3",
+		},
+		{
+			name:              "five clusters - should only show first three",
+			stuckClusterNames: []string{"cluster1", "cluster2", "cluster3", "cluster4", "cluster5"},
+			wantClusterString: "cluster1, cluster2, cluster3...",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got := generateStuckClustersString(tt.stuckClusterNames)
+
+			if got != tt.wantClusterString {
+				t.Fatalf("generateStuckClustersString() = %v, want %v", got, tt.wantClusterString)
+			}
+		})
+	}
+}
