@@ -28,6 +28,7 @@ export PROPERTY_PROVIDER="${PROPERTY_PROVIDER:-azure}"
 export USE_PREDEFINED_REGIONS="${USE_PREDEFINED_REGIONS:-false}"
 export RESOURCE_SNAPSHOT_CREATION_MINIMUM_INTERVAL="${RESOURCE_SNAPSHOT_CREATION_MINIMUM_INTERVAL:-0m}"
 export RESOURCE_CHANGES_COLLECTION_DURATION="${RESOURCE_CHANGES_COLLECTION_DURATION:-0m}"
+export CERT_MANAGER_VERSION="${CERT_MANAGER_VERSION:-v1.16.2}"
 
 # The pre-defined regions; if the AKS property provider is used.
 #
@@ -114,14 +115,32 @@ done
 
 # Install the helm charts
 
-# Install the hub agent to the hub cluster
 kind export kubeconfig --name $HUB_CLUSTER
+
+# Install cert-manager first (required for webhook certificates)
+echo "Installing cert-manager..."
+
+# Install cert-manager using Helm to avoid ownership conflicts with hub-agent chart
+helm repo add jetstack https://charts.jetstack.io --force-update
+helm repo update
+helm install cert-manager jetstack/cert-manager \
+    --namespace cert-manager \
+    --create-namespace \
+    --version $CERT_MANAGER_VERSION \
+    --set crds.enabled=true \
+    --wait \
+    --timeout=300s
+
+# Install the hub agent to the hub cluster
 helm install hub-agent ../../charts/hub-agent/ \
     --set image.pullPolicy=Never \
     --set image.repository=$REGISTRY/$HUB_AGENT_IMAGE \
     --set image.tag=$TAG \
     --set namespace=fleet-system \
     --set logVerbosity=5 \
+    --set replicaCount=3 \
+    --set useCertManager=true \
+    --set webhookCertSecretName=fleet-webhook-server-cert \
     --set enableWebhook=true \
     --set enableWorkload=true \
     --set webhookClientConnectionType=service \

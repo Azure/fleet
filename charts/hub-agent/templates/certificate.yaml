@@ -1,0 +1,63 @@
+{{- if and .Values.enableWebhook .Values.useCertManager }}
+---
+apiVersion: cert-manager.io/v1
+kind: Certificate
+metadata:
+  # This name must match FleetWebhookCertName in pkg/webhook/webhook.go
+  name: fleet-webhook-certificate
+  namespace: {{ .Values.namespace }}
+  labels:
+    {{- include "hub-agent.labels" . | nindent 4 }}
+spec:
+  # Secret name where cert-manager will store the certificate
+  secretName: {{ .Values.webhookCertSecretName }}
+  
+  # Certificate duration (90 days is cert-manager's default and recommended)
+  duration: 2160h # 90 days
+  
+  # Renew certificate 30 days before expiry
+  renewBefore: 720h # 30 days
+  
+  # Subject configuration
+  subject:
+    organizations:
+      - KubeFleet
+  
+  # Common name
+  commonName: fleet-webhook.{{ .Values.namespace }}.svc
+  
+  # DNS names for the certificate
+  dnsNames:
+    - {{ .Values.webhookServiceName }}
+    - {{ .Values.webhookServiceName }}.{{ .Values.namespace }}
+    - {{ .Values.webhookServiceName }}.{{ .Values.namespace }}.svc
+    - {{ .Values.webhookServiceName }}.{{ .Values.namespace }}.svc.cluster.local
+  
+  # Issuer reference - using self-signed issuer
+  issuerRef:
+    name: fleet-selfsigned-issuer
+    kind: Issuer
+    group: cert-manager.io
+  
+  # Private key configuration
+  privateKey:
+    algorithm: ECDSA
+    size: 256
+  
+  # Key usages
+  usages:
+    - digital signature
+    - key encipherment
+    - server auth
+---
+# Self-signed issuer for generating the certificate
+apiVersion: cert-manager.io/v1
+kind: Issuer
+metadata:
+  name: fleet-selfsigned-issuer
+  namespace: {{ .Values.namespace }}
+  labels:
+    {{- include "hub-agent.labels" . | nindent 4 }}
+spec:
+  selfSigned: {}
+{{- end }}
