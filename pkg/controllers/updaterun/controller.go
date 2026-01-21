@@ -21,7 +21,6 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"strconv"
 	"time"
 
 	"github.com/prometheus/client_golang/prometheus"
@@ -51,9 +50,10 @@ import (
 var (
 	// errStagedUpdatedAborted is the error when the updateRun is aborted.
 	errStagedUpdatedAborted = fmt.Errorf("cannot continue the updateRun")
-	// errInitializedFailed is the error when the updateRun fails to initialize.
-	// It is a wrapped error of errStagedUpdatedAborted, because some initialization functions are reused in the validation step.
-	errInitializedFailed = fmt.Errorf("%w: failed to initialize the updateRun", errStagedUpdatedAborted)
+	// errValidationFailed is the error when the updateRun fails validation.
+	// It is a wrapped error of errStagedUpdatedAborted, because we perform validation during initialization
+	// and subsequent reconciliations where initialization is skipped.
+	errValidationFailed = fmt.Errorf("%w: failed to validate the updateRun", errStagedUpdatedAborted)
 )
 
 // Reconciler reconciles an updateRun object.
@@ -125,8 +125,8 @@ func (r *Reconciler) Reconcile(ctx context.Context, req runtime.Request) (runtim
 		var initErr error
 		if toBeUpdatedBindings, toBeDeletedBindings, initErr = r.initialize(ctx, updateRun); initErr != nil {
 			klog.ErrorS(initErr, "Failed to initialize the updateRun", "updateRun", runObjRef)
-			// errInitializedFailed cannot be retried.
-			if errors.Is(initErr, errInitializedFailed) {
+			// errStagedUpdatedAborted cannot be retried.
+			if errors.Is(initErr, errStagedUpdatedAborted) {
 				return runtime.Result{}, r.recordInitializationFailed(ctx, updateRun, initErr.Error())
 			}
 			return runtime.Result{}, initErr
@@ -488,26 +488,26 @@ func handleApprovalRequestDelete(obj client.Object, q workqueue.TypedRateLimitin
 // emitUpdateRunStatusMetric emits the update run status metric based on status conditions in the updateRun.
 func emitUpdateRunStatusMetric(updateRun placementv1beta1.UpdateRunObj) {
 	generation := updateRun.GetGeneration()
-	genStr := strconv.FormatInt(generation, 10)
+	state := updateRun.GetUpdateRunSpec().State
 
 	updateRunStatus := updateRun.GetUpdateRunStatus()
 	succeedCond := meta.FindStatusCondition(updateRunStatus.Conditions, string(placementv1beta1.StagedUpdateRunConditionSucceeded))
 	if succeedCond != nil && succeedCond.ObservedGeneration == generation {
-		hubmetrics.FleetUpdateRunStatusLastTimestampSeconds.WithLabelValues(updateRun.GetNamespace(), updateRun.GetName(), genStr,
+		hubmetrics.FleetUpdateRunStatusLastTimestampSeconds.WithLabelValues(updateRun.GetNamespace(), updateRun.GetName(), string(state),
 			string(placementv1beta1.StagedUpdateRunConditionSucceeded), string(succeedCond.Status), succeedCond.Reason).SetToCurrentTime()
 		return
 	}
 
 	progressingCond := meta.FindStatusCondition(updateRunStatus.Conditions, string(placementv1beta1.StagedUpdateRunConditionProgressing))
 	if progressingCond != nil && progressingCond.ObservedGeneration == generation {
-		hubmetrics.FleetUpdateRunStatusLastTimestampSeconds.WithLabelValues(updateRun.GetNamespace(), updateRun.GetName(), genStr,
+		hubmetrics.FleetUpdateRunStatusLastTimestampSeconds.WithLabelValues(updateRun.GetNamespace(), updateRun.GetName(), string(state),
 			string(placementv1beta1.StagedUpdateRunConditionProgressing), string(progressingCond.Status), progressingCond.Reason).SetToCurrentTime()
 		return
 	}
 
 	initializedCond := meta.FindStatusCondition(updateRunStatus.Conditions, string(placementv1beta1.StagedUpdateRunConditionInitialized))
 	if initializedCond != nil && initializedCond.ObservedGeneration == generation {
-		hubmetrics.FleetUpdateRunStatusLastTimestampSeconds.WithLabelValues(updateRun.GetNamespace(), updateRun.GetName(), genStr,
+		hubmetrics.FleetUpdateRunStatusLastTimestampSeconds.WithLabelValues(updateRun.GetNamespace(), updateRun.GetName(), string(state),
 			string(placementv1beta1.StagedUpdateRunConditionInitialized), string(initializedCond.Status), initializedCond.Reason).SetToCurrentTime()
 		return
 	}
