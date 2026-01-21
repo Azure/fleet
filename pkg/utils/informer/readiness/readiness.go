@@ -25,13 +25,19 @@ import (
 	"k8s.io/klog/v2"
 )
 
+// TO-DO (chenyu1): the readiness check below verifies if all the caches have been sync'd;
+// as an informer is considered synced once it has performed its initial list, checking the
+// sync status repeatedly (be default every 10 seconds) might not be very performant. We should
+// find a better way to handle this situation.
+
 // InformerReadinessChecker creates a readiness check function that verifies
 // all resource informer caches are synced before marking the pod as ready.
 // This prevents components from processing requests before the discovery cache is populated.
 func InformerReadinessChecker(resourceInformer informer.Manager) func(*http.Request) error {
 	return func(_ *http.Request) error {
 		if resourceInformer == nil {
-			return fmt.Errorf("resource informer not initialized")
+			klog.V(2).InfoS("Readiness check failed: resource informer is nil")
+			return fmt.Errorf("resource informer is nil")
 		}
 
 		// Require ALL informer caches to be synced before marking ready
@@ -39,6 +45,7 @@ func InformerReadinessChecker(resourceInformer informer.Manager) func(*http.Requ
 		if len(allResources) == 0 {
 			// This can happen during startup when the ResourceInformer is created but the InformerPopulator
 			// hasn't discovered and registered any resources yet via AddDynamicResources().
+			klog.V(2).InfoS("Readiness check failed: no resources registered in resource informer yet")
 			return fmt.Errorf("resource informer not ready: no resources registered")
 		}
 
@@ -51,6 +58,9 @@ func InformerReadinessChecker(resourceInformer informer.Manager) func(*http.Requ
 		}
 
 		if len(unsyncedResources) > 0 {
+			klog.V(2).InfoS("Readiness check failed: some resource informers are not synced yet",
+				"countOfUnsyncedInformers", len(unsyncedResources),
+				"countOfTotalInformers", len(allResources))
 			return fmt.Errorf("resource informer not ready: %d/%d informers not synced yet", len(unsyncedResources), len(allResources))
 		}
 
