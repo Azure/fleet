@@ -26,13 +26,20 @@ webhookServiceName: fleetwebhook
 enableGuardRail: true
 webhookClientConnectionType: service
 enableWorkload: false
+# useCertManager enables cert-manager for webhook certificate management
+# When enabled, cert-manager must be installed as a prerequisite (it is not installed automatically by this chart)
+# and a Certificate resource will be created
+useCertManager: false
+# webhookCertSecretName is ONLY used when useCertManager=true
+# It specifies the name of the Secret where cert-manager stores the certificate
+# webhookCertSecretName: fleet-webhook-server-cert
+
 forceDeleteWaitTime: 15m0s
 clusterUnhealthyThreshold: 3m0s
 resourceSnapshotCreationMinimumInterval: 30s
 resourceChangesCollectionDuration: 15s
 
-namespace:
-  fleet-system
+namespace: fleet-system
 
 resources:
   limits:
