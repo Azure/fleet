@@ -1,3 +1,6 @@
+{{- if and (not .Values.useCertManager) (gt (.Values.replicaCount | int) 1) }}
+{{- fail "ERROR: replicaCount > 1 requires useCertManager=true (self-signed certificates cannot be shared across replicas)" }}
+{{- end }}
 apiVersion: apps/v1
 kind: Deployment
 metadata:
@@ -6,6 +9,7 @@ metadata:
   labels:
     {{- include "hub-agent.labels" . | nindent 4 }}
 spec:
+  replicas: {{ .Values.replicaCount }}
   selector:
     matchLabels:
       {{- include "hub-agent.selectorLabels" . | nindent 6 }}
@@ -34,6 +38,7 @@ spec:
             - --webhook-service-name={{ .Values.webhookServiceName }}
             - --enable-guard-rail={{ .Values.enableGuardRail }}
             - --enable-workload={{ .Values.enableWorkload }}
+            - --use-cert-manager={{ .Values.useCertManager }}
             - --whitelisted-users=system:serviceaccount:fleet-system:hub-agent-sa
             - --webhook-client-connection-type={{.Values.webhookClientConnectionType}}
             - --v={{ .Values.logVerbosity }}
@@ -82,6 +87,22 @@ spec:
                 fieldPath: metadata.namespace
           resources:
             {{- toYaml .Values.resources | nindent 12 }}
+          {{- if .Values.useCertManager }}
+          volumeMounts:
+          - name: webhook-cert
+            # This path must match FleetWebhookCertDir in pkg/webhook/webhook.go
+            mountPath: /tmp/k8s-webhook-server/serving-certs
+            readOnly: true
+          {{- end }}
+      {{- if .Values.useCertManager }}
+      volumes:
+      - name: webhook-cert
+        secret:
+          secretName: {{ .Values.webhookCertSecretName }}
+          # defaultMode 0444 (read for all) allows the container process to read the certs
+          # regardless of the user/group it runs as
+          defaultMode: 0444
+      {{- end }}
       {{- with .Values.affinity }}
       affinity:
         {{- toYaml . | nindent 8 }}

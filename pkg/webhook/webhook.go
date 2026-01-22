@@ -29,6 +29,7 @@ import (
 	"math/big"
 	"os"
 	"path/filepath"
+	"strings"
 	"time"
 
 	admv1 "k8s.io/api/admissionregistration/v1"
@@ -73,6 +74,13 @@ const (
 	fleetValidatingWebhookCfgName = "fleet-validating-webhook-configuration"
 	fleetGuardRailWebhookCfgName  = "fleet-guard-rail-webhook-configuration"
 	fleetMutatingWebhookCfgName   = "fleet-mutating-webhook-configuration"
+
+	// FleetWebhookCertDir is the directory where webhook certificates are stored.
+	// This path must match the volumeMount path in charts/hub-agent/templates/deployment.yaml
+	FleetWebhookCertDir = "/tmp/k8s-webhook-server/serving-certs"
+	// FleetWebhookCertName is the name of the Certificate resource created by cert-manager.
+	// This name must match the Certificate name in charts/hub-agent/templates/certificate.yaml
+	FleetWebhookCertName = "fleet-webhook-certificate"
 
 	crdResourceName                      = "customresourcedefinitions"
 	bindingResourceName                  = "bindings"
@@ -134,14 +142,14 @@ var AddToManagerFleetResourceValidator func(manager.Manager, []string, bool) err
 var AddToManagerMemberclusterValidator func(manager.Manager, bool)
 
 // AddToManager adds all Controllers to the Manager
-func AddToManager(m manager.Manager, whiteListedUsers []string, denyModifyMemberClusterLabels bool, networkingAgentsEnabled bool) error {
+func AddToManager(m manager.Manager, config *Config) error {
 	for _, f := range AddToManagerFuncs {
 		if err := f(m); err != nil {
 			return err
 		}
 	}
-	AddToManagerMemberclusterValidator(m, networkingAgentsEnabled)
-	return AddToManagerFleetResourceValidator(m, whiteListedUsers, denyModifyMemberClusterLabels)
+	AddToManagerMemberclusterValidator(m, config.networkingAgentsEnabled)
+	return AddToManagerFleetResourceValidator(m, config.whiteListedUsers, config.denyModifyMemberClusterLabels)
 }
 
 type Config struct {
@@ -162,9 +170,18 @@ type Config struct {
 
 	denyModifyMemberClusterLabels bool
 	enableWorkload                bool
+	// useCertManager indicates whether cert-manager is used for certificate management
+	useCertManager bool
+	// webhookCertName is the name of the Certificate resource created by cert-manager.
+	// This is referenced in the cert-manager.io/inject-ca-from annotation.
+	webhookCertName string
+	// whiteListedUsers is a list of users who are allowed to modify fleet resources
+	whiteListedUsers []string
+	// networkingAgentsEnabled indicates whether networking agents are enabled
+	networkingAgentsEnabled bool
 }
 
-func NewWebhookConfig(mgr manager.Manager, webhookServiceName string, port int32, clientConnectionType *options.WebhookClientConnectionType, certDir string, enableGuardRail bool, denyModifyMemberClusterLabels bool, enableWorkload bool) (*Config, error) {
+func NewWebhookConfig(mgr manager.Manager, webhookServiceName string, port int32, clientConnectionType *options.WebhookClientConnectionType, certDir string, enableGuardRail bool, denyModifyMemberClusterLabels bool, enableWorkload bool, useCertManager bool, webhookCertName string, whiteListedUsers []string, networkingAgentsEnabled bool) (*Config, error) {
 	// We assume the Pod namespace should be passed to env through downward API in the Pod spec.
 	namespace := os.Getenv("POD_NAMESPACE")
 	if namespace == "" {
@@ -180,13 +197,42 @@ func NewWebhookConfig(mgr manager.Manager, webhookServiceName string, port int32
 		enableGuardRail:               enableGuardRail,
 		denyModifyMemberClusterLabels: denyModifyMemberClusterLabels,
 		enableWorkload:                enableWorkload,
+		useCertManager:                useCertManager,
+		webhookCertName:               webhookCertName,
+		whiteListedUsers:              whiteListedUsers,
+		networkingAgentsEnabled:       networkingAgentsEnabled,
 	}
-	caPEM, err := w.genCertificate(certDir)
-	if err != nil {
-		return nil, err
+
+	if useCertManager {
+		// When using cert-manager, the CA bundle is automatically injected by cert-manager's CA injector
+		// based on the cert-manager.io/inject-ca-from annotation. We don't need to load or set the CA here.
+		// The certificates (tls.crt and tls.key) are mounted by Kubernetes and used automatically by the webhook server.
+		klog.V(2).InfoS("Using cert-manager for certificate management", "certDir", certDir)
+	} else {
+		// Use self-signed certificate generation (original flow)
+		caPEM, err := w.genCertificate(certDir)
+		if err != nil {
+			return nil, fmt.Errorf("failed to generate self-signed certificate: %w", err)
+		}
+		w.caPEM = caPEM
 	}
-	w.caPEM = caPEM
-	return &w, err
+
+	return &w, nil
+}
+
+// NewWebhookConfigFromOptions creates a webhook config from command-line options.
+// This helper handles type conversions from option strings to proper types.
+// Note: This function assumes opts has been pre-validated using opts.Validate().
+// String-to-enum conversions (e.g., WebhookClientConnectionType) are performed without
+// additional validation, as validation happens at the Options level.
+func NewWebhookConfigFromOptions(mgr manager.Manager, opts *options.Options, webhookPort int32) (*Config, error) {
+	webhookClientConnectionType := options.WebhookClientConnectionType(opts.WebhookClientConnectionType)
+	whiteListedUsers := strings.Split(opts.WhiteListedUsers, ",")
+
+	return NewWebhookConfig(mgr, opts.WebhookServiceName, webhookPort,
+		&webhookClientConnectionType, FleetWebhookCertDir, opts.EnableGuardRail,
+		opts.DenyModifyMemberClusterLabels, opts.EnableWorkload, opts.UseCertManager,
+		FleetWebhookCertName, whiteListedUsers, opts.NetworkingAgentsEnabled)
 }
 
 func (w *Config) Start(ctx context.Context) error {
@@ -194,6 +240,66 @@ func (w *Config) Start(ctx context.Context) error {
 	if err := w.createFleetWebhookConfiguration(ctx); err != nil {
 		klog.ErrorS(err, "unable to setup webhook configurations in apiserver")
 		return err
+	}
+	return nil
+}
+
+// CheckCAInjection verifies that cert-manager has injected the CA bundle into all webhook configurations.
+// This is used as a readiness check when useCertManager is enabled.
+// Returns nil when CA bundles are injected, or an error if they are missing.
+func (w *Config) CheckCAInjection(ctx context.Context) error {
+	if !w.useCertManager {
+		// Not using cert-manager, no need to check
+		return nil
+	}
+
+	cl := w.mgr.GetClient()
+
+	// Check mutating webhook configuration
+	if err := w.checkMutatingWebhookCABundle(ctx, cl, fleetMutatingWebhookCfgName); err != nil {
+		return err
+	}
+
+	// Check validating webhook configuration
+	if err := w.checkValidatingWebhookCABundle(ctx, cl, fleetValidatingWebhookCfgName); err != nil {
+		return err
+	}
+
+	// Check guard rail webhook configuration if enabled
+	if w.enableGuardRail {
+		if err := w.checkValidatingWebhookCABundle(ctx, cl, fleetGuardRailWebhookCfgName); err != nil {
+			return err
+		}
+	}
+
+	klog.V(2).InfoS("All webhook configurations have CA bundles injected by cert-manager")
+	return nil
+}
+
+// checkMutatingWebhookCABundle verifies that all webhooks in a MutatingWebhookConfiguration have CA bundles.
+func (w *Config) checkMutatingWebhookCABundle(ctx context.Context, cl client.Client, configName string) error {
+	var cfg admv1.MutatingWebhookConfiguration
+	if err := cl.Get(ctx, client.ObjectKey{Name: configName}, &cfg); err != nil {
+		return fmt.Errorf("failed to get MutatingWebhookConfiguration %s: %w", configName, err)
+	}
+	for _, webhook := range cfg.Webhooks {
+		if len(webhook.ClientConfig.CABundle) == 0 {
+			return fmt.Errorf("MutatingWebhookConfiguration %s webhook %s is missing CA bundle (cert-manager injection pending)", configName, webhook.Name)
+		}
+	}
+	return nil
+}
+
+// checkValidatingWebhookCABundle verifies that all webhooks in a ValidatingWebhookConfiguration have CA bundles.
+func (w *Config) checkValidatingWebhookCABundle(ctx context.Context, cl client.Client, configName string) error {
+	var cfg admv1.ValidatingWebhookConfiguration
+	if err := cl.Get(ctx, client.ObjectKey{Name: configName}, &cfg); err != nil {
+		return fmt.Errorf("failed to get ValidatingWebhookConfiguration %s: %w", configName, err)
+	}
+	for _, webhook := range cfg.Webhooks {
+		if len(webhook.ClientConfig.CABundle) == 0 {
+			return fmt.Errorf("ValidatingWebhookConfiguration %s webhook %s is missing CA bundle (cert-manager injection pending)", configName, webhook.Name)
+		}
 	}
 	return nil
 }
@@ -214,14 +320,29 @@ func (w *Config) createFleetWebhookConfiguration(ctx context.Context) error {
 	return nil
 }
 
+// buildWebhookAnnotations creates annotations for webhook configurations.
+// When using cert-manager, adds the inject-ca-from annotation to automatically inject the CA bundle.
+func (w *Config) buildWebhookAnnotations() map[string]string {
+	annotations := map[string]string{}
+	if w.useCertManager {
+		// Tell cert-manager's CA injector to automatically inject the CA bundle from the Certificate resource.
+		// Format: "namespace/certificate-name" - references the Certificate resource, not the Secret.
+		annotations["cert-manager.io/inject-ca-from"] = fmt.Sprintf("%s/%s", w.serviceNamespace, w.webhookCertName)
+	}
+	return annotations
+}
+
 // createMutatingWebhookConfiguration creates the MutatingWebhookConfiguration object for the webhook.
 func (w *Config) createMutatingWebhookConfiguration(ctx context.Context, webhooks []admv1.MutatingWebhook, configName string) error {
+	annotations := w.buildWebhookAnnotations()
+
 	mutatingWebhookConfig := admv1.MutatingWebhookConfiguration{
 		ObjectMeta: metav1.ObjectMeta{
 			Name: configName,
 			Labels: map[string]string{
 				"admissions.enforcer/disabled": "true",
 			},
+			Annotations: annotations,
 		},
 		Webhooks: webhooks,
 	}
@@ -269,12 +390,15 @@ func (w *Config) buildFleetMutatingWebhooks() []admv1.MutatingWebhook {
 }
 
 func (w *Config) createValidatingWebhookConfiguration(ctx context.Context, webhooks []admv1.ValidatingWebhook, configName string) error {
+	annotations := w.buildWebhookAnnotations()
+
 	validatingWebhookConfig := admv1.ValidatingWebhookConfiguration{
 		ObjectMeta: metav1.ObjectMeta{
 			Name: configName,
 			Labels: map[string]string{
 				"admissions.enforcer/disabled": "true",
 			},
+			Annotations: annotations,
 		},
 		Webhooks: webhooks,
 	}
@@ -631,9 +755,14 @@ func (w *Config) createClientConfig(validationPath string) admv1.WebhookClientCo
 	}
 	serviceEndpoint := w.serviceURL + validationPath
 	serviceRef.Path = ptr.To(validationPath)
-	config := admv1.WebhookClientConfig{
-		CABundle: w.caPEM,
+	config := admv1.WebhookClientConfig{}
+
+	// When using cert-manager, leave CABundle empty so cert-manager's CA injector can populate it.
+	// The cert-manager.io/inject-ca-from annotation triggers automatic CA injection.
+	if !w.useCertManager {
+		config.CABundle = w.caPEM
 	}
+
 	switch *w.clientConnectionType {
 	case options.Service:
 		config.Service = &serviceRef
