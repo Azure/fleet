@@ -38,7 +38,7 @@ func TestReadinessChecker(t *testing.T) {
 			name:             "nil informer",
 			resourceInformer: nil,
 			expectError:      true,
-			errorContains:    "resource informer not initialized",
+			errorContains:    "resource informer is nil",
 		},
 		{
 			name: "no resources registered",
