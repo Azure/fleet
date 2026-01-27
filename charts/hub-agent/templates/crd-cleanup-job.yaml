@@ -1,0 +1,39 @@
+{{- if and .Values.crdCleanup.enabled .Values.enableV1Beta1APIs }}
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: {{ include "hub-agent.fullname" . }}-crd-cleanup
+  namespace: {{ .Values.namespace }}
+  labels:
+    {{- include "hub-agent.labels" . | nindent 4 }}
+  annotations:
+    # Run this job before helm deletes other resources
+    "helm.sh/hook": pre-delete
+    "helm.sh/hook-weight": "-5"
+    "helm.sh/hook-delete-policy": hook-succeeded,hook-failed
+spec:
+  ttlSecondsAfterFinished: 60
+  activeDeadlineSeconds: 300
+  backoffLimit: 2
+  template:
+    metadata:
+      labels:
+        {{- include "hub-agent.selectorLabels" . | nindent 8 }}
+    spec:
+      serviceAccountName: {{ include "hub-agent.fullname" . }}-sa
+      restartPolicy: Never
+      containers:
+        - name: crd-cleanup
+          image: "{{ .Values.crdCleanup.image.repository }}:{{ .Values.crdCleanup.image.tag }}"
+          imagePullPolicy: {{ .Values.crdCleanup.image.pullPolicy }}
+          args:
+            - --mode=hub
+            - --v={{ .Values.crdCleanup.logVerbosity }}
+          resources:
+            limits:
+              cpu: 50m
+              memory: 64Mi
+            requests:
+              cpu: 10m
+              memory: 32Mi
+{{- end }}

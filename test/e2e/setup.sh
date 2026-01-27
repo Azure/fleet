@@ -25,6 +25,7 @@ export HUB_AGENT_IMAGE="${HUB_AGENT_IMAGE:-hub-agent}"
 export MEMBER_AGENT_IMAGE="${MEMBER_AGENT_IMAGE:-member-agent}"
 export REFRESH_TOKEN_IMAGE="${REFRESH_TOKEN_IMAGE:-refresh-token}"
 export CRD_INSTALLER_IMAGE="${CRD_INSTALLER_IMAGE:-crd-installer}"
+export CRD_CLEANUP_IMAGE="${CRD_CLEANUP_IMAGE:-crd-cleanup}"
 export PROPERTY_PROVIDER="${PROPERTY_PROVIDER:-azure}"
 export USE_PREDEFINED_REGIONS="${USE_PREDEFINED_REGIONS:-false}"
 export RESOURCE_SNAPSHOT_CREATION_MINIMUM_INTERVAL="${RESOURCE_SNAPSHOT_CREATION_MINIMUM_INTERVAL:-0m}"
@@ -102,18 +103,21 @@ make -C "../.." docker-build-hub-agent
 make -C "../.." docker-build-member-agent
 make -C "../.." docker-build-refresh-token
 make -C "../.." docker-build-crd-installer
+make -C "../.." docker-build-crd-cleanup
 
 # Load the Fleet agent images into the kind clusters
 
 # Load the hub agent image into the hub cluster
 kind load docker-image --name $HUB_CLUSTER $REGISTRY/$HUB_AGENT_IMAGE:$TAG
 kind load docker-image --name $HUB_CLUSTER $REGISTRY/$CRD_INSTALLER_IMAGE:$TAG
+kind load docker-image --name $HUB_CLUSTER $REGISTRY/$CRD_CLEANUP_IMAGE:$TAG
 
 # Load the member agent image and the refresh token image into the member clusters
 for i in "${MEMBER_CLUSTERS[@]}"
 do
 	kind load docker-image --name "$i" $REGISTRY/$MEMBER_AGENT_IMAGE:$TAG
     kind load docker-image --name "$i" $REGISTRY/$CRD_INSTALLER_IMAGE:$TAG
+    kind load docker-image --name "$i" $REGISTRY/$CRD_CLEANUP_IMAGE:$TAG
     kind load docker-image --name "$i" $REGISTRY/$REFRESH_TOKEN_IMAGE:$TAG
 done
 
@@ -144,9 +148,13 @@ helm install hub-agent ../../charts/hub-agent/ \
     --set crdInstaller.image.repository=$REGISTRY/$CRD_INSTALLER_IMAGE \
     --set crdInstaller.image.tag=$TAG \
     --set crdInstaller.image.pullPolicy=Never \
+    --set crdCleanup.enabled=true \
+    --set crdCleanup.image.repository=$REGISTRY/$CRD_CLEANUP_IMAGE \
+    --set crdCleanup.image.tag=$TAG \
+    --set crdCleanup.image.pullPolicy=Never \
     --set namespace=fleet-system \
     --set logVerbosity=5 \
-    --set replicaCount=3 \
+    --set replicaCount=1 \
     --set useCertManager=true \
     --set webhookCertSecretName=fleet-webhook-server-cert \
     --set enableWebhook=true \
@@ -218,6 +226,10 @@ do
             --set crdInstaller.image.repository=$REGISTRY/$CRD_INSTALLER_IMAGE \
             --set crdInstaller.image.tag=$TAG \
             --set crdInstaller.image.pullPolicy=Never \
+            --set crdCleanup.enabled=true \
+            --set crdCleanup.image.repository=$REGISTRY/$CRD_CLEANUP_IMAGE \
+            --set crdCleanup.image.tag=$TAG \
+            --set crdCleanup.image.pullPolicy=Never \
             --set config.memberClusterName="kind-${MEMBER_CLUSTERS[$i]}" \
             --set logVerbosity=5 \
             --set namespace=fleet-system \
@@ -238,6 +250,10 @@ do
             --set crdInstaller.image.repository=$REGISTRY/$CRD_INSTALLER_IMAGE \
             --set crdInstaller.image.tag=$TAG \
             --set crdInstaller.image.pullPolicy=Never \
+            --set crdCleanup.enabled=true \
+            --set crdCleanup.image.repository=$REGISTRY/$CRD_CLEANUP_IMAGE \
+            --set crdCleanup.image.tag=$TAG \
+            --set crdCleanup.image.pullPolicy=Never \
             --set config.memberClusterName="kind-${MEMBER_CLUSTERS[$i]}" \
             --set logVerbosity=5 \
             --set namespace=fleet-system \

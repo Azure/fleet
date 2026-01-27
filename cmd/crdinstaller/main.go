@@ -87,9 +87,9 @@ func installCRDs(ctx context.Context, client client.Client, crdPath, mode string
 
 	klog.Infof("Found %d CRDs to install for mode %s", len(crdsToInstall), mode)
 
-	// Install each CRD.
+	// Install each CRD with the mode label.
 	for i := range crdsToInstall {
-		if err := utils.InstallCRD(ctx, client, &crdsToInstall[i]); err != nil {
+		if err := utils.InstallCRD(ctx, client, &crdsToInstall[i], mode); err != nil {
 			return err
 		}
 	}

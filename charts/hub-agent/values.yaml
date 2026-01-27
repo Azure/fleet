@@ -19,6 +19,16 @@ crdInstaller:
     tag: main
   logVerbosity: 2
 
+# CRD cleanup job configuration.
+# This job cleans up CRDs when the helm chart is uninstalled.
+crdCleanup:
+  enabled: false
+  image:
+    repository: ghcr.io/azure/fleet/crd-cleanup
+    pullPolicy: Always
+    tag: main
+  logVerbosity: 2
+
 logVerbosity: 5
 
 enableWebhook: true
