@@ -7,11 +7,13 @@ HUB_AGENT_IMAGE_VERSION ?= $(TAG)
 MEMBER_AGENT_IMAGE_VERSION ?= $(TAG)
 REFRESH_TOKEN_IMAGE_VERSION ?= $(TAG)
 CRD_INSTALLER_IMAGE_VERSION ?= $(TAG)
+CRD_CLEANUP_IMAGE_VERSION ?= $(TAG)
 
 HUB_AGENT_IMAGE_NAME ?= hub-agent
 MEMBER_AGENT_IMAGE_NAME ?= member-agent
 REFRESH_TOKEN_IMAGE_NAME ?= refresh-token
 CRD_INSTALLER_IMAGE_NAME ?= crd-installer
+CRD_CLEANUP_IMAGE_NAME ?= crd-cleanup
 ARC_MEMBER_AGENT_HELMCHART_NAME = arc-member-cluster-agents-helm-chart
 
 TARGET_OS ?= linux
@@ -256,6 +258,7 @@ build: generate fmt vet ## Build agent binaries
 	go build -o bin/hubagent cmd/hubagent/main.go
 	go build -o bin/memberagent cmd/memberagent/main.go
 	go build -o bin/crdinstaller cmd/crdinstaller/main.go
+	go build -o bin/crdcleanup cmd/crdcleanup/main.go
 
 .PHONY: run-hubagent
 run-hubagent: manifests generate fmt vet ## Run hub-agent from your host
@@ -280,7 +283,7 @@ BUILDKIT_VERSION ?= v0.18.1
 
 .PHONY: push
 push: ## Build and push all Docker images
-	$(MAKE) OUTPUT_TYPE="type=registry" docker-build-hub-agent docker-build-member-agent docker-build-refresh-token docker-build-crd-installer
+	$(MAKE) OUTPUT_TYPE="type=registry" docker-build-hub-agent docker-build-member-agent docker-build-refresh-token docker-build-crd-installer docker-build-crd-cleanup
 
 # By default, docker buildx create will pull image moby/buildkit:buildx-stable-1 and hit the too many requests error
 #
@@ -356,6 +359,18 @@ docker-build-crd-installer: docker-buildx-builder
 		--platform=$(TARGET_OS)/$(TARGET_ARCH) \
 		--pull \
 		--tag $(REGISTRY)/$(CRD_INSTALLER_IMAGE_NAME):$(CRD_INSTALLER_IMAGE_VERSION) \
+		--progress=$(BUILDKIT_PROGRESS_TYPE) \
+		--build-arg GOARCH=$(TARGET_ARCH) \
+		--build-arg GOOS=${TARGET_OS} .
+
+.PHONY: docker-build-crd-cleanup
+docker-build-crd-cleanup: docker-buildx-builder ## Build crd-cleanup image
+	docker buildx build \
+		--file docker/crd-cleanup.Dockerfile \
+		--output=$(OUTPUT_TYPE) \
+		--platform=$(TARGET_OS)/$(TARGET_ARCH) \
+		--pull \
+		--tag $(REGISTRY)/$(CRD_CLEANUP_IMAGE_NAME):$(CRD_CLEANUP_IMAGE_VERSION) \
 		--progress=$(BUILDKIT_PROGRESS_TYPE) \
 		--build-arg GOARCH=$(TARGET_ARCH) \
 		--build-arg GOOS=${TARGET_OS} .

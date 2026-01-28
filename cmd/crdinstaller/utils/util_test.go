@@ -157,11 +157,19 @@ func TestInstallCRD(t *testing.T) {
 	tests := []struct {
 		name      string
 		crd       *apiextensionsv1.CustomResourceDefinition
+		mode      string
 		wantError bool
 	}{
 		{
-			name:      "successful CRD installation",
+			name:      "successful CRD installation in hub mode",
 			crd:       testCRD,
+			mode:      "hub",
+			wantError: false,
+		},
+		{
+			name:      "successful CRD installation in member mode",
+			crd:       testCRD,
+			mode:      "member",
 			wantError: false,
 		},
 	}
@@ -169,7 +177,7 @@ func TestInstallCRD(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			fakeClient := fake.NewClientBuilder().WithScheme(scheme).Build()
-			err := InstallCRD(context.Background(), fakeClient, tt.crd)
+			err := InstallCRD(context.Background(), fakeClient, tt.crd, tt.mode)
 
 			if tt.wantError {
 				if err == nil {
@@ -192,6 +200,10 @@ func TestInstallCRD(t *testing.T) {
 
 			if installedCRD.Labels[CRDInstallerLabelKey] != "true" {
 				t.Errorf("Expected CRD label %s to be 'true', got %q", CRDInstallerLabelKey, installedCRD.Labels[CRDInstallerLabelKey])
+			}
+
+			if installedCRD.Labels[CRDInstallerModeLabel] != tt.mode {
+				t.Errorf("Expected CRD label %s to be %q, got %q", CRDInstallerModeLabel, tt.mode, installedCRD.Labels[CRDInstallerModeLabel])
 			}
 
 			if installedCRD.Labels[AzureManagedLabelKey] != FleetLabelValue {

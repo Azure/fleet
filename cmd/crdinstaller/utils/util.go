@@ -26,6 +26,8 @@ import (
 const (
 	// CRDInstallerLabelKey is the label key used to indicate that a CRD is managed by the installer.
 	CRDInstallerLabelKey = "crd-installer.azurefleet.io/managed"
+	// CRDInstallerModeLabel is the label key used to indicate the mode (hub/member) that installed the CRD.
+	CRDInstallerModeLabel = "crd-installer.azurefleet.io/mode"
 	// AzureManagedLabelKey is the label key used to indicate that a CRD is managed by an azure resource.
 	AzureManagedLabelKey = "kubernetes.azure.com/managedby"
 	// FleetLabelValue is the value for the AzureManagedLabelKey indicating management by Fleet.
@@ -42,8 +44,9 @@ var (
 )
 
 // InstallCRD creates/updates a Custom Resource Definition (CRD) from the provided CRD object.
-func InstallCRD(ctx context.Context, client client.Client, crd *apiextensionsv1.CustomResourceDefinition) error {
-	klog.V(2).Infof("Installing CRD: %s", crd.Name)
+// The mode parameter ("hub" or "member") is used to label the CRD for cleanup identification.
+func InstallCRD(ctx context.Context, client client.Client, crd *apiextensionsv1.CustomResourceDefinition, mode string) error {
+	klog.V(2).Infof("Installing CRD: %s (mode: %s)", crd.Name, mode)
 
 	existingCRD := apiextensionsv1.CustomResourceDefinition{
 		ObjectMeta: metav1.ObjectMeta{
@@ -55,12 +58,14 @@ func InstallCRD(ctx context.Context, client client.Client, crd *apiextensionsv1.
 		// Copy spec from our decoded CRD to the object we're creating/updating.
 		existingCRD.Spec = crd.Spec
 
-		// Add an additional ownership label to indicate this CRD is managed by the installer.
+		// Add labels to indicate this CRD is managed by the installer.
 		if existingCRD.Labels == nil {
 			existingCRD.Labels = make(map[string]string)
 		}
 		// Ensure the label for management by the installer is set.
 		existingCRD.Labels[CRDInstallerLabelKey] = "true"
+		// Set the mode label to identify which agent (hub/member) installed this CRD.
+		existingCRD.Labels[CRDInstallerModeLabel] = mode
 		// Also set the Azure managed label to indicate this is managed by Fleet,
 		// needed for clean up of CRD by kube-addon-manager.
 		existingCRD.Labels[AzureManagedLabelKey] = FleetLabelValue
