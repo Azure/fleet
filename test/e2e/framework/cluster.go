@@ -18,6 +18,7 @@ package framework
 
 import (
 	"os"
+	"path/filepath"
 
 	"github.com/onsi/gomega"
 	"k8s.io/apimachinery/pkg/api/meta"
@@ -33,8 +34,18 @@ import (
 )
 
 var (
-	kubeconfigPath = os.Getenv("KUBECONFIG")
+	kubeconfigPath string
 )
+
+func init() {
+	kubeconfigPath = os.Getenv("KUBECONFIG")
+	if kubeconfigPath == "" {
+		// Default to $HOME/.kube/config like kubectl does.
+		if home, err := os.UserHomeDir(); err == nil {
+			kubeconfigPath = filepath.Join(home, ".kube", "config")
+		}
+	}
+}
 
 // Cluster object defines the required clients based on the kubeconfig of the test cluster.
 type Cluster struct {
