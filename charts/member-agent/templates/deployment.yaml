@@ -36,6 +36,30 @@ spec:
             - --enable-pprof={{ .Values.enablePprof }}
             - --pprof-port={{ .Values.pprofPort }}
             - --hub-pprof-port={{ .Values.hubPprofPort }}
+            {{- if .Values.workApplierRequeueRateLimiterAttemptsWithFixedDelay }}
+            - --work-applier-requeue-rate-limiter-attempts-with-fixed-delay={{ .Values.workApplierRequeueRateLimiterAttemptsWithFixedDelay }}
+            {{- end }}
+            {{- if .Values.workApplierRequeueRateLimiterFixedDelaySeconds }}
+            - --work-applier-requeue-rate-limiter-fixed-delay-seconds={{ .Values.workApplierRequeueRateLimiterFixedDelaySeconds }}
+            {{- end }}
+            {{- if .Values.workApplierRequeueRateLimiterExponentialBaseForSlowBackoff }}
+            - --work-applier-requeue-rate-limiter-exponential-base-for-slow-backoff={{ .Values.workApplierRequeueRateLimiterExponentialBaseForSlowBackoff }}
+            {{- end }}
+            {{- if .Values.workApplierRequeueRateLimiterInitialSlowBackoffDelaySeconds }}
+            - --work-applier-requeue-rate-limiter-initial-slow-backoff-delay-seconds={{ .Values.workApplierRequeueRateLimiterInitialSlowBackoffDelaySeconds }}
+            {{- end }}
+            {{- if .Values.workApplierRequeueRateLimiterMaxSlowBackoffDelaySeconds }}
+            - --work-applier-requeue-rate-limiter-max-slow-backoff-delay-seconds={{ .Values.workApplierRequeueRateLimiterMaxSlowBackoffDelaySeconds }}
+            {{- end }}
+            {{- if .Values.workApplierRequeueRateLimiterExponentialBaseForFastBackoff }}
+            - --work-applier-requeue-rate-limiter-exponential-base-for-fast-backoff={{ .Values.workApplierRequeueRateLimiterExponentialBaseForFastBackoff }}
+            {{- end }}
+            {{- if .Values.workApplierRequeueRateLimiterMaxFastBackoffDelaySeconds }}
+            - --work-applier-requeue-rate-limiter-max-fast-backoff-delay-seconds={{ .Values.workApplierRequeueRateLimiterMaxFastBackoffDelaySeconds }}
+            {{- end }}
+            {{- if .Values.workApplierRequeueRateLimiterSkipToFastBackoffForAvailableOrDiffReportedWorkObjs }}
+            - --work-applier-requeue-rate-limiter-skip-to-fast-backoff-for-available-or-diff-reported-work-objs={{ .Values.workApplierRequeueRateLimiterSkipToFastBackoffForAvailableOrDiffReportedWorkObjs }}
+            {{- end }}
             {{- if .Values.propertyProvider }}
             - --property-provider={{ .Values.propertyProvider }}
             {{- end }}

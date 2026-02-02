@@ -194,6 +194,8 @@ kind export kubeconfig --name $HUB_CLUSTER
 HUB_SERVER_URL="https://$(docker inspect $HUB_CLUSTER-control-plane --format='{{range .NetworkSettings.Networks}}{{.IPAddress}}{{end}}'):6443"
 
 # Install the member agents and related components
+# Note that the work applier in the member agent are set to requeue at max. every 5 seconds instead of using the default 
+# exponential backoff behavior; this is to accommodate some of the timeout settings in the E2E test specs.
 for (( i=0; i<${MEMBER_CLUSTER_COUNT}; i++ ));
 do
     kind export kubeconfig --name "${MEMBER_CLUSTERS[$i]}"
@@ -210,6 +212,8 @@ do
             --set logVerbosity=5 \
             --set namespace=fleet-system \
             --set enableV1Beta1APIs=true \
+            --set workApplierRequeueRateLimiterMaxSlowBackoffDelaySeconds=5 \
+            --set workApplierRequeueRateLimiterMaxFastBackoffDelaySeconds=5 \
             --set propertyProvider=$PROPERTY_PROVIDER \
             --set region=${REGIONS[$i]} \
             $( [ "$PROPERTY_PROVIDER" = "azure" ] && echo "-f azure_valid_config.yaml" )
@@ -226,6 +230,8 @@ do
             --set logVerbosity=5 \
             --set namespace=fleet-system \
             --set enableV1Beta1APIs=true \
+            --set workApplierRequeueRateLimiterMaxSlowBackoffDelaySeconds=5 \
+            --set workApplierRequeueRateLimiterMaxFastBackoffDelaySeconds=5 \
             --set propertyProvider=$PROPERTY_PROVIDER \
             $( [ "$PROPERTY_PROVIDER" = "azure" ] && echo "-f azure_valid_config.yaml" )
     fi
