@@ -168,7 +168,7 @@ func (d *ChangeDetector) dynamicResourceFilter(obj interface{}) bool {
 	}
 
 	if unstructuredObj, ok := obj.(*unstructured.Unstructured); ok {
-		shouldPropagate, err := utils.ShouldPropagateObj(d.InformerManager, unstructuredObj.DeepCopy(), d.EnableWorkload)
+		shouldPropagate, err := controller.ShouldPropagateObj(d.InformerManager, unstructuredObj.DeepCopy(), d.EnableWorkload)
 		if err != nil || !shouldPropagate {
 			klog.V(5).InfoS("Skip watching resource in namespace", "namespace", cwKey.Namespace,
 				"group", cwKey.Group, "version", cwKey.Version, "kind", cwKey.Kind, "object", cwKey.Name)
