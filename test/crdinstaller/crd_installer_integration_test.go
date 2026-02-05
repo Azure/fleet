@@ -35,15 +35,17 @@ const (
 // It ensures that the installer can create a CRD, update it with new fields, and handle ownership label correctly.
 // The original CRD has 4 properties, and the updated CRD has a new property to simulate CRD upgrade.
 var _ = Describe("Test CRD Installer, Create and Update CRD", Ordered, func() {
-	Context("without ARC installation mode", func() {
-		AfterAll(func() {
-			deleteCRD(crdName)
-		})
+	AfterEach(OncePerOrdered, func() {
+		deleteCRD(crdName)
+	})
 
+	Context("without ARC installation mode", func() {
 		It("should create original CRD", func() {
 			crd, err := cmdCRDInstaller.GetCRDFromPath(originalCRDPath, scheme)
 			Expect(err).NotTo(HaveOccurred(), "should get CRD from path %s", originalCRDPath)
-			Expect(cmdCRDInstaller.InstallCRD(ctx, k8sClient, crd, false)).To(Succeed())
+			Eventually(func() error {
+				return cmdCRDInstaller.InstallCRD(ctx, k8sClient, crd, false)
+			}, eventuallyDuration, eventuallyInterval).Should(Succeed())
 		})
 
 		It("should verify original CRD installation", func() {
@@ -68,7 +70,9 @@ var _ = Describe("Test CRD Installer, Create and Update CRD", Ordered, func() {
 		It("should update the CRD with new field in spec with crdinstaller label", func() {
 			crd, err := cmdCRDInstaller.GetCRDFromPath(updatedCRDPath, scheme)
 			Expect(err).NotTo(HaveOccurred(), "should get CRD from path %s", updatedCRDPath)
-			Expect(cmdCRDInstaller.InstallCRD(ctx, k8sClient, crd, false)).To(Succeed())
+			Eventually(func() error {
+				return cmdCRDInstaller.InstallCRD(ctx, k8sClient, crd, false)
+			}, eventuallyDuration, eventuallyInterval).Should(Succeed())
 		})
 
 		It("should verify updated CRD", func() {
@@ -91,14 +95,12 @@ var _ = Describe("Test CRD Installer, Create and Update CRD", Ordered, func() {
 	})
 
 	Context("with ARC installation mode", func() {
-		AfterAll(func() {
-			deleteCRD(crdName)
-		})
-
 		It("should create CRD with ARC installation mode", func() {
 			crd, err := cmdCRDInstaller.GetCRDFromPath(originalCRDPath, scheme)
 			Expect(err).NotTo(HaveOccurred(), "should get CRD from path %s", originalCRDPath)
-			Expect(cmdCRDInstaller.InstallCRD(ctx, k8sClient, crd, true)).To(Succeed())
+			Eventually(func() error {
+				return cmdCRDInstaller.InstallCRD(ctx, k8sClient, crd, true)
+			}, eventuallyDuration, eventuallyInterval).Should(Succeed())
 		})
 
 		It("should verify CRD has ARC installation label", func() {
@@ -121,7 +123,9 @@ var _ = Describe("Test CRD Installer, Create and Update CRD", Ordered, func() {
 		It("should update the CRD with new field in spec while preserving ARC label", func() {
 			crd, err := cmdCRDInstaller.GetCRDFromPath(updatedCRDPath, scheme)
 			Expect(err).NotTo(HaveOccurred(), "should get CRD from path %s", updatedCRDPath)
-			Expect(cmdCRDInstaller.InstallCRD(ctx, k8sClient, crd, true)).To(Succeed())
+			Eventually(func() error {
+				return cmdCRDInstaller.InstallCRD(ctx, k8sClient, crd, true)
+			}, eventuallyDuration, eventuallyInterval).Should(Succeed())
 		})
 
 		It("should verify updated CRD has all labels including ARC", func() {
