@@ -24,6 +24,8 @@ import (
 )
 
 const (
+	// ArcInstallationKey is the key used to indicate if the installation is for ARC AKS cluster.
+	ArcInstallationKey = "crd-installer.azurefleet.io/arcinstallation"
 	// CRDInstallerLabelKey is the label key used to indicate that a CRD is managed by the installer.
 	CRDInstallerLabelKey = "crd-installer.azurefleet.io/managed"
 	// AzureManagedLabelKey is the label key used to indicate that a CRD is managed by an azure resource.
@@ -42,7 +44,7 @@ var (
 )
 
 // InstallCRD creates/updates a Custom Resource Definition (CRD) from the provided CRD object.
-func InstallCRD(ctx context.Context, client client.Client, crd *apiextensionsv1.CustomResourceDefinition) error {
+func InstallCRD(ctx context.Context, client client.Client, crd *apiextensionsv1.CustomResourceDefinition, isArcInstallation bool) error {
 	klog.V(2).Infof("Installing CRD: %s", crd.Name)
 
 	existingCRD := apiextensionsv1.CustomResourceDefinition{
@@ -58,6 +60,11 @@ func InstallCRD(ctx context.Context, client client.Client, crd *apiextensionsv1.
 		// Add an additional ownership label to indicate this CRD is managed by the installer.
 		if existingCRD.Labels == nil {
 			existingCRD.Labels = make(map[string]string)
+		}
+		if isArcInstallation {
+			// For ARC AKS installation, we want to add an additional label to indicate this is an ARC managed cluster,
+			// needed for clean up of CRD by kube-addon-manager.
+			existingCRD.Labels[ArcInstallationKey] = "true"
 		}
 		// Ensure the label for management by the installer is set.
 		existingCRD.Labels[CRDInstallerLabelKey] = "true"
