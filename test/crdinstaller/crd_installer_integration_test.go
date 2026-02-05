@@ -13,9 +13,11 @@ import (
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
 	apiextensionsv1 "k8s.io/apiextensions-apiserver/pkg/apis/apiextensions/v1"
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/types"
 
 	cmdCRDInstaller "go.goms.io/fleet/cmd/crdinstaller/utils"
+	"go.goms.io/fleet/pkg/utils"
 )
 
 const (
@@ -33,53 +35,111 @@ const (
 // It ensures that the installer can create a CRD, update it with new fields, and handle ownership label correctly.
 // The original CRD has 4 properties, and the updated CRD has a new property to simulate CRD upgrade.
 var _ = Describe("Test CRD Installer, Create and Update CRD", Ordered, func() {
-	It("should create original CRD", func() {
-		crd, err := cmdCRDInstaller.GetCRDFromPath(originalCRDPath, scheme)
-		Expect(err).NotTo(HaveOccurred(), "should get CRD from path %s", originalCRDPath)
-		Expect(cmdCRDInstaller.InstallCRD(ctx, k8sClient, crd, false)).To(Succeed())
-	})
-
-	It("should verify original CRD installation", func() {
-		ensureCRDExistsWithLabels(map[string]string{
-			cmdCRDInstaller.CRDInstallerLabelKey: "true",
-			cmdCRDInstaller.AzureManagedLabelKey: cmdCRDInstaller.FleetLabelValue,
+	Context("without ARC installation mode", func() {
+		AfterAll(func() {
+			deleteCRD(crdName)
 		})
-		crd := &apiextensionsv1.CustomResourceDefinition{}
-		Expect(k8sClient.Get(ctx, types.NamespacedName{Name: crdName}, crd)).NotTo(HaveOccurred(), "CRD %s should be installed", crdName)
-		spec := fetchSpecJSONSchemaProperties(crd)
-		// Original CRD should have 4 properties defined in spec.
-		Expect(len(spec.Properties)).Should(Equal(4), "CRD %s should have 4 properties defined in spec", crdName)
-		Expect(spec.Properties["bar"].Type).Should(Equal("string"), "CRD %s should have 'bar' property of type string defined in properties", crdName)
-		_, ok := spec.Properties["newField"]
-		Expect(ok).To(BeFalse(), "CRD %s should not have 'newField' property defined in properties", crdName)
-	})
 
-	It("update the CRD to add a random label", func() {
-		updateCRDLabels(crdName, map[string]string{randomLabelKey: "true"})
-	})
-
-	It("should update the CRD with new field in spec with crdinstaller label", func() {
-		crd, err := cmdCRDInstaller.GetCRDFromPath(updatedCRDPath, scheme)
-		Expect(err).NotTo(HaveOccurred(), "should get CRD from path %s", updatedCRDPath)
-		Expect(cmdCRDInstaller.InstallCRD(ctx, k8sClient, crd, false)).To(Succeed())
-	})
-
-	It("should verify updated CRD", func() {
-		// ensure we don't overwrite the random label.
-		ensureCRDExistsWithLabels(map[string]string{
-			randomLabelKey:                       "true",
-			cmdCRDInstaller.CRDInstallerLabelKey: "true",
-			cmdCRDInstaller.AzureManagedLabelKey: cmdCRDInstaller.FleetLabelValue,
+		It("should create original CRD", func() {
+			crd, err := cmdCRDInstaller.GetCRDFromPath(originalCRDPath, scheme)
+			Expect(err).NotTo(HaveOccurred(), "should get CRD from path %s", originalCRDPath)
+			Expect(cmdCRDInstaller.InstallCRD(ctx, k8sClient, crd, false)).To(Succeed())
 		})
-		crd := &apiextensionsv1.CustomResourceDefinition{}
-		Expect(k8sClient.Get(ctx, types.NamespacedName{Name: crdName}, crd)).NotTo(HaveOccurred(), "CRD %s should be installed", crdName)
-		spec := fetchSpecJSONSchemaProperties(crd)
-		// Updated CRD should have 5 properties defined in spec.
-		Expect(len(spec.Properties)).Should(Equal(5), "CRD %s should have 5 properties defined in spec", crdName)
-		Expect(spec.Properties["bar"].Type).Should(Equal("string"), "CRD %s should have 'bar' property of type string defined in properties", crdName)
-		_, ok := spec.Properties["newField"]
-		Expect(ok).To(BeTrue(), "CRD %s should have 'newField' property defined in properties", crdName)
-		Expect(spec.Properties["newField"].Type).Should(Equal("string"), "CRD %s should have 'newField' property of type string defined in properties", crdName)
+
+		It("should verify original CRD installation", func() {
+			ensureCRDExistsWithLabels(map[string]string{
+				cmdCRDInstaller.CRDInstallerLabelKey: "true",
+				cmdCRDInstaller.AzureManagedLabelKey: cmdCRDInstaller.FleetLabelValue,
+			})
+			crd := &apiextensionsv1.CustomResourceDefinition{}
+			Expect(k8sClient.Get(ctx, types.NamespacedName{Name: crdName}, crd)).NotTo(HaveOccurred(), "CRD %s should be installed", crdName)
+			spec := fetchSpecJSONSchemaProperties(crd)
+			// Original CRD should have 4 properties defined in spec.
+			Expect(len(spec.Properties)).Should(Equal(4), "CRD %s should have 4 properties defined in spec", crdName)
+			Expect(spec.Properties["bar"].Type).Should(Equal("string"), "CRD %s should have 'bar' property of type string defined in properties", crdName)
+			_, ok := spec.Properties["newField"]
+			Expect(ok).To(BeFalse(), "CRD %s should not have 'newField' property defined in properties", crdName)
+		})
+
+		It("update the CRD to add a random label", func() {
+			updateCRDLabels(crdName, map[string]string{randomLabelKey: "true"})
+		})
+
+		It("should update the CRD with new field in spec with crdinstaller label", func() {
+			crd, err := cmdCRDInstaller.GetCRDFromPath(updatedCRDPath, scheme)
+			Expect(err).NotTo(HaveOccurred(), "should get CRD from path %s", updatedCRDPath)
+			Expect(cmdCRDInstaller.InstallCRD(ctx, k8sClient, crd, false)).To(Succeed())
+		})
+
+		It("should verify updated CRD", func() {
+			// ensure we don't overwrite the random label.
+			ensureCRDExistsWithLabels(map[string]string{
+				randomLabelKey:                       "true",
+				cmdCRDInstaller.CRDInstallerLabelKey: "true",
+				cmdCRDInstaller.AzureManagedLabelKey: cmdCRDInstaller.FleetLabelValue,
+			})
+			crd := &apiextensionsv1.CustomResourceDefinition{}
+			Expect(k8sClient.Get(ctx, types.NamespacedName{Name: crdName}, crd)).NotTo(HaveOccurred(), "CRD %s should be installed", crdName)
+			spec := fetchSpecJSONSchemaProperties(crd)
+			// Updated CRD should have 5 properties defined in spec.
+			Expect(len(spec.Properties)).Should(Equal(5), "CRD %s should have 5 properties defined in spec", crdName)
+			Expect(spec.Properties["bar"].Type).Should(Equal("string"), "CRD %s should have 'bar' property of type string defined in properties", crdName)
+			_, ok := spec.Properties["newField"]
+			Expect(ok).To(BeTrue(), "CRD %s should have 'newField' property defined in properties", crdName)
+			Expect(spec.Properties["newField"].Type).Should(Equal("string"), "CRD %s should have 'newField' property of type string defined in properties", crdName)
+		})
+	})
+
+	Context("with ARC installation mode", func() {
+		AfterAll(func() {
+			deleteCRD(crdName)
+		})
+
+		It("should create CRD with ARC installation mode", func() {
+			crd, err := cmdCRDInstaller.GetCRDFromPath(originalCRDPath, scheme)
+			Expect(err).NotTo(HaveOccurred(), "should get CRD from path %s", originalCRDPath)
+			Expect(cmdCRDInstaller.InstallCRD(ctx, k8sClient, crd, true)).To(Succeed())
+		})
+
+		It("should verify CRD has ARC installation label", func() {
+			ensureCRDExistsWithLabels(map[string]string{
+				cmdCRDInstaller.CRDInstallerLabelKey: "true",
+				cmdCRDInstaller.AzureManagedLabelKey: cmdCRDInstaller.FleetLabelValue,
+				cmdCRDInstaller.ArcInstallationKey:   "true",
+			})
+			crd := &apiextensionsv1.CustomResourceDefinition{}
+			Expect(k8sClient.Get(ctx, types.NamespacedName{Name: crdName}, crd)).NotTo(HaveOccurred(), "CRD %s should be installed", crdName)
+			spec := fetchSpecJSONSchemaProperties(crd)
+			// Original CRD should have 4 properties defined in spec.
+			Expect(len(spec.Properties)).Should(Equal(4), "CRD %s should have 4 properties defined in spec", crdName)
+		})
+
+		It("update the CRD to add a random label", func() {
+			updateCRDLabels(crdName, map[string]string{randomLabelKey: "true"})
+		})
+
+		It("should update the CRD with new field in spec while preserving ARC label", func() {
+			crd, err := cmdCRDInstaller.GetCRDFromPath(updatedCRDPath, scheme)
+			Expect(err).NotTo(HaveOccurred(), "should get CRD from path %s", updatedCRDPath)
+			Expect(cmdCRDInstaller.InstallCRD(ctx, k8sClient, crd, true)).To(Succeed())
+		})
+
+		It("should verify updated CRD has all labels including ARC", func() {
+			// ensure we don't overwrite the random label and ARC label is preserved.
+			ensureCRDExistsWithLabels(map[string]string{
+				randomLabelKey:                       "true",
+				cmdCRDInstaller.CRDInstallerLabelKey: "true",
+				cmdCRDInstaller.AzureManagedLabelKey: cmdCRDInstaller.FleetLabelValue,
+				cmdCRDInstaller.ArcInstallationKey:   "true",
+			})
+			crd := &apiextensionsv1.CustomResourceDefinition{}
+			Expect(k8sClient.Get(ctx, types.NamespacedName{Name: crdName}, crd)).NotTo(HaveOccurred(), "CRD %s should be installed", crdName)
+			spec := fetchSpecJSONSchemaProperties(crd)
+			// Updated CRD should have 5 properties defined in spec.
+			Expect(len(spec.Properties)).Should(Equal(5), "CRD %s should have 5 properties defined in spec", crdName)
+			_, ok := spec.Properties["newField"]
+			Expect(ok).To(BeTrue(), "CRD %s should have 'newField' property defined in properties", crdName)
+		})
 	})
 })
 
@@ -115,5 +175,17 @@ func ensureCRDExistsWithLabels(wantLabels map[string]string) {
 			return fmt.Errorf("crd labels mismatch (-want, +got) :\n%s", diff)
 		}
 		return nil
-	}, eventuallyDuration, eventuallyInterval).ShouldNot(HaveOccurred(), "CRD %s should exist with labels %v", crdName)
+	}, eventuallyDuration, eventuallyInterval).ShouldNot(HaveOccurred(), "CRD %s should exist with labels %v", crdName, wantLabels)
+}
+
+func deleteCRD(crdName string) {
+	crd := &apiextensionsv1.CustomResourceDefinition{
+		ObjectMeta: metav1.ObjectMeta{
+			Name: crdName,
+		},
+	}
+	Expect(k8sClient.Delete(ctx, crd)).Should(SatisfyAny(Succeed(), utils.NotFoundMatcher{}))
+	Eventually(func() error {
+		return k8sClient.Get(ctx, types.NamespacedName{Name: crdName}, crd)
+	}, eventuallyDuration, eventuallyInterval).Should(utils.NotFoundMatcher{}, "CRD %s should be deleted", crdName)
 }
