@@ -34,6 +34,10 @@ const (
 	FleetLabelValue = "fleet"
 )
 
+const (
+	trueLabelValue = "true"
+)
+
 var (
 	multiclusterCRD = map[string]bool{
 		"multicluster.x-k8s.io_clusterprofiles.yaml": true,
@@ -64,10 +68,10 @@ func InstallCRD(ctx context.Context, client client.Client, crd *apiextensionsv1.
 		if isArcInstallation {
 			// For ARC AKS installation, we want to add an additional label to indicate this is an ARC managed cluster,
 			// needed for clean up of CRD by kube-addon-manager.
-			existingCRD.Labels[ArcInstallationKey] = "true"
+			existingCRD.Labels[ArcInstallationKey] = trueLabelValue
 		}
 		// Ensure the label for management by the installer is set.
-		existingCRD.Labels[CRDInstallerLabelKey] = "true"
+		existingCRD.Labels[CRDInstallerLabelKey] = trueLabelValue
 		// Also set the Azure managed label to indicate this is managed by Fleet,
 		// needed for clean up of CRD by kube-addon-manager.
 		existingCRD.Labels[AzureManagedLabelKey] = FleetLabelValue
