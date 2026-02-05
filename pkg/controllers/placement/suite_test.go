@@ -111,17 +111,20 @@ var _ = BeforeSuite(func() {
 	})
 	Expect(err).Should(Succeed(), "failed to create manager")
 
-	reconciler := &Reconciler{
-		Client:          mgr.GetClient(),
-		Scheme:          mgr.GetScheme(),
-		UncachedReader:  mgr.GetAPIReader(),
-		Recorder:        mgr.GetEventRecorderFor(controllerName),
+	resourceSelectorResolver := controller.ResourceSelectorResolver{
 		RestMapper:      mgr.GetRESTMapper(),
 		InformerManager: informer.NewInformerManager(dynamicClient, 5*time.Minute, ctx.Done()),
 		ResourceConfig:  utils.NewResourceConfig(false),
 		SkippedNamespaces: map[string]bool{
 			"default": true,
 		},
+	}
+	reconciler := &Reconciler{
+		Client:                   mgr.GetClient(),
+		Scheme:                   mgr.GetScheme(),
+		UncachedReader:           mgr.GetAPIReader(),
+		Recorder:                 mgr.GetEventRecorderFor(controllerName),
+		ResourceSelectorResolver: resourceSelectorResolver,
 	}
 	opts := options.RateLimitOptions{
 		RateLimiterBaseDelay:  5 * time.Millisecond,
