@@ -27,7 +27,6 @@ import (
 	appv1 "k8s.io/api/apps/v1"
 	batchv1 "k8s.io/api/batch/v1"
 	corev1 "k8s.io/api/core/v1"
-	discoveryv1 "k8s.io/api/discovery/v1"
 	networkingv1 "k8s.io/api/networking/v1"
 	policyv1 "k8s.io/api/policy/v1"
 	rbacv1 "k8s.io/api/rbac/v1"
@@ -35,10 +34,7 @@ import (
 	storagev1 "k8s.io/api/storage/v1"
 	apiextensionsv1 "k8s.io/apiextensions-apiserver/pkg/apis/apiextensions/v1"
 	"k8s.io/apimachinery/pkg/api/equality"
-	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
-	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
-	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/runtime/schema"
 	"k8s.io/client-go/discovery"
 	"k8s.io/client-go/util/retry"
@@ -50,8 +46,6 @@ import (
 	placementv1 "go.goms.io/fleet/apis/placement/v1"
 	placementv1beta1 "go.goms.io/fleet/apis/placement/v1beta1"
 	"go.goms.io/fleet/pkg/utils/condition"
-	"go.goms.io/fleet/pkg/utils/controller"
-	"go.goms.io/fleet/pkg/utils/informer"
 )
 
 const (
@@ -505,71 +499,6 @@ func CheckCRDInstalled(discoveryClient discovery.DiscoveryInterface, gvk schema.
 	return err
 }
 
-// ShouldPropagateObj decides if one should propagate the object.
-// PVCs are only propagated when enableWorkload is false (workloads not allowed on hub).
-func ShouldPropagateObj(informerManager informer.Manager, uObj *unstructured.Unstructured, enableWorkload bool) (bool, error) {
-	// TODO:  add more special handling for different resource kind
-	switch uObj.GroupVersionKind() {
-	case appv1.SchemeGroupVersion.WithKind(ReplicaSetKind):
-		// Skip ReplicaSets if they are managed by Deployments (have owner references).
-		// Standalone ReplicaSets (without owners) can be propagated.
-		if len(uObj.GetOwnerReferences()) > 0 {
-			return false, nil
-		}
-	case appv1.SchemeGroupVersion.WithKind("ControllerRevision"):
-		// Skip ControllerRevisions if they are managed by DaemonSets/StatefulSets (have owner references).
-		// Standalone ControllerRevisions (without owners) can be propagated.
-		if len(uObj.GetOwnerReferences()) > 0 {
-			return false, nil
-		}
-	case corev1.SchemeGroupVersion.WithKind(ConfigMapKind):
-		// Skip the built-in custom CA certificate created in the namespace.
-		if uObj.GetName() == "kube-root-ca.crt" {
-			return false, nil
-		}
-	case corev1.SchemeGroupVersion.WithKind("ServiceAccount"):
-		// Skip the default service account created in the namespace.
-		if uObj.GetName() == "default" {
-			return false, nil
-		}
-	case corev1.SchemeGroupVersion.WithKind("Secret"):
-		// The secret, with type 'kubernetes.io/service-account-token', is created along with `ServiceAccount` should be
-		// prevented from propagating.
-		var secret corev1.Secret
-		if err := runtime.DefaultUnstructuredConverter.FromUnstructured(uObj.Object, &secret); err != nil {
-			return false, controller.NewUnexpectedBehaviorError(fmt.Errorf("failed to convert a secret object %s in namespace %s: %w", uObj.GetName(), uObj.GetNamespace(), err))
-		}
-		if secret.Type == corev1.SecretTypeServiceAccountToken {
-			return false, nil
-		}
-	case corev1.SchemeGroupVersion.WithKind("PersistentVolumeClaim"):
-		// Skip PersistentVolumeClaims by default to avoid conflicts with the PVCs created by statefulset controller.
-		// This only happens if the workloads are allowed to run on the hub cluster.
-		if enableWorkload {
-			return false, nil
-		}
-	case corev1.SchemeGroupVersion.WithKind("Endpoints"):
-		// we assume that all endpoints with the same name of a service is created by the service controller
-		if _, err := informerManager.Lister(ServiceGVR).ByNamespace(uObj.GetNamespace()).Get(uObj.GetName()); err != nil {
-			if apierrors.IsNotFound(err) {
-				// there is no service of the same name as the end point,
-				// we assume that this endpoint is created by the user
-				return true, nil
-			}
-			return false, controller.NewAPIServerError(true, fmt.Errorf("failed to get the service %s in namespace %s: %w", uObj.GetName(), uObj.GetNamespace(), err))
-		}
-		// we find a service of the same name as the endpoint, we assume it's created by the service
-		return false, nil
-	case discoveryv1.SchemeGroupVersion.WithKind("EndpointSlice"):
-		// all EndpointSlice created by the EndpointSlice controller has a managed by label
-		if _, exist := uObj.GetLabels()[discoveryv1.LabelManagedBy]; exist {
-			// do not propagate hub cluster generated endpoint slice
-			return false, nil
-		}
-	}
-	return true, nil
-}
-
 // IsReservedNamespace indicates if an argued namespace is reserved.
 func IsReservedNamespace(namespace string) bool {
 	return strings.HasPrefix(namespace, fleetPrefix) || strings.HasPrefix(namespace, kubePrefix)
@@ -774,7 +703,7 @@ var LessFuncDiffedResourcePlacementsV1 = func(a, b placementv1.DiffedResourcePla
 	return aStr < bStr
 }
 
-// LessFuncCondition is a less function for sorting conditions based on its types.
+// LessFuncConditionByType is a less function for sorting conditions based on its types.
 var LessFuncConditionByType = func(a, b metav1.Condition) bool {
 	return a.Type < b.Type
 }

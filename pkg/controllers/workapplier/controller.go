@@ -551,23 +551,40 @@ func (r *Reconciler) forgetWorkAndRemoveFinalizer(ctx context.Context, work *fle
 // ensureAppliedWork makes sure that an associated appliedWork and a finalizer on the work resource exists on the cluster.
 func (r *Reconciler) ensureAppliedWork(ctx context.Context, work *fleetv1beta1.Work) (*fleetv1beta1.AppliedWork, error) {
 	workRef := klog.KObj(work)
-	appliedWork := &fleetv1beta1.AppliedWork{}
-	hasFinalizer := false
-	if controllerutil.ContainsFinalizer(work, fleetv1beta1.WorkFinalizer) {
-		hasFinalizer = true
-		err := r.spokeClient.Get(ctx, types.NamespacedName{Name: work.Name}, appliedWork)
-		switch {
-		case apierrors.IsNotFound(err):
-			klog.ErrorS(err, "AppliedWork finalizer resource does not exist even with the finalizer, it will be recreated", "appliedWork", workRef.Name)
-		case err != nil:
-			klog.ErrorS(err, "Failed to retrieve the appliedWork ", "appliedWork", workRef.Name)
-			return nil, controller.NewAPIServerError(true, err)
-		default:
-			return appliedWork, nil
+
+	// Add a finalizer to the Work object.
+	if !controllerutil.ContainsFinalizer(work, fleetv1beta1.WorkFinalizer) {
+		work.Finalizers = append(work.Finalizers, fleetv1beta1.WorkFinalizer)
+
+		if err := r.hubClient.Update(ctx, work, &client.UpdateOptions{}); err != nil {
+			klog.ErrorS(err, "Failed to add the cleanup finalizer to the work", "work", workRef)
+			return nil, controller.NewAPIServerError(false, err)
 		}
+		klog.V(2).InfoS("Added the cleanup finalizer to the Work object", "work", workRef)
 	}
 
-	// we create the appliedWork before setting the finalizer, so it should always exist unless it's deleted behind our back
+	// Check if an AppliedWork object already exists for the Work object.
+	//
+	// Since we only create an AppliedWork object after adding the finalizer to the Work object,
+	// usually it is safe for us to assume that if the finalizer is absent, the AppliedWork object should
+	// not exist. This is not the case with the work applier though, as the controller features a
+	// Leave method that will strip all Work objects off their finalizers, which is called when the
+	// member cluster leaves the fleet. If the member cluster chooses to re-join the fleet, the controller
+	// will see a Work object with no finalizer but with an AppliedWork object. Because of this, here we always
+	// check for the existence of the AppliedWork object, with or without the finalizer.
+	appliedWork := &fleetv1beta1.AppliedWork{}
+	err := r.spokeClient.Get(ctx, types.NamespacedName{Name: work.Name}, appliedWork)
+	switch {
+	case err == nil:
+		// The AppliedWork already exists; no further action is needed.
+		klog.V(2).InfoS("Found an AppliedWork for the Work object", "work", workRef, "appliedWork", klog.KObj(appliedWork))
+		return appliedWork, nil
+	case !apierrors.IsNotFound(err):
+		klog.ErrorS(err, "Failed to retrieve the appliedWork object", "appliedWork", workRef.Name)
+		return nil, controller.NewAPIServerError(true, err)
+	}
+
+	// The AppliedWork object does not exist; create one.
 	appliedWork = &fleetv1beta1.AppliedWork{
 		ObjectMeta: metav1.ObjectMeta{
 			Name: work.Name,
@@ -577,20 +594,14 @@ func (r *Reconciler) ensureAppliedWork(ctx context.Context, work *fleetv1beta1.W
 			WorkNamespace: work.Namespace,
 		},
 	}
-	if err := r.spokeClient.Create(ctx, appliedWork); err != nil && !apierrors.IsAlreadyExists(err) {
-		klog.ErrorS(err, "AppliedWork create failed", "appliedWork", workRef.Name)
+	if err := r.spokeClient.Create(ctx, appliedWork); err != nil {
+		// Note: the controller must retry on AppliedWork AlreadyExists errors; otherwise the
+		// controller will run the reconciliation loop with an AppliedWork that has no UID,
+		// which might lead to takeover failures in later steps.
+		klog.ErrorS(err, "Failed to create an AppliedWork object for the Work object", "appliedWork", klog.KObj(appliedWork), "work", workRef)
 		return nil, controller.NewAPIServerError(false, err)
 	}
-	if !hasFinalizer {
-		klog.InfoS("Add the finalizer to the work", "work", workRef)
-		work.Finalizers = append(work.Finalizers, fleetv1beta1.WorkFinalizer)
-
-		if err := r.hubClient.Update(ctx, work, &client.UpdateOptions{}); err != nil {
-			klog.ErrorS(err, "Failed to add the finalizer to the work", "work", workRef)
-			return nil, controller.NewAPIServerError(false, err)
-		}
-	}
-	klog.InfoS("Recreated the appliedWork resource", "appliedWork", workRef.Name)
+	klog.V(2).InfoS("Created an AppliedWork for the Work object", "work", workRef, "appliedWork", klog.KObj(appliedWork))
 	return appliedWork, nil
 }
 
