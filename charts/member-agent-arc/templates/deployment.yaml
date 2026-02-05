@@ -22,6 +22,7 @@ spec:
           image: "{{ .Values.crdinstaller.repository }}:{{ .Values.crdinstaller.tag }}"
           args:
             - --mode=member
+            - --arcInstallation=true
             - --v={{ .Values.crdinstaller.logVerbosity }}
           securityContext:
             capabilities:
