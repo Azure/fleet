@@ -20,12 +20,193 @@ import (
 	"testing"
 	"time"
 
+	"github.com/google/go-cmp/cmp"
 	"k8s.io/apimachinery/pkg/api/meta"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	clusterinventory "sigs.k8s.io/cluster-inventory-api/apis/v1alpha1"
 
 	clusterv1beta1 "github.com/kubefleet-dev/kubefleet/apis/cluster/v1beta1"
+	"github.com/kubefleet-dev/kubefleet/pkg/propertyprovider"
+	"github.com/kubefleet-dev/kubefleet/pkg/utils/controller"
 )
+
+func TestFillInClusterStatus(t *testing.T) {
+	reconciler := &Reconciler{}
+
+	tests := []struct {
+		name                 string
+		memberCluster        *clusterv1beta1.MemberCluster
+		clusterProfile       *clusterinventory.ClusterProfile
+		expectVersion        bool
+		expectedK8sVersion   string
+		expectAccessProvider bool
+		expectedServer       string
+		expectedCAData       string
+	}{
+		{
+			name: "Cluster property collection has not succeeded",
+			memberCluster: &clusterv1beta1.MemberCluster{
+				ObjectMeta: metav1.ObjectMeta{
+					Name:       "test-cluster",
+					Generation: 1,
+				},
+				Status: clusterv1beta1.MemberClusterStatus{
+					Conditions: []metav1.Condition{
+						{
+							Type:               string(clusterv1beta1.ConditionTypeClusterPropertyCollectionSucceeded),
+							Status:             metav1.ConditionFalse,
+							ObservedGeneration: 1,
+						},
+					},
+				},
+			},
+			clusterProfile:       &clusterinventory.ClusterProfile{},
+			expectVersion:        false,
+			expectAccessProvider: false,
+		},
+		{
+			name: "Cluster property collection succeeded but no properties",
+			memberCluster: &clusterv1beta1.MemberCluster{
+				ObjectMeta: metav1.ObjectMeta{
+					Name:       "test-cluster",
+					Generation: 1,
+				},
+				Status: clusterv1beta1.MemberClusterStatus{
+					Conditions: []metav1.Condition{
+						{
+							Type:               string(clusterv1beta1.ConditionTypeClusterPropertyCollectionSucceeded),
+							Status:             metav1.ConditionTrue,
+							ObservedGeneration: 1,
+						},
+					},
+					Properties: map[clusterv1beta1.PropertyName]clusterv1beta1.PropertyValue{},
+				},
+			},
+			clusterProfile:       &clusterinventory.ClusterProfile{},
+			expectVersion:        false,
+			expectAccessProvider: true,
+		},
+		{
+			name: "Cluster property collection succeeded with k8s version only",
+			memberCluster: &clusterv1beta1.MemberCluster{
+				ObjectMeta: metav1.ObjectMeta{
+					Name:       "test-cluster",
+					Generation: 1,
+				},
+				Status: clusterv1beta1.MemberClusterStatus{
+					Conditions: []metav1.Condition{
+						{
+							Type:               string(clusterv1beta1.ConditionTypeClusterPropertyCollectionSucceeded),
+							Status:             metav1.ConditionTrue,
+							ObservedGeneration: 1,
+						},
+					},
+					Properties: map[clusterv1beta1.PropertyName]clusterv1beta1.PropertyValue{
+						propertyprovider.K8sVersionProperty: {
+							Value: "v1.28.0",
+						},
+					},
+				},
+			},
+			clusterProfile:       &clusterinventory.ClusterProfile{},
+			expectVersion:        true,
+			expectedK8sVersion:   "v1.28.0",
+			expectAccessProvider: true,
+		},
+		{
+			name: "Cluster property collection succeeded with all properties",
+			memberCluster: &clusterv1beta1.MemberCluster{
+				ObjectMeta: metav1.ObjectMeta{
+					Name:       "test-cluster",
+					Generation: 1,
+				},
+				Status: clusterv1beta1.MemberClusterStatus{
+					Conditions: []metav1.Condition{
+						{
+							Type:               string(clusterv1beta1.ConditionTypeClusterPropertyCollectionSucceeded),
+							Status:             metav1.ConditionTrue,
+							ObservedGeneration: 1,
+						},
+					},
+					Properties: map[clusterv1beta1.PropertyName]clusterv1beta1.PropertyValue{
+						propertyprovider.K8sVersionProperty: {
+							Value: "v1.29.1",
+						},
+						propertyprovider.ClusterEntryPointProperty: {
+							Value: "https://api.test-cluster.example.com:6443",
+						},
+						propertyprovider.ClusterCertificateAuthorityProperty: {
+							Value: "dGVzdC1jYS1kYXRh",
+						},
+					},
+				},
+			},
+			clusterProfile:       &clusterinventory.ClusterProfile{},
+			expectVersion:        true,
+			expectedK8sVersion:   "v1.29.1",
+			expectAccessProvider: true,
+			expectedServer:       "https://api.test-cluster.example.com:6443",
+			expectedCAData:       "dGVzdC1jYS1kYXRh",
+		},
+		{
+			name: "Cluster property collection succeeded with partial properties",
+			memberCluster: &clusterv1beta1.MemberCluster{
+				ObjectMeta: metav1.ObjectMeta{
+					Name:       "test-cluster",
+					Generation: 1,
+				},
+				Status: clusterv1beta1.MemberClusterStatus{
+					Conditions: []metav1.Condition{
+						{
+							Type:               string(clusterv1beta1.ConditionTypeClusterPropertyCollectionSucceeded),
+							Status:             metav1.ConditionTrue,
+							ObservedGeneration: 1,
+						},
+					},
+					Properties: map[clusterv1beta1.PropertyName]clusterv1beta1.PropertyValue{
+						propertyprovider.K8sVersionProperty: {
+							Value: "v1.27.5",
+						},
+						propertyprovider.ClusterEntryPointProperty: {
+							Value: "https://api.partial-cluster.example.com:6443",
+						},
+					},
+				},
+			},
+			clusterProfile:       &clusterinventory.ClusterProfile{},
+			expectVersion:        true,
+			expectedK8sVersion:   "v1.27.5",
+			expectAccessProvider: true,
+			expectedServer:       "https://api.partial-cluster.example.com:6443",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			reconciler.fillInClusterStatus(tt.memberCluster, tt.clusterProfile)
+
+			expected := clusterinventory.ClusterProfileStatus{}
+			if tt.expectVersion {
+				expected.Version.Kubernetes = tt.expectedK8sVersion
+			}
+			if tt.expectAccessProvider {
+				expected.AccessProviders = []clusterinventory.AccessProvider{{
+					Name: controller.ClusterManagerName,
+				}}
+				if tt.expectedServer != "" {
+					expected.AccessProviders[0].Cluster.Server = tt.expectedServer
+				}
+				if tt.expectedCAData != "" {
+					expected.AccessProviders[0].Cluster.CertificateAuthorityData = []byte(tt.expectedCAData)
+				}
+			}
+
+			if diff := cmp.Diff(expected, tt.clusterProfile.Status); diff != "" {
+				t.Fatalf("test case `%s` failed diff (-want +got):\n%s", tt.name, diff)
+			}
+		})
+	}
+}
 
 func TestSyncClusterProfileCondition(t *testing.T) {
 	clusterUnhealthyThreshold := 5 * time.Minute

@@ -39,6 +39,7 @@ import (
 
 	clusterv1beta1 "github.com/kubefleet-dev/kubefleet/apis/cluster/v1beta1"
 	"github.com/kubefleet-dev/kubefleet/pkg/propertyprovider"
+	"github.com/kubefleet-dev/kubefleet/pkg/utils/condition"
 	"github.com/kubefleet-dev/kubefleet/pkg/utils/controller"
 )
 
@@ -110,6 +111,13 @@ func (r *Reconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.Resu
 		return ctrl.Result{}, nil
 	}
 
+	// Check if the MemberCluster has joined.
+	joinedCondition := meta.FindStatusCondition(mc.Status.Conditions, string(clusterv1beta1.ConditionTypeMemberClusterJoined))
+	if !condition.IsConditionStatusTrue(joinedCondition, mc.Generation) {
+		klog.V(2).InfoS("Member cluster has not joined; skip cluster profile reconciliation", "memberCluster", mcRef)
+		return ctrl.Result{}, nil
+	}
+
 	// Check if the MemberCluster object has the cleanup finalizer; if not, add it.
 	if !controllerutil.ContainsFinalizer(mc, clusterProfileCleanupFinalizer) {
 		mc.Finalizers = append(mc.Finalizers, clusterProfileCleanupFinalizer)
@@ -175,6 +183,12 @@ func (r *Reconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.Resu
 // fillInClusterStatus fills in the ClusterProfile status fields from the MemberCluster status.
 // Currently, it only fills in the Kubernetes version field.
 func (r *Reconciler) fillInClusterStatus(mc *clusterv1beta1.MemberCluster, cp *clusterinventory.ClusterProfile) {
+	clusterPropertyCondition := meta.FindStatusCondition(mc.Status.Conditions, string(clusterv1beta1.ConditionTypeClusterPropertyCollectionSucceeded))
+	if !condition.IsConditionStatusTrue(clusterPropertyCondition, mc.Generation) {
+		klog.V(3).InfoS("Cluster property collection has not succeeded; skip updating the cluster profile status", "memberCluster", klog.KObj(mc), "clusterProfile", klog.KObj(cp))
+		return
+	}
+
 	k8sversion, exists := mc.Status.Properties[propertyprovider.K8sVersionProperty]
 	if exists {
 		klog.V(3).InfoS("Get Kubernetes version from member cluster status", "kubernetesVersion", k8sversion.Value, "clusterProfile", klog.KObj(cp))
