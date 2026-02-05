@@ -22,7 +22,10 @@ import (
 	"go.goms.io/fleet/cmd/crdinstaller/utils"
 )
 
-var mode = flag.String("mode", "", "Mode to run in: 'hub' or 'member' (required)")
+var (
+	mode              = flag.String("mode", "", "Mode to run in: 'hub' or 'member' (required)")
+	isArcInstallation = flag.Bool("arcInstallation", false, "Enable ARC AKS installation mode")
+)
 
 func main() {
 	klog.InitFlags(nil)
@@ -34,6 +37,7 @@ func main() {
 	}
 
 	klog.Infof("Starting CRD installer in %s mode", *mode)
+	klog.Infof("ARC installation mode: %v", *isArcInstallation)
 
 	// Print all flags for debugging.
 	flag.VisitAll(func(f *flag.Flag) {
@@ -66,7 +70,7 @@ func main() {
 
 	// Install CRDs from the fixed location.
 	const crdPath = "/workspace/config/crd/bases"
-	if err := installCRDs(ctx, client, crdPath, *mode); err != nil {
+	if err := installCRDs(ctx, client, crdPath, *mode, *isArcInstallation); err != nil {
 		klog.Fatalf("Failed to install CRDs: %v", err)
 	}
 
@@ -74,7 +78,7 @@ func main() {
 }
 
 // installCRDs installs the CRDs from the specified directory based on the mode.
-func installCRDs(ctx context.Context, client client.Client, crdPath, mode string) error {
+func installCRDs(ctx context.Context, client client.Client, crdPath, mode string, isArcInstallation bool) error {
 	// List of CRDs to install based on mode.
 	crdsToInstall, err := utils.CollectCRDs(crdPath, mode, client.Scheme())
 	if err != nil {
@@ -89,7 +93,7 @@ func installCRDs(ctx context.Context, client client.Client, crdPath, mode string
 
 	// Install each CRD.
 	for i := range crdsToInstall {
-		if err := utils.InstallCRD(ctx, client, &crdsToInstall[i]); err != nil {
+		if err := utils.InstallCRD(ctx, client, &crdsToInstall[i], isArcInstallation); err != nil {
 			return err
 		}
 	}
