@@ -48,7 +48,7 @@ var (
 )
 
 // InstallCRD creates/updates a Custom Resource Definition (CRD) from the provided CRD object.
-func InstallCRD(ctx context.Context, client client.Client, crd *apiextensionsv1.CustomResourceDefinition, isArcInstallation bool) error {
+func InstallCRD(ctx context.Context, client client.Client, crd *apiextensionsv1.CustomResourceDefinition, mode string) error {
 	klog.V(2).Infof("Installing CRD: %s", crd.Name)
 
 	existingCRD := apiextensionsv1.CustomResourceDefinition{
@@ -65,7 +65,7 @@ func InstallCRD(ctx context.Context, client client.Client, crd *apiextensionsv1.
 		if existingCRD.Labels == nil {
 			existingCRD.Labels = make(map[string]string)
 		}
-		if isArcInstallation {
+		if mode == "arcMember" {
 			// For ARC AKS installation, we want to add an additional label to indicate this is an ARC managed cluster,
 			// needed for clean up of CRD by kube-addon-manager.
 			existingCRD.Labels[ArcInstallationKey] = trueLabelValue
@@ -117,7 +117,7 @@ func CollectCRDs(crdDirectoryPath, mode string, scheme *runtime.Scheme) ([]apiex
 		// Process based on mode.
 		crdFileName := filepath.Base(crdpath)
 
-		if mode == "member" {
+		if mode == "member" || mode == "arcMember" {
 			if memberCRD[crdFileName] {
 				crd, err := GetCRDFromPath(crdpath, scheme)
 				if err != nil {
