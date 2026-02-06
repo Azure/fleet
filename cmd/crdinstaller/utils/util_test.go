@@ -155,29 +155,29 @@ func TestInstallCRD(t *testing.T) {
 	}
 
 	tests := []struct {
-		name              string
-		crd               *apiextensionsv1.CustomResourceDefinition
-		isArcInstallation bool
-		wantError         bool
+		name      string
+		crd       *apiextensionsv1.CustomResourceDefinition
+		mode      string
+		wantError bool
 	}{
 		{
-			name:              "successful CRD installation without ARC",
-			crd:               testCRD,
-			isArcInstallation: false,
-			wantError:         false,
+			name:      "successful CRD installation with member mode",
+			crd:       testCRD,
+			mode:      "member",
+			wantError: false,
 		},
 		{
-			name:              "successful CRD installation with ARC",
-			crd:               testCRD,
-			isArcInstallation: true,
-			wantError:         false,
+			name:      "successful CRD installation with arcMember mode",
+			crd:       testCRD,
+			mode:      "arcMember",
+			wantError: false,
 		},
 	}
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			fakeClient := fake.NewClientBuilder().WithScheme(scheme).Build()
-			err := InstallCRD(context.Background(), fakeClient, tt.crd, tt.isArcInstallation)
+			err := InstallCRD(context.Background(), fakeClient, tt.crd, tt.mode)
 
 			if tt.wantError {
 				if err == nil {
@@ -206,7 +206,7 @@ func TestInstallCRD(t *testing.T) {
 				t.Errorf("Expected CRD label %s to be %q, got %q", AzureManagedLabelKey, FleetLabelValue, installedCRD.Labels[AzureManagedLabelKey])
 			}
 
-			if tt.isArcInstallation {
+			if tt.mode == "arcMember" {
 				if installedCRD.Labels[ArcInstallationKey] != "true" {
 					t.Errorf("Expected CRD label %s to be 'true', got %q", ArcInstallationKey, installedCRD.Labels[ArcInstallationKey])
 				}
