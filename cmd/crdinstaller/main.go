@@ -22,15 +22,17 @@ import (
 	"go.goms.io/fleet/cmd/crdinstaller/utils"
 )
 
-var mode = flag.String("mode", "", "Mode to run in: 'hub' or 'member' (required)")
+var (
+	mode = flag.String("mode", "", "Mode to run in: 'hub', 'member', 'arcMember', (required)")
+)
 
 func main() {
 	klog.InitFlags(nil)
 	flag.Parse()
 
 	// Validate required flags.
-	if *mode != "hub" && *mode != "member" {
-		klog.Fatal("--mode flag must be either 'hub' or 'member'")
+	if *mode != utils.ModeHub && *mode != utils.ModeMember && *mode != utils.ModeArcMember {
+		klog.Fatal("--mode flag must be either 'hub' or 'member' or 'arcMember'")
 	}
 
 	klog.Infof("Starting CRD installer in %s mode", *mode)
@@ -89,7 +91,7 @@ func installCRDs(ctx context.Context, client client.Client, crdPath, mode string
 
 	// Install each CRD.
 	for i := range crdsToInstall {
-		if err := utils.InstallCRD(ctx, client, &crdsToInstall[i]); err != nil {
+		if err := utils.InstallCRD(ctx, client, &crdsToInstall[i], mode); err != nil {
 			return err
 		}
 	}
