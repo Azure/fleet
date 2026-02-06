@@ -31,8 +31,8 @@ func main() {
 	flag.Parse()
 
 	// Validate required flags.
-	if *mode != "hub" && *mode != "member" && *mode != "arcMember" {
-		klog.Fatal("--mode flag must be either 'hub' or 'member' or ''arcMember'")
+	if *mode != utils.ModeHub && *mode != utils.ModeMember && *mode != utils.ModeArcMember {
+		klog.Fatal("--mode flag must be either 'hub' or 'member' or 'arcMember'")
 	}
 
 	klog.Infof("Starting CRD installer in %s mode", *mode)

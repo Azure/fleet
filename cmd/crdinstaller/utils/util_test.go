@@ -56,7 +56,7 @@ func runTest(t *testing.T, crdPath string) {
 	}{
 		{
 			name: "hub mode v1beta1 with actual directory",
-			mode: "hub",
+			mode: ModeHub,
 			wantedCRDNames: []string{
 				"memberclusters.cluster.kubernetes-fleet.io",
 				"internalmemberclusters.cluster.kubernetes-fleet.io",
@@ -90,7 +90,7 @@ func runTest(t *testing.T, crdPath string) {
 		},
 		{
 			name: "member mode v1beta1 with actual directory",
-			mode: "member",
+			mode: ModeMember,
 			wantedCRDNames: []string{
 				"appliedworks.placement.kubernetes-fleet.io",
 			},
@@ -163,13 +163,13 @@ func TestInstallCRD(t *testing.T) {
 		{
 			name:      "successful CRD installation with member mode",
 			crd:       testCRD,
-			mode:      "member",
+			mode:      ModeMember,
 			wantError: false,
 		},
 		{
 			name:      "successful CRD installation with arcMember mode",
 			crd:       testCRD,
-			mode:      "arcMember",
+			mode:      ModeArcMember,
 			wantError: false,
 		},
 	}
@@ -206,7 +206,7 @@ func TestInstallCRD(t *testing.T) {
 				t.Errorf("Expected CRD label %s to be %q, got %q", AzureManagedLabelKey, FleetLabelValue, installedCRD.Labels[AzureManagedLabelKey])
 			}
 
-			if tt.mode == "arcMember" {
+			if tt.mode == ModeArcMember {
 				if installedCRD.Labels[ArcInstallationKey] != "true" {
 					t.Errorf("Expected CRD label %s to be 'true', got %q", ArcInstallationKey, installedCRD.Labels[ArcInstallationKey])
 				}

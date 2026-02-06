@@ -44,7 +44,7 @@ var _ = Describe("Test CRD Installer, Create and Update CRD", Ordered, func() {
 			crd, err := cmdCRDInstaller.GetCRDFromPath(originalCRDPath, scheme)
 			Expect(err).NotTo(HaveOccurred(), "should get CRD from path %s", originalCRDPath)
 			Eventually(func() error {
-				return cmdCRDInstaller.InstallCRD(ctx, k8sClient, crd, "member")
+				return cmdCRDInstaller.InstallCRD(ctx, k8sClient, crd, cmdCRDInstaller.ModeMember)
 			}, eventuallyDuration, eventuallyInterval).Should(Succeed())
 		})
 
@@ -71,7 +71,7 @@ var _ = Describe("Test CRD Installer, Create and Update CRD", Ordered, func() {
 			crd, err := cmdCRDInstaller.GetCRDFromPath(updatedCRDPath, scheme)
 			Expect(err).NotTo(HaveOccurred(), "should get CRD from path %s", updatedCRDPath)
 			Eventually(func() error {
-				return cmdCRDInstaller.InstallCRD(ctx, k8sClient, crd, "member")
+				return cmdCRDInstaller.InstallCRD(ctx, k8sClient, crd, cmdCRDInstaller.ModeMember)
 			}, eventuallyDuration, eventuallyInterval).Should(Succeed())
 		})
 
@@ -99,7 +99,7 @@ var _ = Describe("Test CRD Installer, Create and Update CRD", Ordered, func() {
 			crd, err := cmdCRDInstaller.GetCRDFromPath(originalCRDPath, scheme)
 			Expect(err).NotTo(HaveOccurred(), "should get CRD from path %s", originalCRDPath)
 			Eventually(func() error {
-				return cmdCRDInstaller.InstallCRD(ctx, k8sClient, crd, "arcMember")
+				return cmdCRDInstaller.InstallCRD(ctx, k8sClient, crd, cmdCRDInstaller.ModeArcMember)
 			}, eventuallyDuration, eventuallyInterval).Should(Succeed())
 		})
 
@@ -124,7 +124,7 @@ var _ = Describe("Test CRD Installer, Create and Update CRD", Ordered, func() {
 			crd, err := cmdCRDInstaller.GetCRDFromPath(updatedCRDPath, scheme)
 			Expect(err).NotTo(HaveOccurred(), "should get CRD from path %s", updatedCRDPath)
 			Eventually(func() error {
-				return cmdCRDInstaller.InstallCRD(ctx, k8sClient, crd, "arcMember")
+				return cmdCRDInstaller.InstallCRD(ctx, k8sClient, crd, cmdCRDInstaller.ModeArcMember)
 			}, eventuallyDuration, eventuallyInterval).Should(Succeed())
 		})
 
