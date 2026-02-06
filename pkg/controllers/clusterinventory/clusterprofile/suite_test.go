@@ -25,14 +25,15 @@ import (
 
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
+	"go.uber.org/zap/zapcore"
 	"k8s.io/client-go/kubernetes/scheme"
 	"k8s.io/client-go/rest"
 	"k8s.io/klog/v2"
-	"k8s.io/klog/v2/textlogger"
 	clusterinventory "sigs.k8s.io/cluster-inventory-api/apis/v1alpha1"
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/envtest"
+	"sigs.k8s.io/controller-runtime/pkg/log/zap"
 	"sigs.k8s.io/controller-runtime/pkg/manager"
 	"sigs.k8s.io/controller-runtime/pkg/metrics/server"
 
@@ -61,6 +62,10 @@ var _ = BeforeSuite(func() {
 	fs := flag.NewFlagSet("klog", flag.ContinueOnError)
 	klog.InitFlags(fs)
 	Expect(fs.Parse([]string{"--v", "5", "-add_dir_header", "true"})).Should(Succeed())
+
+	logger := zap.New(zap.WriteTo(GinkgoWriter), zap.UseDevMode(true), zap.Level(zapcore.Level(-5)))
+	klog.SetLogger(logger)
+	ctrl.SetLogger(logger)
 
 	By("bootstrapping test environment")
 	testEnv = &envtest.Environment{
@@ -92,7 +97,7 @@ var _ = BeforeSuite(func() {
 		Metrics: server.Options{
 			BindAddress: "0",
 		},
-		Logger: textlogger.NewLogger(textlogger.NewConfig(textlogger.Verbosity(4))),
+		Logger: logger,
 	})
 	Expect(err).Should(Succeed())
 	err = (&Reconciler{

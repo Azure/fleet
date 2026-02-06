@@ -67,8 +67,6 @@ const (
 
 	hubClusterSAName = "fleet-hub-agent"
 	fleetSystemNS    = "fleet-system"
-
-	kubeConfigPathEnvVarName = "KUBECONFIG"
 )
 
 const (
@@ -206,9 +204,6 @@ func beforeSuiteForAllProcesses() {
 	fs := flag.NewFlagSet("klog", flag.ContinueOnError)
 	klog.InitFlags(fs)
 	Expect(fs.Parse([]string{"--v", "5", "-add_dir_header", "true"})).Should(Succeed())
-
-	// Check if the required environment variable, which specifies the path to kubeconfig file, has been set.
-	Expect(os.Getenv(kubeConfigPathEnvVarName)).NotTo(BeEmpty(), "Required environment variable KUBECONFIG is not set")
 
 	// Initialize the cluster objects and their clients.
 	hubCluster = framework.NewCluster(hubClusterName, "", scheme, nil)

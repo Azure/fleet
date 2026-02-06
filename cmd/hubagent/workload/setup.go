@@ -161,18 +161,21 @@ func SetupControllers(ctx context.Context, wg *sync.WaitGroup, mgr ctrl.Manager,
 	validator.RestMapper = mgr.GetRESTMapper()          // webhook needs this to validate GVK of resource selector
 
 	// Set up  a custom controller to reconcile placement objects
+	resourceSelectorResolver := controller.ResourceSelectorResolver{
+		RestMapper:        mgr.GetRESTMapper(),
+		InformerManager:   dynamicInformerManager,
+		ResourceConfig:    resourceConfig,
+		SkippedNamespaces: skippedNamespaces,
+		EnableWorkload:    opts.EnableWorkload,
+	}
 	pc := &placement.Reconciler{
 		Client:                                  mgr.GetClient(),
 		Recorder:                                mgr.GetEventRecorderFor(placementControllerName),
-		RestMapper:                              mgr.GetRESTMapper(),
-		InformerManager:                         dynamicInformerManager,
-		ResourceConfig:                          resourceConfig,
-		SkippedNamespaces:                       skippedNamespaces,
 		Scheme:                                  mgr.GetScheme(),
 		UncachedReader:                          mgr.GetAPIReader(),
+		ResourceSelectorResolver:                resourceSelectorResolver,
 		ResourceSnapshotCreationMinimumInterval: opts.ResourceSnapshotCreationMinimumInterval,
 		ResourceChangesCollectionDuration:       opts.ResourceChangesCollectionDuration,
-		EnableWorkload:                          opts.EnableWorkload,
 	}
 
 	rateLimiter := options.DefaultControllerRateLimiter(opts.RateLimiterOpts)

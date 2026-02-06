@@ -42,12 +42,10 @@ import (
 	fleetv1beta1 "go.goms.io/fleet/apis/placement/v1beta1"
 	hubmetrics "go.goms.io/fleet/pkg/metrics/hub"
 	"go.goms.io/fleet/pkg/scheduler/queue"
-	"go.goms.io/fleet/pkg/utils"
 	"go.goms.io/fleet/pkg/utils/annotations"
 	"go.goms.io/fleet/pkg/utils/condition"
 	"go.goms.io/fleet/pkg/utils/controller"
 	"go.goms.io/fleet/pkg/utils/defaulter"
-	"go.goms.io/fleet/pkg/utils/informer"
 	"go.goms.io/fleet/pkg/utils/labels"
 	"go.goms.io/fleet/pkg/utils/resource"
 	fleettime "go.goms.io/fleet/pkg/utils/time"
@@ -64,12 +62,6 @@ const controllerResyncPeriod = 30 * time.Minute
 
 // Reconciler reconciles a cluster resource placement object
 type Reconciler struct {
-	// the informer contains the cache for all the resources we need.
-	InformerManager informer.Manager
-
-	// RestMapper is used to convert between gvk and gvr on known resources.
-	RestMapper meta.RESTMapper
-
 	// Client is used to update objects which goes to the api server directly.
 	Client client.Client
 
@@ -78,15 +70,12 @@ type Reconciler struct {
 	// It's only needed by v1beta1 APIs.
 	UncachedReader client.Reader
 
-	// ResourceConfig contains all the API resources that we won't select based on allowed or skipped propagating APIs option.
-	ResourceConfig *utils.ResourceConfig
-
-	// SkippedNamespaces contains the namespaces that we should not propagate.
-	SkippedNamespaces map[string]bool
-
 	Recorder record.EventRecorder
 
 	Scheme *runtime.Scheme
+
+	// ResourceSelectorResolver
+	ResourceSelectorResolver controller.ResourceSelectorResolver
 
 	// ResourceSnapshotCreationMinimumInterval is the minimum interval to create a new resourcesnapshot
 	// to avoid too frequent updates.
@@ -94,9 +83,6 @@ type Reconciler struct {
 
 	// ResourceChangesCollectionDuration is the duration for collecting resource changes into one snapshot.
 	ResourceChangesCollectionDuration time.Duration
-
-	// EnableWorkload indicates whether workloads are allowed to run on the hub cluster.
-	EnableWorkload bool
 }
 
 func (r *Reconciler) Reconcile(ctx context.Context, key controller.QueueKey) (ctrl.Result, error) {
@@ -198,7 +184,7 @@ func (r *Reconciler) handleUpdate(ctx context.Context, placementObj fleetv1beta1
 	}
 
 	// validate the resource selectors first before creating any snapshot
-	envelopeObjCount, selectedResources, selectedResourceIDs, err := r.selectResourcesForPlacement(placementObj)
+	envelopeObjCount, selectedResources, selectedResourceIDs, err := r.ResourceSelectorResolver.SelectResourcesForPlacement(placementObj)
 	if err != nil {
 		klog.ErrorS(err, "Failed to select the resources", "placement", placementKObj)
 		if !errors.Is(err, controller.ErrUserError) {
