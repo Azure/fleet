@@ -117,27 +117,22 @@ func CollectCRDs(crdDirectoryPath, mode string, scheme *runtime.Scheme) ([]apiex
 		// Process based on mode.
 		crdFileName := filepath.Base(crdpath)
 
+		var shouldInstall bool
 		switch mode {
 		case "member", "arcMember":
-			if memberCRD[crdFileName] {
-				crd, err := GetCRDFromPath(crdpath, scheme)
-				if err != nil {
-					return err
-				}
-				crdsToInstall = append(crdsToInstall, *crd)
-			}
+			shouldInstall = memberCRD[crdFileName]
 		case "hub":
+			// Install multicluster CRD or CRDs with kubernetes-fleet.io in the filename (excluding member-only CRDs).
+			// CRD filenames follow the pattern <group>_<plural>.yaml, so we can check the filename.
+			shouldInstall = multiclusterCRD[crdFileName] || (strings.Contains(crdFileName, "kubernetes-fleet.io") && !memberCRD[crdFileName])
+		}
+
+		if shouldInstall {
 			crd, err := GetCRDFromPath(crdpath, scheme)
 			if err != nil {
 				return err
 			}
-			// special case for multicluster external CRD in hub cluster.
-			if multiclusterCRD[crdFileName] {
-				crdsToInstall = append(crdsToInstall, *crd)
-			} else if strings.Contains(crd.Spec.Group, "kubernetes-fleet.io") && !memberCRD[crdFileName] {
-				// For hub mode, only collect CRDs whose group has substring kubernetes-fleet.io.
-				crdsToInstall = append(crdsToInstall, *crd)
-			}
+			crdsToInstall = append(crdsToInstall, *crd)
 		}
 
 		return nil
