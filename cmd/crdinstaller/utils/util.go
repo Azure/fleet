@@ -38,6 +38,16 @@ const (
 	trueLabelValue = "true"
 )
 
+// Mode constants for CRD installer.
+const (
+	// ModeHub installs hub cluster CRDs.
+	ModeHub = "hub"
+	// ModeMember installs member cluster CRDs.
+	ModeMember = "member"
+	// ModeArcMember installs member cluster CRDs with ARC labels.
+	ModeArcMember = "arcMember"
+)
+
 var (
 	multiclusterCRD = map[string]bool{
 		"multicluster.x-k8s.io_clusterprofiles.yaml": true,
@@ -65,7 +75,7 @@ func InstallCRD(ctx context.Context, client client.Client, crd *apiextensionsv1.
 		if existingCRD.Labels == nil {
 			existingCRD.Labels = make(map[string]string)
 		}
-		if mode == "arcMember" {
+		if mode == ModeArcMember {
 			// For ARC AKS installation, we want to add an additional label to indicate this is an ARC managed cluster,
 			// needed for clean up of CRD by kube-addon-manager.
 			existingCRD.Labels[ArcInstallationKey] = trueLabelValue
@@ -119,9 +129,9 @@ func CollectCRDs(crdDirectoryPath, mode string, scheme *runtime.Scheme) ([]apiex
 
 		var shouldInstall bool
 		switch mode {
-		case "member", "arcMember":
+		case ModeMember, ModeArcMember:
 			shouldInstall = memberCRD[crdFileName]
-		case "hub":
+		case ModeHub:
 			// Install multicluster CRD or CRDs with kubernetes-fleet.io in the filename (excluding member-only CRDs).
 			// CRD filenames follow the pattern <group>_<plural>.yaml, so we can check the filename.
 			shouldInstall = multiclusterCRD[crdFileName] || (strings.Contains(crdFileName, "kubernetes-fleet.io") && !memberCRD[crdFileName])
