@@ -106,8 +106,7 @@ var _ = Describe("Test CRD Installer, Create and Update CRD", Ordered, func() {
 		It("should verify CRD has ARC installation label", func() {
 			ensureCRDExistsWithLabels(map[string]string{
 				cmdCRDInstaller.CRDInstallerLabelKey: "true",
-				cmdCRDInstaller.AzureManagedLabelKey: cmdCRDInstaller.FleetLabelValue,
-				cmdCRDInstaller.ArcInstallationKey:   "true",
+				cmdCRDInstaller.AzureManagedLabelKey: cmdCRDInstaller.ModeArcMember,
 			})
 			crd := &apiextensionsv1.CustomResourceDefinition{}
 			Expect(k8sClient.Get(ctx, types.NamespacedName{Name: crdName}, crd)).NotTo(HaveOccurred(), "CRD %s should be installed", crdName)
@@ -133,8 +132,7 @@ var _ = Describe("Test CRD Installer, Create and Update CRD", Ordered, func() {
 			ensureCRDExistsWithLabels(map[string]string{
 				randomLabelKey:                       "true",
 				cmdCRDInstaller.CRDInstallerLabelKey: "true",
-				cmdCRDInstaller.AzureManagedLabelKey: cmdCRDInstaller.FleetLabelValue,
-				cmdCRDInstaller.ArcInstallationKey:   "true",
+				cmdCRDInstaller.AzureManagedLabelKey: cmdCRDInstaller.ModeArcMember,
 			})
 			crd := &apiextensionsv1.CustomResourceDefinition{}
 			Expect(k8sClient.Get(ctx, types.NamespacedName{Name: crdName}, crd)).NotTo(HaveOccurred(), "CRD %s should be installed", crdName)

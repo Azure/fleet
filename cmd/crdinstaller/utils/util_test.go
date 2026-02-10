@@ -202,17 +202,13 @@ func TestInstallCRD(t *testing.T) {
 				t.Errorf("Expected CRD label %s to be 'true', got %q", CRDInstallerLabelKey, installedCRD.Labels[CRDInstallerLabelKey])
 			}
 
-			if installedCRD.Labels[AzureManagedLabelKey] != FleetLabelValue {
-				t.Errorf("Expected CRD label %s to be %q, got %q", AzureManagedLabelKey, FleetLabelValue, installedCRD.Labels[AzureManagedLabelKey])
-			}
-
 			if tt.mode == ModeArcMember {
-				if installedCRD.Labels[ArcInstallationKey] != "true" {
-					t.Errorf("Expected CRD label %s to be 'true', got %q", ArcInstallationKey, installedCRD.Labels[ArcInstallationKey])
+				if installedCRD.Labels[AzureManagedLabelKey] != ModeArcMember {
+					t.Errorf("Expected CRD label %s to be %q, got %q", AzureManagedLabelKey, ModeArcMember, installedCRD.Labels[AzureManagedLabelKey])
 				}
 			} else {
-				if _, exists := installedCRD.Labels[ArcInstallationKey]; exists {
-					t.Errorf("Expected CRD label %s to not exist for non-ARC installation", ArcInstallationKey)
+				if installedCRD.Labels[AzureManagedLabelKey] != FleetLabelValue {
+					t.Errorf("Expected CRD label %s to be %q, got %q", AzureManagedLabelKey, FleetLabelValue, installedCRD.Labels[AzureManagedLabelKey])
 				}
 			}
 
