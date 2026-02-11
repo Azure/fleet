@@ -21,7 +21,7 @@ spec:
           imagePullPolicy: IfNotPresent
           image: "{{ .Values.crdinstaller.repository }}:{{ .Values.crdinstaller.tag }}"
           args:
-            - --mode=member
+            - --mode=arcMember
             - --v={{ .Values.crdinstaller.logVerbosity }}
           securityContext:
             capabilities:
