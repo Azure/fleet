@@ -70,7 +70,7 @@ func (r *Reconciler) takeOverPreExistingObject(
 		// No takeover will be performed.
 		//
 		// Note that This will be registered as an (apply) error.
-		return nil, nil, false, fmt.Errorf("the object is already owned by some other sources(s) and co-ownership is disallowed")
+		return nil, nil, false, fmt.Errorf("the object is already owned by some other sources(s) and co-ownership is disallowed (existingOwnerRefs: %+v)", existingOwnerRefs)
 	}
 
 	// Check if the object is already owned by Fleet, but the owner is a different AppliedWork

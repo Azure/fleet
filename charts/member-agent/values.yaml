@@ -64,3 +64,8 @@ enableV1Beta1APIs: true
 enablePprof: true
 pprofPort: 6065
 hubPprofPort: 6066
+
+priorityQueue:
+  enabled: false
+  priorityLinearEquationCoeffA: -3
+  priorityLinearEquationCoeffB: 100

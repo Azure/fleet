@@ -42,6 +42,11 @@ import (
 )
 
 const (
+	testRunnerNameEnvVarName  = "KUBEFLEET_CI_TEST_RUNNER_NAME"
+	runnerNameToSkipTestsInCI = "default"
+)
+
+const (
 	workName = "work-1"
 
 	deployName      = "deploy-1"
@@ -255,6 +260,13 @@ func manifestAppliedCond(workGeneration int64, status metav1.ConditionStatus, re
 }
 
 func TestMain(m *testing.M) {
+	// Skip the tests if in the CI environment the tests are invoked with `go test` instead of the Ginkgo CLI.
+	// This has no effect outside the CI environment.
+	if v := os.Getenv(testRunnerNameEnvVarName); v == runnerNameToSkipTestsInCI {
+		log.Println("Skipping the tests in CI as they are not run with the expected runner")
+		os.Exit(0)
+	}
+
 	// Add custom APIs to the runtime scheme.
 	if err := fleetv1beta1.AddToScheme(scheme.Scheme); err != nil {
 		log.Fatalf("failed to add custom APIs (placement/v1beta1) to the runtime scheme: %v", err)

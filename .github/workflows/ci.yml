@@ -30,8 +30,9 @@ jobs:
           do_not_skip: '["workflow_dispatch", "schedule", "push"]'
           concurrent_skipping: false
 
-  unit-tests:
-    runs-on: ubuntu-latest
+  unit-and-integration-tests:
+    runs-on:
+      labels: oracle-vm-16cpu-64gb-x86-64
     needs: detect-noop
     if: needs.detect-noop.outputs.noop != 'true'
     steps:
@@ -46,18 +47,43 @@ jobs:
       - name: Set up Ginkgo CLI
         run: |
           go install github.com/onsi/ginkgo/v2/ginkgo@v2.19.1
+      
+      - name: Prepare necessary environment variables
+        run: |
+          echo "CGO_ENABLED=1" >> $GITHUB_ENV
+          KUBEBUILDER_ASSETS=$(make --silent kubebuilder-assets-path)
+          echo "KUBEBUILDER_ASSETS="$KUBEBUILDER_ASSETS"" >> $GITHUB_ENV
 
-      - name: Run unit tests & Generate coverage
-        run: make test
-
+      # Certain tests that require special setup (e.g., those that should be run with Ginkgo CLI only) will
+      # be skipped in this step.
+      #
+      # Note that the skipping only applies to the CI environment.
+      - name: Run unit and integration tests with default setup & generate coverage
+        run: |
+          make test
+        env:
+          KUBEFLEET_CI_TEST_RUNNER_NAME: 'default'
+      
+      # The work applier integration tests use in-memory Kubernetes environment setup; due to resource constraints
+      # and the way the tests are organized, running the suite with as many parallel Ginkgo processes as possible (i.e.,
+      # the number of all CPU cores) might not lead to the optimal outcome.
+      #
+      # Note (chenyu1): switch to test matrices if we need to test with more configuration combos in the future.
+      - name: Run work applier unit and integration tests with Ginkgo CLI & generate coverage
+        run: |
+          ginkgo -v -p --procs=4 --race --cover -coverprofile=work-applier-it-coverage.out ./pkg/controllers/workapplier/ 
+          KUBEFLEET_CI_WORK_APPLIER_RUN_WITH_PRIORITY_QUEUE=true ginkgo -v -p --procs=4 --race --cover -coverprofile=work-applier-it-no-pri-q-coverage.out ./pkg/controllers/workapplier/
+        env:
+          KUBEFLEET_CI_TEST_RUNNER_NAME: 'ginkgo'
+      
       - name: Upload Codecov report
         uses: codecov/codecov-action@v5
         with:
-           ## Repository upload token - get it from codecov.io. Required only for private repositories
+          ## Repository upload token - get it from codecov.io. Required only for private repositories
           token: ${{ secrets.CODECOV_TOKEN }}
-          ## Comma-separated list of files to upload
-          files: ./ut-coverage.xml
-  
+          # The codecov action will auto-search all coverage files by default. All uploaded coverage will be
+          # merged automatically.
+
   e2e-tests:
     strategy:
       fail-fast: false

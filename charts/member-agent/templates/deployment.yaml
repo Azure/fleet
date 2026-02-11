@@ -69,6 +69,11 @@ spec:
             {{- if .Values.region }}
             - --region={{ .Values.region }}
             {{- end }}
+            {{- if .Values.priorityQueue.enabled }}
+            - --enable-work-applier-priority-queue=true
+            - --work-applier-priority-linear-equation-coeff-a={{ .Values.priorityQueue.priorityLinearEquationCoeffA }}
+            - --work-applier-priority-linear-equation-coeff-b={{ .Values.priorityQueue.priorityLinearEquationCoeffB }}
+            {{- end }}
           env:
           - name: HUB_SERVER_URL
             value: "{{ .Values.config.hubURL }}"
