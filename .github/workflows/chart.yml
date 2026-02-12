@@ -5,7 +5,7 @@ on:
     branches:
       - main
     paths:
-      - ".github/workflows/chart.yaml"
+      - ".github/workflows/chart.yml"
       - "charts/**"
   create:
     # Publish semver tags as releases.
@@ -13,19 +13,73 @@ on:
 
 permissions:
   contents: write
+  packages: write
+
+env:
+  REGISTRY: ghcr.io
 
 jobs:
-  deploy:
+  publish-github-pages:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v6.0.2
         with:
           submodules: true
           fetch-depth: 0
-      - name: Publish Helm chart
+      - name: Publish Helm chart to GitHub Pages
         uses: stefanprodan/helm-gh-pages@v1.7.0
         with:
           token: ${{ secrets.GITHUB_TOKEN }}
           charts_dir: charts
           target_dir: charts
-          linting: off
+          linting: on
+
+  publish-oci:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v6.0.2
+
+      - name: Login to GitHub Container Registry
+        uses: docker/login-action@5e57cd118135c172c3672efd75eb46360885c0ef
+        with:
+          registry: ${{ env.REGISTRY }}
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Package and push Helm charts to GHCR
+        run: |
+          set -euo pipefail
+          
+          # Convert repository name to lowercase for OCI registry
+          REPO_LOWER=$(echo "${{ github.repository }}" | tr '[:upper:]' '[:lower:]')
+          
+          # Determine version to use
+          if [[ "${{ github.ref }}" == refs/tags/* ]]; then
+            # Use release tag as version (strip 'v' prefix)
+            CHART_VERSION=${GITHUB_REF#refs/tags/v}
+            echo "Using release tag version: ${CHART_VERSION}"
+          else
+            # Use version from Chart.yaml for non-tag pushes
+            CHART_VERSION=$(grep '^version:' charts/hub-agent/Chart.yaml | awk '{print $2}')
+            echo "Using Chart.yaml version: ${CHART_VERSION}"
+          fi
+          
+          # Package and push hub-agent chart
+          echo "📦 Packaging hub-agent chart..."
+          helm package charts/hub-agent --version ${CHART_VERSION} --app-version ${CHART_VERSION}
+          
+          echo "🚀 Pushing hub-agent to OCI registry..."
+          helm push hub-agent-${CHART_VERSION}.tgz oci://${{ env.REGISTRY }}/${REPO_LOWER}/charts
+          
+          # Package and push member-agent chart
+          echo "📦 Packaging member-agent chart..."
+          helm package charts/member-agent --version ${CHART_VERSION} --app-version ${CHART_VERSION}
+          
+          echo "🚀 Pushing member-agent to OCI registry..."
+          helm push member-agent-${CHART_VERSION}.tgz oci://${{ env.REGISTRY }}/${REPO_LOWER}/charts
+          
+          echo ""
+          echo "✅ Helm charts published to OCI registry!"
+          echo "📍 Hub Agent: oci://${{ env.REGISTRY }}/${REPO_LOWER}/charts/hub-agent:${CHART_VERSION}"
+          echo "📍 Member Agent: oci://${{ env.REGISTRY }}/${REPO_LOWER}/charts/member-agent:${CHART_VERSION}"
