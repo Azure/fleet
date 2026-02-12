@@ -77,6 +77,13 @@ jobs:
         run: |
           make push
 
+      - name: Push Helm charts to OCI registry
+        env:
+          HELM_REGISTRY_PASSWORD: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          echo "${HELM_REGISTRY_PASSWORD}" | helm registry login ghcr.io -u ${{ github.actor }} --password-stdin
+          make helm-push
+
       - name: Verify images
         run: |
           echo "✅ Published images:"
@@ -84,4 +91,8 @@ jobs:
           echo "  - ${{ env.REGISTRY }}/${{ env.MEMBER_AGENT_IMAGE_NAME }}:${{ env.TAG }}"
           echo "  - ${{ env.REGISTRY }}/${{ env.REFRESH_TOKEN_IMAGE_NAME }}:${{ env.TAG }}"
           echo ""
-          echo "📦 Images are now public!"
+          echo "📦 Published Helm charts:"
+          echo "  - oci://${{ env.REGISTRY }}/hub-agent:${{ env.TAG }}"
+          echo "  - oci://${{ env.REGISTRY }}/member-agent:${{ env.TAG }}"
+          echo ""
+          echo "📦 Images and charts are now public!"

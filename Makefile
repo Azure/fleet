@@ -233,6 +233,14 @@ BUILDKIT_VERSION ?= v0.18.1
 push: ## Build and push all Docker images
 	$(MAKE) OUTPUT_TYPE="type=registry" docker-build-hub-agent docker-build-member-agent docker-build-refresh-token
 
+.PHONY: helm-push
+helm-push: ## Package and push Helm charts to OCI registry
+	helm package charts/hub-agent --version $(TAG) --app-version $(TAG) --destination .helm-packages
+	helm package charts/member-agent --version $(TAG) --app-version $(TAG) --destination .helm-packages
+	helm push .helm-packages/hub-agent-$(TAG).tgz oci://$(REGISTRY)
+	helm push .helm-packages/member-agent-$(TAG).tgz oci://$(REGISTRY)
+	rm -rf .helm-packages
+
 # By default, docker buildx create will pull image moby/buildkit:buildx-stable-1 and hit the too many requests error
 .PHONY: docker-buildx-builder
 # Note (chenyu1): the step below sets up emulation for building/running non-native binaries on the host. The original

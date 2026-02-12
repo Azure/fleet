@@ -30,7 +30,7 @@ spec:
             - --enable-guard-rail={{ .Values.enableGuardRail }}
             - --enable-workload={{ .Values.enableWorkload }}
             - --use-cert-manager={{ .Values.useCertManager }}
-            - --whitelisted-users=system:serviceaccount:fleet-system:hub-agent-sa
+            - --whitelisted-users=system:serviceaccount:{{ .Values.namespace }}:{{ include "hub-agent.fullname" . }}-sa
             - --webhook-client-connection-type={{.Values.webhookClientConnectionType}}
             - --v={{ .Values.logVerbosity }}
             - -add_dir_header
