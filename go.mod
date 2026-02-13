@@ -1,6 +1,6 @@
 module github.com/kubefleet-dev/kubefleet
 
-go 1.24.12
+go 1.24.13
 
 require (
 	github.com/Azure/azure-sdk-for-go/sdk/azcore v1.18.0
