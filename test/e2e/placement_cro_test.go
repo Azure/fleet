@@ -604,6 +604,7 @@ var _ = Context("creating clusterResourceOverride with and resource becomes inva
 var _ = Context("creating clusterResourceOverride with delete rules for one cluster", Ordered, func() {
 	crpName := fmt.Sprintf(crpNameTemplate, GinkgoParallelProcess())
 	croName := fmt.Sprintf(croNameTemplate, GinkgoParallelProcess())
+	croSnapShotName := fmt.Sprintf(placementv1beta1.OverrideSnapshotNameFmt, croName, 0)
 
 	BeforeAll(func() {
 		By("creating work resources")
@@ -659,6 +660,12 @@ var _ = Context("creating clusterResourceOverride with delete rules for one clus
 		By(fmt.Sprintf("creating clusterResourceOverride %s", croName))
 		Expect(hubClient.Create(ctx, cro)).To(Succeed(), "Failed to create clusterResourceOverride %s", croName)
 
+		// This is to make sure the CRO snapshot is created before the CRP.
+		Eventually(func() error {
+			croSnap := &placementv1beta1.ClusterResourceOverrideSnapshot{}
+			return hubClient.Get(ctx, types.NamespacedName{Name: croSnapShotName}, croSnap)
+		}, eventuallyDuration, eventuallyInterval).Should(Succeed(), "Failed to create CRO snapshot %s", croSnapShotName)
+
 		// Create the CRP.
 		createCRP(crpName)
 	})
@@ -697,14 +704,9 @@ var _ = Context("creating clusterResourceOverride with delete rules for one clus
 
 	It("should not place the selected resources on the member clusters that are deleted", func() {
 		memberCluster := allMemberClusters[2]
-		Consistently(func() bool {
-			ns := &corev1.Namespace{}
-			workNamespaceName := fmt.Sprintf(workNamespaceNameTemplate, GinkgoParallelProcess())
-			if err := memberCluster.KubeClient.Get(ctx, types.NamespacedName{Name: workNamespaceName}, ns); err != nil {
-				return errors.IsNotFound(err)
-			}
-			return false
-		}, consistentlyDuration, eventuallyInterval).Should(BeTrue(), "Failed to delete work resources on member cluster %s", memberCluster.ClusterName)
+		// With CRO snapshot ready before CRP creation, resources should never be placed.
+		workResourcesRemovedActual := workNamespaceRemovedFromClusterActual(memberCluster)
+		Consistently(workResourcesRemovedActual, consistentlyDuration, consistentlyInterval).Should(Succeed(), "Work resources should not be placed on member cluster %s", memberCluster.ClusterName)
 	})
 })
 
