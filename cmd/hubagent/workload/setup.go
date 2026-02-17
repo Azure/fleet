@@ -164,14 +164,15 @@ func SetupControllers(ctx context.Context, wg *sync.WaitGroup, mgr ctrl.Manager,
 		SkippedNamespaces: skippedNamespaces,
 		EnableWorkload:    opts.EnableWorkload,
 	}
+	resourceSnapshotResolver := controller.NewResourceSnapshotResolver(mgr.GetClient(), mgr.GetScheme())
+	resourceSnapshotResolver.Config = controller.NewResourceSnapshotConfig(opts.ResourceSnapshotCreationMinimumInterval, opts.ResourceChangesCollectionDuration)
 	pc := &placement.Reconciler{
-		Client:                                  mgr.GetClient(),
-		Recorder:                                mgr.GetEventRecorderFor(placementControllerName),
-		Scheme:                                  mgr.GetScheme(),
-		UncachedReader:                          mgr.GetAPIReader(),
-		ResourceSelectorResolver:                resourceSelectorResolver,
-		ResourceSnapshotCreationMinimumInterval: opts.ResourceSnapshotCreationMinimumInterval,
-		ResourceChangesCollectionDuration:       opts.ResourceChangesCollectionDuration,
+		Client:                   mgr.GetClient(),
+		Recorder:                 mgr.GetEventRecorderFor(placementControllerName),
+		Scheme:                   mgr.GetScheme(),
+		UncachedReader:           mgr.GetAPIReader(),
+		ResourceSelectorResolver: resourceSelectorResolver,
+		ResourceSnapshotResolver: *resourceSnapshotResolver,
 	}
 
 	rateLimiter := options.DefaultControllerRateLimiter(opts.RateLimiterOpts)
