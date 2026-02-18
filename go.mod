@@ -42,6 +42,7 @@ require (
 	sigs.k8s.io/cloud-provider-azure/pkg/azclient v0.5.20
 	sigs.k8s.io/cluster-inventory-api v0.0.0-20251028164203-2e3fabb46733
 	sigs.k8s.io/controller-runtime v0.22.4
+	sigs.k8s.io/yaml v1.6.0
 )
 
 require (
@@ -134,7 +135,6 @@ require (
 	sigs.k8s.io/kustomize/kyaml v0.18.1 // indirect
 	sigs.k8s.io/randfill v1.0.0 // indirect
 	sigs.k8s.io/structured-merge-diff/v6 v6.3.0 // indirect
-	sigs.k8s.io/yaml v1.6.0 // indirect
 )
 
 replace (

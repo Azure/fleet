@@ -56,7 +56,7 @@ func runTest(t *testing.T, crdPath string) {
 	}{
 		{
 			name: "hub mode v1beta1 with actual directory",
-			mode: "hub",
+			mode: ModeHub,
 			wantedCRDNames: []string{
 				"memberclusters.cluster.kubernetes-fleet.io",
 				"internalmemberclusters.cluster.kubernetes-fleet.io",
@@ -90,7 +90,7 @@ func runTest(t *testing.T, crdPath string) {
 		},
 		{
 			name: "member mode v1beta1 with actual directory",
-			mode: "member",
+			mode: ModeMember,
 			wantedCRDNames: []string{
 				"appliedworks.placement.kubernetes-fleet.io",
 			},
@@ -157,11 +157,19 @@ func TestInstallCRD(t *testing.T) {
 	tests := []struct {
 		name      string
 		crd       *apiextensionsv1.CustomResourceDefinition
+		mode      string
 		wantError bool
 	}{
 		{
-			name:      "successful CRD installation",
+			name:      "successful CRD installation with member mode",
 			crd:       testCRD,
+			mode:      ModeMember,
+			wantError: false,
+		},
+		{
+			name:      "successful CRD installation with arcMember mode",
+			crd:       testCRD,
+			mode:      ModeArcMember,
 			wantError: false,
 		},
 	}
@@ -169,7 +177,7 @@ func TestInstallCRD(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			fakeClient := fake.NewClientBuilder().WithScheme(scheme).Build()
-			err := InstallCRD(context.Background(), fakeClient, tt.crd)
+			err := InstallCRD(context.Background(), fakeClient, tt.crd, tt.mode)
 
 			if tt.wantError {
 				if err == nil {
@@ -194,8 +202,14 @@ func TestInstallCRD(t *testing.T) {
 				t.Errorf("Expected CRD label %s to be 'true', got %q", CRDInstallerLabelKey, installedCRD.Labels[CRDInstallerLabelKey])
 			}
 
-			if installedCRD.Labels[AzureManagedLabelKey] != FleetLabelValue {
-				t.Errorf("Expected CRD label %s to be %q, got %q", AzureManagedLabelKey, FleetLabelValue, installedCRD.Labels[AzureManagedLabelKey])
+			if tt.mode == ModeArcMember {
+				if installedCRD.Labels[AzureManagedLabelKey] != ModeArcMember {
+					t.Errorf("Expected CRD label %s to be %q, got %q", AzureManagedLabelKey, ModeArcMember, installedCRD.Labels[AzureManagedLabelKey])
+				}
+			} else {
+				if installedCRD.Labels[AzureManagedLabelKey] != FleetLabelValue {
+					t.Errorf("Expected CRD label %s to be %q, got %q", AzureManagedLabelKey, FleetLabelValue, installedCRD.Labels[AzureManagedLabelKey])
+				}
 			}
 
 			if diff := cmp.Diff(tt.crd.Spec, installedCRD.Spec); diff != "" {

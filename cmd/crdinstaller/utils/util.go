@@ -32,6 +32,20 @@ const (
 	FleetLabelValue = "fleet"
 )
 
+const (
+	trueLabelValue = "true"
+)
+
+// Mode constants for CRD installer.
+const (
+	// ModeHub installs hub cluster CRDs.
+	ModeHub = "hub"
+	// ModeMember installs member cluster CRDs.
+	ModeMember = "member"
+	// ModeArcMember installs member cluster CRDs with ARC member label value.
+	ModeArcMember = "arcMember"
+)
+
 var (
 	multiclusterCRD = map[string]bool{
 		"multicluster.x-k8s.io_clusterprofiles.yaml": true,
@@ -42,7 +56,7 @@ var (
 )
 
 // InstallCRD creates/updates a Custom Resource Definition (CRD) from the provided CRD object.
-func InstallCRD(ctx context.Context, client client.Client, crd *apiextensionsv1.CustomResourceDefinition) error {
+func InstallCRD(ctx context.Context, client client.Client, crd *apiextensionsv1.CustomResourceDefinition, mode string) error {
 	klog.V(2).Infof("Installing CRD: %s", crd.Name)
 
 	existingCRD := apiextensionsv1.CustomResourceDefinition{
@@ -60,10 +74,16 @@ func InstallCRD(ctx context.Context, client client.Client, crd *apiextensionsv1.
 			existingCRD.Labels = make(map[string]string)
 		}
 		// Ensure the label for management by the installer is set.
-		existingCRD.Labels[CRDInstallerLabelKey] = "true"
+		existingCRD.Labels[CRDInstallerLabelKey] = trueLabelValue
 		// Also set the Azure managed label to indicate this is managed by Fleet,
 		// needed for clean up of CRD by kube-addon-manager.
-		existingCRD.Labels[AzureManagedLabelKey] = FleetLabelValue
+		if mode == ModeArcMember {
+			// For aks ARC, we set the label value to "arcMember" to avoid clean up of CRDs by OM.
+			existingCRD.Labels[AzureManagedLabelKey] = ModeArcMember
+		} else {
+			existingCRD.Labels[AzureManagedLabelKey] = FleetLabelValue
+		}
+
 		return nil
 	}
 	err := install(ctx, client, &existingCRD, mutFn)
@@ -106,35 +126,22 @@ func CollectCRDs(crdDirectoryPath, mode string, scheme *runtime.Scheme) ([]apiex
 		// Process based on mode.
 		crdFileName := filepath.Base(crdpath)
 
-		if mode == "member" {
-			if memberCRD[crdFileName] {
-				crd, err := GetCRDFromPath(crdpath, scheme)
-				if err != nil {
-					return err
-				}
-				crdsToInstall = append(crdsToInstall, *crd)
-			}
-			// Skip CRDs that are not in the memberCRD map.
-			return nil
+		var shouldInstall bool
+		switch mode {
+		case ModeMember, ModeArcMember:
+			shouldInstall = memberCRD[crdFileName]
+		case ModeHub:
+			// Install multicluster CRD or CRDs with kubernetes-fleet.io in the filename (excluding member-only CRDs).
+			// CRD filenames follow the pattern <group>_<plural>.yaml, so we can check the filename.
+			shouldInstall = multiclusterCRD[crdFileName] || (strings.Contains(crdFileName, "kubernetes-fleet.io") && !memberCRD[crdFileName])
 		}
 
-		crd, err := GetCRDFromPath(crdpath, scheme)
-		if err != nil {
-			return err
-		}
-
-		// For hub mode, only collect CRDs whose group has substring kubernetes-fleet.io.
-		if mode == "hub" {
-			// special case for multicluster external CRD in hub cluster.
-			if multiclusterCRD[crdFileName] {
-				crdsToInstall = append(crdsToInstall, *crd)
-				return nil
+		if shouldInstall {
+			crd, err := GetCRDFromPath(crdpath, scheme)
+			if err != nil {
+				return err
 			}
-			group := crd.Spec.Group
-			// Check if the group contains "kubernetes-fleet.io" substring.
-			if strings.Contains(group, "kubernetes-fleet.io") && !memberCRD[crdFileName] {
-				crdsToInstall = append(crdsToInstall, *crd)
-			}
+			crdsToInstall = append(crdsToInstall, *crd)
 		}
 
 		return nil
