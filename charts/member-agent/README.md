@@ -1,13 +1,37 @@
 # Azure Fleet Member Agent Helm Chart
 
-## Get Repo
+## Chart Versioning
 
-```console
-helm repo add member-agent https://azure.github.io/fleet/charts/member-agent
-helm repo update
-```
+Chart versions match the KubeFleet release versions. For example, to install KubeFleet v0.2.1, use chart version `0.2.1`.
 
 ## Install Chart
+
+### Using Published Chart (Recommended)
+
+The member-agent chart is published to both GitHub Container Registry (OCI) and GitHub Pages.
+
+#### Option 1: OCI Registry (Recommended)
+
+```console
+# Install directly from OCI registry (replace VERSION with the desired release)
+helm install member-agent oci://ghcr.io/kubefleet-dev/kubefleet/charts/member-agent \
+  --version VERSION \
+  --namespace fleet-system \
+  --create-namespace
+```
+
+#### Option 2: Traditional Helm Repository
+
+```console
+# Add the KubeFleet Helm repository
+helm repo add kubefleet https://kubefleet-dev.github.io/kubefleet/charts
+helm repo update
+
+# Install member-agent (specify --version to pin to a specific release)
+helm install member-agent kubefleet/member-agent --namespace fleet-system --create-namespace
+```
+
+### From Local Source
 
 ```console
 # Go to `charts` folder inside the repo
@@ -21,10 +45,13 @@ _See [helm install](https://helm.sh/docs/helm/helm_install/) for command documen
 ## Upgrade Chart
 
 ```console
-# Go to `charts` folder inside the repo
-cd <REPO_DIRECTORY>/fleet/charts
-# Helm upgrade
-helm upgrade member-agent member-agent/ --namespace fleet-system
+# Using OCI registry (specify VERSION)
+helm upgrade member-agent oci://ghcr.io/kubefleet-dev/kubefleet/charts/member-agent \
+  --version VERSION \
+  --namespace fleet-system
+
+# Using traditional repository
+helm upgrade member-agent kubefleet/member-agent --namespace fleet-system
 ```
 
 ## Parameters
@@ -42,7 +69,16 @@ helm upgrade member-agent member-agent/ --namespace fleet-system
 | logVerbosity            | Log level. Uses V logs (klog)                                                                                                                                                                                                                  | `3`                                                  |
 | propertyProvider        | The property provider to use with the member agent; if none is specified, the Fleet member agent will start with no property provider (i.e., the agent will expose no cluster properties, and collect only limited resource usage information) | ``                                                   |
 | region                  | The region where the member cluster resides                                                                                                                                                                                                    | ``                                                   |
+| workApplierRequeueRateLimiterAttemptsWithFixedDelay | This parameter is a set of values to control how frequent KubeFleet should reconcile (processed) manifests; it specifies then number of attempts to requeue with fixed delay before switching to exponential backoff | `1` |
+| workApplierRequeueRateLimiterFixedDelaySeconds | This parameter is a set of values to control how frequent KubeFleet should reconcile (process) manifests; it specifies the fixed delay in seconds for initial requeue attempts | `5` |
+| workApplierRequeueRateLimiterExponentialBaseForSlowBackoff | This parameter is a set of values to control how frequent KubeFleet should reconcile (process) manifests; it specifies the exponential base for the slow backoff stage | `1.2` |
+| workApplierRequeueRateLimiterInitialSlowBackoffDelaySeconds | This parameter is a set of values to control how frequent KubeFleet should reconcile (process) manifests; it specifies the initial delay in seconds for the slow backoff stage | `2` |
+| workApplierRequeueRateLimiterMaxSlowBackoffDelaySeconds | This parameter is a set of values to control how frequent KubeFleet should reconcile (process) manifests; it specifies the maximum delay in seconds for the slow backoff stage | `15` |
+| workApplierRequeueRateLimiterExponentialBaseForFastBackoff | This parameter is a set of values to control how frequent KubeFleet should reconcile (process) manifests; it specifies the exponential base for the fast backoff stage | `1.5` |
+| workApplierRequeueRateLimiterMaxFastBackoffDelaySeconds | This parameter is a set of values to control how frequent KubeFleet should reconcile (process) manifests; it specifies the maximum delay in seconds for the fast backoff stage | `900` |
+| workApplierRequeueRateLimiterSkipToFastBackoffForAvailableOrDiffReportedWorkObjs | This parameter is a set of values to control how frequent KubeFleet should reconcile (process) manifests; it specifies whether to skip the slow backoff stage and start fast backoff immediately for available or diff-reported work objects | `true` |
 | config.azureCloudConfig | The cloud provider configuration                                                                                                                                                                                                               | **required if property provider is set to azure**    |
+
 
 ## Override Azure cloud config
 

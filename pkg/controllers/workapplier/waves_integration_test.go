@@ -1259,7 +1259,9 @@ var _ = Describe("parallel processing with waves", func() {
 
 			// Ensure that the AppliedWork object has been removed.
 			appliedWorkRemovedActual := appliedWorkRemovedActual(memberClient3, workName)
-			Eventually(appliedWorkRemovedActual, eventuallyDuration, eventuallyInterval).Should(Succeed(), "Failed to remove the AppliedWork object")
+			// As the cleanup for this test case involves the removal of many resources, we
+			// use a longer timeout to avoid flakiness.
+			Eventually(appliedWorkRemovedActual, eventuallyDuration*5, eventuallyInterval).Should(Succeed(), "Failed to remove the AppliedWork object")
 
 			workRemovedActual := testutilsactuals.WorkObjectRemovedActual(ctx, hubClient, workName, memberReservedNSName3)
 			Eventually(workRemovedActual, eventuallyDuration, eventuallyInterval).Should(Succeed(), "Failed to remove the Work object")

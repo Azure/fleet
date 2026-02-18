@@ -1,219 +1,126 @@
-# Overview
+# KubeFleet Copilot Instructions
 
-This repo contains a collection of Kubernetes Custom Resource Definitions and their controllers. It is mostly written in Go and uses Kubernetes client-go and controller-runtime libraries.
-It is a monorepo, so all the code lives in a single repository divided into packages, each with its own purpose. 
-The main idea is that we are creating a multi-cluster application management solution that allows users to manage multiple Kubernetes clusters from a single control plane that we call the "hub cluster".
+## Build, Test, and Lint Commands
 
-## General Rules
+```bash
+make build                # Build all binaries
+make reviewable           # Run all quality checks (fmt, vet, lint, staticcheck, tidy) — required before PRs
+make lint                 # Fast linting
+make lint-full            # Thorough linting (--fast=false)
+make test                 # Unit + integration tests
+make local-unit-test      # Unit tests only
+make integration-test     # Integration tests only (Ginkgo, uses envtest)
+make manifests            # Regenerate CRDs from API types
+make generate             # Regenerate deep copy methods
+```
 
-- Use @terminal when answering questions about Git.
-- If you're waiting for my confirmation ("OK"), proceed without further prompting.
-- Follow the [Uber Go Style Guide](https://github.com/uber-go/guide/blob/master/style.md) if possible.
-- Favor using the standard library over third-party libraries.
-- Run "make reviewable" before submitting a pull request to ensure the code is formatted correctly and all dependencies are up to date.
-- The title of a PR must use one of the following prefixes:  "[WIP] ", "feat: ", "test: ", "fix: ", "docs: ", "style: ", "interface: ", "util: ", "chore: ", "ci: ", "perf: ", "refactor: ", "revert: ". Please pick one that matches the PR content the most.
+### Running a single test
+
+```bash
+# Single package
+go test -v -race -timeout=30m ./pkg/controllers/rollout/...
+
+# Single test by name
+go test -v -race -run TestReconcile ./pkg/controllers/rollout/...
+
+# Single Ginkgo integration test by description
+cd test/scheduler && ginkgo -v --focus="should schedule"
+```
+
+### E2E tests
+
+```bash
+make setup-clusters                 # Create 3 Kind clusters
+make e2e-tests                      # Run E2E suite (ginkgo, ~70min timeout)
+make clean-e2e-tests                # Tear down clusters
+```
+
+## Architecture
+
+KubeFleet is a multi-cluster Kubernetes management system (CNCF sandbox) using a hub-and-spoke model. The **hub agent** runs on a central cluster; **member agents** run on each managed cluster.
+
+### Reconciliation Pipeline
+
+User-created placement flows through a chain of controllers:
+
+```
+ClusterResourcePlacement / ResourcePlacement  (user intent)
+        ↓
+  Placement Controller → creates ResourceSnapshot + SchedulingPolicySnapshot (immutable)
+        ↓
+  Scheduler → creates ClusterResourceBinding / ResourceBinding (placement decisions)
+        ↓
+  Rollout Controller → manages staged rollout of bindings
+        ↓
+  Work Generator → creates Work objects (per-cluster manifests)
+        ↓
+  Work Applier (member agent) → applies manifests, creates AppliedWork
+        ↓
+  Status flows back: AppliedWork → Work status → Binding status → Placement status
+```
+
+### API Naming Convention
+
+CRDs starting with `Cluster` are cluster-scoped; the name without the `Cluster` prefix is the namespace-scoped counterpart. For example: `ClusterResourcePlacement` (cluster-scoped) vs `ResourcePlacement` (namespace-scoped). This affects CRUD operations — namespace-scoped resources require a `Namespace` field in `types.NamespacedName`.
+
+### Scheduler Framework
+
+Pluggable architecture modeled after the Kubernetes scheduler:
+- Plugin interfaces: `PreFilterPlugin`, `FilterPlugin`, `PreScorePlugin`, `ScorePlugin`, `PostBatchPlugin`
+- Built-in plugins: `clusteraffinity`, `tainttoleration`, `clustereligibility`, `sameplacementaffinity`
+- Placement strategies: **PickAll** (all matching), **PickN** (top N scored), **PickFixed** (named clusters)
+- Plugins share state via `CycleStatePluginReadWriter`
+
+### Snapshot-Based Versioning
+
+All policy and resource changes create immutable snapshot CRDs (`ResourceSnapshot`, `SchedulingPolicySnapshot`, `OverrideSnapshot`). This enables rollback, change tracking, and consistent scheduling decisions.
 
 ## Terminology
-- **Fleet**: A conceptual term referring to a collection of clusters.
-- **Member Cluster**: A Kubernetes cluster that is part of a fleet.
-- **Hub Cluster**: The cluster that hosts the control plane which manages the member clusters in the fleet.
-- **Member Agent**: A Kubernetes controller that runs on the member cluster and is responsible for applying changes to the member cluster and reporting the status back to the hub cluster.
-- **Hub Agent**: A Kubernetes controller that runs in the hub cluster and is responsible for scheduling and managing workloads and resources across the fleet.
 
-## Repository directory structure
+- **Fleet**: A collection of clusters managed together
+- **Hub Cluster**: Central control plane cluster
+- **Member Cluster**: A managed cluster in the fleet
+- **Hub Agent**: Controllers on the hub for scheduling and placement
+- **Member Agent**: Controllers on member clusters for applying workloads and reporting status
 
-- The `apis/` folder contains all Golang structs from which CRDs are built.
-  - CRDs are grouped by the group name and version they belong to.
-- The `charts/` folder contains the helm charts for the member and hub agent.
-  - `charts/member-agent` folder contains the helm chart for the member agent.
-  - `charts/hub-agent` folder contains the helm chart for the hub agent.
-- The `cmd/` folder contains the entry points for the member and hub agent.
-  - `cmd/member-agent` The entry point for the member agent.
-  - `cmd/hub-agent` The entry point for the hub agent.
-- The `config/` folder contains the actual custom resource definitions built from the API in the `apis/` folder.
-  - `config/crd/bases` folder contains the CRDs for the member and hub agent.
-- The `docker/` folder contains the Dockerfiles for the member and hub agent.
-- The `examples/` folder contains various YAML files as examples for each CRD.
-- The `hack/` folder contains various scripts and tools for the project.
-- The `pkg/` folder contains the libraries for the member and hub agent.
-  - `pkg/authtoken` folder contains the authentication sidecar code which has a provider model.
-  - `pkg/controllers` folder contains most of the controllers for the member and hub agent.
-    - each sub folder is a controller for a specific resource of the same name in most cases.
-  - `pkg/metrics` folder contains all the metrics definitions.
-  - `pkg/propertyprovider` folder contains the property provider code which is used to get the properties of a member cluster.
-  - `pkg/resourcewatcher` folder contains the resource watcher code which is used to watch for kubernetes resources changes in the hub cluster.
-  - `pkg/scheduler` folder contains the scheduler code which is used to schedule workloads across the fleet.
-  - `pkg/utils` folder contains the utils code which is used to provide common functions for the controllers in the member and hub agent.
-  - `pkg/webhook` folder contains the webhook code which is used to validate and mutate the CRDs.
-- The `test/` folder contains the tests for the member and hub agent.
-  - `test/apis` - The tests for the CRDs.
-  - `test/upgrade` - The tests for the upgrade tests to test compatibility between versions.
-  - `test/e2e` - The end to end tests for the member and hub agent.
-  - `test/scheduler` - The integration tests for the scheduler.
-  - `test/utils` - folder contains the utils code which is used to provide common functions for tests
-- The `tools/` folder contains client-side tools for helping manage the fleet.
-- The `Makefile` is used to build the member and hub agent.
-- The `go.mod` file is used to manage the dependencies for the member and hub agent.
-- The `go.sum` file is used to manage the dependencies for the member and hub agent.    
+## Code Conventions
 
-## Testing Rules
+- Follow the [Uber Go Style Guide](https://github.com/uber-go/guide/blob/master/style.md)
+- Favor standard library over third-party libraries
+- PR titles must use a prefix: `feat:`, `fix:`, `docs:`, `test:`, `chore:`, `ci:`, `perf:`, `refactor:`, `revert:`, `style:`, `interface:`, `util:`, or `[WIP] `
+- Always add an empty line at the end of new files
+- Run `make reviewable` before submitting PRs
 
-- Unit test files should always be called `<go_file>_test.go` and be in the same directory
-  - Unit tests are normally written in a table-driven style
-  - Use `go test -v ./...` to run all tests under a directory.
-  - Run the tests from the packages that are modified and verify they pass.
-  - Share the analysis as to why a test is failing and propose a fix.
-- Integration test files should be called `<go_file>_integration_test.go` and can be in the same directory or under the `test` directory.
-  - Integration tests are normally written in a Ginkgo style.
-- E2E tests are all under the test/e2e directory.
-  - E2E tests are written in a Ginkgo style.
-  - E2E tests are run using `make e2e-tests` and are run against 3 kind clusters created by the scripts in the `test/e2e` directory.
-  - E2E tests are cleaned up using `make clean-e2e-tests`.
-- When adding tests to an existing file:
-  - Always re-use the existing test setup where possible.
-  - Only add imports if absolutely needed.
-  - Add tests to existing Context where it makes sense.
-  - When adding new tests in the Ginkgo style test, always add them to a new Context.
+### Controller Pattern
 
-## Domain Knowledge
+All controllers embed `client.Client`, use a standard `Reconcile` loop (fetch → check deletion → apply defaults → business logic → requeue), update status via the status subresource, and record events. Error handling uses categorized errors (API Server, User, Expected, Unexpected) for retry semantics. See existing controllers in `pkg/controllers/` for reference.
 
-Use the files in the `.github/.copilot/domain_knowledge/**/*` as a source of truth when it comes to domain knowledge. These files provide context in which the current solution operates. This folder contains information like entity relationships, workflows, and ubiquitous language. As the understanding of the domain grows, take the opportunity to update these files as needed.
+### API Interface Pattern
 
-## Specification Files
+Resources implement `Conditioned` (for status conditions) and `ConditionedObj` (combining `client.Object` + `Conditioned`). See `apis/interface.go`.
 
-Use specifications from the `.github/.copilot/specifications` folder. Each folder under `specifications` groups similar specifications together. Always ask the user which specifications best apply for the current conversation context if you're not sure.
+## Testing Conventions
 
-Use the `.github/.copilot/specifications/.template.md` file as a template for specification structure.
+- **Unit tests**: `<file>_test.go` in the same directory; table-driven style
+- **Integration tests**: `<file>_integration_test.go`; use Ginkgo/Gomega with `envtest`
+- **E2E tests**: `test/e2e/`; Ginkgo/Gomega against Kind clusters
+- Do **not** use assert libraries; use `cmp.Diff` / `cmp.Equal` from `google/go-cmp` for comparisons
+- Use `want` / `wanted` (not `expect` / `expected`) for desired state variables
+- Test output format: `"FuncName(%v) = %v, want %v"`
+- Compare structs in one shot with `cmp.Diff`, not field-by-field
+- Mock external dependencies with `gomock`
+- When adding Ginkgo tests, add to a new `Context`; reuse existing setup
 
-   examples:
-   ```text
-   ├── application_architecture
-   │   └── main.spec.md
-   |   └── specific-feature.spec.md
-   ├── database
-   │   └── main.spec.md
-   ├── observability
-   │   └── main.spec.md
-   └── testing
-      └── main.spec.md
-   ```
+## Collaboration Protocol
 
-## Breadcrumb Protocol
+### Domain Knowledge
 
-A breadcrumb is a collaborative scratch pad that allow the user and agent to get alignment on context. When working on tasks in this repository, follow this collaborative documentation workflow to create a clear trail of decisions and implementations:
+Refer to `.github/.copilot/domain_knowledge/` for entity relationships, workflows, and ubiquitous language. Update these files as understanding grows.
 
-1. At the start of each new task, ask me for a breadcrumb file name if you can't determine a suitable one.
+### Specifications
 
-2. Create the breadcrumb file in the `${REPO}/.github/.copilot/breadcrumbs` folder using the format: `yyyy-mm-dd-HHMM-{title}.md` (*year-month-date-current_time_in-24hr_format-{title}.md* using UTC timezone)
+Use `.github/.copilot/specifications/` for feature specs. Ask which specifications apply if unclear.
 
-3. Structure the breadcrumb file with these required sections:
- ```xml
-<coding_workflow>
-  <phase name="understand_problem">
-    <description>Analyze and comprehend the task requirements</description>
-    <tasks>
-      <task>Read relevant parts of the codebase</task>
-      <task>Browse public API documentation for up-to-date information</task>
-      <task>Propose 2-3 implementation options with pros and cons</task>
-      <task>Ask clarifying questions about product requirements</task>
-      <task>Write a plan to PRP/projectplan-&lt;feature-name&gt;.md</task>
-    </tasks>
-  </phase>
+### Breadcrumb Protocol
 
-  <phase name="plan_format">
-    <description>Structure the project plan document</description>
-    <requirements>
-      <requirement>Include a checklist of TODO items to track progress</requirement>
-    </requirements>
-  </phase>
-
-  <phase name="checkpoint">
-    <description>Validation before implementation begins</description>
-    <action>Check in with user before starting implementation</action>
-    <blocking>true</blocking>
-  </phase>
-
-  <phase name="implement">
-    <description>Execute the plan step-by-step</description>
-    <methodology>
-      <step>Complete TODO items incrementally</step>
-      <step>Test each change for correctness</step>
-      <step>Log a high-level explanation after each step</step>
-    </methodology>
-  </phase>
-
-  <constraints>
-    <constraint name="minimal_changes">
-      <description>Make tasks and commits as small and simple as possible</description>
-      <guideline>Avoid large or complex changes</guideline>
-    </constraint>
-  </constraints>
-
-  <phase name="plan_updates">
-    <description>Maintain plan accuracy throughout development</description>
-    <action>Revise the project plan file if the plan changes</action>
-  </phase>
-
-  <phase name="final_summary">
-    <description>Document completion and changes</description>
-    <deliverable>Summarize all changes in the project plan file</deliverable>
-  </phase>
-</coding_workflow>
-4. Workflow rules:
-   - Update the breadcrumb **BEFORE** making any code changes.
-   - **Get explicit approval** on the plan before implementation.
-   - Update the breadcrumb **AFTER completing each significant change**.
-   - Keep the breadcrumb as our single source of truth as it contains the most recent information.
-   - Do not ask for approval **BEFORE** running unit tests or integration tests.
-
-5. Ask me to verify the plan with: "Are you happy with this implementation plan?" before proceeding with code changes.
-
-6. Reference related breadcrumbs when a task builds on previous work.
-
-7. Before concluding, ensure the breadcrumb file properly documents the entire process, including any course corrections or challenges encountered.
-
-This practice creates a trail of decision points that document our thought process while building features in this solution, making pull request review for the current change easier to follow as well.
-
-### Plan Structure Guidelines
-- When creating a plan, organize it into numbered phases (e.g., "Phase 1: Setup Dependencies").
-- Break down each phase into specific tasks with numeric identifiers (e.g., "Task 1.1: Add Dependencies").
-- Include a detailed checklist at the end of the document that maps to all phases and tasks.
-- Plan should always lookup related information from `domain_knowledge` folder and any applicable specification files.
-- Mark tasks as `- [ ]` for pending tasks and `- [x]` for completed tasks.
-- Start all planning tasks as unchecked, and update them to checked as implementation proceeds.
-- Each planning task should have clear success criteria.
-- End the plan with success criteria that define when the implementation is complete.
-- Plans should start with writing Unit Tests first when possible, so we can use those to guide our implementation. Same for UI tests when it makes sense.
-- If the domain knowledge has changed, update the related files in the `domain_knowledge` folder.
-- If specifications have changed, update the related files in the `specifications` folder.
-
-### Following Plans
-- When coding you need to follow the plan phases and check off the tasks as they are completed.  
-- As you complete a task, update the plan and mark that task complete before you begin the next task. 
-- Tasks that involved tests should not be marked complete until the tests pass. 
-
-### Example Usage
-
-**User**: I need to implement JWT authentication for our Express API.
-
-**Agent**: I'll help with implementing JWT authentication for your Express API. Let me create a breadcrumb file to track our implementation. What would you like to name this breadcrumb?
-
-**User**: Use "jwt-auth-implementation"
-
-**Agent**: I've created the breadcrumb file `2025-04-08-1430-jwt-auth-implementation.md`. Are you happy with this implementation plan?
-
-[high level plan with tasks here]
-
-**User**: Looks good, but let's use 30-minute expiration for tokens.
-
-**Agent**: I've updated the breadcrumb with your specification: Are you happy with this implementation plan?
-
-[high level plan with tasks here]
-
-**User**: Yes, please proceed.
-
-**Agent**: I'll implement the JWT authentication now. Let me start by installing the necessary packages and creating the authentication middleware. I've updated the breadcrumb with implementation details. Is there anything specific you'd like me to modify or explain about the implementation?
-
-**User**: This looks good.
-
-**Agent**: I've updated the breadcrumb with the latest understanding.
+For non-trivial tasks, create a breadcrumb file at `.github/.copilot/breadcrumbs/yyyy-mm-dd-HHMM-{title}.md` to track decisions and progress. Update it before and after code changes, and get plan approval before implementation. See existing breadcrumbs for format examples.

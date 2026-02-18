@@ -161,18 +161,22 @@ func SetupControllers(ctx context.Context, wg *sync.WaitGroup, mgr ctrl.Manager,
 	validator.RestMapper = mgr.GetRESTMapper()          // webhook needs this to validate GVK of resource selector
 
 	// Set up  a custom controller to reconcile placement objects
+	resourceSelectorResolver := controller.ResourceSelectorResolver{
+		RestMapper:        mgr.GetRESTMapper(),
+		InformerManager:   dynamicInformerManager,
+		ResourceConfig:    resourceConfig,
+		SkippedNamespaces: skippedNamespaces,
+		EnableWorkload:    opts.EnableWorkload,
+	}
+	resourceSnapshotResolver := controller.NewResourceSnapshotResolver(mgr.GetClient(), mgr.GetScheme())
+	resourceSnapshotResolver.Config = controller.NewResourceSnapshotConfig(opts.ResourceSnapshotCreationMinimumInterval, opts.ResourceChangesCollectionDuration)
 	pc := &placement.Reconciler{
-		Client:                                  mgr.GetClient(),
-		Recorder:                                mgr.GetEventRecorderFor(placementControllerName),
-		RestMapper:                              mgr.GetRESTMapper(),
-		InformerManager:                         dynamicInformerManager,
-		ResourceConfig:                          resourceConfig,
-		SkippedNamespaces:                       skippedNamespaces,
-		Scheme:                                  mgr.GetScheme(),
-		UncachedReader:                          mgr.GetAPIReader(),
-		ResourceSnapshotCreationMinimumInterval: opts.ResourceSnapshotCreationMinimumInterval,
-		ResourceChangesCollectionDuration:       opts.ResourceChangesCollectionDuration,
-		EnableWorkload:                          opts.EnableWorkload,
+		Client:                   mgr.GetClient(),
+		Recorder:                 mgr.GetEventRecorderFor(placementControllerName),
+		Scheme:                   mgr.GetScheme(),
+		UncachedReader:           mgr.GetAPIReader(),
+		ResourceSelectorResolver: resourceSelectorResolver,
+		ResourceSnapshotResolver: *resourceSnapshotResolver,
 	}
 
 	rateLimiter := options.DefaultControllerRateLimiter(opts.RateLimiterOpts)

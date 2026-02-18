@@ -1,5 +1,5 @@
 # Build the memberagent binary
-FROM mcr.microsoft.com/oss/go/microsoft/golang:1.24.9 AS builder
+FROM mcr.microsoft.com/oss/go/microsoft/golang:1.24.13 AS builder
 
 ARG GOOS=linux
 ARG GOARCH=amd64

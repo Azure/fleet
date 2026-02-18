@@ -1409,7 +1409,7 @@ var _ = Describe("Test placement v1beta1 API validation", func() {
 			err := hubClient.Create(ctx, &strategy)
 			var statusErr *k8sErrors.StatusError
 			Expect(errors.As(err, &statusErr)).To(BeTrue(), fmt.Sprintf("Create updateRunStrategy call produced error %s. Error type wanted is %s.", reflect.TypeOf(err), reflect.TypeOf(&k8sErrors.StatusError{})))
-			Expect(statusErr.ErrStatus.Message).Should(MatchRegexp("Too long: may not be longer than 63"))
+			Expect(statusErr.ErrStatus.Message).Should(MatchRegexp("Too long: may not be more than 63 bytes"))
 		})
 
 		It("Should deny creation of ClusterStagedUpdateStrategy with invalid stage config - stage name with invalid characters", func() {

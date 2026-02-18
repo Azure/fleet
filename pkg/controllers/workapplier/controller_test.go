@@ -17,6 +17,7 @@ limitations under the License.
 package workapplier
 
 import (
+	"context"
 	"fmt"
 	"log"
 	"os"
@@ -32,10 +33,17 @@ import (
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/runtime/schema"
+	"k8s.io/apimachinery/pkg/types"
 	"k8s.io/client-go/kubernetes/scheme"
 	"k8s.io/utils/ptr"
+	"sigs.k8s.io/controller-runtime/pkg/client/fake"
 
 	fleetv1beta1 "go.goms.io/fleet/apis/placement/v1beta1"
+)
+
+const (
+	testRunnerNameEnvVarName  = "KUBEFLEET_CI_TEST_RUNNER_NAME"
+	runnerNameToSkipTestsInCI = "default"
 )
 
 const (
@@ -208,7 +216,8 @@ var (
 )
 
 var (
-	ignoreFieldTypeMetaInNamespace = cmpopts.IgnoreFields(corev1.Namespace{}, "TypeMeta")
+	ignoreFieldTypeMetaInNamespace       = cmpopts.IgnoreFields(corev1.Namespace{}, "TypeMeta")
+	ignoreFieldObjectMetaresourceVersion = cmpopts.IgnoreFields(metav1.ObjectMeta{}, "ResourceVersion")
 
 	lessFuncAppliedResourceMeta = func(i, j fleetv1beta1.AppliedResourceMeta) bool {
 		iStr := fmt.Sprintf("%s/%s/%s/%s/%s", i.Group, i.Version, i.Kind, i.Namespace, i.Name)
@@ -251,6 +260,13 @@ func manifestAppliedCond(workGeneration int64, status metav1.ConditionStatus, re
 }
 
 func TestMain(m *testing.M) {
+	// Skip the tests if in the CI environment the tests are invoked with `go test` instead of the Ginkgo CLI.
+	// This has no effect outside the CI environment.
+	if v := os.Getenv(testRunnerNameEnvVarName); v == runnerNameToSkipTestsInCI {
+		log.Println("Skipping the tests in CI as they are not run with the expected runner")
+		os.Exit(0)
+	}
+
 	// Add custom APIs to the runtime scheme.
 	if err := fleetv1beta1.AddToScheme(scheme.Scheme); err != nil {
 		log.Fatalf("failed to add custom APIs (placement/v1beta1) to the runtime scheme: %v", err)
@@ -260,6 +276,14 @@ func TestMain(m *testing.M) {
 	initializeVariables()
 
 	os.Exit(m.Run())
+}
+
+func fakeClientScheme(t *testing.T) *runtime.Scheme {
+	scheme := runtime.NewScheme()
+	if err := fleetv1beta1.AddToScheme(scheme); err != nil {
+		t.Fatalf("Failed to add placement v1beta1 scheme: %v", err)
+	}
+	return scheme
 }
 
 func initializeVariables() {
@@ -330,5 +354,199 @@ func TestPrepareManifestProcessingBundles(t *testing.T) {
 	}
 	if diff := cmp.Diff(bundles, wantBundles, cmp.AllowUnexported(manifestProcessingBundle{})); diff != "" {
 		t.Errorf("prepareManifestProcessingBundles() mismatches (-got +want):\n%s", diff)
+	}
+}
+
+// TestEnsureAppliedWork tests the ensureAppliedWork method.
+func TestEnsureAppliedWork(t *testing.T) {
+	ctx := context.Background()
+
+	fakeUID := types.UID("foo")
+	testCases := []struct {
+		name            string
+		work            *fleetv1beta1.Work
+		appliedWork     *fleetv1beta1.AppliedWork
+		wantWork        *fleetv1beta1.Work
+		wantAppliedWork *fleetv1beta1.AppliedWork
+	}{
+		{
+			name: "with work cleanup finalizer present, but no corresponding AppliedWork exists",
+			work: &fleetv1beta1.Work{
+				ObjectMeta: metav1.ObjectMeta{
+					Name:      workName,
+					Namespace: memberReservedNSName1,
+					Finalizers: []string{
+						fleetv1beta1.WorkFinalizer,
+					},
+				},
+			},
+			wantWork: &fleetv1beta1.Work{
+				ObjectMeta: metav1.ObjectMeta{
+					Name:      workName,
+					Namespace: memberReservedNSName1,
+					Finalizers: []string{
+						fleetv1beta1.WorkFinalizer,
+					},
+				},
+			},
+			wantAppliedWork: &fleetv1beta1.AppliedWork{
+				ObjectMeta: metav1.ObjectMeta{
+					Name: workName,
+				},
+				Spec: fleetv1beta1.AppliedWorkSpec{
+					WorkName:      workName,
+					WorkNamespace: memberReservedNSName1,
+				},
+			},
+		},
+		{
+			name: "with work cleanup finalizer present, and corresponding AppliedWork exists",
+			work: &fleetv1beta1.Work{
+				ObjectMeta: metav1.ObjectMeta{
+					Name:      workName,
+					Namespace: memberReservedNSName1,
+					Finalizers: []string{
+						fleetv1beta1.WorkFinalizer,
+					},
+				},
+			},
+			appliedWork: &fleetv1beta1.AppliedWork{
+				ObjectMeta: metav1.ObjectMeta{
+					Name: workName,
+					// Add the UID field to track if the method returns the existing object.
+					UID: fakeUID,
+				},
+				Spec: fleetv1beta1.AppliedWorkSpec{
+					WorkName:      workName,
+					WorkNamespace: memberReservedNSName1,
+				},
+			},
+			wantWork: &fleetv1beta1.Work{
+				ObjectMeta: metav1.ObjectMeta{
+					Name:      workName,
+					Namespace: memberReservedNSName1,
+					Finalizers: []string{
+						fleetv1beta1.WorkFinalizer,
+					},
+				},
+			},
+			wantAppliedWork: &fleetv1beta1.AppliedWork{
+				ObjectMeta: metav1.ObjectMeta{
+					Name: workName,
+					UID:  fakeUID,
+				},
+				Spec: fleetv1beta1.AppliedWorkSpec{
+					WorkName:      workName,
+					WorkNamespace: memberReservedNSName1,
+				},
+			},
+		},
+		{
+			name: "without work cleanup finalizer, but corresponding AppliedWork exists",
+			work: &fleetv1beta1.Work{
+				ObjectMeta: metav1.ObjectMeta{
+					Name:      workName,
+					Namespace: memberReservedNSName1,
+				},
+			},
+			appliedWork: &fleetv1beta1.AppliedWork{
+				ObjectMeta: metav1.ObjectMeta{
+					Name: workName,
+					// Add the UID field to track if the method returns the existing object.
+					UID: fakeUID,
+				},
+				Spec: fleetv1beta1.AppliedWorkSpec{
+					WorkName:      workName,
+					WorkNamespace: memberReservedNSName1,
+				},
+			},
+			wantWork: &fleetv1beta1.Work{
+				ObjectMeta: metav1.ObjectMeta{
+					Name:      workName,
+					Namespace: memberReservedNSName1,
+					Finalizers: []string{
+						fleetv1beta1.WorkFinalizer,
+					},
+				},
+			},
+			wantAppliedWork: &fleetv1beta1.AppliedWork{
+				ObjectMeta: metav1.ObjectMeta{
+					Name: workName,
+					UID:  fakeUID,
+				},
+				Spec: fleetv1beta1.AppliedWorkSpec{
+					WorkName:      workName,
+					WorkNamespace: memberReservedNSName1,
+				},
+			},
+		},
+		{
+			name: "without work cleanup finalizer, and no corresponding AppliedWork exists",
+			work: &fleetv1beta1.Work{
+				ObjectMeta: metav1.ObjectMeta{
+					Name:      workName,
+					Namespace: memberReservedNSName1,
+				},
+			},
+			wantWork: &fleetv1beta1.Work{
+				ObjectMeta: metav1.ObjectMeta{
+					Name:      workName,
+					Namespace: memberReservedNSName1,
+					Finalizers: []string{
+						fleetv1beta1.WorkFinalizer,
+					},
+				},
+			},
+			wantAppliedWork: &fleetv1beta1.AppliedWork{
+				ObjectMeta: metav1.ObjectMeta{
+					Name: workName,
+				},
+				Spec: fleetv1beta1.AppliedWorkSpec{
+					WorkName:      workName,
+					WorkNamespace: memberReservedNSName1,
+				},
+			},
+		},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			hubClientScheme := fakeClientScheme(t)
+			fakeHubClient := fake.NewClientBuilder().
+				WithScheme(hubClientScheme).
+				WithObjects(tc.work).
+				Build()
+
+			memberClientScheme := fakeClientScheme(t)
+			fakeMemberClientBuilder := fake.NewClientBuilder().WithScheme(memberClientScheme)
+			if tc.appliedWork != nil {
+				fakeMemberClientBuilder = fakeMemberClientBuilder.WithObjects(tc.appliedWork)
+			}
+			fakeMemberClient := fakeMemberClientBuilder.Build()
+
+			r := &Reconciler{
+				hubClient:   fakeHubClient,
+				spokeClient: fakeMemberClient,
+			}
+
+			gotAppliedWork, err := r.ensureAppliedWork(ctx, tc.work)
+			if err != nil {
+				t.Fatalf("ensureAppliedWork() = %v, want no error", err)
+			}
+
+			// Verify the Work object.
+			gotWork := &fleetv1beta1.Work{}
+			if err := fakeHubClient.Get(ctx, types.NamespacedName{Name: tc.work.Name, Namespace: tc.work.Namespace}, gotWork); err != nil {
+				t.Fatalf("failed to get Work object from fake hub client: %v", err)
+			}
+			if diff := cmp.Diff(gotWork, tc.wantWork, ignoreFieldObjectMetaresourceVersion); diff != "" {
+				t.Errorf("Work objects diff (-got +want):\n%s", diff)
+			}
+
+			// Verify the AppliedWork object.
+			if diff := cmp.Diff(gotAppliedWork, tc.wantAppliedWork, ignoreFieldObjectMetaresourceVersion); diff != "" {
+				t.Errorf("AppliedWork objects diff (-got +want):\n%s", diff)
+			}
+		})
 	}
 }

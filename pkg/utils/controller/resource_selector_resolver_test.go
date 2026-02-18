@@ -14,7 +14,7 @@ See the License for the specific language governing permissions and
 limitations under the License.
 */
 
-package placement
+package controller
 
 import (
 	"errors"
@@ -38,7 +38,6 @@ import (
 
 	fleetv1beta1 "go.goms.io/fleet/apis/placement/v1beta1"
 	"go.goms.io/fleet/pkg/utils"
-	"go.goms.io/fleet/pkg/utils/controller"
 	testinformer "go.goms.io/fleet/test/utils/informer"
 )
 
@@ -533,7 +532,7 @@ func TestGatherSelectedResource(t *testing.T) {
 				Listers:                 map[schema.GroupVersionResource]*testinformer.FakeLister{},
 			},
 			want:      nil,
-			wantError: controller.ErrUserError,
+			wantError: ErrUserError,
 		},
 		{
 			name:          "should handle single resource selection successfully",
@@ -606,7 +605,7 @@ func TestGatherSelectedResource(t *testing.T) {
 					},
 				}
 			}(),
-			wantError: controller.ErrUnexpectedBehavior,
+			wantError: ErrUnexpectedBehavior,
 		},
 		{
 			name:          "should return error using label selector when informer manager returns error",
@@ -630,7 +629,7 @@ func TestGatherSelectedResource(t *testing.T) {
 					},
 				}
 			}(),
-			wantError: controller.ErrAPIServerError,
+			wantError: ErrAPIServerError,
 		},
 		{
 			name:          "should return only non-deleting resources when mixed with deleting resources",
@@ -745,7 +744,7 @@ func TestGatherSelectedResource(t *testing.T) {
 					},
 				}
 			}(),
-			wantError: controller.ErrUserError,
+			wantError: ErrUserError,
 		},
 		{
 			name:          "should sort resources according to apply order",
@@ -795,7 +794,7 @@ func TestGatherSelectedResource(t *testing.T) {
 				Listers:                 map[schema.GroupVersionResource]*testinformer.FakeLister{},
 			},
 			want:      nil,
-			wantError: controller.ErrUserError,
+			wantError: ErrUserError,
 		},
 		{
 			name:          "should sort resources for cluster scoped placement",
@@ -1027,7 +1026,7 @@ func TestGatherSelectedResource(t *testing.T) {
 					NamespaceScopedResources: []schema.GroupVersionResource{utils.DeploymentGVR, utils.ConfigMapGVR},
 				}
 			}(),
-			wantError: controller.ErrUserError,
+			wantError: ErrUserError,
 		},
 		{
 			name:          "should return error when selecting a reserved namespace for cluster scoped placement",
@@ -1057,7 +1056,7 @@ func TestGatherSelectedResource(t *testing.T) {
 					NamespaceScopedResources: []schema.GroupVersionResource{utils.DeploymentGVR, utils.ConfigMapGVR},
 				}
 			}(),
-			wantError: controller.ErrUserError,
+			wantError: ErrUserError,
 		},
 		{
 			name:          "should return empty result when informer manager returns not found error for cluster scoped placement",
@@ -1109,7 +1108,7 @@ func TestGatherSelectedResource(t *testing.T) {
 					},
 				}
 			}(),
-			wantError: controller.ErrUnexpectedBehavior,
+			wantError: ErrUnexpectedBehavior,
 		},
 		{
 			name:          "should return error using label selector when informer manager returns error (getting namespace) for cluster scoped placement",
@@ -1134,7 +1133,7 @@ func TestGatherSelectedResource(t *testing.T) {
 					},
 				}
 			}(),
-			wantError: controller.ErrAPIServerError,
+			wantError: ErrAPIServerError,
 		},
 		{
 			name:          "should return error when informer manager returns non-NotFound error (getting deployment) for cluster scoped placement",
@@ -1162,7 +1161,7 @@ func TestGatherSelectedResource(t *testing.T) {
 					NamespaceScopedResources: []schema.GroupVersionResource{utils.DeploymentGVR},
 				}
 			}(),
-			wantError: controller.ErrUnexpectedBehavior,
+			wantError: ErrUnexpectedBehavior,
 		},
 		{
 			name:          "should skip reserved resources for namespaced placement",
@@ -1228,7 +1227,7 @@ func TestGatherSelectedResource(t *testing.T) {
 					InformerSynced: ptr.To(false),
 				}
 			}(),
-			wantError: controller.ErrExpectedBehavior,
+			wantError: ErrExpectedBehavior,
 		},
 		{
 			name:          "should return error when informer cache is not synced for cluster scoped placement",
@@ -1251,7 +1250,7 @@ func TestGatherSelectedResource(t *testing.T) {
 					InformerSynced: ptr.To(false),
 				}
 			}(),
-			wantError: controller.ErrExpectedBehavior,
+			wantError: ErrExpectedBehavior,
 		},
 		{
 			name:          "should return error when informer cache is not synced for cluster scoped placement with namespace resources",
@@ -1280,7 +1279,7 @@ func TestGatherSelectedResource(t *testing.T) {
 					InformerSynced:           ptr.To(false),
 				}
 			}(),
-			wantError: controller.ErrExpectedBehavior,
+			wantError: ErrExpectedBehavior,
 		},
 		{
 			name:          "should return error when shouldPropagateObj returns error",
@@ -1308,7 +1307,7 @@ func TestGatherSelectedResource(t *testing.T) {
 					},
 				}
 			}(),
-			wantError: controller.ErrUnexpectedBehavior,
+			wantError: ErrUnexpectedBehavior,
 		},
 		{
 			name:          "should return error by selecting all the endpoints when shouldPropagateObj returns error",
@@ -1335,19 +1334,19 @@ func TestGatherSelectedResource(t *testing.T) {
 					},
 				}
 			}(),
-			wantError: controller.ErrUnexpectedBehavior,
+			wantError: ErrUnexpectedBehavior,
 		},
 	}
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			r := &Reconciler{
+			rsr := &ResourceSelectorResolver{
 				ResourceConfig:  tt.resourceConfig,
 				InformerManager: tt.informerManager,
 				RestMapper:      newFakeRESTMapper(),
 			}
 
-			got, err := r.gatherSelectedResource(tt.placementName, tt.selectors)
+			got, err := rsr.gatherSelectedResource(tt.placementName, tt.selectors)
 			if gotErr, wantErr := err != nil, tt.wantError != nil; gotErr != wantErr || !errors.Is(err, tt.wantError) {
 				t.Fatalf("gatherSelectedResource() = %v, want error %v", err, tt.wantError)
 			}
@@ -1959,6 +1958,263 @@ func TestSortResources(t *testing.T) {
 				if diff != "" {
 					t.Errorf("sortResources() mismatch (-want +got):\n%s", diff)
 				}
+			}
+		})
+	}
+}
+
+func TestShouldPropagateObj(t *testing.T) {
+	tests := []struct {
+		name            string
+		obj             map[string]interface{}
+		ownerReferences []metav1.OwnerReference
+		enableWorkload  bool
+		want            bool
+	}{
+		{
+			name: "standalone replicaset without ownerReferences should propagate",
+			obj: map[string]interface{}{
+				"apiVersion": "apps/v1",
+				"kind":       "ReplicaSet",
+				"metadata": map[string]interface{}{
+					"name":      "standalone-rs",
+					"namespace": "default",
+				},
+			},
+			ownerReferences: nil,
+			enableWorkload:  true,
+			want:            true,
+		},
+		{
+			name: "standalone replicaset without ownerReferences should propagate if workload is disabled",
+			obj: map[string]interface{}{
+				"apiVersion": "apps/v1",
+				"kind":       "ReplicaSet",
+				"metadata": map[string]interface{}{
+					"name":      "standalone-rs",
+					"namespace": "default",
+				},
+			},
+			ownerReferences: nil,
+			enableWorkload:  false,
+			want:            true,
+		},
+		{
+			name: "standalone pod without ownerReferences should propagate",
+			obj: map[string]interface{}{
+				"apiVersion": "v1",
+				"kind":       "Pod",
+				"metadata": map[string]interface{}{
+					"name":      "standalone-pod",
+					"namespace": "default",
+				},
+			},
+			ownerReferences: nil,
+			enableWorkload:  true,
+			want:            true,
+		},
+		{
+			name: "replicaset with deployment owner should NOT propagate",
+			obj: map[string]interface{}{
+				"apiVersion": "apps/v1",
+				"kind":       "ReplicaSet",
+				"metadata": map[string]interface{}{
+					"name":      "test-deploy-abc123",
+					"namespace": "default",
+				},
+			},
+			ownerReferences: []metav1.OwnerReference{
+				{
+					APIVersion: "apps/v1",
+					Kind:       "Deployment",
+					Name:       "test-deploy",
+					UID:        "12345",
+				},
+			},
+			enableWorkload: true,
+			want:           false,
+		},
+		{
+			name: "pod owned by replicaset - passes ShouldPropagateObj but filtered by resource config",
+			obj: map[string]interface{}{
+				"apiVersion": "v1",
+				"kind":       "Pod",
+				"metadata": map[string]interface{}{
+					"name":      "test-deploy-abc123-xyz",
+					"namespace": "default",
+				},
+			},
+			ownerReferences: []metav1.OwnerReference{
+				{
+					APIVersion: "apps/v1",
+					Kind:       "ReplicaSet",
+					Name:       "test-deploy-abc123",
+					UID:        "67890",
+				},
+			},
+			enableWorkload: false,
+			want:           true, // ShouldPropagateObj doesn't filter Pods - they're filtered by NewResourceConfig
+		},
+		{
+			name: "controllerrevision owned by daemonset should NOT propagate",
+			obj: map[string]interface{}{
+				"apiVersion": "apps/v1",
+				"kind":       "ControllerRevision",
+				"metadata": map[string]interface{}{
+					"name":      "test-ds-7b9848797f",
+					"namespace": "default",
+				},
+			},
+			ownerReferences: []metav1.OwnerReference{
+				{
+					APIVersion: "apps/v1",
+					Kind:       "DaemonSet",
+					Name:       "test-ds",
+					UID:        "abcdef",
+				},
+			},
+			enableWorkload: false,
+			want:           false,
+		},
+		{
+			name: "controllerrevision owned by statefulset should NOT propagate",
+			obj: map[string]interface{}{
+				"apiVersion": "apps/v1",
+				"kind":       "ControllerRevision",
+				"metadata": map[string]interface{}{
+					"name":      "test-ss-7878b4b446",
+					"namespace": "default",
+				},
+			},
+			ownerReferences: []metav1.OwnerReference{
+				{
+					APIVersion: "apps/v1",
+					Kind:       "StatefulSet",
+					Name:       "test-ss",
+					UID:        "fedcba",
+				},
+			},
+			enableWorkload: false,
+			want:           false,
+		},
+		{
+			name: "standalone controllerrevision without owner should propagate",
+			obj: map[string]interface{}{
+				"apiVersion": "apps/v1",
+				"kind":       "ControllerRevision",
+				"metadata": map[string]interface{}{
+					"name":      "custom-revision",
+					"namespace": "default",
+				},
+			},
+			ownerReferences: nil,
+			enableWorkload:  false,
+			want:            true,
+		},
+		{
+			name: "PVC should propagate when workload is disabled",
+			obj: map[string]interface{}{
+				"apiVersion": "v1",
+				"kind":       "PersistentVolumeClaim",
+				"metadata": map[string]interface{}{
+					"name":      "test-pvc",
+					"namespace": "default",
+				},
+			},
+			ownerReferences: nil,
+			enableWorkload:  false,
+			want:            true,
+		},
+		{
+			name: "PVC should NOT propagate when workload is enabled",
+			obj: map[string]interface{}{
+				"apiVersion": "v1",
+				"kind":       "PersistentVolumeClaim",
+				"metadata": map[string]interface{}{
+					"name":      "test-pvc",
+					"namespace": "default",
+				},
+			},
+			ownerReferences: nil,
+			enableWorkload:  true,
+			want:            false,
+		},
+		{
+			name: "PVC with ownerReferences should NOT propagate when workload is enabled",
+			obj: map[string]interface{}{
+				"apiVersion": "v1",
+				"kind":       "PersistentVolumeClaim",
+				"metadata": map[string]interface{}{
+					"name":      "data-statefulset-0",
+					"namespace": "default",
+				},
+			},
+			ownerReferences: []metav1.OwnerReference{
+				{
+					APIVersion: "apps/v1",
+					Kind:       "StatefulSet",
+					Name:       "statefulset",
+					UID:        "sts-uid",
+				},
+			},
+			enableWorkload: true,
+			want:           false,
+		},
+		{
+			name: "Default ServiceAccount in namespace should NOT propagate",
+			obj: map[string]interface{}{
+				"apiVersion": "v1",
+				"kind":       "ServiceAccount",
+				"metadata": map[string]interface{}{
+					"name":      "default",
+					"namespace": "test-ns",
+				},
+			},
+			want: false,
+		},
+		{
+			name: "service-account-token secret should NOT propagate",
+			obj: map[string]interface{}{
+				"apiVersion": "v1",
+				"kind":       "Secret",
+				"metadata": map[string]interface{}{
+					"name":      "sa-token",
+					"namespace": "test",
+				},
+				"type": string(corev1.SecretTypeServiceAccountToken),
+			},
+			want: false,
+		},
+		{
+			name: "endpointslice with managed-by label should NOT propagate",
+			obj: map[string]interface{}{
+				"apiVersion": "discovery.k8s.io/v1",
+				"kind":       "EndpointSlice",
+				"metadata": map[string]interface{}{
+					"name": "test-endpointslice",
+					"labels": map[string]interface{}{
+						"endpointslice.kubernetes.io/managed-by": "endpointslice-controller",
+					},
+				},
+			},
+			want: false,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			uObj := &unstructured.Unstructured{Object: tt.obj}
+			if tt.ownerReferences != nil {
+				uObj.SetOwnerReferences(tt.ownerReferences)
+			}
+
+			got, err := ShouldPropagateObj(nil, uObj, tt.enableWorkload)
+			if err != nil {
+				t.Errorf("ShouldPropagateObj() error = %v", err)
+				return
+			}
+			if got != tt.want {
+				t.Errorf("ShouldPropagateObj() = %v, want %v", got, tt.want)
 			}
 		})
 	}
