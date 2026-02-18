@@ -18,13 +18,14 @@ package workgenerator
 
 import (
 	"context"
+	"crypto/sha256"
+	"encoding/hex"
 	"fmt"
 	"sort"
 	"strings"
 
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
-	"k8s.io/apimachinery/pkg/util/uuid"
 	"k8s.io/klog/v2"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 
@@ -81,12 +82,19 @@ func (r *Reconciler) createOrUpdateEnvelopeCRWorkObj(
 	var work *fleetv1beta1.Work
 	switch {
 	case len(workList.Items) > 1:
-		// Multiple matching work objects found; this should never occur under normal conditions.
+		// Multiple matching work objects found; this should never occur under normal conditions
+		// with deterministic naming. Log details for investigation.
 		wrappedErr := fmt.Errorf("%d work objects found for the same envelope %v, only one expected", len(workList.Items), envelopeReader.GetEnvelopeObjRef())
 		klog.ErrorS(wrappedErr, "Failed to create or update work object for envelope",
 			"resourceBinding", klog.KObj(binding),
 			"resourceSnapshot", klog.KObj(resourceSnapshot),
 			"envelope", envelopeReader.GetEnvelopeObjRef())
+		// Log the work object names to help debug
+		for i := range workList.Items {
+			klog.ErrorS(wrappedErr, "Duplicate work object found",
+				"work", klog.KObj(&workList.Items[i]),
+				"creationTimestamp", workList.Items[i].CreationTimestamp)
+		}
 		return nil, controller.NewUnexpectedBehaviorError(wrappedErr)
 	case len(workList.Items) == 1:
 		klog.V(2).InfoS("Found existing work object for the envelope; updating it",
@@ -196,7 +204,11 @@ func buildNewWorkForEnvelopeCR(
 	manifests []fleetv1beta1.Manifest,
 	resourceOverrideSnapshotHash, clusterResourceOverrideSnapshotHash string,
 ) *fleetv1beta1.Work {
-	workName := fmt.Sprintf(fleetv1beta1.WorkNameWithEnvelopeCRFmt, workNamePrefix, uuid.NewUUID())
+	// Generate a deterministic work name based on the envelope identity to prevent duplicate work objects
+	// from being created by concurrent reconciliations. The name is stable across reconciliations for
+	// the same envelope, allowing Kubernetes' built-in duplicate prevention to work correctly.
+	envelopeIdentifier := generateEnvelopeIdentifier(envelopeReader)
+	workName := fmt.Sprintf(fleetv1beta1.WorkNameWithEnvelopeCRFmt, workNamePrefix, envelopeIdentifier)
 	workNamespace := fmt.Sprintf(utils.NamespaceNameFormat, resourceBinding.GetBindingSpec().TargetCluster)
 
 	// Create the labels map
@@ -233,4 +245,19 @@ func buildNewWorkForEnvelopeCR(
 			ApplyStrategy: resourceBinding.GetBindingSpec().ApplyStrategy,
 		},
 	}
+}
+
+// generateEnvelopeIdentifier generates a stable, deterministic identifier for an envelope.
+// This identifier is used in the work name to ensure that the same envelope always produces
+// the same work name, enabling Kubernetes' atomic create operations to prevent duplicates.
+func generateEnvelopeIdentifier(envelopeReader fleetv1beta1.EnvelopeReader) string {
+	// Create a stable identifier based on envelope type, name, and namespace.
+	// For cluster-scoped envelopes, namespace is empty, so we include the type to ensure uniqueness.
+	identifier := fmt.Sprintf("%s.%s.%s", envelopeReader.GetEnvelopeType(), envelopeReader.GetNamespace(), envelopeReader.GetName())
+
+	// Use SHA256 hash to create a deterministic identifier
+	hash := sha256.Sum256([]byte(identifier))
+	// Take first 8 characters of the hex-encoded hash to keep work names reasonably short
+	// while maintaining uniqueness (8 hex chars = 4 bytes = 2^32 combinations, sufficient for envelope uniqueness)
+	return hex.EncodeToString(hash[:])[:8]
 }
