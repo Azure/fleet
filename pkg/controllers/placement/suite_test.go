@@ -119,12 +119,14 @@ var _ = BeforeSuite(func() {
 			"default": true,
 		},
 	}
+	resourceSnapshotResolver := controller.NewResourceSnapshotResolver(mgr.GetClient(), mgr.GetScheme())
 	reconciler := &Reconciler{
 		Client:                   mgr.GetClient(),
 		Scheme:                   mgr.GetScheme(),
 		UncachedReader:           mgr.GetAPIReader(),
 		Recorder:                 mgr.GetEventRecorderFor(controllerName),
 		ResourceSelectorResolver: resourceSelectorResolver,
+		ResourceSnapshotResolver: *resourceSnapshotResolver,
 	}
 	opts := options.RateLimitOptions{
 		RateLimiterBaseDelay:  5 * time.Millisecond,

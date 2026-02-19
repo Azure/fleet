@@ -140,7 +140,7 @@ var _ = Describe("placing wrapped resources using a CRP", func() {
 			for idx := range allMemberClusters {
 				memberCluster := allMemberClusters[idx]
 				workResourcesPlacedActual := checkAllResourcesPlacement(memberCluster)
-				Eventually(workResourcesPlacedActual, eventuallyDuration, eventuallyInterval).Should(Succeed(), "Failed to place work resources on member cluster %s", memberCluster.ClusterName)
+				Eventually(workResourcesPlacedActual, workloadEventuallyDuration, eventuallyInterval).Should(Succeed(), "Failed to place work resources on member cluster %s", memberCluster.ClusterName)
 			}
 		})
 

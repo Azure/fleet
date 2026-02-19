@@ -1,0 +1,674 @@
+/*
+Copyright 2025 The KubeFleet Authors.
+
+Licensed under the Apache License, Version 2.0 (the "License");
+you may not use this file except in compliance with the License.
+You may obtain a copy of the License at
+
+    http://www.apache.org/licenses/LICENSE-2.0
+
+Unless required by applicable law or agreed to in writing, software
+distributed under the License is distributed on an "AS IS" BASIS,
+WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+See the License for the specific language governing permissions and
+limitations under the License.
+*/
+
+package v1
+
+import (
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/apimachinery/pkg/util/intstr"
+)
+
+// +genclient
+// +genclient:Cluster
+// +kubebuilder:object:root=true
+// +kubebuilder:subresource:status
+// +kubebuilder:resource:scope=Cluster,categories={fleet,fleet-placement},shortName=csur
+// +k8s:deepcopy-gen:interfaces=k8s.io/apimachinery/pkg/runtime.Object
+// +kubebuilder:printcolumn:JSONPath=`.spec.placementName`,name="Placement",type=string
+// +kubebuilder:printcolumn:JSONPath=`.spec.resourceSnapshotIndex`,name="Resource-Snapshot-Index",type=string
+// +kubebuilder:printcolumn:JSONPath=`.status.policySnapshotIndexUsed`,name="Policy-Snapshot-Index",type=string
+// +kubebuilder:printcolumn:JSONPath=`.status.conditions[?(@.type=="Initialized")].status`,name="Initialized",type=string
+// +kubebuilder:printcolumn:JSONPath=`.status.conditions[?(@.type=="Progressing")].status`,name="Progressing",type=string
+// +kubebuilder:printcolumn:JSONPath=`.status.conditions[?(@.type=="Succeeded")].status`,name="Succeeded",type=string
+// +kubebuilder:printcolumn:JSONPath=`.metadata.creationTimestamp`,name="Age",type=date
+// +kubebuilder:printcolumn:JSONPath=`.spec.stagedRolloutStrategyName`,name="Strategy",priority=1,type=string
+// +kubebuilder:validation:XValidation:rule="size(self.metadata.name) < 64",message="metadata.name max length is 63"
+
+// ClusterStagedUpdateRun represents a stage by stage update process that applies ClusterResourcePlacement
+// selected resources to specified clusters.
+// Resources from unselected clusters are removed after all stages in the update strategy are completed.
+// Each ClusterStagedUpdateRun object corresponds to a single release of a specific resource version.
+// The release is abandoned if the ClusterStagedUpdateRun object is deleted or the scheduling decision changes.
+// The name of the ClusterStagedUpdateRun must conform to RFC 1123.
+type ClusterStagedUpdateRun struct {
+	metav1.TypeMeta   `json:",inline"`
+	metav1.ObjectMeta `json:"metadata,omitempty"`
+
+	// The desired state of ClusterStagedUpdateRun.
+	// +kubebuilder:validation:Required
+	Spec UpdateRunSpec `json:"spec"`
+
+	// The observed status of ClusterStagedUpdateRun.
+	// +kubebuilder:validation:Optional
+	Status UpdateRunStatus `json:"status,omitempty"`
+}
+
+// State represents the desired state of an update run.
+// +enum
+type State string
+
+const (
+	// StateInitialize describes user intent to initialize but not run the update run.
+	// This is the default state when an update run is created.
+	// Users can subsequently set the state to Run.
+	StateInitialize State = "Initialize"
+
+	// StateRun describes user intent to execute (or resume execution if stopped).
+	// Users can subsequently set the state to Stop.
+	StateRun State = "Run"
+
+	// StateStop describes user intent to stop the update run.
+	// Users can subsequently set the state to Run.
+	StateStop State = "Stop"
+)
+
+// UpdateRunSpec defines the desired rollout strategy and the snapshot indices of the resources to be updated.
+// It specifies a stage-by-stage update process across selected clusters for the given ResourcePlacement object.
+// +kubebuilder:validation:XValidation:rule="!(has(oldSelf.state) && oldSelf.state == 'Initialize' && self.state == 'Stop')",message="invalid state transition: cannot transition from Initialize to Stop"
+// +kubebuilder:validation:XValidation:rule="!(has(oldSelf.state) && oldSelf.state == 'Run' && self.state == 'Initialize')",message="invalid state transition: cannot transition from Run to Initialize"
+// +kubebuilder:validation:XValidation:rule="!(has(oldSelf.state) && oldSelf.state == 'Stop' && self.state == 'Initialize')",message="invalid state transition: cannot transition from Stop to Initialize"
+type UpdateRunSpec struct {
+	// PlacementName is the name of placement that this update run is applied to.
+	// There can be multiple active update runs for each placement, but
+	// it's up to the DevOps team to ensure they don't conflict with each other.
+	// +kubebuilder:validation:Required
+	// +kubebuilder:validation:MaxLength=255
+	// +kubebuilder:validation:XValidation:rule="self == oldSelf",message="placementName is immutable"
+	PlacementName string `json:"placementName"`
+
+	// The resource snapshot index of the selected resources to be updated across clusters.
+	// The index represents a group of resource snapshots that includes all the resources a ResourcePlacement selected.
+	// +kubebuilder:validation:XValidation:rule="self == oldSelf",message="resourceSnapshotIndex is immutable"
+	// +kubebuilder:validation:Optional
+	ResourceSnapshotIndex string `json:"resourceSnapshotIndex"`
+
+	// The name of the update strategy that specifies the stages and the sequence
+	// in which the selected resources will be updated on the member clusters. The stages
+	// are computed according to the referenced strategy when the update run starts
+	// and recorded in the status field.
+	// +kubebuilder:validation:Required
+	// +kubebuilder:validation:XValidation:rule="self == oldSelf",message="stagedRolloutStrategyName is immutable"
+	StagedUpdateStrategyName string `json:"stagedRolloutStrategyName"`
+
+	// State indicates the desired state of the update run.
+	// Initialize: The update run should be initialized but execution should not start (default).
+	// Run: The update run should execute or resume execution.
+	// Stop: The update run should stop execution.
+	// +kubebuilder:validation:Optional
+	// +kubebuilder:default=Initialize
+	// +kubebuilder:validation:Enum=Initialize;Run;Stop
+	State State `json:"state,omitempty"`
+}
+
+// +genclient
+// +genclient:cluster
+// +kubebuilder:object:root=true
+// +kubebuilder:subresource:status
+// +kubebuilder:resource:scope=Cluster,categories={fleet,fleet-placement},shortName=csus
+// +k8s:deepcopy-gen:interfaces=k8s.io/apimachinery/pkg/runtime.Object
+
+// ClusterStagedUpdateStrategy defines a reusable strategy that specifies the stages and the sequence
+// in which the selected cluster resources will be updated on the member clusters.
+type ClusterStagedUpdateStrategy struct {
+	metav1.TypeMeta   `json:",inline"`
+	metav1.ObjectMeta `json:"metadata,omitempty"`
+
+	// The desired state of ClusterStagedUpdateStrategy.
+	// +kubebuilder:validation:Required
+	Spec UpdateStrategySpec `json:"spec"`
+}
+
+// UpdateStrategySpec defines the desired state of the StagedUpdateStrategy.
+type UpdateStrategySpec struct {
+	// Stage specifies the configuration for each update stage.
+	// +kubebuilder:validation:MaxItems=31
+	// +kubebuilder:validation:Required
+	Stages []StageConfig `json:"stages"`
+}
+
+// ClusterStagedUpdateStrategyList contains a list of StagedUpdateStrategy.
+// +kubebuilder:resource:scope=Cluster
+// +k8s:deepcopy-gen:interfaces=k8s.io/apimachinery/pkg/runtime.Object
+type ClusterStagedUpdateStrategyList struct {
+	metav1.TypeMeta `json:",inline"`
+	metav1.ListMeta `json:"metadata,omitempty"`
+	Items           []ClusterStagedUpdateStrategy `json:"items"`
+}
+
+// StageConfig describes a single update stage.
+// The clusters in each stage are updated sequentially.
+// The update stops if any of the updates fail.
+type StageConfig struct {
+	// The name of the stage. This MUST be unique within the same StagedUpdateStrategy.
+	// +kubebuilder:validation:MaxLength=63
+	// +kubebuilder:validation:Pattern="^[a-z0-9]+$"
+	// +kubebuilder:validation:Required
+	Name string `json:"name"`
+
+	// LabelSelector is a label query over all the joined member clusters. Clusters matching the query are selected
+	// for this stage. There cannot be overlapping clusters between stages when the stagedUpdateRun is created.
+	// If the label selector is empty, the stage includes all the selected clusters.
+	// If the label selector is nil, the stage does not include any selected clusters.
+	// +kubebuilder:validation:Optional
+	LabelSelector *metav1.LabelSelector `json:"labelSelector,omitempty"`
+
+	// The label key used to sort the selected clusters.
+	// The clusters within the stage are updated sequentially following the rule below:
+	//   - primary: Ascending order based on the value of the label key, interpreted as integers if present.
+	//   - secondary: Ascending order based on the name of the cluster if the label key is absent or the label value is the same.
+	// +kubebuilder:validation:Optional
+	SortingLabelKey *string `json:"sortingLabelKey,omitempty"`
+
+	// MaxConcurrency specifies the maximum number of clusters that can be updated concurrently within this stage.
+	// Value can be an absolute number (ex: 5) or a percentage of the total clusters in the stage (ex: 50%).
+	// Fractional results are rounded down. A minimum of 1 update is enforced.
+	// If not specified, all clusters in the stage are updated sequentially (effectively maxConcurrency = 1).
+	// Defaults to 1.
+	// +kubebuilder:default=1
+	// +kubebuilder:validation:XIntOrString
+	// +kubebuilder:validation:Pattern="^(100|[1-9][0-9]?)%$"
+	// +kubebuilder:validation:XValidation:rule="self == null || type(self) != int || self >= 1",message="maxConcurrency must be at least 1"
+	// +kubebuilder:validation:Optional
+	MaxConcurrency *intstr.IntOrString `json:"maxConcurrency,omitempty"`
+
+	// The collection of tasks that each stage needs to complete successfully before moving to the next stage.
+	// Each task is executed in parallel and there cannot be more than one task of the same type.
+	// +kubebuilder:validation:MaxItems=2
+	// +kubebuilder:validation:Optional
+	// +kubebuilder:validation:XValidation:rule="!self.exists(e, e.type == 'Approval' && has(e.waitTime))",message="AfterStageTaskType is Approval, waitTime is not allowed"
+	// +kubebuilder:validation:XValidation:rule="!self.exists(e, e.type == 'TimedWait' && !has(e.waitTime))",message="AfterStageTaskType is TimedWait, waitTime is required"
+	AfterStageTasks []StageTask `json:"afterStageTasks,omitempty"`
+
+	// The collection of tasks that needs to completed successfully by each stage before starting the stage.
+	// Each task is executed in parallel and there cannot be more than one task of the same type.
+	// +kubebuilder:validation:Optional
+	// +kubebuilder:validation:MaxItems=1
+	// +kubebuilder:validation:XValidation:rule="!self.exists(e, e.type == 'Approval' && has(e.waitTime))",message="AfterStageTaskType is Approval, waitTime is not allowed"
+	// +kubebuilder:validation:XValidation:rule="!self.exists(e, e.type == 'TimedWait')",message="BeforeStageTaskType cannot be TimedWait"
+	BeforeStageTasks []StageTask `json:"beforeStageTasks,omitempty"`
+}
+
+// StageTask is the pre or post stage task that needs to be completed before starting or moving to the next stage.
+type StageTask struct {
+	// The type of the before or after stage task.
+	// +kubebuilder:validation:Enum=TimedWait;Approval
+	// +kubebuilder:validation:Required
+	Type StageTaskType `json:"type"`
+
+	// The time to wait after all the clusters in the current stage complete the update before moving to the next stage.
+	// +kubebuilder:validation:Pattern="^0|([0-9]+(\\.[0-9]+)?(s|m|h))+$"
+	// +kubebuilder:validation:Type=string
+	// +kubebuilder:validation:Optional
+	WaitTime *metav1.Duration `json:"waitTime,omitempty"`
+}
+
+// UpdateRunStatus defines the observed state of the ClusterStagedUpdateRun.
+type UpdateRunStatus struct {
+	// PolicySnapShotIndexUsed records the policy snapshot index of the ClusterResourcePlacement (CRP) that
+	// the update run is based on. The index represents the latest policy snapshot at the start of the update run.
+	// If a newer policy snapshot is detected after the run starts, the staged update run is abandoned.
+	// The scheduler must identify all clusters that meet the current policy before the update run begins.
+	// All clusters involved in the update run are selected from the list of clusters scheduled by the CRP according
+	// to the current policy.
+	// +kubebuilder:validation:Optional
+	PolicySnapshotIndexUsed string `json:"policySnapshotIndexUsed,omitempty"`
+
+	// PolicyObservedClusterCount records the number of observed clusters in the policy snapshot.
+	// It is recorded at the beginning of the update run from the policy snapshot object.
+	// If the `ObservedClusterCount` value is updated during the update run, the update run is abandoned.
+	// +kubebuilder:validation:Optional
+	PolicyObservedClusterCount int `json:"policyObservedClusterCount,omitempty"`
+
+	// ResourceSnapshotIndexUsed records the resource snapshot index that the update run is based on.
+	// The index represents the same resource snapshots as specified in the spec field, or the latest.
+	// +kubbebuilder:validation:Optional
+	ResourceSnapshotIndexUsed string `json:"resourceSnapshotIndexUsed,omitempty"`
+
+	// ApplyStrategy is the apply strategy that the stagedUpdateRun is using.
+	// It is the same as the apply strategy in the CRP when the staged update run starts.
+	// The apply strategy is not updated during the update run even if it changes in the CRP.
+	// +kubebuilder:validation:Optional
+	ApplyStrategy *ApplyStrategy `json:"appliedStrategy,omitempty"`
+
+	// UpdateStrategySnapshot is the snapshot of the UpdateStrategy used for the update run.
+	// The snapshot is immutable during the update run.
+	// The strategy is applied to the list of clusters scheduled by the CRP according to the current policy.
+	// The update run fails to initialize if the strategy fails to produce a valid list of stages where each selected
+	// cluster is included in exactly one stage.
+	// +kubebuilder:validation:Optional
+	UpdateStrategySnapshot *UpdateStrategySpec `json:"stagedUpdateStrategySnapshot,omitempty"`
+
+	// StagesStatus lists the current updating status of each stage.
+	// The list is empty if the update run is not started or failed to initialize.
+	// +kubebuilder:validation:Optional
+	StagesStatus []StageUpdatingStatus `json:"stagesStatus,omitempty"`
+
+	// DeletionStageStatus lists the current status of the deletion stage. The deletion stage
+	// removes all the resources from the clusters that are not selected by the
+	// current policy after all the update stages are completed.
+	// +kubebuilder:validation:Optional
+	DeletionStageStatus *StageUpdatingStatus `json:"deletionStageStatus,omitempty"`
+
+	// +patchMergeKey=type
+	// +patchStrategy=merge
+	// +listType=map
+	// +listMapKey=type
+	//
+	// Conditions is an array of current observed conditions for StagedUpdateRun.
+	// Known conditions are "Initialized", "Progressing", "Succeeded".
+	// +kubebuilder:validation:Optional
+	Conditions []metav1.Condition `json:"conditions,omitempty"`
+}
+
+// StagedUpdateRunConditionType identifies a specific condition of the StagedUpdateRun.
+// +enum
+type StagedUpdateRunConditionType string
+
+const (
+	// StagedUpdateRunConditionInitialized indicates whether the staged update run is initialized, meaning it
+	// has computed all the stages according to the referenced strategy and is ready to start the update.
+	// Its condition status can be one of the following:
+	// - "True": The staged update run is initialized successfully.
+	// - "False": The staged update run encountered an error during initialization and aborted.
+	StagedUpdateRunConditionInitialized StagedUpdateRunConditionType = "Initialized"
+
+	// StagedUpdateRunConditionProgressing indicates whether the staged update run is making progress.
+	// Its condition status can be one of the following:
+	// - "True": The staged update run is making progress.
+	// - "False": The staged update run is waiting/paused/abandoned.
+	// - "Unknown": The staged update run is in a transitioning state.
+	StagedUpdateRunConditionProgressing StagedUpdateRunConditionType = "Progressing"
+
+	// StagedUpdateRunConditionSucceeded indicates whether the staged update run is completed successfully.
+	// Its condition status can be one of the following:
+	// - "True": The staged update run is completed successfully.
+	// - "False": The staged update run encountered an error and stopped.
+	StagedUpdateRunConditionSucceeded StagedUpdateRunConditionType = "Succeeded"
+)
+
+// StageUpdatingStatus defines the status of the update run in a stage.
+type StageUpdatingStatus struct {
+	// The name of the stage.
+	// +kubebuilder:validation:Required
+	StageName string `json:"stageName"`
+
+	// The list of each cluster's updating status in this stage.
+	// +kubebuilder:validation:Required
+	Clusters []ClusterUpdatingStatus `json:"clusters"`
+
+	// The status of the post-update tasks associated with the current stage.
+	// Empty if the stage has not finished updating all the clusters.
+	// +kubebuilder:validation:MaxItems=2
+	// +kubebuilder:validation:Optional
+	AfterStageTaskStatus []StageTaskStatus `json:"afterStageTaskStatus,omitempty"`
+
+	// The status of the pre-update tasks associated with the current stage.
+	// +kubebuilder:validation:MaxItems=1
+	// +kubebuilder:validation:Optional
+	BeforeStageTaskStatus []StageTaskStatus `json:"beforeStageTaskStatus,omitempty"`
+
+	// The time when the update started on the stage. Empty if the stage has not started updating.
+	// +kubebuilder:validation:Optional
+	// +kubebuilder:validation:Type=string
+	// +kubebuilder:validation:Format=date-time
+	StartTime *metav1.Time `json:"startTime,omitempty"`
+
+	// The time when the update finished on the stage. Empty if the stage has not started updating.
+	// +kubebuilder:validation:Optional
+	// +kubebuilder:validation:Type=string
+	// +kubebuilder:validation:Format=date-time
+	EndTime *metav1.Time `json:"endTime,omitempty"`
+
+	// +patchMergeKey=type
+	// +patchStrategy=merge
+	// +listType=map
+	// +listMapKey=type
+	//
+	// Conditions is an array of current observed updating conditions for the stage. Empty if the stage has not started updating.
+	// Known conditions are "Progressing", "Succeeded".
+	// +kubebuilder:validation:Optional
+	Conditions []metav1.Condition `json:"conditions,omitempty"`
+}
+
+// StageUpdatingConditionType identifies a specific condition of the stage that is being updated.
+// +enum
+type StageUpdatingConditionType string
+
+const (
+	// StageUpdatingConditionProgressing indicates whether the stage updating is making progress.
+	// Its condition status can be one of the following:
+	// - "True": The stage updating is making progress.
+	// - "False": The stage updating is waiting.
+	// - "Unknown": The staged updating is a transitioning state.
+	StageUpdatingConditionProgressing StageUpdatingConditionType = "Progressing"
+
+	// StageUpdatingConditionSucceeded indicates whether the stage updating is completed successfully.
+	// Its condition status can be one of the following:
+	// - "True": The stage updating is completed successfully.
+	// - "False": The stage updating encountered an error and stopped.
+	StageUpdatingConditionSucceeded StageUpdatingConditionType = "Succeeded"
+)
+
+// ClusterUpdatingStatus defines the status of the update run on a cluster.
+type ClusterUpdatingStatus struct {
+	// The name of the cluster.
+	// +kubebuilder:validation:Required
+	ClusterName string `json:"clusterName"`
+
+	// ResourceOverrideSnapshots is a list of ResourceOverride snapshots associated with the cluster.
+	// The list is computed at the beginning of the update run and not updated during the update run.
+	// The list is empty if there are no resource overrides associated with the cluster.
+	// +kubebuilder:validation:Optional
+	ResourceOverrideSnapshots []NamespacedName `json:"resourceOverrideSnapshots,omitempty"`
+
+	// ClusterResourceOverrides contains a list of applicable ClusterResourceOverride snapshot names
+	// associated with the cluster.
+	// The list is computed at the beginning of the update run and not updated during the update run.
+	// The list is empty if there are no cluster overrides associated with the cluster.
+	// +kubebuilder:validation:Optional
+	ClusterResourceOverrideSnapshots []string `json:"clusterResourceOverrideSnapshots,omitempty"`
+
+	// +patchMergeKey=type
+	// +patchStrategy=merge
+	// +listType=map
+	// +listMapKey=type
+	//
+	// Conditions is an array of current observed conditions for clusters. Empty if the cluster has not started updating.
+	// Known conditions are "Started", "Succeeded".
+	// +kubebuilder:validation:Optional
+	Conditions []metav1.Condition `json:"conditions,omitempty"`
+}
+
+// ClusterUpdatingStatusConditionType identifies a specific condition of the UpdatingStatus of the cluster.
+// +enum
+type ClusterUpdatingStatusConditionType string
+
+const (
+	// ClusterUpdatingConditionStarted indicates whether the cluster updating has started.
+	// Its condition status can be one of the following:
+	// - "True": The cluster updating has started.
+	ClusterUpdatingConditionStarted ClusterUpdatingStatusConditionType = "Started"
+
+	// ClusterUpdatingConditionSucceeded indicates whether the cluster updating is completed successfully.
+	// Its condition status can be one of the following:
+	// - "True": The cluster updating is completed successfully.
+	// - "False": The cluster updating encountered an error and stopped.
+	ClusterUpdatingConditionSucceeded ClusterUpdatingStatusConditionType = "Succeeded"
+)
+
+type StageTaskStatus struct {
+	// The type of the pre or post update task.
+	// +kubebuilder:validation:Enum=TimedWait;Approval
+	// +kubebuilder:validation:Required
+	Type StageTaskType `json:"type"`
+
+	// The name of the approval request object that is created for this stage.
+	// Only valid if the AfterStageTaskType is Approval.
+	// +kubebuilder:validation:Optional
+	ApprovalRequestName string `json:"approvalRequestName,omitempty"`
+
+	// +patchMergeKey=type
+	// +patchStrategy=merge
+	// +listType=map
+	// +listMapKey=type
+	//
+	// Conditions is an array of current observed conditions for the specific type of pre or post update task.
+	// Known conditions are "ApprovalRequestCreated", "WaitTimeElapsed", and "ApprovalRequestApproved".
+	// +kubebuilder:validation:Optional
+	Conditions []metav1.Condition `json:"conditions,omitempty"`
+}
+
+// StageTaskType identifies a specific type of the AfterStageTask or BeforeStageTask.
+// +enum
+type StageTaskType string
+
+const (
+	// StageTaskTypeTimedWait indicates the stage task is a timed wait.
+	StageTaskTypeTimedWait StageTaskType = "TimedWait"
+
+	// StageTaskTypeApproval indicates the stage task is an approval.
+	StageTaskTypeApproval StageTaskType = "Approval"
+)
+
+// StageTaskConditionType identifies a specific condition of the AfterStageTask or BeforeStageTask.
+// +enum
+type StageTaskConditionType string
+
+const (
+	// StageTaskConditionApprovalRequestCreated indicates if the approval request has been created.
+	// Its condition status can be:
+	// - "True": The approval request has been created.
+	StageTaskConditionApprovalRequestCreated StageTaskConditionType = "ApprovalRequestCreated"
+
+	// StageTaskConditionApprovalRequestApproved indicates if the approval request has been approved.
+	// Its condition status can be:
+	// - "True": The approval request has been approved.
+	StageTaskConditionApprovalRequestApproved StageTaskConditionType = "ApprovalRequestApproved"
+
+	// StageTaskConditionWaitTimeElapsed indicates if the wait time after each stage has elapsed.
+	// If the status is "False", the condition message will include the remaining wait time.
+	// Its condition status can be:
+	// - "True": The wait time has elapsed.
+	// - "False": The wait time has not elapsed.
+	StageTaskConditionWaitTimeElapsed StageTaskConditionType = "WaitTimeElapsed"
+)
+
+// ClusterStagedUpdateRunList contains a list of ClusterStagedUpdateRun.
+// +kubebuilder:resource:scope=Cluster
+// +k8s:deepcopy-gen:interfaces=k8s.io/apimachinery/pkg/runtime.Object
+type ClusterStagedUpdateRunList struct {
+	metav1.TypeMeta `json:",inline"`
+	metav1.ListMeta `json:"metadata,omitempty"`
+	Items           []ClusterStagedUpdateRun `json:"items"`
+}
+
+// +genclient
+// +genclient:Cluster
+// +kubebuilder:object:root=true
+// +kubebuilder:subresource:status
+// +kubebuilder:resource:scope=Cluster,categories={fleet,fleet-placement},shortName=careq
+// +k8s:deepcopy-gen:interfaces=k8s.io/apimachinery/pkg/runtime.Object
+// +kubebuilder:printcolumn:JSONPath=`.spec.parentStageRollout`,name="Update-Run",type=string
+// +kubebuilder:printcolumn:JSONPath=`.spec.targetStage`,name="Stage",type=string
+// +kubebuilder:printcolumn:JSONPath=`.status.conditions[?(@.type=="Approved")].status`,name="Approved",type=string
+// +kubebuilder:printcolumn:JSONPath=`.metadata.creationTimestamp`,name="Age",type=date
+
+// ClusterApprovalRequest defines a request for user approval for cluster staged update run.
+// The request object MUST have the following labels:
+//   - `TargetUpdateRun`: Points to the cluster staged update run that this approval request is for.
+//   - `TargetStage`: The name of the stage that this approval request is for.
+//   - `IsLatestUpdateRunApproval`: Indicates whether this approval request is the latest one related to this update run.
+//   - `TaskType`: Indicates whether this approval request is for the before or after stage task.
+type ClusterApprovalRequest struct {
+	metav1.TypeMeta   `json:",inline"`
+	metav1.ObjectMeta `json:"metadata,omitempty"`
+
+	// The desired state of ClusterApprovalRequest.
+	// +kubebuilder:validation:XValidation:rule="self == oldSelf",message="The spec field is immutable"
+	// +kubebuilder:validation:Required
+	Spec ApprovalRequestSpec `json:"spec"`
+
+	// The observed state of ClusterApprovalRequest.
+	// +kubebuilder:validation:Optional
+	Status ApprovalRequestStatus `json:"status,omitempty"`
+}
+
+// ApprovalRequestSpec defines the desired state of the update run approval request.
+// The entire spec is immutable.
+type ApprovalRequestSpec struct {
+	// The name of the staged update run that this approval request is for.
+	// +kubebuilder:validation:Required
+	TargetUpdateRun string `json:"parentStageRollout"`
+
+	// The name of the update stage that this approval request is for.
+	// +kubebuilder:validation:Required
+	TargetStage string `json:"targetStage"`
+}
+
+// ApprovalRequestStatus defines the observed state of the ClusterApprovalRequest.
+type ApprovalRequestStatus struct {
+	// +patchMergeKey=type
+	// +patchStrategy=merge
+	// +listType=map
+	// +listMapKey=type
+	//
+	// Conditions is an array of current observed conditions for the specific type of post-update task.
+	// Known conditions are "Approved" and "ApprovalAccepted".
+	// +kubebuilder:validation:Optional
+	Conditions []metav1.Condition `json:"conditions,omitempty"`
+}
+
+// ApprovalRequestConditionType identifies a specific condition of the ClusterApprovalRequest.
+type ApprovalRequestConditionType string
+
+const (
+	// ApprovalRequestConditionApproved indicates if the approval request was approved.
+	// Its condition status can be:
+	// - "True": The request is approved.
+	ApprovalRequestConditionApproved ApprovalRequestConditionType = "Approved"
+
+	// ApprovalRequestConditionApprovalAccepted indicates if the approved approval request was accepted.
+	// Its condition status can be:
+	// - "True": The request is approved.
+	ApprovalRequestConditionApprovalAccepted ApprovalRequestConditionType = "ApprovalAccepted"
+)
+
+// ClusterApprovalRequestList contains a list of ClusterApprovalRequest.
+// +kubebuilder:resource:scope=Cluster
+// +k8s:deepcopy-gen:interfaces=k8s.io/apimachinery/pkg/runtime.Object
+type ClusterApprovalRequestList struct {
+	metav1.TypeMeta `json:",inline"`
+	metav1.ListMeta `json:"metadata,omitempty"`
+	Items           []ClusterApprovalRequest `json:"items"`
+}
+
+// +genclient
+// +kubebuilder:object:root=true
+// +kubebuilder:subresource:status
+// +kubebuilder:resource:scope=Namespaced,categories={fleet,fleet-placement},shortName=sur
+// +k8s:deepcopy-gen:interfaces=k8s.io/apimachinery/pkg/runtime.Object
+// +kubebuilder:printcolumn:JSONPath=`.spec.placementName`,name="Placement",type=string
+// +kubebuilder:printcolumn:JSONPath=`.spec.resourceSnapshotIndex`,name="Resource-Snapshot-Index",type=string
+// +kubebuilder:printcolumn:JSONPath=`.status.policySnapshotIndexUsed`,name="Policy-Snapshot-Index",type=string
+// +kubebuilder:printcolumn:JSONPath=`.status.conditions[?(@.type=="Initialized")].status`,name="Initialized",type=string
+// +kubebuilder:printcolumn:JSONPath=`.status.conditions[?(@.type=="Progressing")].status`,name="Progressing",type=string
+// +kubebuilder:printcolumn:JSONPath=`.status.conditions[?(@.type=="Succeeded")].status`,name="Succeeded",type=string
+// +kubebuilder:printcolumn:JSONPath=`.metadata.creationTimestamp`,name="Age",type=date
+// +kubebuilder:printcolumn:JSONPath=`.spec.stagedRolloutStrategyName`,name="Strategy",priority=1,type=string
+// +kubebuilder:validation:XValidation:rule="size(self.metadata.name) < 64",message="metadata.name max length is 63"
+
+// StagedUpdateRun represents a stage by stage update process that applies ResourcePlacement
+// selected resources to specified clusters.
+// Resources from unselected clusters are removed after all stages in the update strategy are completed.
+// Each StagedUpdateRun object corresponds to a single release of a specific resource version.
+// The release is abandoned if the StagedUpdateRun object is deleted or the scheduling decision changes.
+// The name of the StagedUpdateRun must conform to RFC 1123.
+type StagedUpdateRun struct {
+	metav1.TypeMeta   `json:",inline"`
+	metav1.ObjectMeta `json:"metadata,omitempty"`
+
+	// The desired state of StagedUpdateRun.
+	// +kubebuilder:validation:Required
+	Spec UpdateRunSpec `json:"spec"`
+
+	// The observed status of StagedUpdateRun.
+	// +kubebuilder:validation:Optional
+	Status UpdateRunStatus `json:"status,omitempty"`
+}
+
+// StagedUpdateRunList contains a list of StagedUpdateRun.
+// +kubebuilder:resource:scope=Namespaced
+// +k8s:deepcopy-gen:interfaces=k8s.io/apimachinery/pkg/runtime.Object
+type StagedUpdateRunList struct {
+	metav1.TypeMeta `json:",inline"`
+	metav1.ListMeta `json:"metadata,omitempty"`
+	Items           []StagedUpdateRun `json:"items"`
+}
+
+// +genclient
+// +kubebuilder:object:root=true
+// +kubebuilder:resource:scope=Namespaced,categories={fleet,fleet-placement},shortName=sus
+// +k8s:deepcopy-gen:interfaces=k8s.io/apimachinery/pkg/runtime.Object
+
+// StagedUpdateStrategy defines a reusable strategy that specifies the stages and the sequence
+// in which the selected cluster resources will be updated on the member clusters.
+type StagedUpdateStrategy struct {
+	metav1.TypeMeta   `json:",inline"`
+	metav1.ObjectMeta `json:"metadata,omitempty"`
+
+	// The desired state of StagedUpdateStrategy.
+	// +kubebuilder:validation:Required
+	Spec UpdateStrategySpec `json:"spec"`
+}
+
+// StagedUpdateStrategyList contains a list of StagedUpdateStrategy.
+// +kubebuilder:resource:scope=Namespaced
+// +k8s:deepcopy-gen:interfaces=k8s.io/apimachinery/pkg/runtime.Object
+type StagedUpdateStrategyList struct {
+	metav1.TypeMeta `json:",inline"`
+	metav1.ListMeta `json:"metadata,omitempty"`
+	Items           []StagedUpdateStrategy `json:"items"`
+}
+
+// +genclient
+// +kubebuilder:object:root=true
+// +kubebuilder:subresource:status
+// +kubebuilder:resource:scope=Namespaced,categories={fleet,fleet-placement},shortName=areq
+// +k8s:deepcopy-gen:interfaces=k8s.io/apimachinery/pkg/runtime.Object
+// +kubebuilder:printcolumn:JSONPath=`.spec.parentStageRollout`,name="Update-Run",type=string
+// +kubebuilder:printcolumn:JSONPath=`.spec.targetStage`,name="Stage",type=string
+// +kubebuilder:printcolumn:JSONPath=`.status.conditions[?(@.type=="Approved")].status`,name="Approved",type=string
+// +kubebuilder:printcolumn:JSONPath=`.metadata.creationTimestamp`,name="Age",type=date
+
+// ApprovalRequest defines a request for user approval for staged update run.
+// The request object MUST have the following labels:
+//   - `TargetUpdateRun`: Points to the staged update run that this approval request is for.
+//   - `TargetStage`: The name of the stage that this approval request is for.
+//   - `IsLatestUpdateRunApproval`: Indicates whether this approval request is the latest one related to this update run.
+//   - `TaskType`: Indicates whether this approval request is for the before or after stage task.
+type ApprovalRequest struct {
+	metav1.TypeMeta   `json:",inline"`
+	metav1.ObjectMeta `json:"metadata,omitempty"`
+
+	// The desired state of ApprovalRequest.
+	// +kubebuilder:validation:XValidation:rule="self == oldSelf",message="The spec field is immutable"
+	// +kubebuilder:validation:Required
+	Spec ApprovalRequestSpec `json:"spec"`
+
+	// The observed state of ApprovalRequest.
+	// +kubebuilder:validation:Optional
+	Status ApprovalRequestStatus `json:"status,omitempty"`
+}
+
+// ApprovalRequestList contains a list of ApprovalRequest.
+// +kubebuilder:resource:scope=Namespaced
+// +k8s:deepcopy-gen:interfaces=k8s.io/apimachinery/pkg/runtime.Object
+type ApprovalRequestList struct {
+	metav1.TypeMeta `json:",inline"`
+	metav1.ListMeta `json:"metadata,omitempty"`
+	Items           []ApprovalRequest `json:"items"`
+}
+
+func init() {
+	SchemeBuilder.Register(
+		&ClusterStagedUpdateRun{}, &ClusterStagedUpdateRunList{},
+		&ClusterStagedUpdateStrategy{}, &ClusterStagedUpdateStrategyList{},
+		&ClusterApprovalRequest{}, &ClusterApprovalRequestList{},
+		&StagedUpdateRun{}, &StagedUpdateRunList{},
+		&StagedUpdateStrategy{}, &StagedUpdateStrategyList{},
+		&ApprovalRequest{}, &ApprovalRequestList{},
+	)
+}
