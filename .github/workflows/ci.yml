@@ -31,8 +31,7 @@ jobs:
           concurrent_skipping: false
 
   unit-and-integration-tests:
-    runs-on:
-      labels: oracle-vm-16cpu-64gb-x86-64
+    runs-on: ubuntu-latest
     needs: detect-noop
     if: needs.detect-noop.outputs.noop != 'true'
     steps:
