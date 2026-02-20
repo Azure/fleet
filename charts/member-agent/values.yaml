@@ -1,16 +1,16 @@
 replicaCount: 1
 
 image:
-  repository: ghcr.io/azure/fleet/member-agent
+  repository: ghcr.io/kubefleet-dev/kubefleet/member-agent
   pullPolicy: Always
-  tag: main
+  tag: ""
 
 logVerbosity: 5
 
 refreshtoken:
-  repository: ghcr.io/azure/fleet/refresh-token
+  repository: ghcr.io/kubefleet-dev/kubefleet/refresh-token
   pullPolicy: Always
-  tag: main
+  tag: ""
 
 resources:
   limits:

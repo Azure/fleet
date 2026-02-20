@@ -136,7 +136,7 @@ spec:
         {{- end }}
         {{- if not .Values.useCAAuth }}
         - name: refresh-token
-          image: "{{ .Values.refreshtoken.repository }}:{{ .Values.refreshtoken.tag }}"
+          image: "{{ .Values.refreshtoken.repository }}:{{ .Values.refreshtoken.tag | default .Chart.AppVersion }}"
           imagePullPolicy: {{ .Values.refreshtoken.pullPolicy }}
           args:
             {{- $provider := .Values.config.provider }}

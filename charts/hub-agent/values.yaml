@@ -5,10 +5,10 @@
 replicaCount: 1
 
 image:
-  repository: ghcr.io/azure/fleet/hub-agent
+  repository: ghcr.io/kubefleet-dev/kubefleet/hub-agent
   pullPolicy: Always
   # Overrides the image tag whose default is the chart appVersion.
-  tag: main
+  tag: ""
 
 logVerbosity: 5
 
