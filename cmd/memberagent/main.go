@@ -101,6 +101,9 @@ var (
 	workApplierRequeueRateLimiterMaxFastBackoffDelaySeconds                          = flag.Float64("work-applier-requeue-rate-limiter-max-fast-backoff-delay-seconds", 900, "If set, the work applier will not back off longer than this value in seconds when it is in the fast backoff stage.")
 	workApplierRequeueRateLimiterSkipToFastBackoffForAvailableOrDiffReportedWorkObjs = flag.Bool("work-applier-requeue-rate-limiter-skip-to-fast-backoff-for-available-or-diff-reported-work-objs", true, "If set, the rate limiter will skip the slow backoff stage and start fast backoff immediately for work objects that are available or have diff reported.")
 
+	// Property feature gates when the property provider is not none.
+	enableNamespaceCollectionInPropertyProvider = flag.Bool("enable-namespace-collection-in-property-provider", false, "If set, the property provider will collect the namespaces in the member cluster.")
+
 	// Work applier priority queue settings.
 	enableWorkApplierPriorityQueue          = flag.Bool("enable-work-applier-priority-queue", false, "If set, the work applier will use a priority queue to process work objects.")
 	workApplierPriorityLinearEquationCoeffA = flag.Int("work-applier-priority-linear-equation-coeff-a", -3, "The work applier sets the priority for a Work object processing attempt using the linear equation: priority = A * (work object age in minutes) + B. This flag sets the coefficient A in the equation.")
@@ -459,7 +462,7 @@ func Start(ctx context.Context, hubCfg, memberConfig *rest.Config, hubOpts, memb
 			// the specific instance wins the leader election.
 			klog.V(1).InfoS("Property Provider is azure, loading cloud config", "cloudConfigFile", *cloudConfigFile)
 			// TODO (britaniar): load cloud config for Azure property provider.
-			pp = azure.New(region, *isAzProviderCostPropertiesEnabled, *isAzProviderAvailableResPropertiesEnabled)
+			pp = azure.New(region, *isAzProviderCostPropertiesEnabled, *isAzProviderAvailableResPropertiesEnabled, *enableNamespaceCollectionInPropertyProvider)
 		default:
 			// Fall back to not using any property provider if the provided type is none or
 			// not recognizable.

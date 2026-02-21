@@ -43,6 +43,8 @@ import (
 	"github.com/kubefleet-dev/kubefleet/pkg/propertyprovider"
 	"github.com/kubefleet-dev/kubefleet/pkg/propertyprovider/azure/controllers"
 	"github.com/kubefleet-dev/kubefleet/pkg/propertyprovider/azure/trackers"
+	defaultcontrollers "github.com/kubefleet-dev/kubefleet/pkg/propertyprovider/default/controllers"
+	defaulttrackers "github.com/kubefleet-dev/kubefleet/pkg/propertyprovider/default/trackers"
 	"github.com/kubefleet-dev/kubefleet/pkg/utils/controller"
 )
 
@@ -81,8 +83,9 @@ const (
 // PropertyProvider is the Azure property provider for Fleet.
 type PropertyProvider struct {
 	// The trackers.
-	podTracker  *trackers.PodTracker
-	nodeTracker *trackers.NodeTracker
+	podTracker       *trackers.PodTracker
+	nodeTracker      *trackers.NodeTracker
+	namespaceTracker *defaulttrackers.NamespaceTracker
 
 	// The discovery client to get k8s cluster version.
 	discoveryClient discovery.ServerVersionInterface
@@ -96,14 +99,16 @@ type PropertyProvider struct {
 	// The feature flags.
 	isCostCollectionEnabled               bool
 	isAvailableResourcesCollectionEnabled bool
+	isNamespaceCollectionEnabled          bool
 
 	// The controller manager in use by the Azure property provider; this field is mostly reserved for
 	// testing purposes.
 	mgr ctrl.Manager
 	// The names in use by the controllers managed by the property provider; these fields are exposed
 	// to avoid name conflicts, though at this moment are mostly reserved for testing purposes.
-	nodeControllerName string
-	podControllerName  string
+	nodeControllerName      string
+	podControllerName       string
+	namespaceControllerName string
 
 	// Cache for Kubernetes version information with TTL.
 	k8sVersionMutex              sync.Mutex
@@ -307,6 +312,26 @@ func (p *PropertyProvider) Start(ctx context.Context, config *rest.Config) error
 		}
 	}
 
+	if p.isNamespaceCollectionEnabled {
+		if p.namespaceTracker != nil {
+			// A namespace tracker has been explicitly set; use it.
+			klog.V(2).Info("A namespace tracker has been explicitly set")
+		} else {
+			p.namespaceTracker = defaulttrackers.NewNamespaceTracker(mgr.GetClient())
+		}
+
+		// Set up the namespace reconciler.
+		klog.V(2).Info("Setting up the namespace reconciler")
+		namespaceReconciler := &defaultcontrollers.NamespaceReconciler{
+			NamespaceTracker: p.namespaceTracker,
+			Client:           mgr.GetClient(),
+		}
+		if err := namespaceReconciler.SetupWithManager(mgr, p.namespaceControllerName); err != nil {
+			klog.ErrorS(err, "Failed to start the namespace reconciler in the Azure property provider")
+			return err
+		}
+	}
+
 	// Start the controller manager.
 	//
 	// Note that the controller manager will run in a separate goroutine to avoid blocking
@@ -371,10 +396,17 @@ func (p *PropertyProvider) Collect(ctx context.Context) propertyprovider.Propert
 		}
 	}
 
-	// Return the collection response.
+	var ns map[string]string
+	var nsConds []metav1.Condition
+	if p.isNamespaceCollectionEnabled {
+		ns, nsConds = p.collectNamespaces()
+		conds = append(conds, nsConds...)
+	}
+
 	return propertyprovider.PropertyCollectionResponse{
 		Properties: properties,
 		Resources:  resources,
+		Namespaces: ns,
 		Conditions: conds,
 	}
 }
@@ -485,6 +517,15 @@ func (p *PropertyProvider) collectAvailableResource(_ context.Context, usage *cl
 	usage.Available = available
 }
 
+func (p *PropertyProvider) collectNamespaces() (map[string]string, []metav1.Condition) {
+	if p.namespaceTracker == nil {
+		klog.Error(controller.NewUnexpectedBehaviorError(fmt.Errorf("no namespaceTracker is set")))
+		return nil, nil
+	}
+	result, reachLimit := p.namespaceTracker.ListNamespaces()
+	return result, propertyprovider.BuildNamespaceCollectionConditions(reachLimit)
+}
+
 // collectK8sVersion collects the Kubernetes server version information.
 // It uses a cache with a 15-minute TTL to minimize API calls to the discovery client.
 func (p *PropertyProvider) collectK8sVersion(_ context.Context, properties map[clusterv1beta1.PropertyName]clusterv1beta1.PropertyValue) {
@@ -576,15 +617,17 @@ func (p *PropertyProvider) autoDiscoverRegionAndSetupTrackers(ctx context.Contex
 // called.
 func New(
 	region *string,
-	isCostCollectionEnabled, isAvailableResourcesCollectionEnabled bool,
+	isCostCollectionEnabled, isAvailableResourcesCollectionEnabled, isNamespaceCollectionEnabled bool,
 ) propertyprovider.PropertyProvider {
 	return &PropertyProvider{
 		region: region,
 		// Use the default names.
 		nodeControllerName:                    "azure-property-provider-node-watcher",
 		podControllerName:                     "azure-property-provider-pod-watcher",
+		namespaceControllerName:               "azure-property-provider-namespace-watcher",
 		isCostCollectionEnabled:               isCostCollectionEnabled,
 		isAvailableResourcesCollectionEnabled: isAvailableResourcesCollectionEnabled,
+		isNamespaceCollectionEnabled:          isNamespaceCollectionEnabled,
 	}
 }
 
