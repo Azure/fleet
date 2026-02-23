@@ -2,15 +2,14 @@ name: Helm Chart Publisher
 
 on:
   push:
-    branches:
-      - main
-    paths:
-      - ".github/workflows/chart.yml"
-      - "charts/**"
-  create:
-    # Publish semver tags as releases.
-    tags: [ 'v*.*.*' ]
-
+    tags:
+      - "v*.*.*"
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: "Release tag (e.g., v1.0.0)"
+        required: true
+        type: string
 permissions:
   contents: write
   packages: write
@@ -19,7 +18,13 @@ env:
   REGISTRY: ghcr.io
 
 jobs:
+  export-registry:
+    uses: ./.github/workflows/setup-release.yml
+    with:
+      tag: ${{ inputs.tag || github.ref_name }}
+
   publish-github-pages:
+    needs: export-registry
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v6.0.2
@@ -35,51 +40,48 @@ jobs:
           linting: on
 
   publish-oci:
+    needs: export-registry
     runs-on: ubuntu-latest
     steps:
       - name: Checkout code
         uses: actions/checkout@v6.0.2
 
       - name: Login to GitHub Container Registry
-        uses: docker/login-action@c94ce9fb468520275223c153574b00df6fe4bcc9
+        uses: docker/login-action@v3.6.0
         with:
           registry: ${{ env.REGISTRY }}
           username: ${{ github.actor }}
           password: ${{ secrets.GITHUB_TOKEN }}
 
-      - name: Package and push Helm charts to GHCR
+      - name: Package and push Helm charts to GHCR via Makefile
         run: |
           set -euo pipefail
-          
-          # Convert repository name to lowercase for OCI registry
-          REPO_LOWER=$(echo "${{ github.repository }}" | tr '[:upper:]' '[:lower:]')
-          
-          # Determine version to use
-          if [[ "${{ github.ref }}" == refs/tags/* ]]; then
-            # Use release tag as version (strip 'v' prefix)
-            CHART_VERSION=${GITHUB_REF#refs/tags/v}
-            echo "Using release tag version: ${CHART_VERSION}"
-          else
-            # Use version from Chart.yaml for non-tag pushes
-            CHART_VERSION=$(grep '^version:' charts/hub-agent/Chart.yaml | awk '{print $2}')
-            echo "Using Chart.yaml version: ${CHART_VERSION}"
-          fi
-          
-          # Package and push hub-agent chart
-          echo "📦 Packaging hub-agent chart..."
-          helm package charts/hub-agent --version ${CHART_VERSION} --app-version ${CHART_VERSION}
-          
-          echo "🚀 Pushing hub-agent to OCI registry..."
-          helm push hub-agent-${CHART_VERSION}.tgz oci://${{ env.REGISTRY }}/${REPO_LOWER}/charts
-          
-          # Package and push member-agent chart
-          echo "📦 Packaging member-agent chart..."
-          helm package charts/member-agent --version ${CHART_VERSION} --app-version ${CHART_VERSION}
-          
-          echo "🚀 Pushing member-agent to OCI registry..."
-          helm push member-agent-${CHART_VERSION}.tgz oci://${{ env.REGISTRY }}/${REPO_LOWER}/charts
-          
-          echo ""
-          echo "✅ Helm charts published to OCI registry!"
-          echo "📍 Hub Agent: oci://${{ env.REGISTRY }}/${REPO_LOWER}/charts/hub-agent:${CHART_VERSION}"
-          echo "📍 Member Agent: oci://${{ env.REGISTRY }}/${REPO_LOWER}/charts/member-agent:${CHART_VERSION}"
+
+          RELEASE_VERSION="${{ needs.export-registry.outputs.version }}"
+
+          OCI_REGISTRY="${{ needs.export-registry.outputs.registry }}/charts"
+          make helm-push REGISTRY="${OCI_REGISTRY}" TAG="${RELEASE_VERSION}"
+
+      - name: Verify chart appVersion matches release tag
+        run: |
+          set -euo pipefail
+
+          RELEASE_VERSION="${{ needs.export-registry.outputs.version }}"
+          CHART_VERSION="${RELEASE_VERSION}"
+          EXPECTED_APP_VERSION="${RELEASE_VERSION}"
+
+          rm -rf .helm-verify
+          mkdir -p .helm-verify
+
+          for chart in hub-agent member-agent; do
+            helm pull "oci://${{ needs.export-registry.outputs.registry }}/charts/${chart}" --version "${CHART_VERSION}" --destination .helm-verify >/dev/null
+            packaged=".helm-verify/${chart}-${CHART_VERSION}.tgz"
+            actual_app_version=$(tar -xOf "${packaged}" "${chart}/Chart.yaml" | awk -F': ' '/^appVersion:/ {gsub(/"/, "", $2); print $2}')
+            if [[ "${actual_app_version}" != "${EXPECTED_APP_VERSION}" ]]; then
+              echo "ERROR: ${chart} appVersion (${actual_app_version}) does not match release tag (${EXPECTED_APP_VERSION})"
+              exit 1
+            fi
+            echo "✅ ${chart} appVersion=${actual_app_version} matches release tag=${EXPECTED_APP_VERSION}"
+          done
+
+          rm -rf .helm-verify
