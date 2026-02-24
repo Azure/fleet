@@ -48,7 +48,7 @@ jobs:
           echo "MEMBER_AGENT_IMAGE_VERSION=${GITHUB_REF#refs/tags/}" >> $GITHUB_ENV
           echo "REFRESH_TOKEN_IMAGE_VERSION=${GITHUB_REF#refs/tags/}" >> $GITHUB_ENV
       - name: Login to ${{ env.REGISTRY }}
-        uses: docker/login-action@5e57cd118135c172c3672efd75eb46360885c0ef
+        uses: docker/login-action@3227f5311cb93ffd14d13e65d8cc400d30f4dd8a
         with:
           registry: ${{ env.REGISTRY }}
           username: ${{ github.actor }}
