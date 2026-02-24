@@ -16,6 +16,10 @@ limitations under the License.
 
 package propertyprovider
 
+import (
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+)
+
 const (
 	// A list of property names that should be supported by every property provider and
 	// is available out of the box in Fleet without any property provider configuration.
@@ -53,3 +57,33 @@ const (
 	AllocatableCapacityName = "allocatable"
 	AvailableCapacityName   = "available"
 )
+
+const (
+	NamespaceCollectionSucceededCondType = "NamespaceCollectionSucceeded"
+	NamespaceCollectionSucceededReason   = "Succeeded"
+	NamespaceCollectionDegradedReason    = "Degraded"
+	NamespaceCollectionSucceededMsg      = "All namespaces have been collected successfully"
+	NamespaceCollectionDegradedMsg       = "Namespaces are collected in a degraded mode since the number of namespaces reaches the track limit"
+)
+
+// BuildNamespaceCollectionConditions builds the conditions based on the reachLimit value.
+func BuildNamespaceCollectionConditions(reachLimit bool) []metav1.Condition {
+	conds := make([]metav1.Condition, 0, 1)
+	var cond metav1.Condition
+	if reachLimit {
+		cond = metav1.Condition{
+			Type:    NamespaceCollectionSucceededCondType,
+			Status:  metav1.ConditionFalse,
+			Reason:  NamespaceCollectionDegradedReason,
+			Message: NamespaceCollectionDegradedMsg,
+		}
+	} else {
+		cond = metav1.Condition{
+			Type:    NamespaceCollectionSucceededCondType,
+			Status:  metav1.ConditionTrue,
+			Reason:  NamespaceCollectionSucceededReason,
+			Message: NamespaceCollectionSucceededMsg,
+		}
+	}
+	return append(conds, cond)
+}

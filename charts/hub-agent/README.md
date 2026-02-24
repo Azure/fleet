@@ -89,12 +89,10 @@ _See [helm install](https://helm.sh/docs/helm/helm_install/) for command documen
 | Parameter                                 | Description                                                                                | Default                                          |
 |:------------------------------------------|:------------------------------------------------------------------------------------------|:-------------------------------------------------|
 | `replicaCount`                            | Number of hub-agent replicas to deploy                                                     | `1`                                              |
-| `image.repository`                        | Image repository                                                                           | `ghcr.io/azure/azure/fleet/hub-agent`            |
+| `image.repository`                        | Image repository                                                                           | `ghcr.io/kubefleet-dev/kubefleet/hub-agent`      |
 | `image.pullPolicy`                        | Image pull policy                                                                          | `Always`                                         |
-| `image.tag`                               | Image release tag                                                                          | `v0.1.0`                                         |
+| `image.tag`                               | Image release tag (empty uses chart `appVersion`)                                          | `""`                                            |
 | `namespace`                               | Namespace where this chart is installed                                                    | `fleet-system`                                   |
-| `serviceAccount.create`                   | Whether to create a service account                                                        | `true`                                           |
-| `serviceAccount.name`                     | Service account name                                                                       | `hub-agent-sa`                                   |
 | `resources`                               | Resource requests/limits for the container                                                 | limits: 500m CPU, 1Gi; requests: 100m CPU, 128Mi |
 | `affinity`                                | Node affinity for hub-agent pods                                                           | `{}`                                             |
 | `tolerations`                             | Tolerations for hub-agent pods                                                             | `[]`                                             |
@@ -103,15 +101,22 @@ _See [helm install](https://helm.sh/docs/helm/helm_install/) for command documen
 | `webhookServiceName`                      | Webhook service name                                                                       | `fleetwebhook`                                   |
 | `enableGuardRail`                         | Enable guard rail webhook configurations                                                   | `true`                                           |
 | `webhookClientConnectionType`             | Connection type for webhook client (service or url)                                        | `service`                                        |
-| `useCertManager`                          | Use cert-manager for webhook certificate management (requires `enableWorkload=true`) | `false`                                          |
-| `webhookCertSecretName`                   | Name of the Secret where cert-manager stores the certificate                               | `fleet-webhook-server-cert`                      |
+| `useCertManager`                          | Use cert-manager for webhook certificate management (requires `enableWorkload=true`)       | `false`                                          |
+| `webhookCertSecretName`                   | Name of the Secret where cert-manager stores the certificate (required when enabled)       | `unset`                                          |
 | `enableV1Beta1APIs`                       | Watch for v1beta1 APIs                                                                     | `true`                                           |
+| `enableClusterInventoryAPI`               | Enable cluster inventory APIs                                                               | `true`                                           |
+| `enableStagedUpdateRunAPIs`               | Enable staged update run APIs                                                              | `true`                                           |
+| `enableEvictionAPIs`                      | Enable eviction APIs                                                                        | `true`                                           |
+| `enablePprof`                             | Enable pprof endpoint                                                                       | `true`                                           |
+| `pprofPort`                               | pprof server port                                                                           | `6065`                                           |
 | `hubAPIQPS`                               | QPS for fleet-apiserver (not including events/node heartbeat)                              | `250`                                            |
 | `hubAPIBurst`                             | Burst for fleet-apiserver (not including events/node heartbeat)                            | `1000`                                           |
 | `MaxConcurrentClusterPlacement`           | Max concurrent ClusterResourcePlacement operations                                         | `100`                                            |
 | `ConcurrentResourceChangeSyncs`           | Max concurrent resourceChange reconcilers                                                  | `20`                                             |
-| `logFileMaxSize`                          | Max log file size before rotation                                                          | `1000000`                                        |
+| `logFileMaxSize`                          | Max log file size before rotation (optional)                                               | `unset`                                          |
 | `MaxFleetSizeSupported`                   | Max number of member clusters supported                                                    | `100`                                            |
+| `forceDeleteWaitTime`                     | Grace period before force-deleting resources                                                | `15m0s`                                          |
+| `clusterUnhealthyThreshold`               | Threshold duration for marking a cluster unhealthy                                          | `3m0s`                                           |
 | `resourceSnapshotCreationMinimumInterval` | The minimum interval at which resource snapshots could be created.                         | `30s`                                            |
 | `resourceChangesCollectionDuration`       | The duration for collecting resource changes into one snapshot.                            | `15s`                                            |
 | `enableWorkload`                          | Enable kubernetes builtin workload to run in hub cluster.                                  | `false`                                          |

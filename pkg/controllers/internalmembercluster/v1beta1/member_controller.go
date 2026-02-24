@@ -461,6 +461,7 @@ func (r *Reconciler) reportClusterPropertiesWithPropertyProvider(ctx context.Con
 		)
 		imc.Status.Properties = res.Properties
 		imc.Status.ResourceUsage = res.Resources
+		imc.Status.Namespaces = res.Namespaces
 		for idx := range res.Conditions {
 			cond := res.Conditions[idx]
 			// Reset the observed generation, as the property provider is not be aware of it.
