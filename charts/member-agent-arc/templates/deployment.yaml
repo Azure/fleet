@@ -15,7 +15,7 @@ spec:
         app.kubernetes.io/name: fleet-member-agent
     spec:
       serviceAccountName: fleet-member-agent-sa
-      {{- if and .Values.crdinstaller.enabled .Values.enableV1Beta1APIs }}
+      {{- if .Values.crdinstaller.enabled }}
       initContainers:
         - name: crd-installer
           imagePullPolicy: IfNotPresent
@@ -64,7 +64,6 @@ spec:
             - --leader-elect=true
             - --v={{ .Values.logVerbosity }}
             - -add_dir_header
-            - --enable-v1beta1-apis={{ .Values.enableV1Beta1APIs }}
             {{- if .Values.propertyProvider }}
             - --property-provider={{ .Values.propertyProvider }}
             {{- end }}
@@ -191,7 +190,6 @@ spec:
           args:
             - --v={{ .Values.logVerbosity }}
             - --add_dir_header
-            - --enable-v1beta1-apis={{ .Values.enableV1Beta1APIs }}
             - --enable-networking-features={{ .Values.enableNetworkingFeatures }}
           securityContext:
             capabilities:
@@ -316,7 +314,6 @@ spec:
           args:
             - --v={{ .Values.logVerbosity }}
             - --add_dir_header
-            - --enable-v1beta1-apis={{ .Values.enableV1Beta1APIs }}
             - --enable-traffic-manager-feature={{ .Values.enableTrafficManagerFeature }}
             - --enable-networking-features={{ .Values.enableNetworkingFeatures }}
           ports:
