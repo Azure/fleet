@@ -141,6 +141,14 @@ type MemberClusterStatus struct {
 	// +optional
 	ResourceUsage ResourceUsage `json:"resourceUsage,omitempty"`
 
+	// Namespaces is a map of namespace names to their associated work names for namespaces
+	// that are managed by Fleet (i.e., have AppliedWork owner references when created).
+	// The key is the namespace name and the value is the work name from the AppliedWork owner reference.
+	// If the namespace does not have an AppliedWork owner reference, the value will be an empty string.
+	// This field is copied from the corresponding InternalMemberCluster object.
+	// +optional
+	Namespaces map[string]string `json:"namespaces,omitempty"`
+
 	// AgentStatus is an array of current observed status, each corresponding to one member agent running in the member cluster.
 	// +optional
 	AgentStatus []AgentStatus `json:"agentStatus,omitempty"`

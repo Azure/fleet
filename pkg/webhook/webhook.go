@@ -226,13 +226,13 @@ func NewWebhookConfig(mgr manager.Manager, webhookServiceName string, port int32
 // String-to-enum conversions (e.g., WebhookClientConnectionType) are performed without
 // additional validation, as validation happens at the Options level.
 func NewWebhookConfigFromOptions(mgr manager.Manager, opts *options.Options, webhookPort int32) (*Config, error) {
-	webhookClientConnectionType := options.WebhookClientConnectionType(opts.WebhookClientConnectionType)
-	whiteListedUsers := strings.Split(opts.WhiteListedUsers, ",")
+	webhookClientConnectionType := options.WebhookClientConnectionType(opts.WebhookOpts.ClientConnectionType)
+	whiteListedUsers := strings.Split(opts.WebhookOpts.GuardRailWhitelistedUsers, ",")
 
-	return NewWebhookConfig(mgr, opts.WebhookServiceName, webhookPort,
-		&webhookClientConnectionType, FleetWebhookCertDir, opts.EnableGuardRail,
-		opts.DenyModifyMemberClusterLabels, opts.EnableWorkload, opts.UseCertManager,
-		FleetWebhookCertName, whiteListedUsers, opts.NetworkingAgentsEnabled)
+	return NewWebhookConfig(mgr, opts.WebhookOpts.ServiceName, webhookPort,
+		&webhookClientConnectionType, FleetWebhookCertDir, opts.WebhookOpts.EnableGuardRail,
+		opts.WebhookOpts.GuardRailDenyModifyMemberClusterLabels, opts.WebhookOpts.EnableWorkload, opts.WebhookOpts.UseCertManager,
+		FleetWebhookCertName, whiteListedUsers, opts.ClusterMgmtOpts.NetworkingAgentsEnabled)
 }
 
 func (w *Config) Start(ctx context.Context) error {

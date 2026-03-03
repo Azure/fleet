@@ -538,6 +538,8 @@ func (r *Reconciler) syncInternalMemberClusterStatus(imc *clusterv1beta1.Interna
 	r.aggregateJoinedCondition(mc)
 	// Copy resource usages.
 	mc.Status.ResourceUsage = imc.Status.ResourceUsage
+	// Copy namespaces.
+	mc.Status.Namespaces = imc.Status.Namespaces
 	// Copy additional conditions.
 	for idx := range imc.Status.Conditions {
 		cond := imc.Status.Conditions[idx]

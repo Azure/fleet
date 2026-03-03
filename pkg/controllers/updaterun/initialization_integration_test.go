@@ -30,10 +30,12 @@ import (
 	"k8s.io/apimachinery/pkg/api/meta"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/types"
+	"sigs.k8s.io/controller-runtime/pkg/client"
 
 	clusterv1beta1 "go.goms.io/fleet/apis/cluster/v1beta1"
 	placementv1beta1 "go.goms.io/fleet/apis/placement/v1beta1"
 	"go.goms.io/fleet/pkg/utils"
+	"go.goms.io/fleet/pkg/utils/condition"
 )
 
 var (
@@ -82,6 +84,7 @@ var _ = Describe("Updaterun initialization tests", func() {
 		// Set smaller wait time for testing
 		stageUpdatingWaitTime = time.Second * 3
 		clusterUpdatingWaitTime = time.Second * 2
+
 	})
 
 	AfterEach(func() {
@@ -757,6 +760,11 @@ var _ = Describe("Updaterun initialization tests", func() {
 			Expect(k8sClient.Create(ctx, updateStrategy)).To(Succeed())
 		})
 
+		AfterEach(func() {
+			By("Cleaning up auto-created resource snapshots")
+			cleanupAutoCreatedResourceSnapshots(ctx)
+		})
+
 		It("Should fail to initialize if the specified resource snapshot index is invalid - not integer", func() {
 			By("Creating a new clusterStagedUpdateRun with invalid resource snapshot index")
 			updateRun.Spec.ResourceSnapshotIndex = "invalid-index"
@@ -792,29 +800,31 @@ var _ = Describe("Updaterun initialization tests", func() {
 			validateUpdateRunMetricsEmitted(generateInitializationFailedMetric(placementv1beta1.StateInitialize, updateRun))
 		})
 
-		It("Should NOT fail to initialize if the specified resource snapshot is not found when no resource index specified - no resourceSnapshots at all", func() {
+		It("Should create a new resource snapshot and succeed initialization when no resource index specified - no resourceSnapshots at all", func() {
 			By("Creating a new clusterStagedUpdateRun without specifying resourceSnapshotIndex")
 			updateRun.Spec.ResourceSnapshotIndex = ""
 			Expect(k8sClient.Create(ctx, updateRun)).To(Succeed())
 
-			By("Validating the initialization did not fail due to resourceSnapshot not found (retryable error)")
-			// Populate the cache first.
+			By("Validating the initialization succeeded with a newly created resource snapshot")
 			Eventually(func() error {
 				if err := k8sClient.Get(ctx, updateRunNamespacedName, updateRun); err != nil {
 					return err
 				}
-				return nil
-			}, timeout, interval).Should(Succeed(), "failed to get the updateRun")
-			Consistently(func() error {
-				if err := k8sClient.Get(ctx, updateRunNamespacedName, updateRun); err != nil {
-					return err
-				}
 				initCond := meta.FindStatusCondition(updateRun.Status.Conditions, string(placementv1beta1.StagedUpdateRunConditionInitialized))
-				if initCond != nil {
-					return fmt.Errorf("got initialization condition: %v, want nil", initCond)
+				if initCond == nil {
+					return fmt.Errorf("initialization condition not found yet")
+				}
+				if initCond.Status != metav1.ConditionTrue {
+					return fmt.Errorf("initialization condition status = %v, want True, message = %s", initCond.Status, initCond.Message)
+				}
+				if updateRun.Status.ResourceSnapshotIndexUsed != "0" {
+					return fmt.Errorf("resourceSnapshotIndexUsed is not set correctly, got %s, want `0`", updateRun.Status.ResourceSnapshotIndexUsed)
 				}
 				return nil
-			}, duration, interval).Should(Succeed(), "the initialization should keep retrying, not failed")
+			}, timeout, interval).Should(Succeed(), "failed to validate initialization succeeded with auto-created snapshot")
+
+			By("Checking update run status metrics are emitted")
+			validateUpdateRunMetricsEmitted(generateInitializationSucceededMetric(placementv1beta1.StateInitialize, updateRun))
 		})
 
 		It("Should fail to initialize if the specified resource snapshot is not found - no CRP label found", func() {
@@ -862,8 +872,8 @@ var _ = Describe("Updaterun initialization tests", func() {
 			validateUpdateRunMetricsEmitted(generateInitializationFailedMetric(placementv1beta1.StateInitialize, updateRun))
 		})
 
-		It("Should select latest resource snapshot in the status when no resource index defined", func() {
-			By("Creating a new resource snapshot")
+		It("Should create a new resource snapshot when no resource index defined, previous snapshots hash does not match", func() {
+			By("Creating a pre-existing resource snapshot with index 0")
 			Expect(k8sClient.Create(ctx, resourceSnapshot)).To(Succeed())
 
 			By("Creating a new cluster resource override")
@@ -873,13 +883,41 @@ var _ = Describe("Updaterun initialization tests", func() {
 			updateRun.Spec.ResourceSnapshotIndex = ""
 			Expect(k8sClient.Create(ctx, updateRun)).To(Succeed())
 
-			By("Validating the clusterStagedUpdateRun stats")
-			initialized := generateSucceededInitializationStatus(crp, updateRun, testResourceSnapshotIndex, policySnapshot, updateStrategy, clusterResourceOverride)
-			validateClusterStagedUpdateRunStatus(ctx, updateRun, initialized, "")
-			Expect(updateRun.Status.ResourceSnapshotIndexUsed).To(Equal(testResourceSnapshotIndex), "resource snapshot index used mismatch in the updateRun status")
+			By("Validating the initialization succeeded with a newly created resource snapshot")
+			Eventually(func() error {
+				if err := k8sClient.Get(ctx, updateRunNamespacedName, updateRun); err != nil {
+					return err
+				}
+				initCond := meta.FindStatusCondition(updateRun.Status.Conditions, string(placementv1beta1.StagedUpdateRunConditionInitialized))
+				if initCond == nil {
+					return fmt.Errorf("initialization condition not found yet")
+				}
+				if !condition.IsConditionStatusTrue(initCond, updateRun.GetGeneration()) {
+					return fmt.Errorf("initialization condition status = %v, want True, message = %s", initCond.Status, initCond.Message)
+				}
+				if updateRun.Status.ResourceSnapshotIndexUsed != "1" {
+					return fmt.Errorf("resourceSnapshotIndexUsed is not set correctly, got %s, want `1`", updateRun.Status.ResourceSnapshotIndexUsed)
+				}
+				return nil
+			}, timeout, interval).Should(Succeed(), "failed to validate initialization succeeded with auto-created snapshot")
 
 			By("Validating the clusterStagedUpdateRun initialized consistently")
-			validateClusterStagedUpdateRunStatusConsistently(ctx, updateRun, initialized, "")
+			Consistently(func() error {
+				if err := k8sClient.Get(ctx, updateRunNamespacedName, updateRun); err != nil {
+					return err
+				}
+				initCond := meta.FindStatusCondition(updateRun.Status.Conditions, string(placementv1beta1.StagedUpdateRunConditionInitialized))
+				if !condition.IsConditionStatusTrue(initCond, updateRun.GetGeneration()) {
+					return fmt.Errorf("initialization condition changed unexpectedly")
+				}
+				if updateRun.Status.ResourceSnapshotIndexUsed != "1" {
+					return fmt.Errorf("resourceSnapshotIndexUsed is not set correctly, got %s, want `1`", updateRun.Status.ResourceSnapshotIndexUsed)
+				}
+				return nil
+			}, duration, interval).Should(Succeed(), "initialization should remain successful")
+
+			By("Cleaning up auto-created resource snapshots")
+			cleanupAutoCreatedResourceSnapshots(ctx)
 
 			By("Checking update run status metrics are emitted")
 			validateUpdateRunMetricsEmitted(generateInitializationSucceededMetric(placementv1beta1.StateInitialize, updateRun))
@@ -906,18 +944,18 @@ var _ = Describe("Updaterun initialization tests", func() {
 			validateUpdateRunMetricsEmitted(generateInitializationSucceededMetric(placementv1beta1.StateInitialize, updateRun))
 		})
 
-		It("Should pick latest master resource snapshot if multiple snapshots", func() {
-			By("Creating a new resource snapshot")
+		It("Should create a new resource snapshot at next index even when multiple pre-existing snapshots exist and no index specified", func() {
+			By("Creating a pre-existing resource snapshot at index 0")
 			resourceSnapshot.Labels[placementv1beta1.IsLatestSnapshotLabel] = "false"
 			Expect(k8sClient.Create(ctx, resourceSnapshot)).To(Succeed())
 
-			By("Creating a another new resource snapshot")
+			By("Creating a another pre-existing resource snapshot at index 1")
 			resourceSnapshot2.Name = testCRPName + "-1-snapshot"
 			resourceSnapshot2.Labels[placementv1beta1.IsLatestSnapshotLabel] = "false"
 			resourceSnapshot2.Labels[placementv1beta1.ResourceIndexLabel] = "1"
 			Expect(k8sClient.Create(ctx, resourceSnapshot2)).To(Succeed())
 
-			By("Creating a latest master resource snapshot")
+			By("Creating a latest pre-existing resource snapshot at index 2")
 			resourceSnapshot3.Name = testCRPName + "-2-snapshot"
 			resourceSnapshot3.Labels[placementv1beta1.ResourceIndexLabel] = "2"
 			Expect(k8sClient.Create(ctx, resourceSnapshot3)).To(Succeed())
@@ -929,12 +967,41 @@ var _ = Describe("Updaterun initialization tests", func() {
 			updateRun.Spec.ResourceSnapshotIndex = ""
 			Expect(k8sClient.Create(ctx, updateRun)).To(Succeed())
 
-			By("Validating the clusterStagedUpdateRun status")
-			initialized := generateSucceededInitializationStatus(crp, updateRun, "2", policySnapshot, updateStrategy, clusterResourceOverride)
-			validateClusterStagedUpdateRunStatus(ctx, updateRun, initialized, "")
+			By("Validating the initialization succeeded and a new resource snapshot was created")
+			Eventually(func() error {
+				if err := k8sClient.Get(ctx, updateRunNamespacedName, updateRun); err != nil {
+					return err
+				}
+				initCond := meta.FindStatusCondition(updateRun.Status.Conditions, string(placementv1beta1.StagedUpdateRunConditionInitialized))
+				if initCond == nil {
+					return fmt.Errorf("initialization condition not found yet")
+				}
+				if !condition.IsConditionStatusTrue(initCond, updateRun.GetGeneration()) {
+					return fmt.Errorf("initialization condition status = %v, want True, message = %s", initCond.Status, initCond.Message)
+				}
+				if updateRun.Status.ResourceSnapshotIndexUsed != "3" {
+					return fmt.Errorf("resourceSnapshotIndexUsed is not set correctly, got %s, want `3`", updateRun.Status.ResourceSnapshotIndexUsed)
+				}
+				return nil
+			}, timeout, interval).Should(Succeed(), "failed to validate initialization succeeded with auto-created snapshot")
 
 			By("Validating the clusterStagedUpdateRun initialized consistently")
-			validateClusterStagedUpdateRunStatusConsistently(ctx, updateRun, initialized, "")
+			Consistently(func() error {
+				if err := k8sClient.Get(ctx, updateRunNamespacedName, updateRun); err != nil {
+					return err
+				}
+				initCond := meta.FindStatusCondition(updateRun.Status.Conditions, string(placementv1beta1.StagedUpdateRunConditionInitialized))
+				if !condition.IsConditionStatusTrue(initCond, updateRun.GetGeneration()) {
+					return fmt.Errorf("initialization condition changed unexpectedly")
+				}
+				if updateRun.Status.ResourceSnapshotIndexUsed != "3" {
+					return fmt.Errorf("resourceSnapshotIndexUsed is not set correctly, got %s, want `3`", updateRun.Status.ResourceSnapshotIndexUsed)
+				}
+				return nil
+			}, duration, interval).Should(Succeed(), "initialization should remain successful")
+
+			By("Cleaning up auto-created resource snapshots")
+			cleanupAutoCreatedResourceSnapshots(ctx)
 
 			By("Checking update run status metrics are emitted")
 			validateUpdateRunMetricsEmitted(generateInitializationSucceededMetric(placementv1beta1.StateInitialize, updateRun))
@@ -1122,4 +1189,13 @@ func generateExecutionNotStartedStatus(
 	status.StagesStatus[0].BeforeStageTaskStatus[0].Conditions = append(status.StagesStatus[0].BeforeStageTaskStatus[0].Conditions,
 		generateTrueCondition(updateRun, placementv1beta1.StageTaskConditionApprovalRequestCreated))
 	return status
+}
+
+// cleanupAutoCreatedResourceSnapshots deletes all ClusterResourceSnapshots associated with the test CRP.
+// This is needed because auto-created snapshots from GetOrCreateResourceSnapshot are not tracked
+// by the test's AfterEach cleanup, which only deletes the pre-created test snapshots.
+func cleanupAutoCreatedResourceSnapshots(ctx context.Context) {
+	Expect(k8sClient.DeleteAllOf(ctx, &placementv1beta1.ClusterResourceSnapshot{},
+		client.MatchingLabels{placementv1beta1.PlacementTrackingLabel: testCRPName},
+	)).Should(Succeed())
 }

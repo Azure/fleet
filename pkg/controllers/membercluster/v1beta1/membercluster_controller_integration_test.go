@@ -139,6 +139,13 @@ var _ = Describe("Test MemberCluster Controller", func() {
 			}
 			Expect(cmp.Diff(mc.Status.ResourceUsage, wantResourceUsage, cmpopts.IgnoreTypes(time.Time{}))).To(BeEmpty())
 
+			// Compare the namespaces.
+			wantNamespaces := map[string]string{
+				"test-namespace-1": "work-1",
+				"test-namespace-2": "",
+			}
+			Expect(cmp.Diff(mc.Status.Namespaces, wantNamespaces)).To(BeEmpty())
+
 			// Compare the property provider conditions.
 			wantConditions := []metav1.Condition{
 				buildCondition(propertyProviderConditionType1, propertyProviderConditionStatus1, propertyProviderConditionReason1, propertyProviderConditionMessage1, mc.GetGeneration()),
@@ -342,6 +349,7 @@ var _ = Describe("Test MemberCluster Controller", func() {
 				},
 				Properties:    imc.Status.Properties,
 				ResourceUsage: imc.Status.ResourceUsage,
+				Namespaces:    imc.Status.Namespaces,
 				AgentStatus:   imc.Status.AgentStatus,
 			}
 			Expect(cmp.Diff(wantMC, mc.Status, ignoreOption)).Should(BeEmpty())
@@ -373,6 +381,7 @@ var _ = Describe("Test MemberCluster Controller", func() {
 				},
 				Properties:    imc.Status.Properties,
 				ResourceUsage: imc.Status.ResourceUsage,
+				Namespaces:    imc.Status.Namespaces,
 				AgentStatus:   imc.Status.AgentStatus,
 			}
 			Expect(cmp.Diff(wantMC, mc.Status, ignoreOption)).Should(BeEmpty())
@@ -409,6 +418,7 @@ var _ = Describe("Test MemberCluster Controller", func() {
 				},
 				Properties:    imc.Status.Properties,
 				ResourceUsage: imc.Status.ResourceUsage,
+				Namespaces:    imc.Status.Namespaces,
 				AgentStatus:   imc.Status.AgentStatus,
 			}
 			Expect(cmp.Diff(wantMC, mc.Status, ignoreOption)).Should(BeEmpty())
@@ -445,6 +455,7 @@ var _ = Describe("Test MemberCluster Controller", func() {
 				},
 				Properties:    imc.Status.Properties,
 				ResourceUsage: imc.Status.ResourceUsage,
+				Namespaces:    imc.Status.Namespaces,
 				AgentStatus:   imc.Status.AgentStatus,
 			}
 			Expect(cmp.Diff(wantMC, mc.Status, ignoreOption)).Should(BeEmpty())
@@ -500,6 +511,7 @@ var _ = Describe("Test MemberCluster Controller", func() {
 				},
 				Properties:    imc.Status.Properties,
 				ResourceUsage: imc.Status.ResourceUsage,
+				Namespaces:    imc.Status.Namespaces,
 				AgentStatus:   imc.Status.AgentStatus,
 			}
 			options := cmpopts.IgnoreFields(metav1.Condition{}, "LastTransitionTime", "ObservedGeneration", "Message")
@@ -530,6 +542,7 @@ var _ = Describe("Test MemberCluster Controller", func() {
 				},
 				Properties:    imc.Status.Properties,
 				ResourceUsage: imc.Status.ResourceUsage,
+				Namespaces:    imc.Status.Namespaces,
 				AgentStatus:   imc.Status.AgentStatus,
 			}
 			// ignore the ObservedGeneration here cause controller won't update the ReadyToJoin condition.
@@ -623,6 +636,7 @@ var _ = Describe("Test MemberCluster Controller", func() {
 				},
 				Properties:    imc.Status.Properties,
 				ResourceUsage: imc.Status.ResourceUsage,
+				Namespaces:    imc.Status.Namespaces,
 				AgentStatus:   imc.Status.AgentStatus,
 			}
 			Expect(cmp.Diff(wantMC, mc.Status, ignoreOption)).Should(BeEmpty())
@@ -750,5 +764,10 @@ func checkIfMemberClusterResourcesExistsAndUpdateAgentStatusToTrue(ctx context.C
 	// Add conditions reported by the property provider.
 	meta.SetStatusCondition(&imc.Status.Conditions, buildCondition(propertyProviderConditionType1, propertyProviderConditionStatus1, propertyProviderConditionReason1, propertyProviderConditionMessage1, imc.GetGeneration()))
 	meta.SetStatusCondition(&imc.Status.Conditions, buildCondition(propertyProviderConditionType2, propertyProviderConditionStatus2, propertyProviderConditionReason2, propertyProviderConditionMessage2, imc.GetGeneration()))
+	// Update the namespaces map.
+	imc.Status.Namespaces = map[string]string{
+		"test-namespace-1": "work-1",
+		"test-namespace-2": "",
+	}
 	Expect(k8sClient.Status().Update(ctx, &imc)).Should(Succeed())
 }

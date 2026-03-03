@@ -253,6 +253,17 @@ func (r *Reconciler) SetupWithManager(mgr ctrl.Manager) error {
 				}
 			}
 
+			// Capture namespace collection changes.
+			//
+			// This is important for the namespace affinity plugin to trigger rescheduling
+			// when namespaces are added or removed from clusters.
+			oldNamespaces := oldCluster.Status.Namespaces
+			newNamespaces := newCluster.Status.Namespaces
+			if !equality.Semantic.DeepEqual(oldNamespaces, newNamespaces) {
+				klog.V(2).InfoS("A member cluster namespace collection change has been detected", "memberCluster", clusterKObj)
+				return true
+			}
+
 			// Capture resource usage changes.
 			oldCapacity := oldCluster.Status.ResourceUsage.Capacity
 			newCapacity := newCluster.Status.ResourceUsage.Capacity

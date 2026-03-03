@@ -234,6 +234,8 @@ var _ = Describe("Test the clusterStagedUpdateRun controller", func() {
 
 func resetUpdateRunMetrics() {
 	hubmetrics.FleetUpdateRunStatusLastTimestampSeconds.Reset()
+	hubmetrics.FleetUpdateRunStageClusterUpdatingDurationSeconds.Reset()
+	hubmetrics.FleetUpdateRunApprovalRequestLatencySeconds.Reset()
 }
 
 // validateUpdateRunMetricsEmitted validates the update run status metrics are emitted and are emitted in the correct order.
@@ -256,6 +258,117 @@ func validateUpdateRunMetricsEmitted(wantMetrics ...*prometheusclientmodel.Metri
 
 		return nil
 	}, timeout, interval).Should(Succeed(), "failed to validate the update run status metrics")
+}
+
+// validateUpdateRunApprovalStageTaskMetric validates the update run approval stage task metric by checking labels and count.
+func validateUpdateRunApprovalStageTaskMetric(wantMetrics ...*prometheusclientmodel.Metric) {
+	Eventually(func() error {
+		metricFamilies, err := ctrlmetrics.Registry.Gather()
+		if err != nil {
+			return fmt.Errorf("failed to gather metrics: %w", err)
+		}
+		var gotMetrics []*prometheusclientmodel.Metric
+		for _, mf := range metricFamilies {
+			if mf.GetName() == "fleet_workload_update_run_approval_request_latency_seconds" {
+				gotMetrics = mf.GetMetric()
+				break
+			}
+		}
+
+		if len(gotMetrics) != len(wantMetrics) {
+			return fmt.Errorf("metric count mismatch: got %d, want %d", len(gotMetrics), len(wantMetrics))
+		}
+
+		for i, m := range gotMetrics {
+			// Compare labels by extracting values (avoids protobuf unexported field issues).
+			gotLabels := make(map[string]string)
+			for _, l := range m.GetLabel() {
+				gotLabels[l.GetName()] = l.GetValue()
+			}
+			wantLabels := make(map[string]string)
+			for _, l := range wantMetrics[i].GetLabel() {
+				wantLabels[l.GetName()] = l.GetValue()
+			}
+			if diff := cmp.Diff(gotLabels, wantLabels); diff != "" {
+				return fmt.Errorf("metric labels mismatch (-got, +want):\n%s", diff)
+			}
+			if m.GetHistogram().GetSampleCount() != wantMetrics[i].GetHistogram().GetSampleCount() {
+				return fmt.Errorf("metric sample count mismatch: got %d, want %d", m.GetHistogram().GetSampleCount(), wantMetrics[i].GetHistogram().GetSampleCount())
+			}
+		}
+		return nil
+	}, timeout, interval).Should(Succeed(), "failed to validate the update run approval stage task metrics")
+}
+
+// validateUpdateRunStageMetricsEmitted validates the update run stage metrics by checking labels and count.
+func validateUpdateRunStageMetricsEmitted(wantMetrics ...*prometheusclientmodel.Metric) {
+	Eventually(func() error {
+		metricFamilies, err := ctrlmetrics.Registry.Gather()
+		if err != nil {
+			return fmt.Errorf("failed to gather metrics: %w", err)
+		}
+		var gotMetrics []*prometheusclientmodel.Metric
+		for _, mf := range metricFamilies {
+			if mf.GetName() == "fleet_workload_update_run_stage_cluster_updating_duration_seconds" {
+				gotMetrics = mf.GetMetric()
+				break
+			}
+		}
+
+		if len(gotMetrics) != len(wantMetrics) {
+			return fmt.Errorf("metric count mismatch: got %d, want %d", len(gotMetrics), len(wantMetrics))
+		}
+
+		for i, m := range gotMetrics {
+			// Compare labels by extracting values (avoids protobuf unexported field issues).
+			gotLabels := make(map[string]string)
+			for _, l := range m.GetLabel() {
+				gotLabels[l.GetName()] = l.GetValue()
+			}
+			wantLabels := make(map[string]string)
+			for _, l := range wantMetrics[i].GetLabel() {
+				wantLabels[l.GetName()] = l.GetValue()
+			}
+			if diff := cmp.Diff(gotLabels, wantLabels); diff != "" {
+				return fmt.Errorf("metric labels mismatch (-got, +want):\n%s", diff)
+			}
+			if m.GetHistogram().GetSampleCount() != wantMetrics[i].GetHistogram().GetSampleCount() {
+				return fmt.Errorf("metric sample count mismatch: got %d, want %d", m.GetHistogram().GetSampleCount(), wantMetrics[i].GetHistogram().GetSampleCount())
+			}
+		}
+		return nil
+	}, timeout, interval).Should(Succeed(), "failed to validate the update run stage metrics")
+}
+
+func generateStageClusterUpdatingMetric(
+	updateRun *placementv1beta1.ClusterStagedUpdateRun,
+) *prometheusclientmodel.Metric {
+	return &prometheusclientmodel.Metric{
+		Label: []*prometheusclientmodel.LabelPair{
+			{Name: ptr.To("namespace"), Value: &updateRun.Namespace},
+			{Name: ptr.To("name"), Value: &updateRun.Name},
+		},
+		Histogram: &prometheusclientmodel.Histogram{
+			SampleCount: ptr.To(uint64(len(updateRun.Status.StagesStatus))),
+		},
+	}
+}
+
+func generateApprovalStageTaskMetric(
+	updateRun *placementv1beta1.ClusterStagedUpdateRun,
+	stageTask string,
+	stageTaskCount uint64,
+) *prometheusclientmodel.Metric {
+	return &prometheusclientmodel.Metric{
+		Label: []*prometheusclientmodel.LabelPair{
+			{Name: ptr.To("namespace"), Value: &updateRun.Namespace},
+			{Name: ptr.To("name"), Value: &updateRun.Name},
+			{Name: ptr.To("taskType"), Value: ptr.To(stageTask)},
+		},
+		Histogram: &prometheusclientmodel.Histogram{
+			SampleCount: ptr.To(stageTaskCount),
+		},
+	}
 }
 
 // generateMetricsLabels generates the labels for the update run status metrics.
@@ -391,7 +504,7 @@ func generateTestClusterResourcePlacement() *placementv1beta1.ClusterResourcePla
 					Group:   "",
 					Version: "v1",
 					Kind:    "Namespace",
-					Name:    "test-namespace",
+					Name:    testNamespaceName,
 				},
 			},
 			Policy: &placementv1beta1.PlacementPolicy{
@@ -621,9 +734,9 @@ func generateTestClusterResourceSnapshot() *placementv1beta1.ClusterResourceSnap
 			Kind:       "Namespace",
 		},
 		ObjectMeta: metav1.ObjectMeta{
-			Name: "test-namespace",
+			Name: testNamespaceName,
 			Labels: map[string]string{
-				"fleet.azure.com/name": "test-namespace",
+				"fleet.azure.com/name": testNamespaceName,
 			},
 		},
 	})
@@ -667,7 +780,7 @@ func generateTestClusterResourceOverride() *placementv1beta1.ClusterResourceOver
 						Group:   "",
 						Version: "v1",
 						Kind:    "Namespace",
-						Name:    "test-namespace",
+						Name:    testNamespaceName,
 					},
 				},
 				Policy: &placementv1beta1.OverridePolicy{

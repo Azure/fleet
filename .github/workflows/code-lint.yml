@@ -14,10 +14,9 @@ on:
 
 env:
   # Common versions
-  GO_VERSION: '1.24.13'
+  GO_VERSION: "1.24.13"
 
 jobs:
-
   detect-noop:
     runs-on: ubuntu-latest
     outputs:
@@ -58,13 +57,33 @@ jobs:
       contents: read
 
     steps:
-    - name: Set up Go ${{ env.GO_VERSION }}
-      uses: actions/setup-go@v6
-      with:
-        go-version: ${{ env.GO_VERSION }}
+      - name: Set up Go ${{ env.GO_VERSION }}
+        uses: actions/setup-go@v6
+        with:
+          go-version: ${{ env.GO_VERSION }}
 
-    - name: Check out code into the Go module directory
-      uses: actions/checkout@v6.0.2
+      - name: Check out code into the Go module directory
+        uses: actions/checkout@v6.0.2
 
-    - name: golangci-lint
-      run: make lint
+      - name: golangci-lint
+        run: make lint
+
+  helm-lint:
+    name: "Helm Lint"
+    runs-on: ubuntu-latest
+    needs: detect-noop
+    if: needs.detect-noop.outputs.noop != 'true'
+
+    steps:
+      - name: Check out code
+        uses: actions/checkout@v6.0.2
+
+      - name: Set up Helm
+        uses: azure/setup-helm@v4
+        with:
+          version: v3.17.0
+
+      - name: Lint Helm charts
+        run: |
+          helm lint charts/hub-agent
+          helm lint charts/member-agent

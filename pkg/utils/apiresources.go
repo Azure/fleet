@@ -238,7 +238,7 @@ func (r *ResourceConfig) Parse(c string) error {
 	tokens := strings.Split(c, apiGroupSepToken)
 	for _, token := range tokens {
 		if err := r.parseSingle(token); err != nil {
-			return fmt.Errorf("parse --avoid-selecting-apis %w", err)
+			return fmt.Errorf("failed to parse token: %w", err)
 		}
 	}
 

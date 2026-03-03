@@ -806,6 +806,10 @@ func TestSyncInternalMemberClusterStatus(t *testing.T) {
 						},
 						ObservationTime: now,
 					},
+					Namespaces: map[string]string{
+						"test-namespace-1": "work-1",
+						"test-namespace-2": "",
+					},
 					AgentStatus: []clusterv1beta1.AgentStatus{
 						{
 							Type: clusterv1beta1.MemberAgent,
@@ -885,6 +889,10 @@ func TestSyncInternalMemberClusterStatus(t *testing.T) {
 							corev1.ResourceMemory: resource.MustParse("4Gi"),
 						},
 						ObservationTime: now,
+					},
+					Namespaces: map[string]string{
+						"test-namespace-1": "work-1",
+						"test-namespace-2": "",
 					},
 					AgentStatus: []clusterv1beta1.AgentStatus{
 						{

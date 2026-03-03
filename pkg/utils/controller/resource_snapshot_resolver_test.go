@@ -3938,6 +3938,7 @@ func TestShouldCreateNewResourceSnapshotNow(t *testing.T) {
 
 	cases := []struct {
 		name               string
+		nilConfig          bool
 		creationInterval   time.Duration
 		collectionDuration time.Duration
 		creationTime       time.Time
@@ -3945,6 +3946,14 @@ func TestShouldCreateNewResourceSnapshotNow(t *testing.T) {
 		wantAnnoation      bool
 		wantRequeue        ctrl.Result
 	}{
+		{
+			// Config == nil means no timing restrictions; should always create immediately.
+			name:      "Config is nil",
+			nilConfig: true,
+			// Even with a very recent creation time, nil Config must not delay.
+			creationTime: time.Now(),
+			wantRequeue:  ctrl.Result{RequeueAfter: 0, Requeue: false},
+		},
 		{
 			name:               "ResourceSnapshotCreationMinimumInterval and ResourceChangesCollectionDuration are 0",
 			creationInterval:   0,
@@ -4028,9 +4037,9 @@ func TestShouldCreateNewResourceSnapshotNow(t *testing.T) {
 				Build()
 
 			resolver := NewResourceSnapshotResolver(client, nil)
-			resolver.Config = NewResourceSnapshotConfig(tc.creationInterval, // Fast creation
-				tc.collectionDuration, // Longer collection
-			)
+			if !tc.nilConfig {
+				resolver.Config = NewResourceSnapshotConfig(tc.creationInterval, tc.collectionDuration)
+			}
 
 			ctx := context.Background()
 			if err := client.Get(ctx, types.NamespacedName{Name: snapshot.Name}, snapshot); err != nil {
