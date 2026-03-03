@@ -213,29 +213,10 @@ func (r *Reconciler) handleUpdate(ctx context.Context, placementObj fleetv1beta1
 		return ctrl.Result{}, err
 	}
 
-	createResourceSnapshotRes, latestResourceSnapshot, err := r.ResourceSnapshotResolver.GetOrCreateResourceSnapshot(ctx, placementObj, envelopeObjCount,
-		&fleetv1beta1.ResourceSnapshotSpec{SelectedResources: selectedResources}, int(revisionLimit))
+	createResourceSnapshotRes, latestResourceSnapshot, selectedResourceIDs, err := r.handleResourceSnapshotByStrategy(
+		ctx, placementObj, envelopeObjCount, selectedResources, selectedResourceIDs, int(revisionLimit))
 	if err != nil {
 		return ctrl.Result{}, err
-	}
-
-	// We don't requeue the request here immediately so that placement can keep tracking the rollout status.
-	if createResourceSnapshotRes.RequeueAfter > 0 {
-		latestResourceSnapshotKObj := klog.KObj(latestResourceSnapshot)
-		// We cannot create the resource snapshot immediately because of the resource snapshot creation interval.
-		// Rebuild the seletedResourceIDs using the latestResourceSnapshot.
-		latestResourceSnapshotIndex, err := labels.ExtractResourceIndexFromResourceSnapshot(latestResourceSnapshot)
-		if err != nil {
-			klog.ErrorS(err, "Failed to extract the resource index from the resourceSnapshot", "placement", placementKObj, "resourceSnapshot", latestResourceSnapshotKObj)
-			return ctrl.Result{}, controller.NewUnexpectedBehaviorError(err)
-		}
-		placementKey := controller.GetObjectKeyFromNamespaceName(placementObj.GetNamespace(), placementObj.GetName())
-		selectedResourceIDs, err = controller.CollectResourceIdentifiersUsingMasterResourceSnapshot(ctx, r.Client, placementKey, latestResourceSnapshot, strconv.Itoa(latestResourceSnapshotIndex))
-		if err != nil {
-			klog.ErrorS(err, "Failed to collect resource identifiers from the resourceSnapshot", "placement", placementKObj, "resourceSnapshot", latestResourceSnapshotKObj)
-			return ctrl.Result{}, err
-		}
-		klog.V(2).InfoS("Fetched the selected resources from the lastestResourceSnapshot", "placement", placementKObj, "resourceSnapshot", latestResourceSnapshotKObj, "generation", placementObj.GetGeneration())
 	}
 
 	// isScheduleFullfilled is to indicate whether we need to requeue the placement request to track the rollout status.
@@ -313,6 +294,55 @@ func (r *Reconciler) handleUpdate(ctx context.Context, placementObj fleetv1beta1
 	}
 	// no need to requeue the request as the binding status will be changed but we add a long resync loop just in case.
 	return ctrl.Result{RequeueAfter: controllerResyncPeriod}, nil
+}
+
+// handleResourceSnapshotByStrategy handles resource snapshot resolution based on rollout strategy.
+// For External rollout strategy, it only fetches the existing snapshot (can be nil).
+// For other strategies, it creates or gets a resource snapshot and may update selectedResourceIDs if requeue is needed.
+func (r *Reconciler) handleResourceSnapshotByStrategy(
+	ctx context.Context,
+	placementObj fleetv1beta1.PlacementObj,
+	envelopeObjCount int,
+	selectedResources []fleetv1beta1.ResourceContent,
+	selectedResourceIDs []fleetv1beta1.ResourceIdentifier,
+	revisionHistoryLimit int,
+) (ctrl.Result, fleetv1beta1.ResourceSnapshotObj, []fleetv1beta1.ResourceIdentifier, error) {
+	placementKObj := klog.KObj(placementObj)
+	placementSpec := placementObj.GetPlacementSpec()
+
+	// For External rollout strategy, the placement controller should not create new resource snapshots.
+	// The external controller (e.g., UpdateRun controller) is responsible for creating them.
+	if placementSpec.Strategy.Type == fleetv1beta1.ExternalRolloutStrategyType {
+		// latestResourceSnapshot is nil for External strategy - the external controller will create it.
+		klog.V(2).InfoS("Using external rollout strategy, skipping resource snapshot creation", "placement", placementKObj)
+		return ctrl.Result{}, nil, selectedResourceIDs, nil
+	}
+
+	createResourceSnapshotRes, latestResourceSnapshot, err := r.ResourceSnapshotResolver.GetOrCreateResourceSnapshot(ctx, placementObj, envelopeObjCount,
+		&fleetv1beta1.ResourceSnapshotSpec{SelectedResources: selectedResources}, revisionHistoryLimit)
+	if err != nil {
+		return ctrl.Result{}, nil, selectedResourceIDs, err
+	}
+
+	// We don't requeue the request here immediately so that placement can keep tracking the rollout status.
+	if createResourceSnapshotRes.RequeueAfter > 0 {
+		latestResourceSnapshotKObj := klog.KObj(latestResourceSnapshot)
+		// We cannot create the resource snapshot immediately because of the resource snapshot creation interval.
+		// Rebuild the selectedResourceIDs using the latestResourceSnapshot.
+		latestResourceSnapshotIndex, err := labels.ExtractResourceIndexFromResourceSnapshot(latestResourceSnapshot)
+		if err != nil {
+			klog.ErrorS(err, "Failed to extract the resource index from the resourceSnapshot", "placement", placementKObj, "resourceSnapshot", latestResourceSnapshotKObj)
+			return ctrl.Result{}, nil, selectedResourceIDs, controller.NewUnexpectedBehaviorError(err)
+		}
+		placementKey := controller.GetObjectKeyFromNamespaceName(placementObj.GetNamespace(), placementObj.GetName())
+		selectedResourceIDs, err = controller.CollectResourceIdentifiersUsingMasterResourceSnapshot(ctx, r.Client, placementKey, latestResourceSnapshot, strconv.Itoa(latestResourceSnapshotIndex))
+		if err != nil {
+			klog.ErrorS(err, "Failed to collect resource identifiers from the resourceSnapshot", "placement", placementKObj, "resourceSnapshot", latestResourceSnapshotKObj)
+			return ctrl.Result{}, nil, selectedResourceIDs, err
+		}
+		klog.V(2).InfoS("Fetched the selected resources from the latestResourceSnapshot", "placement", placementKObj, "resourceSnapshot", latestResourceSnapshotKObj, "generation", placementObj.GetGeneration())
+	}
+	return createResourceSnapshotRes, latestResourceSnapshot, selectedResourceIDs, nil
 }
 
 func (r *Reconciler) getOrCreateSchedulingPolicySnapshot(ctx context.Context, placementObj fleetv1beta1.PlacementObj, revisionHistoryLimit int) (fleetv1beta1.PolicySnapshotObj, error) {
@@ -571,7 +601,12 @@ func (r *Reconciler) setPlacementStatus(
 	scheduledCondition := buildScheduledCondition(placementObj, latestSchedulingPolicySnapshot)
 	placementObj.SetConditions(scheduledCondition)
 	// set ObservedResourceIndex from the latest resource snapshot's resource index label, before we set Synchronized, Applied conditions.
-	placementStatus.ObservedResourceIndex = latestResourceSnapshot.GetLabels()[fleetv1beta1.ResourceIndexLabel]
+	// For External rollout strategy, latestResourceSnapshot can be nil if no snapshot has been created yet by the external controller.
+	if latestResourceSnapshot != nil {
+		placementStatus.ObservedResourceIndex = latestResourceSnapshot.GetLabels()[fleetv1beta1.ResourceIndexLabel]
+	} else {
+		placementStatus.ObservedResourceIndex = ""
+	}
 
 	// When scheduledCondition is unknown, appliedCondition should be unknown too.
 	// Note: If the scheduledCondition is failed, it means the placement requirement cannot be satisfied fully. For example,

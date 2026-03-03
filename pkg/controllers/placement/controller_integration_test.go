@@ -2029,8 +2029,14 @@ var _ = Describe("Test ClusterResourcePlacement Controller", func() {
 			By("Check clusterSchedulingPolicySnapshot")
 			gotPolicySnapshot = checkClusterSchedulingPolicySnapshot()
 
-			By("Check clusterResourceSnapshot")
-			gotResourceSnapshot = checkClusterResourceSnapshot()
+			By("Check that no clusterResourceSnapshot is created (External rollout strategy)")
+			// For External rollout strategy, the placement controller should NOT create resource snapshots.
+			// The external controller is responsible for creating them.
+			resourceSnapshotList := &placementv1beta1.ClusterResourceSnapshotList{}
+			Consistently(func() int {
+				Expect(k8sClient.List(ctx, resourceSnapshotList, client.MatchingLabels{placementv1beta1.PlacementTrackingLabel: crp.Name})).Should(Succeed())
+				return len(resourceSnapshotList.Items)
+			}, consistentlyTimeout, interval).Should(Equal(0), "Resource snapshot should not be created for External rollout strategy")
 
 			By("Validate CRP status")
 			wantCRP := &placementv1beta1.ClusterResourcePlacement{
@@ -2040,7 +2046,7 @@ var _ = Describe("Test ClusterResourcePlacement Controller", func() {
 				},
 				Spec: crp.Spec,
 				Status: placementv1beta1.PlacementStatus{
-					ObservedResourceIndex: "0",
+					ObservedResourceIndex: "",
 					Conditions: []metav1.Condition{
 						{
 							Status: metav1.ConditionUnknown,
