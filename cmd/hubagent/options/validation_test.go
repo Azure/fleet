@@ -40,6 +40,10 @@ func newTestOptions(modifyOptions ModifyOptions) Options {
 			HubQPS:   250,
 			HubBurst: 1000,
 		},
+		LeaderElectionOpts: LeaderElectionOptions{
+			LeaderElectionQPS:   250.0,
+			LeaderElectionBurst: 1000,
+		},
 		WebhookOpts: WebhookOptions{
 			ClientConnectionType: "url",
 			ServiceName:          testWebhookServiceName,
@@ -77,6 +81,13 @@ func TestValidateControllerManagerConfiguration(t *testing.T) {
 				options.CtrlMgrOpts.HubBurst = 50
 			}),
 			want: field.ErrorList{field.Invalid(newPath.Child("HubBurst"), 50, "The burst limit for client-side throttling must be greater than or equal to its QPS limit")},
+		},
+		"invalid: leader election burst value is less than its QPS value": {
+			opt: newTestOptions(func(option *Options) {
+				option.LeaderElectionOpts.LeaderElectionQPS = 100
+				option.LeaderElectionOpts.LeaderElectionBurst = 50
+			}),
+			want: field.ErrorList{field.Invalid(newPath.Child("LeaderElectionBurst"), 50, "The burst limit for client-side throttling of leader election related operations must be greater than or equal to its QPS limit")},
 		},
 		"WebhookServiceName is empty": {
 			opt: newTestOptions(func(option *Options) {

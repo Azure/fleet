@@ -33,6 +33,11 @@ func (o *Options) Validate() field.ErrorList {
 		errs = append(errs, field.Invalid(newPath.Child("HubBurst"), o.CtrlMgrOpts.HubBurst, "The burst limit for client-side throttling must be greater than or equal to its QPS limit"))
 	}
 
+	// Cross-field validation for leader election options.
+	if float64(o.LeaderElectionOpts.LeaderElectionBurst) < float64(o.LeaderElectionOpts.LeaderElectionQPS) {
+		errs = append(errs, field.Invalid(newPath.Child("LeaderElectionBurst"), o.LeaderElectionOpts.LeaderElectionBurst, "The burst limit for client-side throttling of leader election related operations must be greater than or equal to its QPS limit"))
+	}
+
 	// Cross-field validation for webhook options.
 
 	// Note: this validation logic is a bit weird in the sense that the system accepts

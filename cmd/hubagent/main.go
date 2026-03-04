@@ -28,6 +28,7 @@ import (
 	"k8s.io/apimachinery/pkg/runtime"
 	utilruntime "k8s.io/apimachinery/pkg/util/runtime"
 	clientgoscheme "k8s.io/client-go/kubernetes/scheme"
+	"k8s.io/client-go/rest"
 	"k8s.io/klog/v2"
 	clusterinventory "sigs.k8s.io/cluster-inventory-api/apis/v1alpha1"
 	ctrl "sigs.k8s.io/controller-runtime"
@@ -101,8 +102,18 @@ func main() {
 	// Set up controller-runtime logger
 	ctrl.SetLogger(zap.New(zap.UseDevMode(true)))
 
-	config := ctrl.GetConfigOrDie()
-	config.QPS, config.Burst = float32(opts.CtrlMgrOpts.HubQPS), opts.CtrlMgrOpts.HubBurst
+	// Create separate configs for the general access purpose and the leader election purpose.
+	//
+	// This aims to improve the availability of the hub agent; originally all access to the API
+	// server would share the same rate limiting configuration, and under adverse conditions (e.g.,
+	// large volume of concurrent placements) controllers would exhause all tokens in the rate limiter,
+	// and effectively starve the leader election process (the runtime can no longer renew leases),
+	// which would trigger the hub agent to restart even though the system remains functional.
+	defaultCfg := ctrl.GetConfigOrDie()
+	leaderElectionCfg := rest.CopyConfig(defaultCfg)
+
+	defaultCfg.QPS, defaultCfg.Burst = float32(opts.CtrlMgrOpts.HubQPS), opts.CtrlMgrOpts.HubBurst
+	leaderElectionCfg.QPS, leaderElectionCfg.Burst = float32(opts.LeaderElectionOpts.LeaderElectionQPS), opts.LeaderElectionOpts.LeaderElectionBurst
 
 	mgrOpts := ctrl.Options{
 		Scheme: scheme,
@@ -110,12 +121,27 @@ func main() {
 			SyncPeriod:       &opts.CtrlMgrOpts.ResyncPeriod.Duration,
 			DefaultTransform: cache.TransformStripManagedFields(),
 		},
-		LeaderElection:          opts.LeaderElectionOpts.LeaderElect,
-		LeaderElectionID:        "136224848560.hub.fleet.azure.com",
-		LeaderElectionNamespace: opts.LeaderElectionOpts.ResourceNamespace,
+		LeaderElection:       opts.LeaderElectionOpts.LeaderElect,
+		LeaderElectionConfig: leaderElectionCfg,
+		// If leader election is enabled, the hub agent by default uses a setup
+		// with a lease duration of 60 secs, a renew deadline of 45 secs, and a retry period of 5 secs.
+		// This setup gives the hub agent up to 9 attempts/45 seconds to renew its leadership lease
+		// before it loses the leadership and restarts.
+		//
+		// These values are set significantly higher than the controller-runtime defaults
+		// (15 seconds, 10 seconds, and 2 seconds respectively), as under heavy loads the hub agent
+		// might have difficulty renewing its lease in time due to API server side latencies, which
+		// might further lead to unexpected leadership losses (even when it is the only candidate
+		// running) and restarts.
+		//
+		// Note (chenyu1): a minor side effect with the higher values is that when the agent does restart,
+		// (or in the future when we do run multiple hub agent replicas), the new leader might have to wait a bit
+		// longer (up to 60 seconds) to acquire the leadership, which should still be acceptable in most scenarios.
 		LeaseDuration:           &opts.LeaderElectionOpts.LeaseDuration.Duration,
 		RenewDeadline:           &opts.LeaderElectionOpts.RenewDeadline.Duration,
 		RetryPeriod:             &opts.LeaderElectionOpts.RetryPeriod.Duration,
+		LeaderElectionID:        "136224848560.hub.fleet.azure.com",
+		LeaderElectionNamespace: opts.LeaderElectionOpts.ResourceNamespace,
 		HealthProbeBindAddress:  opts.CtrlMgrOpts.HealthProbeBindAddress,
 		Metrics: metricsserver.Options{
 			BindAddress: opts.CtrlMgrOpts.MetricsBindAddress,
@@ -128,7 +154,7 @@ func main() {
 	if opts.CtrlMgrOpts.EnablePprof {
 		mgrOpts.PprofBindAddress = fmt.Sprintf(":%d", opts.CtrlMgrOpts.PprofPort)
 	}
-	mgr, err := ctrl.NewManager(config, mgrOpts)
+	mgr, err := ctrl.NewManager(defaultCfg, mgrOpts)
 	if err != nil {
 		klog.ErrorS(err, "unable to start controller manager.")
 		exitWithErrorFunc()
@@ -186,7 +212,7 @@ func main() {
 	}
 
 	ctx := ctrl.SetupSignalHandler()
-	if err := workload.SetupControllers(ctx, &wg, mgr, config, opts); err != nil {
+	if err := workload.SetupControllers(ctx, &wg, mgr, defaultCfg, opts); err != nil {
 		klog.ErrorS(err, "unable to set up controllers")
 		exitWithErrorFunc()
 	}
