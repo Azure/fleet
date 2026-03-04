@@ -46,7 +46,7 @@ func (r *Reconciler) validate(
 	klog.V(2).InfoS("Start to validate the updateRun", "updateRun", updateRunRef)
 
 	// Validate the Placement object referenced by the UpdateRun.
-	placementNamespacedName, err := r.validatePlacement(ctx, updateRunCopy)
+	_, placementNamespacedName, err := r.validatePlacement(ctx, updateRunCopy)
 	if err != nil {
 		return -1, nil, nil, err
 	}

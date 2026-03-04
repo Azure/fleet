@@ -25,6 +25,8 @@ import (
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
 
+	corev1 "k8s.io/api/core/v1"
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/client-go/dynamic"
 	"k8s.io/client-go/kubernetes/scheme"
 	"k8s.io/client-go/rest"
@@ -41,6 +43,7 @@ import (
 	placementv1alpha1 "go.goms.io/fleet/apis/placement/v1alpha1"
 	placementv1beta1 "go.goms.io/fleet/apis/placement/v1beta1"
 	"go.goms.io/fleet/pkg/utils"
+	controller "go.goms.io/fleet/pkg/utils/controller"
 	"go.goms.io/fleet/pkg/utils/informer"
 )
 
@@ -53,6 +56,10 @@ var (
 	cancel    context.CancelFunc
 )
 
+const (
+	testNamespaceName = "test-namespace"
+)
+
 func TestAPIs(t *testing.T) {
 	RegisterFailHandler(Fail)
 
@@ -63,8 +70,11 @@ var _ = BeforeSuite(func() {
 	ctx, cancel = context.WithCancel(context.TODO())
 
 	var err error
-	By("Setup klog")
-	klog.SetLogger(zap.New(zap.WriteTo(GinkgoWriter), zap.UseDevMode(true)))
+	By("Setup klog and controller runtime logger")
+	logger := zap.New(zap.WriteTo(GinkgoWriter), zap.UseDevMode(true))
+	klog.SetLogger(logger)
+	ctrl.SetLogger(logger)
+
 	fs := flag.NewFlagSet("klog", flag.ContinueOnError)
 	klog.InitFlags(fs)
 	Expect(fs.Parse([]string{"--v", "5", "-add_dir_header", "true"})).Should(Succeed())
@@ -111,11 +121,27 @@ var _ = BeforeSuite(func() {
 	}, nil)
 
 	// Setup our main reconciler.
+	resourceSelectorResolver := controller.ResourceSelectorResolver{
+		RestMapper:        mgr.GetRESTMapper(),
+		InformerManager:   dynamicInformerManager,
+		ResourceConfig:    utils.NewResourceConfig(false),
+		SkippedNamespaces: map[string]bool{},
+	}
 	err = (&Reconciler{
-		Client:          k8sClient,
-		InformerManager: dynamicInformerManager,
+		Client:                   k8sClient,
+		InformerManager:          dynamicInformerManager,
+		ResourceSelectorResolver: resourceSelectorResolver,
+		ResourceSnapshotResolver: controller.NewResourceSnapshotResolver(mgr.GetClient(), mgr.GetScheme()),
 	}).SetupWithManagerForClusterStagedUpdateRun(mgr)
 	Expect(err).Should(Succeed())
+
+	// create the namespace for testing
+	testNS := &corev1.Namespace{
+		ObjectMeta: metav1.ObjectMeta{
+			Name: testNamespaceName,
+		},
+	}
+	Expect(k8sClient.Create(ctx, testNS)).Should(Succeed())
 
 	go func() {
 		defer GinkgoRecover()

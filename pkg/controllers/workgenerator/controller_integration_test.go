@@ -901,7 +901,6 @@ var _ = Describe("Test Work Generator Controller for clusterResourcePlacement", 
 							placementv1beta1.ParentResourceSnapshotIndexLabel: "1",
 							placementv1beta1.EnvelopeTypeLabel:                string(placementv1beta1.ClusterResourceEnvelopeType),
 							placementv1beta1.EnvelopeNameLabel:                envelopedResourceName,
-							placementv1beta1.EnvelopeNamespaceLabel:           envelopedResourceNameSpace,
 						},
 						Annotations: map[string]string{
 							placementv1beta1.ParentResourceSnapshotNameAnnotation:                binding.Spec.ResourceSnapshotName,
@@ -969,7 +968,6 @@ var _ = Describe("Test Work Generator Controller for clusterResourcePlacement", 
 						placementv1beta1.PlacementTrackingLabel: testCRPName,
 						placementv1beta1.EnvelopeTypeLabel:      string(placementv1beta1.ClusterResourceEnvelopeType),
 						placementv1beta1.EnvelopeNameLabel:      envelopedResourceName,
-						placementv1beta1.EnvelopeNamespaceLabel: envelopedResourceNameSpace,
 					}
 					if err := k8sClient.List(ctx, &workList, envelopWorkLabelMatcher); err != nil {
 						return err
@@ -4164,7 +4162,10 @@ func fetchEnvelopedWork(workList *placementv1beta1.WorkList, binding *placementv
 			placementv1beta1.PlacementTrackingLabel: testCRPName,
 			placementv1beta1.EnvelopeTypeLabel:      envelopeType,
 			placementv1beta1.EnvelopeNameLabel:      envelopeName,
-			placementv1beta1.EnvelopeNamespaceLabel: envelopeNamespace,
+		}
+
+		if envelopeType == string(placementv1beta1.ResourceEnvelopeType) {
+			envelopWorkLabelMatcher[placementv1beta1.EnvelopeNamespaceLabel] = envelopeNamespace
 		}
 		if err := k8sClient.List(ctx, workList, envelopWorkLabelMatcher); err != nil {
 			return err

@@ -285,6 +285,13 @@ func (in *MemberClusterStatus) DeepCopyInto(out *MemberClusterStatus) {
 		}
 	}
 	in.ResourceUsage.DeepCopyInto(&out.ResourceUsage)
+	if in.Namespaces != nil {
+		in, out := &in.Namespaces, &out.Namespaces
+		*out = make(map[string]string, len(*in))
+		for key, val := range *in {
+			(*out)[key] = val
+		}
+	}
 	if in.AgentStatus != nil {
 		in, out := &in.AgentStatus, &out.AgentStatus
 		*out = make([]AgentStatus, len(*in))

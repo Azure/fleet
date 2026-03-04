@@ -103,29 +103,31 @@ func main() {
 	ctrl.SetLogger(zap.New(zap.UseDevMode(true)))
 
 	config := ctrl.GetConfigOrDie()
-	config.QPS, config.Burst = float32(opts.HubQPS), opts.HubBurst
+	config.QPS, config.Burst = float32(opts.CtrlMgrOpts.HubQPS), opts.CtrlMgrOpts.HubBurst
 
 	mgrOpts := ctrl.Options{
 		Scheme: scheme,
 		Cache: cache.Options{
-			SyncPeriod:       &opts.ResyncPeriod.Duration,
+			SyncPeriod:       &opts.CtrlMgrOpts.ResyncPeriod.Duration,
 			DefaultTransform: cache.TransformStripManagedFields(),
 		},
-		LeaderElection:             opts.LeaderElection.LeaderElect,
-		LeaderElectionID:           opts.LeaderElection.ResourceName,
-		LeaderElectionNamespace:    opts.LeaderElection.ResourceNamespace,
-		LeaderElectionResourceLock: opts.LeaderElection.ResourceLock,
-		HealthProbeBindAddress:     opts.HealthProbeAddress,
+		LeaderElection:          opts.LeaderElectionOpts.LeaderElect,
+		LeaderElectionID:        "136224848560.hub.fleet.azure.com",
+		LeaderElectionNamespace: opts.LeaderElectionOpts.ResourceNamespace,
+		LeaseDuration:           &opts.LeaderElectionOpts.LeaseDuration.Duration,
+		RenewDeadline:           &opts.LeaderElectionOpts.RenewDeadline.Duration,
+		RetryPeriod:             &opts.LeaderElectionOpts.RetryPeriod.Duration,
+		HealthProbeBindAddress:  opts.CtrlMgrOpts.HealthProbeBindAddress,
 		Metrics: metricsserver.Options{
-			BindAddress: opts.MetricsBindAddress,
+			BindAddress: opts.CtrlMgrOpts.MetricsBindAddress,
 		},
 		WebhookServer: ctrlwebhook.NewServer(ctrlwebhook.Options{
 			Port:    FleetWebhookPort,
 			CertDir: webhook.FleetWebhookCertDir,
 		}),
 	}
-	if opts.EnablePprof {
-		mgrOpts.PprofBindAddress = fmt.Sprintf(":%d", opts.PprofPort)
+	if opts.CtrlMgrOpts.EnablePprof {
+		mgrOpts.PprofBindAddress = fmt.Sprintf(":%d", opts.CtrlMgrOpts.PprofPort)
 	}
 	mgr, err := ctrl.NewManager(config, mgrOpts)
 	if err != nil {
@@ -134,13 +136,13 @@ func main() {
 	}
 
 	klog.V(2).InfoS("starting hubagent")
-	if opts.EnableV1Beta1APIs {
+	if opts.FeatureFlags.EnableV1Beta1APIs {
 		klog.Info("Setting up memberCluster v1beta1 controller")
 		if err = (&mcv1beta1.Reconciler{
 			Client:                  mgr.GetClient(),
-			NetworkingAgentsEnabled: opts.NetworkingAgentsEnabled,
-			MaxConcurrentReconciles: int(math.Ceil(float64(opts.MaxFleetSizeSupported) / 100)), //one member cluster reconciler routine per 100 member clusters
-			ForceDeleteWaitTime:     opts.ForceDeleteWaitTime.Duration,
+			NetworkingAgentsEnabled: opts.ClusterMgmtOpts.NetworkingAgentsEnabled,
+			MaxConcurrentReconciles: int(math.Ceil(float64(opts.PlacementMgmtOpts.MaxFleetSize) / 100)), //one member cluster reconciler routine per 100 member clusters
+			ForceDeleteWaitTime:     opts.ClusterMgmtOpts.ForceDeleteWaitTime.Duration,
 		}).SetupWithManager(mgr, "membercluster-controller"); err != nil {
 			klog.ErrorS(err, "unable to create v1beta1 controller", "controller", "MemberCluster")
 			exitWithErrorFunc()
@@ -156,7 +158,7 @@ func main() {
 		exitWithErrorFunc()
 	}
 
-	if opts.EnableWebhook {
+	if opts.WebhookOpts.EnableWebhooks {
 		// Generate webhook configuration with certificates
 		webhookConfig, err := webhook.NewWebhookConfigFromOptions(mgr, opts, FleetWebhookPort)
 		if err != nil {
@@ -173,7 +175,7 @@ func main() {
 		// When using cert-manager, add a readiness check to ensure CA bundles are injected before marking ready.
 		// This prevents the pod from accepting traffic before cert-manager has populated the webhook CA bundles,
 		// which would cause webhook calls to fail.
-		if opts.UseCertManager {
+		if opts.WebhookOpts.UseCertManager {
 			if err := mgr.AddReadyzCheck("cert-manager-ca-injection", func(req *http.Request) error {
 				return webhookConfig.CheckCAInjection(req.Context())
 			}); err != nil {

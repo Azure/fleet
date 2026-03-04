@@ -378,7 +378,7 @@ func TestBuildApprovalRequestObject(t *testing.T) {
 			name: "should create namespaced ApprovalRequest when namespace is provided",
 			namespacedName: types.NamespacedName{
 				Name:      fmt.Sprintf(placementv1beta1.AfterStageApprovalTaskNameFmt, "test-update-run", "test-stage"),
-				Namespace: "test-namespace",
+				Namespace: testNamespaceName,
 			},
 			stageName:     "test-stage",
 			updateRunName: "test-update-run",
@@ -386,7 +386,7 @@ func TestBuildApprovalRequestObject(t *testing.T) {
 			want: &placementv1beta1.ApprovalRequest{
 				ObjectMeta: metav1.ObjectMeta{
 					Name:      fmt.Sprintf(placementv1beta1.AfterStageApprovalTaskNameFmt, "test-update-run", "test-stage"),
-					Namespace: "test-namespace",
+					Namespace: testNamespaceName,
 					Labels: map[string]string{
 						placementv1beta1.TargetUpdatingStageNameLabel:   "test-stage",
 						placementv1beta1.TargetUpdateRunLabel:           "test-update-run",

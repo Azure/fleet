@@ -56,8 +56,8 @@ type ResourceSnapshotResolver struct {
 }
 
 // NewResourceSnapshotResolver creates a new ResourceSnapshotResolver with the universal fields
-func NewResourceSnapshotResolver(client client.Client, scheme *runtime.Scheme) *ResourceSnapshotResolver {
-	return &ResourceSnapshotResolver{
+func NewResourceSnapshotResolver(client client.Client, scheme *runtime.Scheme) ResourceSnapshotResolver {
+	return ResourceSnapshotResolver{
 		Client: client,
 		Scheme: scheme,
 	}
@@ -343,7 +343,9 @@ func (r *ResourceSnapshotResolver) ensureLatestResourceSnapshot(ctx context.Cont
 // shouldCreateNewResourceSnapshotNow checks whether it is ready to create the new resource snapshot to avoid too frequent creation
 // based on the configured resourceSnapshotCreationMinimumInterval and resourceChangesCollectionDuration.
 func (r *ResourceSnapshotResolver) shouldCreateNewResourceSnapshotNow(ctx context.Context, latestResourceSnapshot fleetv1beta1.ResourceSnapshotObj) (ctrl.Result, error) {
-	if r.Config != nil && r.Config.ResourceSnapshotCreationMinimumInterval <= 0 && r.Config.ResourceChangesCollectionDuration <= 0 {
+	// If Config is nil (no restrictions) or both intervals are non-positive (effectively disabled),
+	// there is no delay needed — create immediately.
+	if r.Config == nil || (r.Config.ResourceSnapshotCreationMinimumInterval <= 0 && r.Config.ResourceChangesCollectionDuration <= 0) {
 		return ctrl.Result{}, nil
 	}
 

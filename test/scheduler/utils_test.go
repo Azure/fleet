@@ -45,6 +45,7 @@ import (
 	"go.goms.io/fleet/pkg/scheduler/framework"
 	"go.goms.io/fleet/pkg/scheduler/framework/plugins/clusteraffinity"
 	"go.goms.io/fleet/pkg/scheduler/framework/plugins/clustereligibility"
+	"go.goms.io/fleet/pkg/scheduler/framework/plugins/namespaceaffinity"
 	"go.goms.io/fleet/pkg/scheduler/framework/plugins/sameplacementaffinity"
 	"go.goms.io/fleet/pkg/scheduler/framework/plugins/tainttoleration"
 	"go.goms.io/fleet/pkg/scheduler/framework/plugins/topologyspreadconstraints"
@@ -137,6 +138,7 @@ func buildSchedulerFramework(ctrlMgr manager.Manager, clusterEligibilityChecker 
 	taintTolerationPlugin := tainttoleration.New()
 	samePlacementAffinityPlugin := sameplacementaffinity.New()
 	topologyspreadconstraintsPlugin := topologyspreadconstraints.New()
+	namespaceAffinityPlugin := namespaceaffinity.New()
 	profile.
 		// Register cluster affinity plugin.
 		WithPreFilterPlugin(&clusterAffinityPlugin).
@@ -150,6 +152,9 @@ func buildSchedulerFramework(ctrlMgr manager.Manager, clusterEligibilityChecker 
 		// Register same placement affinity plugin.
 		WithFilterPlugin(&samePlacementAffinityPlugin).
 		WithScorePlugin(&samePlacementAffinityPlugin).
+		// Register namespace affinity plugin.
+		WithPreFilterPlugin(&namespaceAffinityPlugin).
+		WithFilterPlugin(&namespaceAffinityPlugin).
 		// Register topology spread constraints plugin.
 		WithPostBatchPlugin(&topologyspreadconstraintsPlugin).
 		WithPreFilterPlugin(&topologyspreadconstraintsPlugin).

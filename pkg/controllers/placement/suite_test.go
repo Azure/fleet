@@ -126,7 +126,7 @@ var _ = BeforeSuite(func() {
 		UncachedReader:           mgr.GetAPIReader(),
 		Recorder:                 mgr.GetEventRecorderFor(controllerName),
 		ResourceSelectorResolver: resourceSelectorResolver,
-		ResourceSnapshotResolver: *resourceSnapshotResolver,
+		ResourceSnapshotResolver: resourceSnapshotResolver,
 	}
 	opts := options.RateLimitOptions{
 		RateLimiterBaseDelay:  5 * time.Millisecond,

@@ -238,14 +238,18 @@ func TestNewWebhookConfigFromOptions(t *testing.T) {
 	}{
 		"valid options with cert-manager": {
 			opts: &options.Options{
-				WebhookServiceName:            "test-webhook",
-				WebhookClientConnectionType:   "service",
-				EnableGuardRail:               true,
-				DenyModifyMemberClusterLabels: true,
-				EnableWorkload:                true,
-				UseCertManager:                true,
-				WhiteListedUsers:              "user1,user2,user3",
-				NetworkingAgentsEnabled:       true,
+				WebhookOpts: options.WebhookOptions{
+					ServiceName:                            "test-webhook",
+					ClientConnectionType:                   "service",
+					EnableGuardRail:                        true,
+					GuardRailDenyModifyMemberClusterLabels: true,
+					EnableWorkload:                         true,
+					UseCertManager:                         true,
+					GuardRailWhitelistedUsers:              "user1,user2,user3",
+				},
+				ClusterMgmtOpts: options.ClusterManagementOptions{
+					NetworkingAgentsEnabled: true,
+				},
 			},
 			wantErr: false,
 			wantConfig: &Config{
@@ -263,14 +267,18 @@ func TestNewWebhookConfigFromOptions(t *testing.T) {
 		},
 		"valid options without cert-manager": {
 			opts: &options.Options{
-				WebhookServiceName:            "test-webhook",
-				WebhookClientConnectionType:   "url",
-				EnableGuardRail:               false,
-				DenyModifyMemberClusterLabels: false,
-				EnableWorkload:                false,
-				UseCertManager:                false,
-				WhiteListedUsers:              "admin",
-				NetworkingAgentsEnabled:       false,
+				WebhookOpts: options.WebhookOptions{
+					ServiceName:                            "test-webhook",
+					ClientConnectionType:                   "url",
+					EnableGuardRail:                        false,
+					GuardRailDenyModifyMemberClusterLabels: false,
+					EnableWorkload:                         false,
+					UseCertManager:                         false,
+					GuardRailWhitelistedUsers:              "admin",
+				},
+				ClusterMgmtOpts: options.ClusterManagementOptions{
+					NetworkingAgentsEnabled: false,
+				},
 			},
 			wantErr: false,
 			wantConfig: &Config{

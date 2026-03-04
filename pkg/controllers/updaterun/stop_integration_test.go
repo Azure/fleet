@@ -243,8 +243,9 @@ var _ = Describe("UpdateRun stop tests", func() {
 				generateTrueCondition(updateRun, placementv1beta1.StageTaskConditionApprovalRequestApproved))
 			validateClusterStagedUpdateRunStatus(ctx, updateRun, wantStatus, "")
 
-			By("Checking update run status metrics are emitted")
+			By("Checking update run metrics are emitted")
 			validateUpdateRunMetricsEmitted(generateWaitingMetric(placementv1beta1.StateRun, updateRun), generateStoppedMetric(placementv1beta1.StateStop, updateRun), generateProgressingMetric(placementv1beta1.StateRun, updateRun))
+			validateUpdateRunApprovalStageTaskMetric(generateApprovalStageTaskMetric(updateRun, placementv1beta1.BeforeStageTaskLabelValue, 1))
 		})
 
 		It("Should mark the 1st cluster in the 1st stage as succeeded after marking the binding available", func() {
@@ -264,8 +265,9 @@ var _ = Describe("UpdateRun stop tests", func() {
 			By("Validating the 1st stage has startTime set")
 			Expect(updateRun.Status.StagesStatus[0].StartTime).ShouldNot(BeNil())
 
-			By("Checking update run status metrics are emitted")
+			By("Checking update run metrics are emitted")
 			validateUpdateRunMetricsEmitted(generateWaitingMetric(placementv1beta1.StateRun, updateRun), generateStoppedMetric(placementv1beta1.StateStop, updateRun), generateProgressingMetric(placementv1beta1.StateRun, updateRun))
+			validateUpdateRunApprovalStageTaskMetric(generateApprovalStageTaskMetric(updateRun, placementv1beta1.BeforeStageTaskLabelValue, 1))
 		})
 
 		It("Should be stopping in the middle of cluster updating when update run state is Stop", func() {
@@ -282,16 +284,18 @@ var _ = Describe("UpdateRun stop tests", func() {
 			meta.SetStatusCondition(&wantStatus.Conditions, generateProgressingUnknownConditionWithReason(updateRun, condition.UpdateRunStoppingReason))
 			validateClusterStagedUpdateRunStatus(ctx, updateRun, wantStatus, "")
 
-			By("Checking update run status metrics are emitted")
+			By("Checking update run metrics are emitted")
 			validateUpdateRunMetricsEmitted(generateWaitingMetric(placementv1beta1.StateRun, updateRun), generateStoppedMetric(placementv1beta1.StateStop, updateRun), generateProgressingMetric(placementv1beta1.StateRun, updateRun), generateStoppingMetric(placementv1beta1.StateStop, updateRun))
+			validateUpdateRunApprovalStageTaskMetric(generateApprovalStageTaskMetric(updateRun, placementv1beta1.BeforeStageTaskLabelValue, 1))
 		})
 
 		It("Should wait for cluster to finish updating so update run should still be stopping", func() {
 			By("Validating the 2nd cluster has NOT succeeded and the update run is still stopping")
 			validateClusterStagedUpdateRunStatusConsistently(ctx, updateRun, wantStatus, "")
 
-			By("Checking update run status metrics are emitted")
+			By("Checking update run metrics are emitted")
 			validateUpdateRunMetricsEmitted(generateWaitingMetric(placementv1beta1.StateRun, updateRun), generateStoppedMetric(placementv1beta1.StateStop, updateRun), generateProgressingMetric(placementv1beta1.StateRun, updateRun), generateStoppingMetric(placementv1beta1.StateStop, updateRun))
+			validateUpdateRunApprovalStageTaskMetric(generateApprovalStageTaskMetric(updateRun, placementv1beta1.BeforeStageTaskLabelValue, 1))
 		})
 
 		It("Should have completely stopped after the in-progress cluster has finished updating", func() {
@@ -312,8 +316,9 @@ var _ = Describe("UpdateRun stop tests", func() {
 			meta.SetStatusCondition(&wantStatus.Conditions, generateFalseProgressingCondition(updateRun, placementv1beta1.StagedUpdateRunConditionProgressing, condition.UpdateRunStoppedReason))
 			validateClusterStagedUpdateRunStatus(ctx, updateRun, wantStatus, "")
 
-			By("Checking update run status metrics are emitted")
+			By("Checking update run metrics are emitted")
 			validateUpdateRunMetricsEmitted(generateWaitingMetric(placementv1beta1.StateRun, updateRun), generateProgressingMetric(placementv1beta1.StateRun, updateRun), generateStoppingMetric(placementv1beta1.StateStop, updateRun), generateStoppedMetric(placementv1beta1.StateStop, updateRun))
+			validateUpdateRunApprovalStageTaskMetric(generateApprovalStageTaskMetric(updateRun, placementv1beta1.BeforeStageTaskLabelValue, 1))
 
 			By("Validating update run is in stopped state")
 			validateClusterStagedUpdateRunStatusConsistently(ctx, updateRun, wantStatus, "")
@@ -338,8 +343,9 @@ var _ = Describe("UpdateRun stop tests", func() {
 			meta.SetStatusCondition(&wantStatus.Conditions, generateTrueCondition(updateRun, placementv1beta1.StagedUpdateRunConditionProgressing))
 			validateClusterStagedUpdateRunStatus(ctx, updateRun, wantStatus, "")
 
-			By("Checking update run status metrics are emitted")
+			By("Checking update run metrics are emitted")
 			validateUpdateRunMetricsEmitted(generateWaitingMetric(placementv1beta1.StateRun, updateRun), generateStoppingMetric(placementv1beta1.StateStop, updateRun), generateStoppedMetric(placementv1beta1.StateStop, updateRun), generateProgressingMetric(placementv1beta1.StateRun, updateRun))
+			validateUpdateRunApprovalStageTaskMetric(generateApprovalStageTaskMetric(updateRun, placementv1beta1.BeforeStageTaskLabelValue, 1))
 		})
 
 		It("Should mark the 3rd cluster in the 1st stage as succeeded after marking the binding available", func() {
@@ -361,8 +367,10 @@ var _ = Describe("UpdateRun stop tests", func() {
 			meta.SetStatusCondition(&wantStatus.Conditions, generateFalseCondition(updateRun, placementv1beta1.StagedUpdateRunConditionProgressing))
 			validateClusterStagedUpdateRunStatus(ctx, updateRun, wantStatus, "")
 
-			By("Checking update run status metrics are emitted")
+			By("Checking update run metrics are emitted")
 			validateUpdateRunMetricsEmitted(generateStoppingMetric(placementv1beta1.StateStop, updateRun), generateStoppedMetric(placementv1beta1.StateStop, updateRun), generateProgressingMetric(placementv1beta1.StateRun, updateRun), generateWaitingMetric(placementv1beta1.StateRun, updateRun))
+			validateUpdateRunApprovalStageTaskMetric(generateApprovalStageTaskMetric(updateRun, placementv1beta1.BeforeStageTaskLabelValue, 1))
+			validateUpdateRunStageMetricsEmitted(generateStageClusterUpdatingMetric(updateRun))
 		})
 
 		It("Should have approval request created for 1st stage AfterStageTask", func() {
@@ -384,8 +392,10 @@ var _ = Describe("UpdateRun stop tests", func() {
 			}
 			validateApprovalRequestCreated(wantApprovalRequest)
 
-			By("Checking update run status metrics are emitted")
+			By("Checking update run metrics are emitted")
 			validateUpdateRunMetricsEmitted(generateStoppingMetric(placementv1beta1.StateStop, updateRun), generateStoppedMetric(placementv1beta1.StateStop, updateRun), generateProgressingMetric(placementv1beta1.StateRun, updateRun), generateWaitingMetric(placementv1beta1.StateRun, updateRun))
+			validateUpdateRunApprovalStageTaskMetric(generateApprovalStageTaskMetric(updateRun, placementv1beta1.BeforeStageTaskLabelValue, 1))
+			validateUpdateRunStageMetricsEmitted(generateStageClusterUpdatingMetric(updateRun))
 		})
 
 		It("Should stop the update run in AfterStageTask for 1st stage when state is Stop", func() {
@@ -401,8 +411,10 @@ var _ = Describe("UpdateRun stop tests", func() {
 			meta.SetStatusCondition(&wantStatus.Conditions, generateFalseConditionWithReason(updateRun, placementv1beta1.StagedUpdateRunConditionProgressing, condition.UpdateRunStoppedReason))
 			validateClusterStagedUpdateRunStatus(ctx, updateRun, wantStatus, "")
 
-			By("Checking update run status metrics are emitted")
+			By("Checking update run metrics are emitted")
 			validateUpdateRunMetricsEmitted(generateStoppingMetric(placementv1beta1.StateStop, updateRun), generateProgressingMetric(placementv1beta1.StateRun, updateRun), generateWaitingMetric(placementv1beta1.StateRun, updateRun), generateStoppedMetric(placementv1beta1.StateStop, updateRun))
+			validateUpdateRunApprovalStageTaskMetric(generateApprovalStageTaskMetric(updateRun, placementv1beta1.BeforeStageTaskLabelValue, 1))
+			validateUpdateRunStageMetricsEmitted(generateStageClusterUpdatingMetric(updateRun))
 		})
 
 		It("Should not continue to delete stage after approval when still stopped", func() {
@@ -427,8 +439,10 @@ var _ = Describe("UpdateRun stop tests", func() {
 			By("Validating update run is stopped")
 			validateClusterStagedUpdateRunStatusConsistently(ctx, updateRun, wantStatus, "")
 
-			By("Checking update run status metrics are emitted")
+			By("Checking update run metrics are emitted")
 			validateUpdateRunMetricsEmitted(generateStoppingMetric(placementv1beta1.StateStop, updateRun), generateProgressingMetric(placementv1beta1.StateRun, updateRun), generateWaitingMetric(placementv1beta1.StateRun, updateRun), generateStoppedMetric(placementv1beta1.StateStop, updateRun))
+			validateUpdateRunApprovalStageTaskMetric(generateApprovalStageTaskMetric(updateRun, placementv1beta1.BeforeStageTaskLabelValue, 1))
+			validateUpdateRunStageMetricsEmitted(generateStageClusterUpdatingMetric(updateRun))
 		})
 
 		It("Should complete the 1st stage once it starts running again when wait time passed and approval request approved then move on to the Delete stage", func() {
@@ -476,8 +490,10 @@ var _ = Describe("UpdateRun stop tests", func() {
 			approvalCreateTime := meta.FindStatusCondition(updateRun.Status.StagesStatus[0].AfterStageTaskStatus[0].Conditions, string(placementv1beta1.StageTaskConditionApprovalRequestCreated)).LastTransitionTime.Time
 			Expect(approvalCreateTime.Before(waitEndTime)).Should(BeTrue())
 
-			By("Checking update run status metrics are emitted")
+			By("Checking update run metrics are emitted")
 			validateUpdateRunMetricsEmitted(generateStoppingMetric(placementv1beta1.StateStop, updateRun), generateWaitingMetric(placementv1beta1.StateRun, updateRun), generateStoppedMetric(placementv1beta1.StateStop, updateRun), generateProgressingMetric(placementv1beta1.StateRun, updateRun))
+			validateUpdateRunApprovalStageTaskMetric(generateApprovalStageTaskMetric(updateRun, placementv1beta1.AfterStageTaskLabelValue, 1), generateApprovalStageTaskMetric(updateRun, placementv1beta1.BeforeStageTaskLabelValue, 1))
+			validateUpdateRunStageMetricsEmitted(generateStageClusterUpdatingMetric(updateRun))
 		})
 
 		It("Should stop the update run in deletion stage when state is Stop", func() {
@@ -493,8 +509,10 @@ var _ = Describe("UpdateRun stop tests", func() {
 			meta.SetStatusCondition(&wantStatus.Conditions, generateProgressingUnknownConditionWithReason(updateRun, condition.UpdateRunStoppingReason))
 			validateClusterStagedUpdateRunStatus(ctx, updateRun, wantStatus, "")
 
-			By("Checking update run status metrics are emitted")
+			By("Checking update run metrics are emitted")
 			validateUpdateRunMetricsEmitted(generateWaitingMetric(placementv1beta1.StateRun, updateRun), generateStoppedMetric(placementv1beta1.StateStop, updateRun), generateProgressingMetric(placementv1beta1.StateRun, updateRun), generateStoppingMetric(placementv1beta1.StateStop, updateRun))
+			validateUpdateRunApprovalStageTaskMetric(generateApprovalStageTaskMetric(updateRun, placementv1beta1.AfterStageTaskLabelValue, 1), generateApprovalStageTaskMetric(updateRun, placementv1beta1.BeforeStageTaskLabelValue, 1))
+			validateUpdateRunStageMetricsEmitted(generateStageClusterUpdatingMetric(updateRun))
 		})
 
 		It("Should not complete deletion stage when in progress clusters still deleting while stopped", func() {
@@ -513,8 +531,10 @@ var _ = Describe("UpdateRun stop tests", func() {
 			By("Validating update run is stopping")
 			validateClusterStagedUpdateRunStatusConsistently(ctx, updateRun, wantStatus, "")
 
-			By("Checking update run status metrics are emitted")
+			By("Checking update run metrics are emitted")
 			validateUpdateRunMetricsEmitted(generateWaitingMetric(placementv1beta1.StateRun, updateRun), generateStoppedMetric(placementv1beta1.StateStop, updateRun), generateProgressingMetric(placementv1beta1.StateRun, updateRun), generateStoppingMetric(placementv1beta1.StateStop, updateRun))
+			validateUpdateRunApprovalStageTaskMetric(generateApprovalStageTaskMetric(updateRun, placementv1beta1.AfterStageTaskLabelValue, 1), generateApprovalStageTaskMetric(updateRun, placementv1beta1.BeforeStageTaskLabelValue, 1))
+			validateUpdateRunStageMetricsEmitted(generateStageClusterUpdatingMetric(updateRun))
 		})
 
 		It("Should stop completely after in-progress deletion is done when state is Stop", func() {
@@ -556,8 +576,10 @@ var _ = Describe("UpdateRun stop tests", func() {
 			meta.SetStatusCondition(&wantStatus.Conditions, generateFalseConditionWithReason(updateRun, placementv1beta1.StagedUpdateRunConditionProgressing, condition.UpdateRunStoppedReason))
 			validateClusterStagedUpdateRunStatus(ctx, updateRun, wantStatus, "")
 
-			By("Checking update run status metrics are emitted")
+			By("Checking update run metrics are emitted")
 			validateUpdateRunMetricsEmitted(generateWaitingMetric(placementv1beta1.StateRun, updateRun), generateProgressingMetric(placementv1beta1.StateRun, updateRun), generateStoppingMetric(placementv1beta1.StateStop, updateRun), generateStoppedMetric(placementv1beta1.StateStop, updateRun))
+			validateUpdateRunApprovalStageTaskMetric(generateApprovalStageTaskMetric(updateRun, placementv1beta1.AfterStageTaskLabelValue, 1), generateApprovalStageTaskMetric(updateRun, placementv1beta1.BeforeStageTaskLabelValue, 1))
+			validateUpdateRunStageMetricsEmitted(generateStageClusterUpdatingMetric(updateRun))
 		})
 
 		It("Should complete delete stage and complete the update run when state is Run", func() {
@@ -597,8 +619,10 @@ var _ = Describe("UpdateRun stop tests", func() {
 			wantStatus.Conditions = append(wantStatus.Conditions, generateTrueCondition(updateRun, placementv1beta1.StagedUpdateRunConditionSucceeded))
 			validateClusterStagedUpdateRunStatus(ctx, updateRun, wantStatus, "")
 
-			By("Checking update run status metrics are emitted")
+			By("Checking update run metrics are emitted")
 			validateUpdateRunMetricsEmitted(generateWaitingMetric(placementv1beta1.StateRun, updateRun), generateProgressingMetric(placementv1beta1.StateRun, updateRun), generateStoppingMetric(placementv1beta1.StateStop, updateRun), generateStoppedMetric(placementv1beta1.StateStop, updateRun), generateSucceededMetric(placementv1beta1.StateRun, updateRun))
+			validateUpdateRunApprovalStageTaskMetric(generateApprovalStageTaskMetric(updateRun, placementv1beta1.AfterStageTaskLabelValue, 1), generateApprovalStageTaskMetric(updateRun, placementv1beta1.BeforeStageTaskLabelValue, 1))
+			validateUpdateRunStageMetricsEmitted(generateStageClusterUpdatingMetric(updateRun))
 		})
 	})
 })
