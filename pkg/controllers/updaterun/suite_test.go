@@ -48,12 +48,13 @@ import (
 )
 
 var (
-	cfg       *rest.Config
-	mgr       manager.Manager
-	testEnv   *envtest.Environment
-	k8sClient client.Client
-	ctx       context.Context
-	cancel    context.CancelFunc
+	cfg                      *rest.Config
+	mgr                      manager.Manager
+	testEnv                  *envtest.Environment
+	k8sClient                client.Client
+	ctx                      context.Context
+	cancel                   context.CancelFunc
+	resourceSelectorResolver controller.ResourceSelectorResolver
 )
 
 const (
@@ -121,7 +122,7 @@ var _ = BeforeSuite(func() {
 	}, nil)
 
 	// Setup our main reconciler.
-	resourceSelectorResolver := controller.ResourceSelectorResolver{
+	resourceSelectorResolver = controller.ResourceSelectorResolver{
 		RestMapper:        mgr.GetRESTMapper(),
 		InformerManager:   dynamicInformerManager,
 		ResourceConfig:    utils.NewResourceConfig(false),
