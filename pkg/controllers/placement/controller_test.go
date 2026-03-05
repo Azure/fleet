@@ -23,6 +23,7 @@ import (
 	"fmt"
 	"strconv"
 	"testing"
+	"time"
 
 	"github.com/google/go-cmp/cmp"
 	"github.com/google/go-cmp/cmp/cmpopts"
@@ -2385,6 +2386,214 @@ func TestDetermineRolloutStateForPlacementWithExternalRolloutStrategy(t *testing
 				}
 				if diff := cmp.Diff(tc.wantConditions, crp.Status.Conditions, cmpOptions...); diff != "" {
 					t.Errorf("determineRolloutStateForPlacementWithExternalRolloutStrategy() got crp.Status.Conditions mismatch (-want, +got):\n%s", diff)
+				}
+			}
+		})
+	}
+}
+
+func TestHandleResourceSnapshotByStrategy(t *testing.T) {
+	tests := []struct {
+		name                    string
+		crp                     *fleetv1beta1.ClusterResourcePlacement
+		existingSnapshots       []client.Object
+		selectedResources       []fleetv1beta1.ResourceContent
+		selectedResourceIDs     []fleetv1beta1.ResourceIdentifier
+		snapshotResolverConfig  *controller.ResourceSnapshotConfig // optional Config for the resolver
+		wantSnapshot            bool
+		wantSnapshotName        string
+		wantSelectedResourceIDs []fleetv1beta1.ResourceIdentifier
+		wantRequeueAfter        bool // true if we expect RequeueAfter > 0
+		wantErr                 bool
+	}{
+		{
+			name: "External rollout strategy with no existing snapshot",
+			crp: &fleetv1beta1.ClusterResourcePlacement{
+				ObjectMeta: metav1.ObjectMeta{
+					Name:       testCRPName,
+					Generation: 1,
+				},
+				Spec: fleetv1beta1.PlacementSpec{
+					ResourceSelectors: []fleetv1beta1.ResourceSelectorTerm{
+						{
+							Group:   corev1.GroupName,
+							Version: "v1",
+							Kind:    "Namespace",
+						},
+					},
+					Strategy: fleetv1beta1.RolloutStrategy{
+						Type: fleetv1beta1.ExternalRolloutStrategyType,
+					},
+				},
+			},
+			existingSnapshots:       []client.Object{},
+			selectedResources:       []fleetv1beta1.ResourceContent{},
+			selectedResourceIDs:     []fleetv1beta1.ResourceIdentifier{{Kind: "Namespace", Name: "test"}},
+			wantSnapshot:            false,
+			wantSnapshotName:        "",
+			wantSelectedResourceIDs: []fleetv1beta1.ResourceIdentifier{{Kind: "Namespace", Name: "test"}},
+			wantRequeueAfter:        false,
+			wantErr:                 false,
+		},
+		{
+			name: "RollingUpdate strategy creates new snapshot when none exists",
+			crp: &fleetv1beta1.ClusterResourcePlacement{
+				ObjectMeta: metav1.ObjectMeta{
+					Name:       testCRPName,
+					Generation: 1,
+				},
+				Spec: fleetv1beta1.PlacementSpec{
+					ResourceSelectors: []fleetv1beta1.ResourceSelectorTerm{
+						{
+							Group:   corev1.GroupName,
+							Version: "v1",
+							Kind:    "Namespace",
+						},
+					},
+					Strategy: fleetv1beta1.RolloutStrategy{
+						Type: fleetv1beta1.RollingUpdateRolloutStrategyType,
+					},
+				},
+			},
+			existingSnapshots: []client.Object{},
+			selectedResources: []fleetv1beta1.ResourceContent{
+				{
+					RawExtension: runtime.RawExtension{
+						Raw: []byte(`{"apiVersion":"v1","kind":"Namespace","metadata":{"name":"test-ns"}}`),
+					},
+				},
+			},
+			selectedResourceIDs:     []fleetv1beta1.ResourceIdentifier{{Kind: "Namespace", Name: "test-ns"}},
+			wantSnapshot:            true,
+			wantSnapshotName:        fmt.Sprintf(fleetv1beta1.ResourceSnapshotNameFmt, testCRPName, 0),
+			wantSelectedResourceIDs: []fleetv1beta1.ResourceIdentifier{{Kind: "Namespace", Name: "test-ns"}},
+			wantRequeueAfter:        false,
+			wantErr:                 false,
+		},
+		{
+			name: "RollingUpdate strategy with different hash triggers requeue when interval configured",
+			crp: &fleetv1beta1.ClusterResourcePlacement{
+				ObjectMeta: metav1.ObjectMeta{
+					Name:       testCRPName,
+					Generation: 1,
+				},
+				Spec: fleetv1beta1.PlacementSpec{
+					ResourceSelectors: []fleetv1beta1.ResourceSelectorTerm{
+						{
+							Group:   corev1.GroupName,
+							Version: "v1",
+							Kind:    "Namespace",
+						},
+					},
+					Strategy: fleetv1beta1.RolloutStrategy{
+						Type: fleetv1beta1.RollingUpdateRolloutStrategyType,
+					},
+				},
+			},
+			existingSnapshots: []client.Object{
+				&fleetv1beta1.ClusterResourceSnapshot{
+					ObjectMeta: metav1.ObjectMeta{
+						Name:              fmt.Sprintf(fleetv1beta1.ResourceSnapshotNameFmt, testCRPName, 0),
+						CreationTimestamp: metav1.Now(),
+						Labels: map[string]string{
+							fleetv1beta1.PlacementTrackingLabel: testCRPName,
+							fleetv1beta1.IsLatestSnapshotLabel:  strconv.FormatBool(true),
+							fleetv1beta1.ResourceIndexLabel:     "0",
+						},
+						Annotations: map[string]string{
+							fleetv1beta1.ResourceGroupHashAnnotation:         "old-hash-different-from-new",
+							fleetv1beta1.NumberOfResourceSnapshotsAnnotation: "1",
+						},
+					},
+					Spec: fleetv1beta1.ResourceSnapshotSpec{
+						SelectedResources: []fleetv1beta1.ResourceContent{
+							{
+								RawExtension: runtime.RawExtension{
+									Raw: []byte(`{"apiVersion":"v1","kind":"Namespace","metadata":{"name":"old-ns"}}`),
+								},
+							},
+						},
+					},
+				},
+			},
+			selectedResources: []fleetv1beta1.ResourceContent{
+				{
+					RawExtension: runtime.RawExtension{
+						Raw: []byte(`{"apiVersion":"v1","kind":"Namespace","metadata":{"name":"new-ns"}}`),
+					},
+				},
+			},
+			selectedResourceIDs:    []fleetv1beta1.ResourceIdentifier{{Kind: "Namespace", Name: "new-ns"}},
+			snapshotResolverConfig: controller.NewResourceSnapshotConfig(15*time.Second, 10*time.Second),
+			wantSnapshot:           true,
+			wantSnapshotName:       fmt.Sprintf(fleetv1beta1.ResourceSnapshotNameFmt, testCRPName, 0),
+			// When requeue is triggered, selectedResourceIDs are rebuilt from the existing snapshot
+			wantSelectedResourceIDs: []fleetv1beta1.ResourceIdentifier{
+				{
+					Group:   "",
+					Version: "v1",
+					Kind:    "Namespace",
+					Name:    "old-ns",
+				},
+			},
+			wantRequeueAfter: true,
+			wantErr:          false,
+		},
+	}
+
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			scheme := serviceScheme(t)
+			fakeClient := fake.NewClientBuilder().
+				WithScheme(scheme).
+				WithObjects(tc.existingSnapshots...).
+				Build()
+			resolver := controller.NewResourceSnapshotResolver(fakeClient, scheme)
+			if tc.snapshotResolverConfig != nil {
+				resolver.Config = tc.snapshotResolverConfig
+			}
+			r := Reconciler{
+				Client:                   fakeClient,
+				Scheme:                   scheme,
+				ResourceSnapshotResolver: resolver,
+			}
+
+			gotResult, gotSnapshot, gotSelectedResourceIDs, gotErr := r.handleResourceSnapshotByStrategy(
+				context.Background(), tc.crp, 0, tc.selectedResources, tc.selectedResourceIDs, 10)
+
+			if (gotErr != nil) != tc.wantErr {
+				t.Errorf("handleResourceSnapshotByStrategy() error = %v, wantErr %v", gotErr, tc.wantErr)
+				return
+			}
+
+			if tc.wantSnapshot {
+				if gotSnapshot == nil {
+					t.Errorf("handleResourceSnapshotByStrategy() gotSnapshot = nil, want non-nil")
+					return
+				}
+				if gotSnapshot.GetName() != tc.wantSnapshotName {
+					t.Errorf("handleResourceSnapshotByStrategy() gotSnapshot.Name = %v, want %v", gotSnapshot.GetName(), tc.wantSnapshotName)
+				}
+			} else {
+				if gotSnapshot != nil {
+					t.Errorf("handleResourceSnapshotByStrategy() gotSnapshot = %v, want nil", gotSnapshot.GetName())
+				}
+			}
+
+			if diff := cmp.Diff(tc.wantSelectedResourceIDs, gotSelectedResourceIDs); diff != "" {
+				t.Errorf("handleResourceSnapshotByStrategy() selectedResourceIDs mismatch (-want, +got):\n%s", diff)
+			}
+
+			// Verify RequeueAfter behavior
+			gotRequeueAfter := gotResult.RequeueAfter > 0
+			if gotRequeueAfter != tc.wantRequeueAfter {
+				t.Errorf("handleResourceSnapshotByStrategy() gotResult.RequeueAfter > 0 = %v, want %v", gotRequeueAfter, tc.wantRequeueAfter)
+			}
+
+			// For External strategy, we always expect no requeue
+			if tc.crp.Spec.Strategy.Type == fleetv1beta1.ExternalRolloutStrategyType {
+				if gotResult.RequeueAfter != 0 {
+					t.Errorf("handleResourceSnapshotByStrategy() gotResult.RequeueAfter = %v, want 0 for External strategy", gotResult.RequeueAfter)
 				}
 			}
 		})

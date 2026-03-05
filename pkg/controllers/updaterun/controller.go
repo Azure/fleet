@@ -23,7 +23,6 @@ import (
 	"fmt"
 	"time"
 
-	"github.com/prometheus/client_golang/prometheus"
 	"k8s.io/apimachinery/pkg/api/meta"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/types"
@@ -40,7 +39,6 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/reconcile"
 
 	placementv1beta1 "go.goms.io/fleet/apis/placement/v1beta1"
-	hubmetrics "go.goms.io/fleet/pkg/metrics/hub"
 	"go.goms.io/fleet/pkg/utils"
 	"go.goms.io/fleet/pkg/utils/condition"
 	"go.goms.io/fleet/pkg/utils/controller"
@@ -62,6 +60,12 @@ type Reconciler struct {
 	recorder record.EventRecorder
 	// the informer contains the cache for all the resources we need to check the resource scope.
 	InformerManager informer.Manager
+
+	// ResourceSelectorResolver selects resources for placement.
+	ResourceSelectorResolver controller.ResourceSelectorResolver
+
+	// ResourceSnapshotResolver gets or creates resource snapshots.
+	ResourceSnapshotResolver controller.ResourceSnapshotResolver
 }
 
 func (r *Reconciler) Reconcile(ctx context.Context, req runtime.Request) (runtime.Result, error) {
@@ -237,8 +241,8 @@ func (r *Reconciler) handleDelete(ctx context.Context, updateRun placementv1beta
 	}
 	klog.V(2).InfoS("Deleted all approvalRequests associated with the updateRun", "updateRun", runObjRef)
 
-	// Delete the update run status metric.
-	hubmetrics.FleetUpdateRunStatusLastTimestampSeconds.DeletePartialMatch(prometheus.Labels{"namespace": updateRun.GetNamespace(), "name": updateRun.GetName()})
+	// Delete the update run metrics.
+	deleteUpdateRunMetrics(updateRun)
 
 	controllerutil.RemoveFinalizer(updateRun, placementv1beta1.UpdateRunFinalizer)
 	if err := r.Client.Update(ctx, updateRun); err != nil {
@@ -483,37 +487,6 @@ func handleApprovalRequestDelete(obj client.Object, q workqueue.TypedRateLimitin
 			Name:      updateRun,
 		},
 	})
-}
-
-// emitUpdateRunStatusMetric emits the update run status metric based on status conditions in the updateRun.
-func emitUpdateRunStatusMetric(updateRun placementv1beta1.UpdateRunObj) {
-	generation := updateRun.GetGeneration()
-	state := updateRun.GetUpdateRunSpec().State
-
-	updateRunStatus := updateRun.GetUpdateRunStatus()
-	succeedCond := meta.FindStatusCondition(updateRunStatus.Conditions, string(placementv1beta1.StagedUpdateRunConditionSucceeded))
-	if succeedCond != nil && succeedCond.ObservedGeneration == generation {
-		hubmetrics.FleetUpdateRunStatusLastTimestampSeconds.WithLabelValues(updateRun.GetNamespace(), updateRun.GetName(), string(state),
-			string(placementv1beta1.StagedUpdateRunConditionSucceeded), string(succeedCond.Status), succeedCond.Reason).SetToCurrentTime()
-		return
-	}
-
-	progressingCond := meta.FindStatusCondition(updateRunStatus.Conditions, string(placementv1beta1.StagedUpdateRunConditionProgressing))
-	if progressingCond != nil && progressingCond.ObservedGeneration == generation {
-		hubmetrics.FleetUpdateRunStatusLastTimestampSeconds.WithLabelValues(updateRun.GetNamespace(), updateRun.GetName(), string(state),
-			string(placementv1beta1.StagedUpdateRunConditionProgressing), string(progressingCond.Status), progressingCond.Reason).SetToCurrentTime()
-		return
-	}
-
-	initializedCond := meta.FindStatusCondition(updateRunStatus.Conditions, string(placementv1beta1.StagedUpdateRunConditionInitialized))
-	if initializedCond != nil && initializedCond.ObservedGeneration == generation {
-		hubmetrics.FleetUpdateRunStatusLastTimestampSeconds.WithLabelValues(updateRun.GetNamespace(), updateRun.GetName(), string(state),
-			string(placementv1beta1.StagedUpdateRunConditionInitialized), string(initializedCond.Status), initializedCond.Reason).SetToCurrentTime()
-		return
-	}
-
-	// We should rarely reach here, it can only happen when updating updateRun status fails.
-	klog.V(2).InfoS("There's no valid status condition on updateRun, status updating failed possibly", "updateRun", klog.KObj(updateRun))
 }
 
 func removeWaitTimeFromUpdateRunStatus(updateRun placementv1beta1.UpdateRunObj) {

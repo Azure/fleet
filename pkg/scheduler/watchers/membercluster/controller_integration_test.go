@@ -372,6 +372,57 @@ var _ = Describe("scheduler member cluster source controller", Serial, Ordered, 
 		})
 	})
 
+	Context("ready cluster has a namespace collection change", func() {
+		BeforeAll(func() {
+			Consistently(noKeyEnqueuedActual, consistentlyDuration, consistentlyInterval).Should(Succeed(), "Workqueue is not empty")
+
+			// Retrieve the cluster.
+			memberCluster := &clusterv1beta1.MemberCluster{}
+			Expect(hubClient.Get(ctx, types.NamespacedName{Name: clusterName1}, memberCluster)).To(Succeed(), "Failed to get member cluster")
+
+			// Update the namespace collection.
+			memberCluster.Status.Namespaces = map[string]string{
+				"namespace-1": "work-1",
+				"namespace-2": "work-2",
+			}
+			Expect(hubClient.Status().Update(ctx, memberCluster)).Should(Succeed(), "Failed to update member cluster namespace collection")
+		})
+
+		It("should enqueue CRPs (case 1a)", func() {
+			Eventually(qualifiedKeysEnqueuedActual, eventuallyDuration, eventuallyInterval).Should(Succeed(), "Keys are not enqueued as expected")
+			Consistently(qualifiedKeysEnqueuedActual, consistentlyDuration, consistentlyInterval).Should(Succeed(), "Keys are not enqueued as expected")
+		})
+
+		It("can empty the key collector", func() {
+			keyCollector.Reset()
+			Eventually(noKeyEnqueuedActual, eventuallyDuration, eventuallyInterval).Should(Succeed(), "Workqueue is not empty")
+			Consistently(noKeyEnqueuedActual, consistentlyDuration, consistentlyInterval).Should(Succeed(), "Workqueue is not empty")
+		})
+
+		It("can update the namespace collection", func() {
+			// Retrieve the cluster.
+			memberCluster := &clusterv1beta1.MemberCluster{}
+			Expect(hubClient.Get(ctx, types.NamespacedName{Name: clusterName1}, memberCluster)).To(Succeed(), "Failed to get member cluster")
+
+			// Update the namespace collection by adding a new namespace.
+			memberCluster.Status.Namespaces = map[string]string{
+				"namespace-1": "work-1",
+				"namespace-2": "work-2",
+				"namespace-3": "work-3",
+			}
+			Expect(hubClient.Status().Update(ctx, memberCluster)).Should(Succeed(), "Failed to update member cluster namespace collection")
+		})
+
+		It("should enqueue CRPs (case 1a)", func() {
+			Eventually(qualifiedKeysEnqueuedActual, eventuallyDuration, eventuallyInterval).Should(Succeed(), "Keys are not enqueued as expected")
+			Consistently(qualifiedKeysEnqueuedActual, consistentlyDuration, consistentlyInterval).Should(Succeed(), "Keys are not enqueued as expected")
+		})
+
+		AfterAll(func() {
+			keyCollector.Reset()
+		})
+	})
+
 	Context("ready cluster is out of sync", func() {
 		BeforeAll(func() {
 			Consistently(noKeyEnqueuedActual, consistentlyDuration, consistentlyInterval).Should(Succeed(), "Workqueue is not empty")

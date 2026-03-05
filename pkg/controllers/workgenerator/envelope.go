@@ -62,14 +62,20 @@ func (r *Reconciler) createOrUpdateEnvelopeCRWorkObj(
 		fleetv1beta1.PlacementTrackingLabel: binding.GetLabels()[fleetv1beta1.PlacementTrackingLabel],
 		fleetv1beta1.EnvelopeTypeLabel:      envelopeReader.GetEnvelopeType(),
 		fleetv1beta1.EnvelopeNameLabel:      envelopeReader.GetName(),
-		fleetv1beta1.EnvelopeNamespaceLabel: envelopeReader.GetNamespace(),
 	}
 	// Add ParentNamespaceLabel if the binding is namespaced
 	if binding.GetNamespace() != "" {
 		labelMatcher[fleetv1beta1.ParentNamespaceLabel] = binding.GetNamespace()
 	}
+
+	// Add EnvelopeNamespaceLabel if the envelope type is ResourceEnvelope.
+	if envelopeReader.GetEnvelopeType() == string(fleetv1beta1.ResourceEnvelopeType) {
+		labelMatcher[fleetv1beta1.EnvelopeNamespaceLabel] = envelopeReader.GetNamespace()
+	}
+
+	namespaceMatcher := client.InNamespace(fmt.Sprintf(utils.NamespaceNameFormat, binding.GetBindingSpec().TargetCluster))
 	workList := &fleetv1beta1.WorkList{}
-	if err = r.Client.List(ctx, workList, labelMatcher); err != nil {
+	if err = r.Client.List(ctx, workList, labelMatcher, namespaceMatcher); err != nil {
 		klog.ErrorS(err, "Failed to list work objects when finding the work object for an envelope",
 			"resourceBinding", klog.KObj(binding),
 			"resourceSnapshot", klog.KObj(resourceSnapshot),
@@ -87,6 +93,12 @@ func (r *Reconciler) createOrUpdateEnvelopeCRWorkObj(
 			"resourceBinding", klog.KObj(binding),
 			"resourceSnapshot", klog.KObj(resourceSnapshot),
 			"envelope", envelopeReader.GetEnvelopeObjRef())
+		// Log the work object names to help debug.
+		workNames := make([]string, len(workList.Items))
+		for i := range workList.Items {
+			workNames[i] = workList.Items[i].Name
+		}
+		klog.ErrorS(wrappedErr, "Duplicate work objects found", "works", workNames)
 		return nil, controller.NewUnexpectedBehaviorError(wrappedErr)
 	case len(workList.Items) == 1:
 		klog.V(2).InfoS("Found existing work object for the envelope; updating it",
@@ -206,11 +218,15 @@ func buildNewWorkForEnvelopeCR(
 		fleetv1beta1.ParentResourceSnapshotIndexLabel: resourceSnapshot.GetLabels()[fleetv1beta1.ResourceIndexLabel],
 		fleetv1beta1.EnvelopeTypeLabel:                envelopeReader.GetEnvelopeType(),
 		fleetv1beta1.EnvelopeNameLabel:                envelopeReader.GetName(),
-		fleetv1beta1.EnvelopeNamespaceLabel:           envelopeReader.GetNamespace(),
 	}
 	// Add ParentNamespaceLabel if the binding is namespaced
 	if resourceBinding.GetNamespace() != "" {
 		labels[fleetv1beta1.ParentNamespaceLabel] = resourceBinding.GetNamespace()
+	}
+
+	// Add EnvelopeNamespaceLabel if the envelope type is ResourceEnvelope.
+	if envelopeReader.GetEnvelopeType() == string(fleetv1beta1.ResourceEnvelopeType) {
+		labels[fleetv1beta1.EnvelopeNamespaceLabel] = envelopeReader.GetNamespace()
 	}
 
 	return &fleetv1beta1.Work{

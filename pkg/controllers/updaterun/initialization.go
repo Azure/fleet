@@ -47,7 +47,7 @@ func (r *Reconciler) initialize(
 	updateRun placementv1beta1.UpdateRunObj,
 ) ([]placementv1beta1.BindingObj, []placementv1beta1.BindingObj, error) {
 	// Validate the Placement object referenced by the UpdateRun.
-	placementNamespacedName, err := r.validatePlacement(ctx, updateRun)
+	placement, placementNamespacedName, err := r.validatePlacement(ctx, updateRun)
 	if err != nil {
 		return nil, nil, err
 	}
@@ -67,7 +67,7 @@ func (r *Reconciler) initialize(
 		return nil, nil, err
 	}
 	// Record the override snapshots associated with each cluster.
-	if err := r.recordOverrideSnapshots(ctx, placementNamespacedName, updateRun); err != nil {
+	if err := r.recordOverrideSnapshots(ctx, placement, updateRun); err != nil {
 		return nil, nil, err
 	}
 
@@ -75,7 +75,7 @@ func (r *Reconciler) initialize(
 }
 
 // validatePlacement validates the Placement object referenced by the UpdateRun.
-func (r *Reconciler) validatePlacement(ctx context.Context, updateRun placementv1beta1.UpdateRunObj) (types.NamespacedName, error) {
+func (r *Reconciler) validatePlacement(ctx context.Context, updateRun placementv1beta1.UpdateRunObj) (placementv1beta1.PlacementObj, types.NamespacedName, error) {
 	updateRunRef := klog.KObj(updateRun)
 	placementName := updateRun.GetUpdateRunSpec().PlacementName
 
@@ -91,10 +91,10 @@ func (r *Reconciler) validatePlacement(ctx context.Context, updateRun placementv
 		if apierrors.IsNotFound(err) {
 			placementNotFoundErr := controller.NewUserError(fmt.Errorf("parent placement not found"))
 			klog.ErrorS(err, "Failed to get placement", "placement", placementKey, "updateRun", updateRunRef)
-			return types.NamespacedName{}, fmt.Errorf("%w: %s", errValidationFailed, placementNotFoundErr.Error())
+			return nil, types.NamespacedName{}, fmt.Errorf("%w: %s", errValidationFailed, placementNotFoundErr.Error())
 		}
 		klog.ErrorS(err, "Failed to get placement", "placement", placementKey, "updateRun", updateRunRef)
-		return types.NamespacedName{}, controller.NewAPIServerError(true, err)
+		return nil, types.NamespacedName{}, controller.NewAPIServerError(true, err)
 	}
 
 	// fill out all the default values for placement, mutation webhook is not setup for resource placement.
@@ -106,13 +106,13 @@ func (r *Reconciler) validatePlacement(ctx context.Context, updateRun placementv
 	if placementSpec.Strategy.Type != placementv1beta1.ExternalRolloutStrategyType {
 		klog.V(2).InfoS("The placement does not have an external rollout strategy", "placement", placementKey, "updateRun", updateRunRef)
 		wrongRolloutTypeErr := controller.NewUserError(errors.New("parent placement does not have an external rollout strategy, current strategy: " + string(placementSpec.Strategy.Type)))
-		return types.NamespacedName{}, fmt.Errorf("%w: %s", errValidationFailed, wrongRolloutTypeErr.Error())
+		return nil, types.NamespacedName{}, fmt.Errorf("%w: %s", errValidationFailed, wrongRolloutTypeErr.Error())
 	}
 
 	updateRunStatus := updateRun.GetUpdateRunStatus()
 	updateRunStatus.ApplyStrategy = placementSpec.Strategy.ApplyStrategy
 
-	return placementKey, nil
+	return placement, placementKey, nil
 }
 
 // determinePolicySnapshot retrieves the latest policy snapshot associated with the Placement,
@@ -499,11 +499,12 @@ func validateAfterStageTask(tasks []placementv1beta1.StageTask) error {
 }
 
 // recordOverrideSnapshots finds all the override snapshots that are associated with each cluster and record them in the UpdateRun status.
-func (r *Reconciler) recordOverrideSnapshots(ctx context.Context, placementKey types.NamespacedName, updateRun placementv1beta1.UpdateRunObj) error {
+func (r *Reconciler) recordOverrideSnapshots(ctx context.Context, placement placementv1beta1.PlacementObj, updateRun placementv1beta1.UpdateRunObj) error {
 	updateRunRef := klog.KObj(updateRun)
 	updateRunSpec := updateRun.GetUpdateRunSpec()
+	placementKey := types.NamespacedName{Name: placement.GetName(), Namespace: placement.GetNamespace()}
 
-	resourceSnapshotObjs, err := r.getResourceSnapshotObjs(ctx, placementKey, updateRun)
+	resourceSnapshotObjs, err := r.getResourceSnapshotObjs(ctx, placement, updateRun)
 	if err != nil {
 		return err
 	}
@@ -560,10 +561,12 @@ func (r *Reconciler) recordOverrideSnapshots(ctx context.Context, placementKey t
 }
 
 // getResourceSnapshotObjs retrieves the list of resource snapshot objects from the specified ResourceSnapshotIndex.
-// If ResourceSnapshotIndex is unspecified, it returns the list of latest resource snapshots.
-func (r *Reconciler) getResourceSnapshotObjs(ctx context.Context, placementKey types.NamespacedName, updateRun placementv1beta1.UpdateRunObj) ([]placementv1beta1.ResourceSnapshotObj, error) {
+// If ResourceSnapshotIndex is unspecified, it takes a new snapshot using SelectResourcesForPlacement and
+// GetOrCreateResourceSnapshot, similar to the placement controller but without waiting for snapshot creation intervals.
+func (r *Reconciler) getResourceSnapshotObjs(ctx context.Context, placement placementv1beta1.PlacementObj, updateRun placementv1beta1.UpdateRunObj) ([]placementv1beta1.ResourceSnapshotObj, error) {
 	updateRunRef := klog.KObj(updateRun)
 	updateRunSpec := updateRun.GetUpdateRunSpec()
+	placementKey := types.NamespacedName{Name: placement.GetName(), Namespace: placement.GetNamespace()}
 	var resourceSnapshotObjs []placementv1beta1.ResourceSnapshotObj
 	if updateRunSpec.ResourceSnapshotIndex != "" {
 		snapshotIndex, err := strconv.Atoi(updateRunSpec.ResourceSnapshotIndex)
@@ -592,23 +595,45 @@ func (r *Reconciler) getResourceSnapshotObjs(ctx context.Context, placementKey t
 		return resourceSnapshotObjs, nil
 	}
 
-	klog.V(2).InfoS("No resource snapshot index specified, fetching latest resource snapshots", "placement", placementKey, "updateRun", updateRunRef)
-	latestResourceSnapshots, err := controller.ListLatestResourceSnapshots(ctx, r.Client, placementKey)
+	klog.V(2).InfoS("No resource snapshot index specified, creating a new resource snapshot", "placement", placementKey, "updateRun", updateRunRef)
+
+	// Select the resources using the placement's resource selectors.
+	envelopeObjCount, selectedResources, _, err := r.ResourceSelectorResolver.SelectResourcesForPlacement(placement)
 	if err != nil {
-		klog.ErrorS(err, "Failed to list the latest resourceSnapshots associated with the placement",
-			"placement", placementKey, "updateRun", updateRunRef)
-		// list err can be retried.
-		return nil, controller.NewAPIServerError(true, err)
+		klog.ErrorS(err, "Failed to select resources for placement", "placement", placementKey, "updateRun", updateRunRef)
+		if errors.Is(err, controller.ErrUserError) {
+			return nil, fmt.Errorf("%w: %s", errValidationFailed, err.Error())
+		}
+		return nil, err
 	}
 
-	resourceSnapshotObjs = latestResourceSnapshots.GetResourceSnapshotObjs()
-	if len(resourceSnapshotObjs) == 0 {
-		err := fmt.Errorf("no latest resourceSnapshots found for placement `%s`. This might be a transient state, need retry", placementKey)
-		klog.ErrorS(err, "No latest resourceSnapshots found for placement. This might be transient, need retry", "placement", placementKey, "updateRun", updateRunRef)
-		// retryable error.
-		return resourceSnapshotObjs, err
+	// Determine the revision history limit.
+	revisionLimit := int32(defaulter.DefaultRevisionHistoryLimitValue)
+	placementSpec := placement.GetPlacementSpec()
+	if placementSpec.RevisionHistoryLimit != nil && *placementSpec.RevisionHistoryLimit > 0 {
+		revisionLimit = *placementSpec.RevisionHistoryLimit
 	}
-	return resourceSnapshotObjs, nil
+
+	// Create or get the resource snapshot. Unlike the placement controller, we do not wait for snapshot creation intervals.
+	_, latestResourceSnapshot, err := r.ResourceSnapshotResolver.GetOrCreateResourceSnapshot(ctx, placement, envelopeObjCount,
+		&placementv1beta1.ResourceSnapshotSpec{SelectedResources: selectedResources}, int(revisionLimit))
+	if err != nil {
+		klog.ErrorS(err, "Failed to get or create resource snapshot", "placement", placementKey, "updateRun", updateRunRef)
+		return nil, err
+	}
+
+	if latestResourceSnapshot == nil {
+		err := fmt.Errorf("no resource snapshot created for placement `%s`", placementKey)
+		klog.ErrorS(err, "Failed to create resource snapshot", "placement", placementKey, "updateRun", updateRunRef)
+		return nil, err
+	}
+
+	// Return the master snapshot directly rather than listing from the cache, because
+	// GetOrCreateResourceSnapshot writes to the API server and the controller-runtime
+	// cache may not have the newly created snapshot yet.
+	klog.V(2).InfoS("Created/fetched resource snapshot for updateRun",
+		"placement", placementKey, "resourceSnapshot", klog.KObj(latestResourceSnapshot), "updateRun", updateRunRef)
+	return []placementv1beta1.ResourceSnapshotObj{latestResourceSnapshot}, nil
 }
 
 // recordInitializationSucceeded records the successful initialization condition in the UpdateRun status.
