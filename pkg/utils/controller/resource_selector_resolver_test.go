@@ -19,6 +19,7 @@ package controller
 import (
 	"errors"
 	"math/rand"
+	"strings"
 	"testing"
 	"time"
 
@@ -1336,6 +1337,243 @@ func TestGatherSelectedResource(t *testing.T) {
 			}(),
 			wantError: ErrUnexpectedBehavior,
 		},
+		{
+			name:          "should select namespace and specific resources with NamespaceWithResourceSelectors mode",
+			placementName: types.NamespacedName{Name: "test-placement"},
+			selectors: []fleetv1beta1.ResourceSelectorTerm{
+				{
+					Group:          "",
+					Version:        "v1",
+					Kind:           "Namespace",
+					Name:           "test-ns",
+					SelectionScope: fleetv1beta1.NamespaceWithResourceSelectors,
+				},
+				{
+					Group:   "apps",
+					Version: "v1",
+					Kind:    "Deployment",
+					Name:    "test-deployment",
+				},
+				{
+					Group:   "",
+					Version: "v1",
+					Kind:    "ConfigMap",
+					Name:    "test-configmap",
+				},
+			},
+			resourceConfig: utils.NewResourceConfig(false), // default deny list
+			informerManager: func() *testinformer.FakeManager {
+				return &testinformer.FakeManager{
+					Listers: map[schema.GroupVersionResource]*testinformer.FakeLister{
+						utils.NamespaceGVR:  {Objects: []runtime.Object{testNamespace, prodNamespace}},
+						utils.DeploymentGVR: {Objects: []runtime.Object{testDeployment}},
+						utils.ConfigMapGVR:  {Objects: []runtime.Object{testConfigMap}},
+					},
+					NamespaceScopedResources: []schema.GroupVersionResource{utils.DeploymentGVR, utils.ConfigMapGVR},
+				}
+			}(),
+			// Should select namespace, deployment, and configmap from test-ns
+			want: []*unstructured.Unstructured{testNamespace, testConfigMap, testDeployment},
+		},
+		{
+			name:          "should select namespace and resources by label selector with NamespaceWithResourceSelectors mode",
+			placementName: types.NamespacedName{Name: "test-placement"},
+			selectors: []fleetv1beta1.ResourceSelectorTerm{
+				{
+					Group:          "",
+					Version:        "v1",
+					Kind:           "Namespace",
+					Name:           "test-ns",
+					SelectionScope: fleetv1beta1.NamespaceWithResourceSelectors,
+				},
+				{
+					Group:   "apps",
+					Version: "v1",
+					Kind:    "Deployment",
+					LabelSelector: &metav1.LabelSelector{
+						MatchLabels: map[string]string{
+							"app": "test",
+						},
+					},
+				},
+			},
+			resourceConfig: utils.NewResourceConfig(false), // default deny list
+			informerManager: func() *testinformer.FakeManager {
+				// Create a deployment with matching labels for this test
+				deploymentWithLabels := testDeployment.DeepCopy()
+				deploymentWithLabels.SetLabels(map[string]string{"app": "test"})
+
+				return &testinformer.FakeManager{
+					IsClusterScopedResource: true,
+					APIResources: map[schema.GroupVersionKind]bool{
+						utils.NamespaceGVK:  true,  // cluster-scoped
+						utils.DeploymentGVK: false, // namespace-scoped
+					},
+					Listers: map[schema.GroupVersionResource]*testinformer.FakeLister{
+						utils.NamespaceGVR:  {Objects: []runtime.Object{testNamespace}},
+						utils.DeploymentGVR: {Objects: []runtime.Object{deploymentWithLabels}},
+					},
+					NamespaceScopedResources: []schema.GroupVersionResource{utils.DeploymentGVR},
+				}
+			}(),
+			// Should select namespace and deployment with matching labels
+			want: func() []*unstructured.Unstructured {
+				deploymentWithLabels := testDeployment.DeepCopy()
+				deploymentWithLabels.SetLabels(map[string]string{"app": "test"})
+				return []*unstructured.Unstructured{testNamespace, deploymentWithLabels}
+			}(),
+		},
+		{
+			name:          "should select namespace and cluster-scoped resources with NamespaceWithResourceSelectors mode",
+			placementName: types.NamespacedName{Name: "test-placement"},
+			selectors: []fleetv1beta1.ResourceSelectorTerm{
+				{
+					Group:          "",
+					Version:        "v1",
+					Kind:           "Namespace",
+					Name:           "test-ns",
+					SelectionScope: fleetv1beta1.NamespaceWithResourceSelectors,
+				},
+				{
+					Group:   "rbac.authorization.k8s.io",
+					Version: "v1",
+					Kind:    "ClusterRole",
+					Name:    "test-cluster-role",
+				},
+				{
+					Group:   "apps",
+					Version: "v1",
+					Kind:    "Deployment",
+					Name:    "test-deployment",
+				},
+			},
+			resourceConfig: utils.NewResourceConfig(false), // default deny list
+			informerManager: func() *testinformer.FakeManager {
+				return &testinformer.FakeManager{
+					IsClusterScopedResource: true,
+					APIResources: map[schema.GroupVersionKind]bool{
+						utils.NamespaceGVK:   true,  // cluster-scoped
+						utils.ClusterRoleGVK: true,  // cluster-scoped
+						utils.DeploymentGVK:  false, // namespace-scoped
+					},
+					Listers: map[schema.GroupVersionResource]*testinformer.FakeLister{
+						utils.NamespaceGVR:   {Objects: []runtime.Object{testNamespace}},
+						utils.ClusterRoleGVR: {Objects: []runtime.Object{testClusterRole}},
+						utils.DeploymentGVR:  {Objects: []runtime.Object{testDeployment}},
+					},
+					NamespaceScopedResources: []schema.GroupVersionResource{utils.DeploymentGVR},
+				}
+			}(),
+			// Should select namespace, cluster role, and deployment
+			want: []*unstructured.Unstructured{testNamespace, testClusterRole, testDeployment},
+		},
+		{
+			name:          "should select only namespace with NamespaceWithResourceSelectors mode when no other selectors provided",
+			placementName: types.NamespacedName{Name: "test-placement"},
+			selectors: []fleetv1beta1.ResourceSelectorTerm{
+				{
+					Group:          "",
+					Version:        "v1",
+					Kind:           "Namespace",
+					Name:           "test-ns",
+					SelectionScope: fleetv1beta1.NamespaceWithResourceSelectors,
+				},
+			},
+			resourceConfig: utils.NewResourceConfig(false), // default deny list
+			informerManager: func() *testinformer.FakeManager {
+				return &testinformer.FakeManager{
+					Listers: map[schema.GroupVersionResource]*testinformer.FakeLister{
+						utils.NamespaceGVR:  {Objects: []runtime.Object{testNamespace, prodNamespace}},
+						utils.DeploymentGVR: {Objects: []runtime.Object{testDeployment}},
+						utils.ConfigMapGVR:  {Objects: []runtime.Object{testConfigMap}},
+					},
+					NamespaceScopedResources: []schema.GroupVersionResource{utils.DeploymentGVR, utils.ConfigMapGVR},
+				}
+			}(),
+			// Should select only the namespace, not its child resources
+			want: []*unstructured.Unstructured{testNamespace},
+		},
+		{
+			name:          "should error when selecting multiple namespaces with NamespaceWithResourceSelectors mode using label selector",
+			placementName: types.NamespacedName{Name: "test-placement"},
+			selectors: []fleetv1beta1.ResourceSelectorTerm{
+				{
+					Group:   "",
+					Version: "v1",
+					Kind:    "Namespace",
+					LabelSelector: &metav1.LabelSelector{
+						MatchLabels: map[string]string{
+							"environment": "test",
+						},
+					},
+					SelectionScope: fleetv1beta1.NamespaceWithResourceSelectors,
+				},
+				{
+					Group:   "apps",
+					Version: "v1",
+					Kind:    "Deployment",
+					Name:    "test-deployment",
+				},
+			},
+			resourceConfig: utils.NewResourceConfig(false), // default deny list
+			informerManager: func() *testinformer.FakeManager {
+				// Create a second test namespace with the same label
+				testNamespace2 := &unstructured.Unstructured{
+					Object: map[string]interface{}{
+						"apiVersion": "v1",
+						"kind":       "Namespace",
+						"metadata": map[string]interface{}{
+							"name": "test-ns-2",
+							"labels": map[string]interface{}{
+								"environment": "test",
+							},
+						},
+					},
+				}
+				testNamespace2.SetGroupVersionKind(utils.NamespaceGVK)
+
+				return &testinformer.FakeManager{
+					Listers: map[schema.GroupVersionResource]*testinformer.FakeLister{
+						utils.NamespaceGVR:  {Objects: []runtime.Object{testNamespace, testNamespace2}},
+						utils.DeploymentGVR: {Objects: []runtime.Object{testDeployment}},
+					},
+					NamespaceScopedResources: []schema.GroupVersionResource{utils.DeploymentGVR},
+				}
+			}(),
+			// Should error because multiple namespaces match the label selector
+			wantError: ErrUserError,
+		},
+		{
+			name:          "should error when selecting zero namespaces with NamespaceWithResourceSelectors mode",
+			placementName: types.NamespacedName{Name: "test-placement"},
+			selectors: []fleetv1beta1.ResourceSelectorTerm{
+				{
+					Group:          "",
+					Version:        "v1",
+					Kind:           "Namespace",
+					Name:           "non-existent-namespace",
+					SelectionScope: fleetv1beta1.NamespaceWithResourceSelectors,
+				},
+				{
+					Group:   "",
+					Version: "v1",
+					Kind:    "ConfigMap",
+					Name:    "test-configmap",
+				},
+			},
+			resourceConfig: utils.NewResourceConfig(false), // default deny list
+			informerManager: func() *testinformer.FakeManager {
+				return &testinformer.FakeManager{
+					Listers: map[schema.GroupVersionResource]*testinformer.FakeLister{
+						utils.NamespaceGVR: {Objects: []runtime.Object{testNamespace}}, // testNamespace doesn't match "non-existent-namespace"
+						utils.ConfigMapGVR: {Objects: []runtime.Object{testConfigMap}},
+					},
+					NamespaceScopedResources: []schema.GroupVersionResource{utils.ConfigMapGVR},
+				}
+			}(),
+			// Should error because no namespaces match the selector
+			wantError: ErrUserError,
+		},
 	}
 
 	for _, tt := range tests {
@@ -1958,6 +2196,286 @@ func TestSortResources(t *testing.T) {
 				if diff != "" {
 					t.Errorf("sortResources() mismatch (-want +got):\n%s", diff)
 				}
+			}
+		})
+	}
+}
+
+func TestFetchSelectedNamespaces(t *testing.T) {
+	testNs1 := &unstructured.Unstructured{
+		Object: map[string]interface{}{
+			"apiVersion": "v1",
+			"kind":       "Namespace",
+			"metadata": map[string]interface{}{
+				"name": "test-ns-1",
+				"labels": map[string]interface{}{
+					"env": "prod",
+				},
+			},
+		},
+	}
+	testNs1.SetGroupVersionKind(utils.NamespaceGVK)
+
+	testNs2 := &unstructured.Unstructured{
+		Object: map[string]interface{}{
+			"apiVersion": "v1",
+			"kind":       "Namespace",
+			"metadata": map[string]interface{}{
+				"name": "test-ns-2",
+				"labels": map[string]interface{}{
+					"env": "dev",
+				},
+			},
+		},
+	}
+	testNs2.SetGroupVersionKind(utils.NamespaceGVK)
+
+	skippedNs := &unstructured.Unstructured{
+		Object: map[string]interface{}{
+			"apiVersion": "v1",
+			"kind":       "Namespace",
+			"metadata": map[string]interface{}{
+				"name": "kube-system",
+			},
+		},
+	}
+	skippedNs.SetGroupVersionKind(utils.NamespaceGVK)
+
+	tests := []struct {
+		name              string
+		selector          fleetv1beta1.ResourceSelectorTerm
+		skippedNamespaces map[string]bool
+		informerManager   *testinformer.FakeManager
+		want              []string
+		wantErr           bool
+	}{
+		{
+			name: "select namespace by name",
+			selector: fleetv1beta1.ResourceSelectorTerm{
+				Group:   "",
+				Version: "v1",
+				Kind:    "Namespace",
+				Name:    "test-ns-1",
+			},
+			skippedNamespaces: nil,
+			informerManager: &testinformer.FakeManager{
+				Listers: map[schema.GroupVersionResource]*testinformer.FakeLister{
+					utils.NamespaceGVR: {Objects: []runtime.Object{testNs1, testNs2}},
+				},
+			},
+			want: []string{"test-ns-1"},
+		},
+		{
+			name: "select namespaces by label selector",
+			selector: fleetv1beta1.ResourceSelectorTerm{
+				Group:   "",
+				Version: "v1",
+				Kind:    "Namespace",
+				LabelSelector: &metav1.LabelSelector{
+					MatchLabels: map[string]string{"env": "prod"},
+				},
+			},
+			skippedNamespaces: nil,
+			informerManager: &testinformer.FakeManager{
+				Listers: map[schema.GroupVersionResource]*testinformer.FakeLister{
+					utils.NamespaceGVR: {Objects: []runtime.Object{testNs1, testNs2}},
+				},
+			},
+			want: []string{"test-ns-1"},
+		},
+		{
+			name: "filter out skipped namespaces",
+			selector: fleetv1beta1.ResourceSelectorTerm{
+				Group:   "",
+				Version: "v1",
+				Kind:    "Namespace",
+				LabelSelector: &metav1.LabelSelector{
+					MatchLabels: map[string]string{},
+				},
+			},
+			skippedNamespaces: map[string]bool{"kube-system": true},
+			informerManager: &testinformer.FakeManager{
+				Listers: map[schema.GroupVersionResource]*testinformer.FakeLister{
+					utils.NamespaceGVR: {Objects: []runtime.Object{testNs1, skippedNs}},
+				},
+			},
+			want: []string{"test-ns-1"},
+		},
+		{
+			name: "no namespaces match selector",
+			selector: fleetv1beta1.ResourceSelectorTerm{
+				Group:   "",
+				Version: "v1",
+				Kind:    "Namespace",
+				Name:    "non-existent",
+			},
+			skippedNamespaces: nil,
+			informerManager: &testinformer.FakeManager{
+				Listers: map[schema.GroupVersionResource]*testinformer.FakeLister{
+					utils.NamespaceGVR: {Objects: []runtime.Object{testNs1, testNs2}},
+				},
+			},
+			want: []string{},
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			rsr := &ResourceSelectorResolver{
+				SkippedNamespaces: tt.skippedNamespaces,
+				ResourceConfig:    utils.NewResourceConfig(false),
+				InformerManager:   tt.informerManager,
+				RestMapper:        newFakeRESTMapper(),
+			}
+
+			got, err := rsr.fetchSelectedNamespaces(tt.selector, "test-placement")
+			if (err != nil) != tt.wantErr {
+				t.Errorf("fetchSelectedNamespaces() error = %v, wantErr %v", err, tt.wantErr)
+				return
+			}
+			if diff := cmp.Diff(tt.want, got); diff != "" {
+				t.Errorf("fetchSelectedNamespaces() mismatch (-want +got):\n%s", diff)
+			}
+		})
+	}
+}
+
+func TestGatherSelectedResource_ErrorCases(t *testing.T) {
+	testNamespace := &unstructured.Unstructured{
+		Object: map[string]interface{}{
+			"apiVersion": "v1",
+			"kind":       "Namespace",
+			"metadata": map[string]interface{}{
+				"name": "test-ns",
+			},
+		},
+	}
+	testNamespace.SetGroupVersionKind(utils.NamespaceGVK)
+
+	testDeployment := &unstructured.Unstructured{
+		Object: map[string]interface{}{
+			"apiVersion": "apps/v1",
+			"kind":       "Deployment",
+			"metadata": map[string]interface{}{
+				"name":      "test-deployment",
+				"namespace": "test-ns",
+			},
+		},
+	}
+	testDeployment.SetGroupVersionKind(utils.DeploymentGVK)
+
+	tests := []struct {
+		name            string
+		placementName   types.NamespacedName
+		selectors       []fleetv1beta1.ResourceSelectorTerm
+		resourceConfig  *utils.ResourceConfig
+		informerManager *testinformer.FakeManager
+		wantError       error
+		wantErrMsg      string
+	}{
+		{
+			name:          "ResourcePlacement trying to select namespace should fail",
+			placementName: types.NamespacedName{Name: "test-placement", Namespace: "some-ns"},
+			selectors: []fleetv1beta1.ResourceSelectorTerm{
+				{
+					Group:   "",
+					Version: "v1",
+					Kind:    "Namespace",
+					Name:    "test-ns",
+				},
+			},
+			resourceConfig: utils.NewResourceConfig(false),
+			informerManager: &testinformer.FakeManager{
+				Listers: map[schema.GroupVersionResource]*testinformer.FakeLister{
+					utils.NamespaceGVR: {Objects: []runtime.Object{testNamespace}},
+				},
+			},
+			wantError:  ErrUserError,
+			wantErrMsg: "cannot select cluster-scoped resource Namespace in a resourcePlacement",
+		},
+		{
+			name:          "CRP selecting namespace-scoped resource without NamespaceWithResourceSelectors mode",
+			placementName: types.NamespacedName{Name: "test-placement"},
+			selectors: []fleetv1beta1.ResourceSelectorTerm{
+				{
+					Group:   "apps",
+					Version: "v1",
+					Kind:    "Deployment",
+					Name:    "test-deployment",
+				},
+			},
+			resourceConfig: utils.NewResourceConfig(false),
+			informerManager: &testinformer.FakeManager{
+				IsClusterScopedResource: true,
+				APIResources: map[schema.GroupVersionKind]bool{
+					utils.DeploymentGVK: false, // namespace-scoped
+				},
+				Listers: map[schema.GroupVersionResource]*testinformer.FakeLister{
+					utils.DeploymentGVR: {Objects: []runtime.Object{testDeployment}},
+				},
+				NamespaceScopedResources: []schema.GroupVersionResource{utils.DeploymentGVR},
+			},
+			wantError:  ErrUserError,
+			wantErrMsg: "cannot select namespace-scoped resource",
+		},
+		{
+			name:          "duplicate resource should fail",
+			placementName: types.NamespacedName{Name: "test-placement"},
+			selectors: []fleetv1beta1.ResourceSelectorTerm{
+				{
+					Group:          "",
+					Version:        "v1",
+					Kind:           "Namespace",
+					Name:           "test-ns",
+					SelectionScope: fleetv1beta1.NamespaceWithResourceSelectors,
+				},
+				{
+					Group:   "apps",
+					Version: "v1",
+					Kind:    "Deployment",
+					Name:    "test-deployment",
+				},
+				// Duplicate selector
+				{
+					Group:   "apps",
+					Version: "v1",
+					Kind:    "Deployment",
+					Name:    "test-deployment",
+				},
+			},
+			resourceConfig: utils.NewResourceConfig(false),
+			informerManager: &testinformer.FakeManager{
+				IsClusterScopedResource: true,
+				APIResources: map[schema.GroupVersionKind]bool{
+					utils.NamespaceGVK:  true,  // cluster-scoped
+					utils.DeploymentGVK: false, // namespace-scoped
+				},
+				Listers: map[schema.GroupVersionResource]*testinformer.FakeLister{
+					utils.NamespaceGVR:  {Objects: []runtime.Object{testNamespace}},
+					utils.DeploymentGVR: {Objects: []runtime.Object{testDeployment}},
+				},
+				NamespaceScopedResources: []schema.GroupVersionResource{utils.DeploymentGVR},
+			},
+			wantError:  ErrUserError,
+			wantErrMsg: "found duplicate resource",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			rsr := &ResourceSelectorResolver{
+				ResourceConfig:  tt.resourceConfig,
+				InformerManager: tt.informerManager,
+				RestMapper:      newFakeRESTMapper(),
+			}
+
+			_, err := rsr.gatherSelectedResource(tt.placementName, tt.selectors)
+			if gotErr, wantErr := err != nil, tt.wantError != nil; gotErr != wantErr || !errors.Is(err, tt.wantError) {
+				t.Errorf("gatherSelectedResource() error = %v, wantError %v", err, tt.wantError)
+				return
+			}
+			if tt.wantError != nil && !strings.Contains(err.Error(), tt.wantErrMsg) {
+				t.Errorf("gatherSelectedResource() error = %v, wantErrMsg %v", err, tt.wantErrMsg)
 			}
 		})
 	}

@@ -237,6 +237,38 @@ func generateRawContent(object *unstructured.Unstructured) ([]byte, error) {
 func (rs *ResourceSelectorResolver) gatherSelectedResource(placementKey types.NamespacedName, selectors []placementv1beta1.ResourceSelectorTerm) ([]*unstructured.Unstructured, error) {
 	var resources []*unstructured.Unstructured
 	var resourceMap = make(map[placementv1beta1.ResourceIdentifier]bool)
+
+	// First pass: check if there's a namespace selector with NamespaceWithResourceSelectors mode
+	// If found, collect the selected namespace (must be exactly one) for filtering resources in the second pass
+	var selectedNamespace string
+	for _, selector := range selectors {
+		gvk := schema.GroupVersionKind{
+			Group:   selector.Group,
+			Version: selector.Version,
+			Kind:    selector.Kind,
+		}
+		if gvk == utils.NamespaceGVK && placementKey.Namespace == "" && selector.SelectionScope == placementv1beta1.NamespaceWithResourceSelectors {
+			namespaces, err := rs.fetchSelectedNamespaces(selector, placementKey.Name)
+			if err != nil {
+				return nil, err
+			}
+			// NamespaceWithResourceSelectors mode requires exactly one namespace
+			if len(namespaces) == 0 {
+				err := fmt.Errorf("invalid clusterResourcePlacement %s: NamespaceWithResourceSelectors mode requires exactly one namespace, but no namespaces were selected", placementKey.Name)
+				klog.ErrorS(err, "No namespaces selected with NamespaceWithResourceSelectors mode", "placement", placementKey.Name)
+				return nil, NewUserError(err)
+			}
+			if len(namespaces) > 1 {
+				err := fmt.Errorf("invalid clusterResourcePlacement %s: NamespaceWithResourceSelectors mode requires exactly one namespace, but %d namespaces were selected", placementKey.Name, len(namespaces))
+				klog.ErrorS(err, "Multiple namespaces selected with NamespaceWithResourceSelectors mode", "placement", placementKey.Name, "namespaceCount", len(namespaces))
+				return nil, NewUserError(err)
+			}
+			selectedNamespace = namespaces[0]
+			break
+		}
+	}
+
+	// Second pass: fetch resources based on selectors
 	for _, selector := range selectors {
 		gvk := schema.GroupVersionKind{
 			Group:   selector.Group,
@@ -248,16 +280,45 @@ func (rs *ResourceSelectorResolver) gatherSelectedResource(placementKey types.Na
 			klog.V(2).InfoS("Skip select resource", "group version kind", gvk.String())
 			continue
 		}
+
 		var objs []runtime.Object
 		var err error
-		if gvk == utils.NamespaceGVK && placementKey.Namespace == "" && selector.SelectionScope != placementv1beta1.NamespaceOnly {
-			objs, err = rs.fetchNamespaceResources(selector, placementKey.Name)
+
+		// Case 1: Namespace selector
+		if gvk == utils.NamespaceGVK {
+			if placementKey.Namespace != "" {
+				// RP trying to select namespace - this is an error because Namespace is cluster-scoped
+				err := fmt.Errorf("invalid placement %s: cannot select cluster-scoped resource Namespace in a resourcePlacement", placementKey)
+				klog.ErrorS(err, "Invalid resource selector for RP", "selector", selector)
+				return nil, NewUserError(err)
+			}
+			// CRP namespace selector
+			switch selector.SelectionScope {
+			case placementv1beta1.NamespaceOnly, placementv1beta1.NamespaceWithResourceSelectors:
+				// Just the namespace objects
+				objs, err = rs.fetchResources(selector, placementKey)
+			default:
+				// NamespaceWithResources mode or empty (default behavior): namespace + all resources inside
+				objs, err = rs.fetchNamespaceResources(selector, placementKey.Name)
+			}
 		} else {
-			objs, err = rs.fetchResources(selector, placementKey)
+			// Case 2: Non-namespace selector
+			isNamespaceScoped := !rs.InformerManager.IsClusterScopedResources(gvk)
+			isCRP := placementKey.Namespace == ""
+			if isCRP && isNamespaceScoped {
+				// Special case when there is a namespaced resource with NamespaceWithResourceSelectors selection mode:
+				// Use selective namespace from 1st pass
+				namespacedKey := types.NamespacedName{Name: placementKey.Name, Namespace: selectedNamespace}
+				objs, err = rs.fetchResources(selector, namespacedKey)
+			} else {
+				objs, err = rs.fetchResources(selector, placementKey)
+			}
 		}
+
 		if err != nil {
 			return nil, err
 		}
+
 		for _, obj := range objs {
 			uObj := obj.(*unstructured.Unstructured)
 			ri := placementv1beta1.ResourceIdentifier{
@@ -528,6 +589,34 @@ func (rs *ResourceSelectorResolver) fetchResources(selector placementv1beta1.Res
 	}
 
 	return selectedObjs, nil
+}
+
+// fetchSelectedNamespaces retrieves the namespace names based on the namespace selector.
+func (rs *ResourceSelectorResolver) fetchSelectedNamespaces(selector placementv1beta1.ResourceSelectorTerm, placementName string) ([]string, error) {
+	klog.V(2).InfoS("start to fetch selected namespaces", "selector", selector, "placement", placementName)
+
+	// Use fetchResources to get namespace objects (handles label selector, name selector, deletion timestamps)
+	placementKey := types.NamespacedName{Name: placementName}
+	objs, err := rs.fetchResources(selector, placementKey)
+	if err != nil {
+		return nil, err
+	}
+
+	// Filter by skipped namespaces and extract names
+	namespaceNames := make([]string, 0, len(objs))
+	for _, obj := range objs {
+		ns, err := meta.Accessor(obj)
+		if err != nil {
+			return nil, NewUnexpectedBehaviorError(fmt.Errorf("failed to access the namespace object: %w", err))
+		}
+		if !utils.ShouldPropagateNamespace(ns.GetName(), rs.SkippedNamespaces) {
+			klog.V(2).InfoS("skip namespace that is not allowed to propagate", "namespace", ns.GetName(), "placement", placementName)
+			continue
+		}
+		namespaceNames = append(namespaceNames, ns.GetName())
+	}
+
+	return namespaceNames, nil
 }
 
 func (rs *ResourceSelectorResolver) ShouldPropagateObj(namespace, placementName string, obj runtime.Object) (bool, error) {

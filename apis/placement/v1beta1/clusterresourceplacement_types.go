@@ -124,6 +124,9 @@ type ClusterResourcePlacement struct {
 }
 
 // PlacementSpec defines the desired state of ClusterResourcePlacement and ResourcePlacement.
+// +kubebuilder:validation:XValidation:rule="size(self.resourceSelectors.filter(x, x.kind == 'Namespace' && x.group == \"\" && x.version == 'v1' && has(x.selectionScope) && x.selectionScope == 'NamespaceWithResourceSelectors')) <= 1",message="only one namespace selector with NamespaceWithResourceSelectors mode is allowed"
+// +kubebuilder:validation:XValidation:rule="size(self.resourceSelectors.filter(x, x.kind == 'Namespace' && x.group == \"\" && x.version == 'v1' && has(x.selectionScope) && x.selectionScope == 'NamespaceWithResourceSelectors')) == 0 || (size(self.resourceSelectors.filter(x, x.kind == 'Namespace' && x.group == \"\" && x.version == 'v1' && has(x.selectionScope) && x.selectionScope == 'NamespaceWithResourceSelectors' && has(x.name) && size(x.name) > 0 && !has(x.labelSelector))) == 1)",message="namespace selector with NamespaceWithResourceSelectors mode must select by name (not by label)"
+// +kubebuilder:validation:XValidation:rule="size(self.resourceSelectors.filter(x, x.kind == 'Namespace' && x.group == \"\" && x.version == 'v1' && has(x.selectionScope) && x.selectionScope == 'NamespaceWithResourceSelectors')) == 0 || size(self.resourceSelectors.filter(x, x.kind == 'Namespace' && x.group == \"\" && x.version == 'v1')) == 1",message="when using NamespaceWithResourceSelectors mode, only one namespace selector is allowed (cannot mix with other namespace selectors)"
 type PlacementSpec struct {
 	// ResourceSelectors is an array of selectors used to select cluster scoped resources. The selectors are `ORed`.
 	// You can have 1-100 selectors.
@@ -185,7 +188,32 @@ type ResourceSelectorTerm struct {
 	Version string `json:"version"`
 
 	// Kind of the to be selected resource.
-	// Note: When `Kind` is `namespace`, by default ALL the resources under the selected namespaces are selected.
+	//
+	// Special behavior when Kind is `namespace` (ClusterResourcePlacement only):
+	// Note: ResourcePlacement cannot select namespaces since it is namespace-scoped and selects resources within a namespace.
+	//
+	// For ClusterResourcePlacement, you can use SelectionScope to control what gets selected:
+	// - NamespaceOnly: Only the namespace object itself
+	// - NamespaceWithResources: The namespace AND all resources within it (default)
+	// - NamespaceWithResourceSelectors: The namespace AND resources specified by additional selectors
+	//
+	// When SelectionScope is NamespaceWithResourceSelectors, you can define additional ResourceSelectorTerms
+	// (after the namespace selector) to specify which resources to include. These additional selectors can
+	// target both namespace-scoped resources (within the selected namespace) and cluster-scoped resources.
+	//
+	// Important requirements for NamespaceWithResourceSelectors mode:
+	// - Exactly one namespace selector with this mode is allowed
+	// - The namespace selector must select by name (not by label)
+	// - Only one namespace selector is allowed when using this mode (cannot mix with other namespace selectors)
+	// - All requirements are validated via CEL at API validation time
+	// - If the selected namespace is deleted after CRP creation, the controller will report an error condition
+	//
+	// Example using NamespaceWithResourceSelectors:
+	// - Namespace selector: {Group: "", Version: "v1", Kind: "Namespace", Name: "prod", SelectionScope: "NamespaceWithResourceSelectors"}
+	// - Additional selector: {Group: "apps", Version: "v1", Kind: "Deployment", LabelSelector: {app: "frontend"}}
+	// - Third selector: {Group: "rbac.authorization.k8s.io", Version: "v1", Kind: "ClusterRole", Name: "admin"}
+	// This selects: the "prod" namespace, all Deployments with label app=frontend in "prod", and the "admin" ClusterRole.
+	//
 	// +kubebuilder:validation:Required
 	Kind string `json:"kind"`
 
@@ -202,21 +230,80 @@ type ResourceSelectorTerm struct {
 	LabelSelector *metav1.LabelSelector `json:"labelSelector,omitempty"`
 
 	// SelectionScope defines the scope of resource selections when the Kind is `namespace`.
-	// +kubebuilder:validation:Enum=NamespaceOnly;NamespaceWithResources
+	// This field is only applicable when Kind is "Namespace" and is ignored for other resource kinds.
+	// See the Kind field documentation for detailed examples and usage patterns.
+	// +kubebuilder:validation:Enum=NamespaceOnly;NamespaceWithResources;NamespaceWithResourceSelectors
 	// +kubebuilder:default=NamespaceWithResources
 	// +kubebuilder:validation:Optional
 	SelectionScope SelectionScope `json:"selectionScope,omitempty"`
 }
 
-// SelectionScope defines the scope of resource selections.
+// SelectionScope defines the scope of resource selections when selecting namespaces.
+// This only applies when a ResourceSelectorTerm has Kind="Namespace".
 type SelectionScope string
 
 const (
-	// NamespaceOnly means only the namespace itself is selected.
+	// NamespaceOnly means only the namespace object itself is selected.
+	//
+	// Use case: When you want to create/manage only the namespace without any resources inside it.
+	// Example: Creating a namespace with specific labels/annotations on member clusters.
 	NamespaceOnly SelectionScope = "NamespaceOnly"
 
-	// NamespaceWithResources means all the resources under the namespace including namespace itself are selected.
+	// NamespaceWithResources means the namespace and ALL resources within it are selected.
+	// This is the default behavior for backward compatibility.
+	//
+	// Use case: When you want to replicate an entire namespace with all its contents to member clusters.
+	// Example: Copying a complete application stack (deployments, services, configmaps, etc.) across clusters.
+	//
+	// Note: This is the default value. When you select a namespace without specifying SelectionScope,
+	// this mode is used automatically.
 	NamespaceWithResources SelectionScope = "NamespaceWithResources"
+
+	// NamespaceWithResourceSelectors allows fine-grained selection of specific resources within a namespace.
+	// The namespace itself is always selected, and you can optionally specify which resources to include
+	// by adding additional ResourceSelectorTerm entries after the namespace selector.
+	//
+	// Use cases:
+	// 1. Select only specific resource types from a namespace (e.g., only Deployments and Services)
+	// 2. Select resources matching certain labels within a namespace
+	// 3. Include specific cluster-scoped resources along with namespace-scoped resources
+	//
+	// How "additional selectors" work:
+	// - Exactly one namespace selector with NamespaceWithResourceSelectors mode is required
+	// - This selector must select a namespace by name (label selectors not allowed)
+	// - ADDITIONAL selectors specify which resources to include:
+	//   - Namespace-scoped resources are filtered to only those within the selected namespace
+	//   - Cluster-scoped resources are included as specified (not limited to the namespace)
+	// - If no additional selectors are provided, only the namespace object itself is selected
+	//
+	// Example 1 - Select specific deployments from a namespace:
+	//   Selector 1: {Group: "", Version: "v1", Kind: "Namespace", Name: "production", SelectionScope: "NamespaceWithResourceSelectors"}
+	//   Selector 2: {Group: "apps", Version: "v1", Kind: "Deployment", LabelSelector: {tier: "frontend"}}
+	//   Result: The "production" namespace + all Deployments labeled tier=frontend within "production"
+	//
+	// Example 2 - Select namespace with multiple resource types:
+	//   Selector 1: {Group: "", Version: "v1", Kind: "Namespace", Name: "app", SelectionScope: "NamespaceWithResourceSelectors"}
+	//   Selector 2: {Group: "apps", Version: "v1", Kind: "Deployment"}
+	//   Selector 3: {Group: "", Version: "v1", Kind: "Service"}
+	//   Result: The "app" namespace + ALL Deployments and Services within "app"
+	//
+	// Example 3 - Include cluster-scoped resources:
+	//   Selector 1: {Group: "", Version: "v1", Kind: "Namespace", Name: "app", SelectionScope: "NamespaceWithResourceSelectors"}
+	//   Selector 2: {Group: "apps", Version: "v1", Kind: "Deployment"}
+	//   Selector 3: {Group: "rbac.authorization.k8s.io", Version: "v1", Kind: "ClusterRole", Name: "app-admin"}
+	//   Result: The "app" namespace + ALL Deployments in "app" + the "app-admin" ClusterRole
+	//
+	// Important constraints:
+	// - Exactly ONE namespace selector with NamespaceWithResourceSelectors mode is allowed
+	// - The namespace selector must select by name (label selectors not allowed)
+	// - Only ONE namespace selector total is allowed when using this mode (cannot mix with other namespace selectors)
+	// - All constraints are enforced via CEL at API validation time
+	//
+	// Runtime behavior:
+	// - If the selected namespace is deleted after the CRP is created, the controller will detect this during
+	//   the next reconciliation and report an error condition in the CRP status
+	// - The CRP will transition to a failed state until the namespace is recreated or the CRP is updated
+	NamespaceWithResourceSelectors SelectionScope = "NamespaceWithResourceSelectors"
 )
 
 // PlacementPolicy contains the rules to select target member clusters to place the selected resources.

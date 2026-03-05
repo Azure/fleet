@@ -41,6 +41,7 @@ import (
 
 	placementv1beta1 "github.com/kubefleet-dev/kubefleet/apis/placement/v1beta1"
 	"github.com/kubefleet-dev/kubefleet/pkg/propertyprovider"
+	"github.com/kubefleet-dev/kubefleet/pkg/utils"
 	"github.com/kubefleet-dev/kubefleet/pkg/utils/controller"
 	"github.com/kubefleet-dev/kubefleet/pkg/utils/informer"
 )
@@ -65,6 +66,18 @@ var (
 	resourceCapacityTypes             = supportedResourceCapacityTypes()
 )
 
+// hasNamespaceWithResourceSelectorsMode checks if any namespace selector has NamespaceWithResourceSelectors mode.
+func hasNamespaceWithResourceSelectorsMode(resourceSelectors []placementv1beta1.ResourceSelectorTerm) bool {
+	for _, selector := range resourceSelectors {
+		if selector.Group == utils.NamespaceGVK.Group && selector.Version == utils.NamespaceGVK.Version && selector.Kind == utils.NamespaceGVK.Kind {
+			if selector.SelectionScope == placementv1beta1.NamespaceWithResourceSelectors {
+				return true
+			}
+		}
+	}
+	return false
+}
+
 // validatePlacement validates a placement object (either ClusterResourcePlacement or ResourcePlacement).
 func validatePlacement(name string, resourceSelectors []placementv1beta1.ResourceSelectorTerm, policy *placementv1beta1.PlacementPolicy, strategy placementv1beta1.RolloutStrategy, isClusterScoped bool) error {
 	allErr := make([]error, 0)
@@ -72,6 +85,8 @@ func validatePlacement(name string, resourceSelectors []placementv1beta1.Resourc
 	if len(name) > validation.DNS1035LabelMaxLength {
 		allErr = append(allErr, fmt.Errorf("the name field cannot have length exceeding %d", validation.DNS1035LabelMaxLength))
 	}
+
+	hasNsWithResourceSelectorsMode := hasNamespaceWithResourceSelectorsMode(resourceSelectors)
 
 	for _, selector := range resourceSelectors {
 		if selector.LabelSelector != nil {
@@ -97,7 +112,8 @@ func validatePlacement(name string, resourceSelectors []placementv1beta1.Resourc
 				Kind:    selector.Kind,
 			}
 			// Only check cluster scope for ClusterResourcePlacement
-			if isClusterScoped && !ResourceInformer.IsClusterScopedResources(gvk) {
+			// Exception: NamespaceWithResourceSelectors mode allows namespace-scoped resources
+			if isClusterScoped && !ResourceInformer.IsClusterScopedResources(gvk) && !hasNsWithResourceSelectorsMode {
 				allErr = append(allErr, fmt.Errorf("the resource is not found in schema (please retry) or it is not a cluster scoped resource: %v", gvk))
 			}
 
