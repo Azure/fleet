@@ -175,5 +175,19 @@ func (m TestMapper) RESTMapping(gk schema.GroupKind, _ ...string) (*meta.RESTMap
 			Scope:            nil,
 		}, nil
 	}
+	if gk.Kind == "Namespace" {
+		return &meta.RESTMapping{
+			Resource:         NamespaceGVR,
+			GroupVersionKind: NamespaceGVK,
+			Scope:            nil,
+		}, nil
+	}
+	if gk.Kind == "ConfigMap" {
+		return &meta.RESTMapping{
+			Resource:         ConfigMapGVR,
+			GroupVersionKind: ConfigMapGVK,
+			Scope:            nil,
+		}, nil
+	}
 	return nil, errors.New("test error: mapping does not exist")
 }

@@ -1057,6 +1057,55 @@ func checkIfRemovedConfigMapFromMemberClustersConsistently(clusters []*framework
 	}
 }
 
+// createCRPWithSelectors creates a ClusterResourcePlacement with the given selectors.
+func createCRPWithSelectors(crpName string, selectors []placementv1beta1.ResourceSelectorTerm) {
+	crp := &placementv1beta1.ClusterResourcePlacement{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:       crpName,
+			Finalizers: []string{customDeletionBlockerFinalizer},
+		},
+		Spec: placementv1beta1.PlacementSpec{
+			ResourceSelectors: selectors,
+		},
+	}
+	By(fmt.Sprintf("creating CRP %s", crpName))
+	Expect(hubClient.Create(ctx, crp)).To(Succeed(), "Failed to create CRP %s", crpName)
+}
+
+// checkNamespacePlacedOnClusters verifies a namespace is placed on all member clusters.
+func checkNamespacePlacedOnClusters(namespaceName string) {
+	for idx := range allMemberClusters {
+		cluster := allMemberClusters[idx]
+		ns := &corev1.Namespace{}
+		Eventually(func() error {
+			return cluster.KubeClient.Get(ctx, types.NamespacedName{Name: namespaceName}, ns)
+		}, eventuallyDuration, eventuallyInterval).Should(Succeed(), "Failed to get namespace %s on cluster %s", namespaceName, cluster.ClusterName)
+	}
+}
+
+// checkNamespaceRemovedFromClusters verifies a namespace is removed from all member clusters.
+func checkNamespaceRemovedFromClusters(namespaceName string) {
+	for idx := range allMemberClusters {
+		cluster := allMemberClusters[idx]
+		Eventually(func() bool {
+			ns := &corev1.Namespace{}
+			err := cluster.KubeClient.Get(ctx, types.NamespacedName{Name: namespaceName}, ns)
+			return err != nil
+		}, eventuallyDuration, eventuallyInterval).Should(BeTrue(), "Namespace %s should be removed from cluster %s", namespaceName, cluster.ClusterName)
+	}
+}
+
+// checkConfigMapPlacedOnClusters verifies a configmap is placed on all member clusters.
+func checkConfigMapPlacedOnClusters(namespaceName, configMapName string) {
+	for idx := range allMemberClusters {
+		cluster := allMemberClusters[idx]
+		cm := &corev1.ConfigMap{}
+		Eventually(func() error {
+			return cluster.KubeClient.Get(ctx, types.NamespacedName{Name: configMapName, Namespace: namespaceName}, cm)
+		}, eventuallyDuration, eventuallyInterval).Should(Succeed(), "Failed to get configmap %s on cluster %s", configMapName, cluster.ClusterName)
+	}
+}
+
 func checkNamespaceExistsWithOwnerRefOnMemberCluster(nsName, crpName string) {
 	Consistently(func() error {
 		ns := &corev1.Namespace{}
