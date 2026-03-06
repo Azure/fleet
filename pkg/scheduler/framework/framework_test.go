@@ -6550,7 +6550,7 @@ func TestRunSchedulingCycleForPickAllPlacementType_StableStatusOutputInLargeFlee
 	profile := NewProfile("TestOnly")
 
 	dummyLabelBasedFilterPluginName := fmt.Sprintf(dummyAllPurposePluginNameFormat, 0)
-	wantLabelKey := "pre-selected"
+	wantLabelKey := "preselected"
 	wantLabelValue := "true"
 	wantLabels := map[string]string{
 		wantLabelKey: wantLabelValue,

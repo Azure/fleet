@@ -13,6 +13,7 @@ Fixes #
 
 I have:
 
+- [ ] Associated this change with a known KubeFleet Issue (Bug, Feature, etc).
 - [ ] Run `make reviewable` to ensure this PR is ready for review.
 
 ### How has this code been tested
