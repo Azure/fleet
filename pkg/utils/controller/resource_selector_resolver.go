@@ -248,22 +248,18 @@ func (rs *ResourceSelectorResolver) gatherSelectedResource(placementKey types.Na
 			Kind:    selector.Kind,
 		}
 		if gvk == utils.NamespaceGVK && placementKey.Namespace == "" && selector.SelectionScope == placementv1beta1.NamespaceWithResourceSelectors {
-			namespaces, err := rs.fetchSelectedNamespaces(selector, placementKey.Name)
+			namespace, found, err := rs.fetchSelectedNamespace(selector, placementKey.Name)
 			if err != nil {
 				return nil, err
 			}
 			// NamespaceWithResourceSelectors mode requires exactly one namespace
-			if len(namespaces) == 0 {
+			if !found {
 				err := fmt.Errorf("invalid clusterResourcePlacement %s: NamespaceWithResourceSelectors mode requires exactly one namespace, but no namespaces were selected", placementKey.Name)
 				klog.ErrorS(err, "No namespaces selected with NamespaceWithResourceSelectors mode", "placement", placementKey.Name)
 				return nil, NewUserError(err)
 			}
-			if len(namespaces) > 1 {
-				err := fmt.Errorf("invalid clusterResourcePlacement %s: NamespaceWithResourceSelectors mode requires exactly one namespace, but %d namespaces were selected", placementKey.Name, len(namespaces))
-				klog.ErrorS(err, "Multiple namespaces selected with NamespaceWithResourceSelectors mode", "placement", placementKey.Name, "namespaceCount", len(namespaces))
-				return nil, NewUserError(err)
-			}
-			selectedNamespace = namespaces[0]
+			// Note: CEL validation ensures that at most one namespace can be selected.
+			selectedNamespace = namespace
 			break
 		}
 	}
@@ -591,32 +587,37 @@ func (rs *ResourceSelectorResolver) fetchResources(selector placementv1beta1.Res
 	return selectedObjs, nil
 }
 
-// fetchSelectedNamespaces retrieves the namespace names based on the namespace selector.
-func (rs *ResourceSelectorResolver) fetchSelectedNamespaces(selector placementv1beta1.ResourceSelectorTerm, placementName string) ([]string, error) {
-	klog.V(2).InfoS("start to fetch selected namespaces", "selector", selector, "placement", placementName)
+// fetchSelectedNamespace retrieves the namespace name based on the namespace selector.
+// This function assumes the selector is a name-based selector (not label-based) as guaranteed by CEL validation.
+// Returns the namespace name if found and not skipped, or empty string if not found/skipped.
+func (rs *ResourceSelectorResolver) fetchSelectedNamespace(selector placementv1beta1.ResourceSelectorTerm, placementName string) (string, bool, error) {
+	klog.V(2).InfoS("start to fetch selected namespace", "selector", selector, "placement", placementName)
 
 	// Use fetchResources to get namespace objects (handles label selector, name selector, deletion timestamps)
 	placementKey := types.NamespacedName{Name: placementName}
 	objs, err := rs.fetchResources(selector, placementKey)
 	if err != nil {
-		return nil, err
+		return "", false, err
 	}
 
-	// Filter by skipped namespaces and extract names
-	namespaceNames := make([]string, 0, len(objs))
-	for _, obj := range objs {
-		ns, err := meta.Accessor(obj)
-		if err != nil {
-			return nil, NewUnexpectedBehaviorError(fmt.Errorf("failed to access the namespace object: %w", err))
-		}
-		if !utils.ShouldPropagateNamespace(ns.GetName(), rs.SkippedNamespaces) {
-			klog.V(2).InfoS("skip namespace that is not allowed to propagate", "namespace", ns.GetName(), "placement", placementName)
-			continue
-		}
-		namespaceNames = append(namespaceNames, ns.GetName())
+	// Since CEL validation ensures name-based selection only, we expect at most 1 namespace object
+	if len(objs) == 0 {
+		return "", false, nil
 	}
 
-	return namespaceNames, nil
+	// We should have exactly 1 namespace object due to CEL validation constraints
+	ns, err := meta.Accessor(objs[0])
+	if err != nil {
+		return "", false, NewUnexpectedBehaviorError(fmt.Errorf("failed to access the namespace object: %w", err))
+	}
+
+	// Check if this namespace should be propagated
+	if !utils.ShouldPropagateNamespace(ns.GetName(), rs.SkippedNamespaces) {
+		klog.V(2).InfoS("skip namespace that is not allowed to propagate", "namespace", ns.GetName(), "placement", placementName)
+		return "", false, nil
+	}
+
+	return ns.GetName(), true, nil
 }
 
 func (rs *ResourceSelectorResolver) ShouldPropagateObj(namespace, placementName string, obj runtime.Object) (bool, error) {
