@@ -130,6 +130,116 @@ spec:
             subPath: azure-proxy-cert.crt
             readOnly: true
           {{- end }}
+        - name: mdsd
+          image: "{{ .Values.geneva.mdsd.repository }}:{{ .Values.geneva.mdsd.tag }}"
+          imagePullPolicy: IfNotPresent
+          env:
+            - name: ENABLE_GIG_BRIDGE_MODE
+              value: {{ .Values.geneva.config.enableGigBridgeMode | quote }}
+            - name: MONITORING_GCS_ENVIRONMENT
+              value: {{ .Values.geneva.gcs.environment | quote }}
+            - name: MONITORING_GCS_ACCOUNT
+              value: {{ .Values.geneva.gcs.account | quote }}
+            - name: MONITORING_GCS_REGION
+              value: {{ .Values.geneva.gcs.region | quote }}
+            - name: MONITORING_GCS_NAMESPACE
+              value: {{ .Values.geneva.gcs.namespace | quote }}
+            - name: MONITORING_CONFIG_VERSION
+              value: {{ .Values.geneva.gcs.configVersion | quote }}
+            - name: MONITORING_GCS_AUTH_ID_TYPE
+              value: {{ .Values.geneva.gcs.authIdType | quote }}
+            - name: MONITORING_TENANT
+              value: {{ .Values.geneva.config.tenant | quote }}
+            - name: MONITORING_ROLE
+              value: {{ .Values.geneva.config.role | quote }}
+            - name: MONITORING_ROLE_INSTANCE
+              valueFrom:
+                fieldRef:
+                  fieldPath: spec.nodeName
+            - name: DOCKER_LOGGING
+              value: {{ .Values.geneva.debugging.dockerLogging | quote }}
+            - name: SKIP_IMDS_LOOKUP_FOR_LEGACY_AUTH
+              value: "true"
+          resources:
+            limits:
+              cpu: 200m
+              memory: 512Mi
+            requests:
+              cpu: 10m
+              memory: 64Mi
+          securityContext:
+            capabilities:
+              drop:
+                - ALL
+          volumeMounts:
+            - name: mdsd-run-vol
+              mountPath: /var/run/mdsd
+            - name: mdsd-logs-vol
+              mountPath: /geneva/geneva_logs
+        - name: fluentd
+          image: "{{ .Values.geneva.fluentd.repository }}:{{ .Values.geneva.fluentd.tag }}"
+          imagePullPolicy: IfNotPresent
+          env:
+            - name: FLUENTD_CONF
+              value: /etc/fluentd/fluentd.conf
+          resources:
+            limits:
+              cpu: 200m
+              memory: 512Mi
+            requests:
+              cpu: 10m
+              memory: 64Mi
+          securityContext:
+            capabilities:
+              drop:
+                - ALL
+          volumeMounts:
+            - name: fluentd-conf-vol
+              mountPath: /etc/fluentd
+            - name: fluentd-buffer-vol
+              mountPath: /var/log/td-agent
+            - name: mdsd-run-vol
+              mountPath: /var/run/mdsd
+            - name: docker-log-vol
+              mountPath: /var/lib/docker/containers
+              readOnly: true
+            - name: var-log-vol
+              mountPath: /var/log
+            - name: run-journal-vol
+              mountPath: /run/log/journal
+              readOnly: true
+        - name: mdm
+          image: "{{ .Values.geneva.mdm.repository }}:{{ .Values.geneva.mdm.tag }}"
+          imagePullPolicy: IfNotPresent
+          env:
+            - name: ROLEINSTANCE
+              valueFrom:
+                fieldRef:
+                  fieldPath: spec.nodeName
+            - name: CONFIG_OVERRIDES_FILE
+              value: /tmp/geneva_mdm/mdmconfig.json
+            - name: MDM_INPUT
+              value: influxdb_udp
+            - name: MDM_LOG_LEVEL
+              value: "Info"
+            - name: MDM_ACCOUNT
+              value: {{ .Values.geneva.mdm.account | quote }}
+            - name: ME_AZURE_ENV
+              value: {{ .Values.geneva.config.azureEnvironment | quote }}
+          resources:
+            limits:
+              cpu: 200m
+              memory: 512Mi
+            requests:
+              cpu: 10m
+              memory: 64Mi
+          securityContext:
+            capabilities:
+              drop:
+                - ALL
+          volumeMounts:
+            - name: mdm-config
+              mountPath: /tmp/geneva_mdm
       volumes:
       - name: provider-token
         emptyDir: { }
@@ -138,6 +248,27 @@ spec:
         secret:
           secretName: azure-proxy-cert
       {{- end }}
+      - name: mdsd-run-vol
+        emptyDir: {}
+      - name: mdsd-logs-vol
+        emptyDir: {}
+      - name: fluentd-conf-vol
+        configMap:
+          name: fluentd-config
+      - name: fluentd-buffer-vol
+        emptyDir: {}
+      - name: docker-log-vol
+        hostPath:
+          path: /var/lib/docker/containers
+      - name: var-log-vol
+        hostPath:
+          path: /var/log
+      - name: run-journal-vol
+        hostPath:
+          path: /run/log/journal
+      - name: mdm-config
+        configMap:
+          name: mdm-config
 ---
 apiVersion: apps/v1
 kind: Deployment
@@ -255,14 +386,145 @@ spec:
               subPath: azure-proxy-cert.crt
               readOnly: true
             {{- end }}
+        - name: mdsd
+          image: "{{ .Values.geneva.mdsd.repository }}:{{ .Values.geneva.mdsd.tag }}"
+          imagePullPolicy: IfNotPresent
+          env:
+            - name: ENABLE_GIG_BRIDGE_MODE
+              value: {{ .Values.geneva.config.enableGigBridgeMode | quote }}
+            - name: MONITORING_GCS_ENVIRONMENT
+              value: {{ .Values.geneva.gcs.environment | quote }}
+            - name: MONITORING_GCS_ACCOUNT
+              value: {{ .Values.geneva.gcs.account | quote }}
+            - name: MONITORING_GCS_REGION
+              value: {{ .Values.geneva.gcs.region | quote }}
+            - name: MONITORING_GCS_NAMESPACE
+              value: {{ .Values.geneva.gcs.namespace | quote }}
+            - name: MONITORING_CONFIG_VERSION
+              value: {{ .Values.geneva.gcs.configVersion | quote }}
+            - name: MONITORING_GCS_AUTH_ID_TYPE
+              value: {{ .Values.geneva.gcs.authIdType | quote }}
+            - name: MONITORING_TENANT
+              value: {{ .Values.geneva.config.tenant | quote }}
+            - name: MONITORING_ROLE
+              value: {{ .Values.geneva.config.role | quote }}
+            - name: MONITORING_ROLE_INSTANCE
+              valueFrom:
+                fieldRef:
+                  fieldPath: spec.nodeName
+            - name: DOCKER_LOGGING
+              value: {{ .Values.geneva.debugging.dockerLogging | quote }}
+            - name: SKIP_IMDS_LOOKUP_FOR_LEGACY_AUTH
+              value: "true"
+          resources:
+            limits:
+              cpu: 200m
+              memory: 512Mi
+            requests:
+              cpu: 10m
+              memory: 64Mi
+          securityContext:
+            capabilities:
+              drop:
+                - ALL
+          volumeMounts:
+            - name: mdsd-run-vol
+              mountPath: /var/run/mdsd
+            - name: mdsd-logs-vol
+              mountPath: /geneva/geneva_logs
+        - name: fluentd
+          image: "{{ .Values.geneva.fluentd.repository }}:{{ .Values.geneva.fluentd.tag }}"
+          imagePullPolicy: IfNotPresent
+          env:
+            - name: FLUENTD_CONF
+              value: /etc/fluentd/fluentd.conf
+          resources:
+            limits:
+              cpu: 200m
+              memory: 512Mi
+            requests:
+              cpu: 10m
+              memory: 64Mi
+          securityContext:
+            capabilities:
+              drop:
+                - ALL
+          volumeMounts:
+            - name: fluentd-conf-vol
+              mountPath: /etc/fluentd
+            - name: fluentd-buffer-vol
+              mountPath: /var/log/td-agent
+            - name: mdsd-run-vol
+              mountPath: /var/run/mdsd
+            - name: docker-log-vol
+              mountPath: /var/lib/docker/containers
+              readOnly: true
+            - name: var-log-vol
+              mountPath: /var/log
+            - name: run-journal-vol
+              mountPath: /run/log/journal
+              readOnly: true
+        - name: mdm
+          image: "{{ .Values.geneva.mdm.repository }}:{{ .Values.geneva.mdm.tag }}"
+          imagePullPolicy: IfNotPresent
+          env:
+            - name: ROLEINSTANCE
+              valueFrom:
+                fieldRef:
+                  fieldPath: spec.nodeName
+            - name: CONFIG_OVERRIDES_FILE
+              value: /tmp/geneva_mdm/mdmconfig.json
+            - name: MDM_INPUT
+              value: influxdb_udp
+            - name: MDM_LOG_LEVEL
+              value: "Info"
+            - name: MDM_ACCOUNT
+              value: {{ .Values.geneva.mdm.account | quote }}
+            - name: ME_AZURE_ENV
+              value: {{ .Values.geneva.config.azureEnvironment | quote }}
+          resources:
+            limits:
+              cpu: 200m
+              memory: 512Mi
+            requests:
+              cpu: 10m
+              memory: 64Mi
+          securityContext:
+            capabilities:
+              drop:
+                - ALL
+          volumeMounts:
+            - name: mdm-config
+              mountPath: /tmp/geneva_mdm
       volumes:
         - name: provider-token
-          emptyDir: { }
+          emptyDir: {}
         {{- if and .Values.Azure.proxySettings.isProxyEnabled .Values.Azure.proxySettings.proxyCert }}
         - name: azure-proxy-cert-store
           secret:
             secretName: azure-proxy-cert
         {{- end }}
+        - name: mdsd-run-vol
+          emptyDir: {}
+        - name: mdsd-logs-vol
+          emptyDir: {}
+        - name: fluentd-conf-vol
+          configMap:
+            name: fluentd-config
+        - name: fluentd-buffer-vol
+          emptyDir: {}
+        - name: docker-log-vol
+          hostPath:
+            path: /var/lib/docker/containers
+        - name: var-log-vol
+          hostPath:
+            path: /var/log
+        - name: run-journal-vol
+          hostPath:
+            path: /run/log/journal
+        - name: mdm-config
+          configMap:
+            name: mdm-config
 ---
 apiVersion: apps/v1
 kind: Deployment
@@ -381,11 +643,142 @@ spec:
               subPath: azure-proxy-cert.crt
               readOnly: true
             {{- end }}
+        - name: mdsd
+          image: "{{ .Values.geneva.mdsd.repository }}:{{ .Values.geneva.mdsd.tag }}"
+          imagePullPolicy: IfNotPresent
+          env:
+            - name: ENABLE_GIG_BRIDGE_MODE
+              value: {{ .Values.geneva.config.enableGigBridgeMode | quote }}
+            - name: MONITORING_GCS_ENVIRONMENT
+              value: {{ .Values.geneva.gcs.environment | quote }}
+            - name: MONITORING_GCS_ACCOUNT
+              value: {{ .Values.geneva.gcs.account | quote }}
+            - name: MONITORING_GCS_REGION
+              value: {{ .Values.geneva.gcs.region | quote }}
+            - name: MONITORING_GCS_NAMESPACE
+              value: {{ .Values.geneva.gcs.namespace | quote }}
+            - name: MONITORING_CONFIG_VERSION
+              value: {{ .Values.geneva.gcs.configVersion | quote }}
+            - name: MONITORING_GCS_AUTH_ID_TYPE
+              value: {{ .Values.geneva.gcs.authIdType | quote }}
+            - name: MONITORING_TENANT
+              value: {{ .Values.geneva.config.tenant | quote }}
+            - name: MONITORING_ROLE
+              value: {{ .Values.geneva.config.role | quote }}
+            - name: MONITORING_ROLE_INSTANCE
+              valueFrom:
+                fieldRef:
+                  fieldPath: spec.nodeName
+            - name: DOCKER_LOGGING
+              value: {{ .Values.geneva.debugging.dockerLogging | quote }}
+            - name: SKIP_IMDS_LOOKUP_FOR_LEGACY_AUTH
+              value: "true"
+          resources:
+            limits:
+              cpu: 200m
+              memory: 512Mi
+            requests:
+              cpu: 10m
+              memory: 64Mi
+          securityContext:
+            capabilities:
+              drop:
+                - ALL
+          volumeMounts:
+            - name: mdsd-run-vol
+              mountPath: /var/run/mdsd
+            - name: mdsd-logs-vol
+              mountPath: /geneva/geneva_logs
+        - name: fluentd
+          image: "{{ .Values.geneva.fluentd.repository }}:{{ .Values.geneva.fluentd.tag }}"
+          imagePullPolicy: IfNotPresent
+          env:
+            - name: FLUENTD_CONF
+              value: /etc/fluentd/fluentd.conf
+          resources:
+            limits:
+              cpu: 200m
+              memory: 512Mi
+            requests:
+              cpu: 10m
+              memory: 64Mi
+          securityContext:
+            capabilities:
+              drop:
+                - ALL
+          volumeMounts:
+            - name: fluentd-conf-vol
+              mountPath: /etc/fluentd
+            - name: fluentd-buffer-vol
+              mountPath: /var/log/td-agent
+            - name: mdsd-run-vol
+              mountPath: /var/run/mdsd
+            - name: docker-log-vol
+              mountPath: /var/lib/docker/containers
+              readOnly: true
+            - name: var-log-vol
+              mountPath: /var/log
+            - name: run-journal-vol
+              mountPath: /run/log/journal
+              readOnly: true
+        - name: mdm
+          image: "{{ .Values.geneva.mdm.repository }}:{{ .Values.geneva.mdm.tag }}"
+          imagePullPolicy: IfNotPresent
+          env:
+            - name: ROLEINSTANCE
+              valueFrom:
+                fieldRef:
+                  fieldPath: spec.nodeName
+            - name: CONFIG_OVERRIDES_FILE
+              value: /tmp/geneva_mdm/mdmconfig.json
+            - name: MDM_INPUT
+              value: influxdb_udp
+            - name: MDM_LOG_LEVEL
+              value: "Info"
+            - name: MDM_ACCOUNT
+              value: {{ .Values.geneva.mdm.account | quote }}
+            - name: ME_AZURE_ENV
+              value: {{ .Values.geneva.config.azureEnvironment | quote }}
+          resources:
+            limits:
+              cpu: 200m
+              memory: 512Mi
+            requests:
+              cpu: 10m
+              memory: 64Mi
+          securityContext:
+            capabilities:
+              drop:
+                - ALL
+          volumeMounts:
+            - name: mdm-config
+              mountPath: /tmp/geneva_mdm
       volumes:
         - name: provider-token
-          emptyDir: { }
+          emptyDir: {}
         {{- if and .Values.Azure.proxySettings.isProxyEnabled .Values.Azure.proxySettings.proxyCert }}
         - name: azure-proxy-cert-store
           secret:
             secretName: azure-proxy-cert
         {{- end }}
+        - name: mdsd-run-vol
+          emptyDir: {}
+        - name: mdsd-logs-vol
+          emptyDir: {}
+        - name: fluentd-conf-vol
+          configMap:
+            name: fluentd-config
+        - name: fluentd-buffer-vol
+          emptyDir: {}
+        - name: docker-log-vol
+          hostPath:
+            path: /var/lib/docker/containers
+        - name: var-log-vol
+          hostPath:
+            path: /var/log
+        - name: run-journal-vol
+          hostPath:
+            path: /run/log/journal
+        - name: mdm-config
+          configMap:
+            name: mdm-config
