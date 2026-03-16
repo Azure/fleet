@@ -123,8 +123,7 @@ do
         --set refreshtoken.pullPolicy=Never \
         --set config.memberClusterName="kind-${MEMBER_CLUSTERS[$i]}" \
         --set logVerbosity=5 \
-        --set namespace=fleet-system \
-        --set enableV1Beta1APIs=true
+        --set namespace=fleet-system
 done
 
 echo "Setup for the before upgrade environment has been completed."

@@ -59,8 +59,6 @@ azure:
 tlsClientInsecure: true #TODO should be false in the production
 useCAAuth: false
 
-enableV1Beta1APIs: true
-
 enablePprof: true
 pprofPort: 6065
 hubPprofPort: 6066

@@ -103,7 +103,6 @@ _See [helm install](https://helm.sh/docs/helm/helm_install/) for command documen
 | `webhookClientConnectionType`             | Connection type for webhook client (service or url)                                        | `service`                                        |
 | `useCertManager`                          | Use cert-manager for webhook certificate management (requires `enableWorkload=true`)       | `false`                                          |
 | `webhookCertSecretName`                   | Name of the Secret where cert-manager stores the certificate (required when enabled)       | `unset`                                          |
-| `enableV1Beta1APIs`                       | Watch for v1beta1 APIs                                                                     | `true`                                           |
 | `enableClusterInventoryAPI`               | Enable cluster inventory APIs                                                               | `true`                                           |
 | `enableStagedUpdateRunAPIs`               | Enable staged update run APIs                                                              | `true`                                           |
 | `enableEvictionAPIs`                      | Enable eviction APIs                                                                        | `true`                                           |
