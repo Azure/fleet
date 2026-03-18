@@ -71,22 +71,10 @@ func (o *WebhookOptions) AddFlags(flags *flag.FlagSet) {
 		"Enable the KubeFleet webhooks or not.",
 	)
 
-	flags.Func(
+	flags.Var(
+		newWebhookClientConnTypeValueWithValidation(string(URL), &o.ClientConnectionType),
 		"webhook-client-connection-type",
 		"The connection type used by the webhook client. Valid values are `url` and `service`. Defaults to `url`. This option only applies if webhooks are enabled.",
-		func(s string) error {
-			if len(s) == 0 {
-				o.ClientConnectionType = "url"
-				return nil
-			}
-
-			parsedStr, err := parseWebhookClientConnectionString(s)
-			if err != nil {
-				return fmt.Errorf("invalid webhook client connection type: %w", err)
-			}
-			o.ClientConnectionType = string(parsedStr)
-			return nil
-		},
 	)
 
 	flags.StringVar(
@@ -130,4 +118,29 @@ func (o *WebhookOptions) AddFlags(flags *flag.FlagSet) {
 		false,
 		"Use the cert-manager project for managing KubeFleet webhook server certificates or not. If set to false, the system will use self-signed certificates. If set to true, the EnableWorkload option must be set to true as well. This option only applies if webhooks are enabled.",
 	)
+}
+
+type WebhookClientConnTypeValueWithValidation string
+
+func (v *WebhookClientConnTypeValueWithValidation) String() string {
+	return string(*v)
+}
+
+func (v *WebhookClientConnTypeValueWithValidation) Set(s string) error {
+	if len(s) == 0 {
+		*v = "url"
+		return nil
+	}
+
+	parsedStr, err := parseWebhookClientConnectionString(s)
+	if err != nil {
+		return fmt.Errorf("invalid webhook client connection type: %w", err)
+	}
+	*v = WebhookClientConnTypeValueWithValidation(parsedStr)
+	return nil
+}
+
+func newWebhookClientConnTypeValueWithValidation(defaultVal string, p *string) *WebhookClientConnTypeValueWithValidation {
+	*p = defaultVal
+	return (*WebhookClientConnTypeValueWithValidation)(p)
 }

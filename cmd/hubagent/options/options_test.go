@@ -706,6 +706,123 @@ func TestPlacementManagementOptions(t *testing.T) {
 	}
 }
 
+// TestWebhookOptions tests the parsing and validation logic of the webhook options defined in WebhookOptions.
+func TestWebhookOptions(t *testing.T) {
+	testCases := []struct {
+		name             string
+		flagSetName      string
+		args             []string
+		wantWebhookOpts  WebhookOptions
+		wantErred        bool
+		wantErrMsgSubStr string
+	}{
+		{
+			name:        "all default",
+			flagSetName: "allDefault",
+			args:        []string{},
+			wantWebhookOpts: WebhookOptions{
+				EnableWebhooks:                         true,
+				ClientConnectionType:                   "url",
+				ServiceName:                            "fleetwebhook",
+				EnableGuardRail:                        false,
+				GuardRailWhitelistedUsers:              "",
+				GuardRailDenyModifyMemberClusterLabels: false,
+				EnableWorkload:                         false,
+				UseCertManager:                         false,
+			},
+		},
+		{
+			name:        "all specified",
+			flagSetName: "allSpecified",
+			args: []string{
+				"--enable-webhook=false",
+				"--webhook-client-connection-type=service",
+				"--webhook-service-name=customwebhook",
+				"--enable-guard-rail=true",
+				"--whitelisted-users=user1,user2",
+				"--deny-modify-member-cluster-labels=true",
+				"--enable-workload=true",
+				"--use-cert-manager=true",
+			},
+			wantWebhookOpts: WebhookOptions{
+				EnableWebhooks:                         false,
+				ClientConnectionType:                   "service",
+				ServiceName:                            "customwebhook",
+				EnableGuardRail:                        true,
+				GuardRailWhitelistedUsers:              "user1,user2",
+				GuardRailDenyModifyMemberClusterLabels: true,
+				EnableWorkload:                         true,
+				UseCertManager:                         true,
+			},
+		},
+		{
+			name:        "webhook client connection type URL (case-insensitive)",
+			flagSetName: "webhookClientConnTypeURL",
+			args:        []string{"--webhook-client-connection-type=URL"},
+			wantWebhookOpts: WebhookOptions{
+				EnableWebhooks:                         true,
+				ClientConnectionType:                   "url",
+				ServiceName:                            "fleetwebhook",
+				EnableGuardRail:                        false,
+				GuardRailWhitelistedUsers:              "",
+				GuardRailDenyModifyMemberClusterLabels: false,
+				EnableWorkload:                         false,
+				UseCertManager:                         false,
+			},
+		},
+		{
+			name:        "webhook client connection type service (case-insensitive)",
+			flagSetName: "webhookClientConnTypeService",
+			args:        []string{"--webhook-client-connection-type=Service"},
+			wantWebhookOpts: WebhookOptions{
+				EnableWebhooks:                         true,
+				ClientConnectionType:                   "service",
+				ServiceName:                            "fleetwebhook",
+				EnableGuardRail:                        false,
+				GuardRailWhitelistedUsers:              "",
+				GuardRailDenyModifyMemberClusterLabels: false,
+				EnableWorkload:                         false,
+				UseCertManager:                         false,
+			},
+		},
+		{
+			name:             "invalid webhook client connection type",
+			flagSetName:      "webhookClientConnTypeInvalid",
+			args:             []string{"--webhook-client-connection-type=ftp"},
+			wantErred:        true,
+			wantErrMsgSubStr: "invalid webhook client connection type",
+		},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			flags := flag.NewFlagSet(tc.flagSetName, flag.ContinueOnError)
+			webhookOpts := WebhookOptions{}
+			webhookOpts.AddFlags(flags)
+
+			err := flags.Parse(tc.args)
+			if tc.wantErred {
+				if err == nil {
+					t.Fatalf("flag Parse() = nil, want erred")
+				}
+
+				if !strings.Contains(err.Error(), tc.wantErrMsgSubStr) {
+					t.Fatalf("flag Parse() error = %v, want error msg with sub-string %s", err, tc.wantErrMsgSubStr)
+				}
+				return
+			}
+
+			if err != nil {
+				t.Fatalf("flag Parse() = %v, want nil", err)
+			}
+
+			if diff := cmp.Diff(webhookOpts, tc.wantWebhookOpts); diff != "" {
+				t.Errorf("webhook options diff (-got, +want):\n%s", diff)
+			}
+		})
+	}
+}
+
 // TestRateLimitOptions tests the parsing and validation logic of the rate limit options defined in RateLimitOptions.
 func TestRateLimitOptions(t *testing.T) {
 	testCases := []struct {
