@@ -53,7 +53,6 @@ tolerations: []
 
 affinity: {}
 
-enableV1Beta1APIs: true
 enableClusterInventoryAPI: true
 enableStagedUpdateRunAPIs: true
 enableEvictionAPIs: true

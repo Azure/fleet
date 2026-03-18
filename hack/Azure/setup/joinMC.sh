@@ -88,8 +88,7 @@ helm install member-agent charts/member-agent/ \
         --set refreshtoken.pullPolicy=Always \
         --set config.memberClusterName=$MEMBER_CLUSTER \
         --set logVerbosity=5 \
-        --set namespace=fleet-system \
-        --set enableV1Beta1APIs=true
+        --set namespace=fleet-system
 
 kubectl get pods -A
 kubectl config use-context $HUB_CLUSTER_CONTEXT

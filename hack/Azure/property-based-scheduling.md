@@ -123,7 +123,6 @@ helm install hub-agent charts/hub-agent/ \
     --set namespace=fleet-system \
     --set enableWebhook=true \
     --set webhookClientConnectionType=service \
-    --set enableV1Beta1APIs=true
 ```
 
 It will take a few moments to complete the installation. After the command returns, verify that the Fleet hub agent is up and running with this command:
@@ -185,7 +184,6 @@ do
         --set config.memberClusterName="${MEMBER_CLUSTERS[$i]}" \
         --set logVerbosity=5 \
         --set namespace=fleet-system \
-        --set enableV1Beta1APIs=true \
         --set propertyProvider=$PROPERTY_PROVIDER
 done
 ```
