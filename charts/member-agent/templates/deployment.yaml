@@ -17,7 +17,7 @@ spec:
       restartPolicy: Always
       serviceAccountName: {{ include "member-agent.fullname" . }}-sa
       initContainers:
-        {{- if and .Values.crdInstaller.enabled .Values.enableV1Beta1APIs }}
+        {{- if .Values.crdInstaller.enabled }}
         - name: crd-installer
           image: "{{ .Values.crdInstaller.image.repository }}:{{ .Values.crdInstaller.image.tag }}"
           imagePullPolicy: {{ .Values.crdInstaller.image.pullPolicy }}
@@ -41,7 +41,6 @@ spec:
             {{- end }}
             - --v={{ .Values.logVerbosity }}
             - -add_dir_header
-            - --enable-v1beta1-apis={{ .Values.enableV1Beta1APIs }}
             - --enable-pprof={{ .Values.enablePprof }}
             - --pprof-port={{ .Values.pprofPort }}
             - --hub-pprof-port={{ .Values.hubPprofPort }}

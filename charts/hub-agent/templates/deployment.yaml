@@ -20,7 +20,7 @@ spec:
     spec:
       serviceAccountName: {{ include "hub-agent.fullname" . }}-sa
       initContainers:
-        {{- if and .Values.crdInstaller.enabled .Values.enableV1Beta1APIs }}
+        {{- if .Values.crdInstaller.enabled }}
         - name: crd-installer
           image: "{{ .Values.crdInstaller.image.repository }}:{{ .Values.crdInstaller.image.tag }}"
           imagePullPolicy: {{ .Values.crdInstaller.image.pullPolicy }}
@@ -43,7 +43,6 @@ spec:
             - --webhook-client-connection-type={{.Values.webhookClientConnectionType}}
             - --v={{ .Values.logVerbosity }}
             - -add_dir_header
-            - --enable-v1beta1-apis={{ .Values.enableV1Beta1APIs }}
             - --enable-cluster-inventory-apis={{ .Values.enableClusterInventoryAPI }}
             - --enable-staged-update-run-apis={{ .Values.enableStagedUpdateRunAPIs }}
             - --enable-eviction-apis={{ .Values.enableEvictionAPIs}}
