@@ -46,6 +46,11 @@ You can reach the KubeFleet community and developers via the following channels:
 
 ## Community Meetings
 
+March 2026: we're currently revamping our community call schedule and will have more to share soon.
+
+Future plans will land on our [community repository](https://github.com/kubefleet-dev/community).
+
+<!--
 We host bi-weekly community meetings that alternate between US/EU and APAC friendly time. In these sessions the community will showcase demos and discuss the current and future state of the project.
 
 Please refer to the [calendar](https://zoom-lfx.platform.linuxfoundation.org/meetings/kubefleet?view=month) for the latest schedule:
@@ -53,6 +58,8 @@ Please refer to the [calendar](https://zoom-lfx.platform.linuxfoundation.org/mee
 * Thursday at 9:00am CST [APAC](https://zoom-lfx.platform.linuxfoundation.org/meeting/98901589453?password=9ab588fd-1214-40c3-84c2-757c124e984f) (biweekly).  [Convert to your timezone](https://dateful.com/convert/beijing-china?t=9am).
 
 For more meeting information, minutes and recordings, please see the [KubeFleet community meeting doc](https://docs.google.com/document/d/1iMcHn11fPlb9ZGoMHiGEBvdIc44W1CjZvsPH3eBg6pA/edit?usp=sharing).
+
+-->
 
 ## Code of Conduct
 Participation in KubeFleet is governed by the [CNCF Code of Conduct](https://github.com/cncf/foundation/blob/master/code-of-conduct.md). See the [Code of Conduct](CODE_OF_CONDUCT.md) for more information.

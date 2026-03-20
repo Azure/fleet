@@ -1,7 +1,6 @@
 # KubeFleet Roadmap
 
-## Project Website
-- Setup the project website
+For our up to date roadmap please see: [KubeFleet Roadmap](https://github.com/orgs/kubefleet-dev/projects/4)
 
 ## Support more cluster properties so that user can pick the right cluster for their workload
 - Support node level SKU as properties, e.g. CPU, GPU, Memory, etc 
