@@ -56,9 +56,24 @@ jobs:
         run: |
           make push
 
+      - name: Tag and push images without v prefix
+        env:
+          VERSION: ${{ needs.export-registry.outputs.version }}
+        run: |
+          for IMAGE in ${{ env.HUB_AGENT_IMAGE_NAME }} ${{ env.MEMBER_AGENT_IMAGE_NAME }} ${{ env.REFRESH_TOKEN_IMAGE_NAME }}; do
+            docker buildx imagetools create \
+              --tag "${{ env.REGISTRY }}/${IMAGE}:${VERSION}" \
+              "${{ env.REGISTRY }}/${IMAGE}:${{ env.TAG }}"
+          done
+
       - name: Verify images
+        env:
+          VERSION: ${{ needs.export-registry.outputs.version }}
         run: |
           echo "✅ Published images:"
           echo "  - ${{ env.REGISTRY }}/${{ env.HUB_AGENT_IMAGE_NAME }}:${{ env.TAG }}"
+          echo "  - ${{ env.REGISTRY }}/${{ env.HUB_AGENT_IMAGE_NAME }}:${VERSION}"
           echo "  - ${{ env.REGISTRY }}/${{ env.MEMBER_AGENT_IMAGE_NAME }}:${{ env.TAG }}"
+          echo "  - ${{ env.REGISTRY }}/${{ env.MEMBER_AGENT_IMAGE_NAME }}:${VERSION}"
           echo "  - ${{ env.REGISTRY }}/${{ env.REFRESH_TOKEN_IMAGE_NAME }}:${{ env.TAG }}"
+          echo "  - ${{ env.REGISTRY }}/${{ env.REFRESH_TOKEN_IMAGE_NAME }}:${VERSION}"
