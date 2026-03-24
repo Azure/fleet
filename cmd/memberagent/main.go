@@ -50,6 +50,7 @@ import (
 
 	clusterv1beta1 "github.com/kubefleet-dev/kubefleet/apis/cluster/v1beta1"
 	placementv1beta1 "github.com/kubefleet-dev/kubefleet/apis/placement/v1beta1"
+	"github.com/kubefleet-dev/kubefleet/cmd/memberagent/options"
 	imcv1beta1 "github.com/kubefleet-dev/kubefleet/pkg/controllers/internalmembercluster/v1beta1"
 	"github.com/kubefleet-dev/kubefleet/pkg/controllers/workapplier"
 	"github.com/kubefleet-dev/kubefleet/pkg/propertyprovider"
@@ -66,52 +67,7 @@ const (
 )
 
 var (
-	scheme               = runtime.NewScheme()
-	useCertificateAuth   = flag.Bool("use-ca-auth", false, "Use key and certificate to authenticate the member agent.")
-	tlsClientInsecure    = flag.Bool("tls-insecure", false, "Enable TLSClientConfig.Insecure property. Enabling this will make the connection inSecure (should be 'true' for testing purpose only.)")
-	hubProbeAddr         = flag.String("hub-health-probe-bind-address", ":8081", "The address the probe endpoint binds to.")
-	hubMetricsAddr       = flag.String("hub-metrics-bind-address", ":8080", "The address the metric endpoint binds to.")
-	probeAddr            = flag.String("health-probe-bind-address", ":8091", "The address the probe endpoint binds to.")
-	metricsAddr          = flag.String("metrics-bind-address", ":8090", "The address the metric endpoint binds to.")
-	enableLeaderElection = flag.Bool("leader-elect", false,
-		"Enable leader election for controller manager. Enabling this will ensure there is only one active controller manager.")
-	leaderElectionNamespace = flag.String("leader-election-namespace", "kube-system", "The namespace in which the leader election resource will be created.")
-	// TODO(weiweng): only keep enableV1Alpha1APIs for backward compatibility with helm charts. Remove soon.
-	enableV1Alpha1APIs = flag.Bool("enable-v1alpha1-apis", false, "If set, the agents will watch for the v1alpha1 APIs. This is deprecated and will be removed soon.")
-	enableV1Beta1APIs  = flag.Bool("enable-v1beta1-apis", true, "If set, the agents will watch for the v1beta1 APIs.")
-	propertyProvider   = flag.String("property-provider", "none", "The property provider to use for the agent.")
-	region             = flag.String("region", "", "The region where the member cluster resides.")
-	cloudConfigFile    = flag.String("cloud-config", "/etc/kubernetes/provider/config.json", "The path to the cloud cloudconfig file.")
-	deletionWaitTime   = flag.Int("deletion-wait-time", 5, "The time the work-applier will wait for work object to be deleted before updating the applied work owner reference")
-	enablePprof        = flag.Bool("enable-pprof", false, "enable pprof profiling")
-	pprofPort          = flag.Int("pprof-port", 6065, "port for pprof profiling")
-	hubPprofPort       = flag.Int("hub-pprof-port", 6066, "port for hub pprof profiling")
-	hubQPS             = flag.Float64("hub-api-qps", 50, "QPS to use while talking with fleet-apiserver. Doesn't cover events and node heartbeat apis which rate limiting is controlled by a different set of flags.")
-	hubBurst           = flag.Int("hub-api-burst", 500, "Burst to use while talking with fleet-apiserver. Doesn't cover events and node heartbeat apis which rate limiting is controlled by a different set of flags.")
-	memberQPS          = flag.Float64("member-api-qps", 250, "QPS to use while talking with fleet-apiserver. Doesn't cover events and node heartbeat apis which rate limiting is controlled by a different set of flags.")
-	memberBurst        = flag.Int("member-api-burst", 1000, "Burst to use while talking with fleet-apiserver. Doesn't cover events and node heartbeat apis which rate limiting is controlled by a different set of flags.")
-
-	// Work applier requeue rate limiter settings.
-	workApplierRequeueRateLimiterAttemptsWithFixedDelay                              = flag.Int("work-applier-requeue-rate-limiter-attempts-with-fixed-delay", 1, "If set, the work applier will requeue work objects with a fixed delay for the specified number of attempts before switching to exponential backoff.")
-	workApplierRequeueRateLimiterFixedDelaySeconds                                   = flag.Float64("work-applier-requeue-rate-limiter-fixed-delay-seconds", 5.0, "If set, the work applier will requeue work objects with this fixed delay in seconds for the specified number of attempts before switching to exponential backoff.")
-	workApplierRequeueRateLimiterExponentialBaseForSlowBackoff                       = flag.Float64("work-applier-requeue-rate-limiter-exponential-base-for-slow-backoff", 1.2, "If set, the work applier will start to back off slowly at this factor after it finished requeueing with fixed delays, until it reaches the slow backoff delay cap. Its value should be larger than 1.0 and no larger than 100.0")
-	workApplierRequeueRateLimiterInitialSlowBackoffDelaySeconds                      = flag.Float64("work-applier-requeue-rate-limiter-initial-slow-backoff-delay-seconds", 2, "If set, the work applier will start to back off slowly at this delay in seconds.")
-	workApplierRequeueRateLimiterMaxSlowBackoffDelaySeconds                          = flag.Float64("work-applier-requeue-rate-limiter-max-slow-backoff-delay-seconds", 15, "If set, the work applier will not back off longer than this value in seconds when it is in the slow backoff stage.")
-	workApplierRequeueRateLimiterExponentialBaseForFastBackoff                       = flag.Float64("work-applier-requeue-rate-limiter-exponential-base-for-fast-backoff", 1.5, "If set, the work applier will start to back off fast at this factor after it completes the slow backoff stage, until it reaches the fast backoff delay cap. Its value should be larger than the base value for the slow backoff stage.")
-	workApplierRequeueRateLimiterMaxFastBackoffDelaySeconds                          = flag.Float64("work-applier-requeue-rate-limiter-max-fast-backoff-delay-seconds", 900, "If set, the work applier will not back off longer than this value in seconds when it is in the fast backoff stage.")
-	workApplierRequeueRateLimiterSkipToFastBackoffForAvailableOrDiffReportedWorkObjs = flag.Bool("work-applier-requeue-rate-limiter-skip-to-fast-backoff-for-available-or-diff-reported-work-objs", true, "If set, the rate limiter will skip the slow backoff stage and start fast backoff immediately for work objects that are available or have diff reported.")
-
-	// Property feature gates when the property provider is not none.
-	enableNamespaceCollectionInPropertyProvider = flag.Bool("enable-namespace-collection-in-property-provider", false, "If set, the property provider will collect the namespaces in the member cluster.")
-
-	// Work applier priority queue settings.
-	enableWorkApplierPriorityQueue          = flag.Bool("enable-work-applier-priority-queue", false, "If set, the work applier will use a priority queue to process work objects.")
-	workApplierPriorityLinearEquationCoeffA = flag.Int("work-applier-priority-linear-equation-coeff-a", -3, "The work applier sets the priority for a Work object processing attempt using the linear equation: priority = A * (work object age in minutes) + B. This flag sets the coefficient A in the equation.")
-	workApplierPriorityLinearEquationCoeffB = flag.Int("work-applier-priority-linear-equation-coeff-b", 100, "The work applier sets the priority for a Work object processing attempt using the linear equation: priority = A * (work object age in minutes) + B. This flag sets the coefficient B in the equation.")
-
-	// Azure property provider feature gates.
-	isAzProviderCostPropertiesEnabled         = flag.Bool("use-cost-properties-in-azure-provider", true, "If set, the Azure property provider will expose cost properties in the member cluster.")
-	isAzProviderAvailableResPropertiesEnabled = flag.Bool("use-available-res-properties-in-azure-provider", true, "If set, the Azure property provider will expose available resources properties in the member cluster.")
+	scheme = runtime.NewScheme()
 )
 
 func init() {
@@ -124,6 +80,9 @@ func init() {
 }
 
 func main() {
+	opts := options.NewOptions()
+	opts.AddFlags(flag.CommandLine)
+
 	flag.Parse()
 	utilrand.Seed(time.Now().UnixNano())
 	defer klog.Flush()
@@ -135,32 +94,19 @@ func main() {
 	// Set up controller-runtime logger
 	ctrl.SetLogger(zap.New(zap.UseDevMode(true)))
 
-	// Validate flags
-	if !*enableV1Alpha1APIs && !*enableV1Beta1APIs {
-		klog.ErrorS(errors.New("either enable-v1alpha1-apis or enable-v1beta1-apis is required"), "Invalid APIs flags")
-		klog.FlushAndExit(klog.ExitFlushTimeout, 1)
-	}
-	// TO-DO (chenyu1): refactor the validation logic.
-	if workApplierPriorityLinearEquationCoeffA == nil || *workApplierPriorityLinearEquationCoeffA >= 0 {
-		klog.ErrorS(errors.New("parameter workApplierPriorityLinearEquationCoeffA is set incorrectly; must use a value less than 0"), "InvalidFlag", "workApplierPriorityLinearEquationCoeffA")
-	}
-	if workApplierPriorityLinearEquationCoeffB == nil || *workApplierPriorityLinearEquationCoeffB <= 0 {
-		klog.ErrorS(errors.New("parameter workApplierPriorityLinearEquationCoeffB is set incorrectly; must use a value greater than 0"), "InvalidFlag", "workApplierPriorityLinearEquationCoeffB")
-	}
-
 	hubURL := os.Getenv("HUB_SERVER_URL")
 
 	if hubURL == "" {
 		klog.ErrorS(errors.New("hub server api cannot be empty"), "Failed to read URL for the hub cluster")
 		klog.FlushAndExit(klog.ExitFlushTimeout, 1)
 	}
-	hubConfig, err := buildHubConfig(hubURL, *useCertificateAuth, *tlsClientInsecure)
-	hubConfig.QPS = float32(*hubQPS)
-	hubConfig.Burst = *hubBurst
+	hubConfig, err := buildHubConfig(hubURL, opts.HubConnectivityOpts.UseCertificateAuth, opts.HubConnectivityOpts.UseInsecureTLSClient)
 	if err != nil {
 		klog.ErrorS(err, "Failed to build Kubernetes client configuration for the hub cluster")
 		klog.FlushAndExit(klog.ExitFlushTimeout, 1)
 	}
+	hubConfig.QPS = float32(opts.CtrlManagerOptions.HubManagerOpts.QPS)
+	hubConfig.Burst = opts.CtrlManagerOptions.HubManagerOpts.Burst
 
 	mcName := os.Getenv("MEMBER_CLUSTER_NAME")
 	if mcName == "" {
@@ -171,20 +117,23 @@ func main() {
 	mcNamespace := fmt.Sprintf(utils.NamespaceNameFormat, mcName)
 
 	memberConfig := ctrl.GetConfigOrDie()
-	memberConfig.QPS = float32(*memberQPS)
-	memberConfig.Burst = *memberBurst
+	memberConfig.QPS = float32(opts.CtrlManagerOptions.MemberManagerOpts.QPS)
+	memberConfig.Burst = opts.CtrlManagerOptions.MemberManagerOpts.Burst
 	// we place the leader election lease on the member cluster to avoid adding load to the hub
 	hubOpts := ctrl.Options{
 		Scheme: scheme,
 		Metrics: metricsserver.Options{
-			BindAddress: *hubMetricsAddr,
+			BindAddress: opts.CtrlManagerOptions.HubManagerOpts.MetricsBindAddress,
 		},
 		WebhookServer: webhook.NewServer(webhook.Options{
 			Port: 8443,
 		}),
-		HealthProbeBindAddress:  *hubProbeAddr,
-		LeaderElection:          *enableLeaderElection,
-		LeaderElectionNamespace: *leaderElectionNamespace,
+		HealthProbeBindAddress:  opts.CtrlManagerOptions.HubManagerOpts.HealthProbeBindAddress,
+		LeaderElection:          opts.CtrlManagerOptions.LeaderElectionOpts.LeaderElect,
+		LeaderElectionNamespace: opts.CtrlManagerOptions.LeaderElectionOpts.ResourceNamespace,
+		LeaseDuration:           &opts.CtrlManagerOptions.LeaderElectionOpts.LeaseDuration.Duration,
+		RenewDeadline:           &opts.CtrlManagerOptions.LeaderElectionOpts.RenewDeadline.Duration,
+		RetryPeriod:             &opts.CtrlManagerOptions.LeaderElectionOpts.RetryPeriod.Duration,
 		LeaderElectionConfig:    memberConfig,
 		LeaderElectionID:        "136224848560.hub.fleet.azure.com",
 		Cache: cache.Options{
@@ -203,23 +152,26 @@ func main() {
 	memberOpts := ctrl.Options{
 		Scheme: scheme,
 		Metrics: metricsserver.Options{
-			BindAddress: *metricsAddr,
+			BindAddress: opts.CtrlManagerOptions.MemberManagerOpts.MetricsBindAddress,
 		},
 		WebhookServer: webhook.NewServer(webhook.Options{
 			Port: 9443,
 		}),
-		HealthProbeBindAddress:  *probeAddr,
+		HealthProbeBindAddress:  opts.CtrlManagerOptions.MemberManagerOpts.HealthProbeBindAddress,
 		LeaderElection:          hubOpts.LeaderElection,
-		LeaderElectionNamespace: *leaderElectionNamespace,
+		LeaderElectionNamespace: opts.CtrlManagerOptions.LeaderElectionOpts.ResourceNamespace,
+		LeaseDuration:           &opts.CtrlManagerOptions.LeaderElectionOpts.LeaseDuration.Duration,
+		RenewDeadline:           &opts.CtrlManagerOptions.LeaderElectionOpts.RenewDeadline.Duration,
+		RetryPeriod:             &opts.CtrlManagerOptions.LeaderElectionOpts.RetryPeriod.Duration,
 		LeaderElectionID:        "136224848560.member.fleet.azure.com",
 	}
 	//+kubebuilder:scaffold:builder
-	if *enablePprof {
-		memberOpts.PprofBindAddress = fmt.Sprintf(":%d", *pprofPort)
-		hubOpts.PprofBindAddress = fmt.Sprintf(":%d", *hubPprofPort)
+	if opts.CtrlManagerOptions.EnablePprof {
+		memberOpts.PprofBindAddress = fmt.Sprintf(":%d", opts.CtrlManagerOptions.MemberManagerOpts.PprofPort)
+		hubOpts.PprofBindAddress = fmt.Sprintf(":%d", opts.CtrlManagerOptions.HubManagerOpts.PprofPort)
 	}
 
-	if err := Start(ctrl.SetupSignalHandler(), hubConfig, memberConfig, hubOpts, memberOpts); err != nil {
+	if err := Start(ctrl.SetupSignalHandler(), hubConfig, memberConfig, hubOpts, memberOpts, *opts); err != nil {
 		klog.ErrorS(err, "Failed to start the controllers for the member agent")
 		klog.FlushAndExit(klog.ExitFlushTimeout, 1)
 	}
@@ -316,7 +268,7 @@ func buildHubConfig(hubURL string, useCertificateAuth bool, tlsClientInsecure bo
 }
 
 // Start the member controllers with the supplied config
-func Start(ctx context.Context, hubCfg, memberConfig *rest.Config, hubOpts, memberOpts ctrl.Options) error {
+func Start(ctx context.Context, hubCfg, memberConfig *rest.Config, hubOpts, memberOpts ctrl.Options, globalOpts options.Options) error {
 	hubMgr, err := ctrl.NewManager(hubCfg, hubOpts)
 	if err != nil {
 		return fmt.Errorf("unable to start hub manager: %w", err)
@@ -375,116 +327,112 @@ func Start(ctx context.Context, hubCfg, memberConfig *rest.Config, hubOpts, memb
 	}
 	discoverClient := discovery.NewDiscoveryClientForConfigOrDie(memberConfig)
 
-	if *enableV1Alpha1APIs {
-		// TODO(weiweng): keeping v1alpha1 APIs for backward compatibility with helm charts. Remove soon.
-		klog.Error("v1alpha1 APIs are no longer supported. Please switch to v1beta1 APIs")
-		return errors.New("v1alpha1 APIs are no longer supported. Please switch to v1beta1 APIs")
+	gvk := placementv1beta1.GroupVersion.WithKind(placementv1beta1.AppliedWorkKind)
+	if err = utils.CheckCRDInstalled(discoverClient, gvk); err != nil {
+		klog.ErrorS(err, "unable to find the required CRD", "GVK", gvk)
+		return err
+	}
+	// Set up the work applier. Note that it is referenced by the InternalMemberCluster controller.
+
+	// Set up the requeue rate limiter for the work applier.
+	//
+	// With default settings, the rate limiter will:
+	// * allow 1 attempt of fixed delay; this helps give objects a bit of headroom to get available (or have
+	//   diffs reported).
+	// * use a fixed delay of 5 seconds for the first attempt.
+	//
+	//   Important (chenyu1): before the introduction of the requeue rate limiter, the work
+	//   applier uses static requeue intervals, specifically 5 seconds (if the work object is unavailable),
+	//   and 15 seconds (if the work object is available). There are a number of test cases that
+	//   implicitly assume this behavior (e.g., a test case might expect that the availability check completes
+	//   w/in 10 seconds), which is why the rate limiter uses the 5 seconds fixed requeue delay by default.
+	//   If you need to change this value and see that some test cases begin to fail, update the test
+	//   cases accordingly.
+	// * after completing all attempts with fixed delay, switch to slow exponential backoff with a base of
+	//   1.2 with an initial delay of 2 seconds and a cap of 15 seconds (12 requeues in total, ~90 seconds in total);
+	//   this is to allow fast checkups in cases where objects are not yet available or have not yet reported diffs.
+	// * after completing the slow backoff stage, switch to a fast exponential backoff with a base of 1.5
+	//   with an initial delay of 15 seconds and a cap of 15 minutes (10 requeues in total, ~42 minutes in total).
+	// * for Work objects that are available or have diffs reported, skip the slow backoff stage and
+	//   start fast backoff immediately.
+	//
+	// The requeue pattern is essentially:
+	// * 1 attempts of requeue with fixed delay (5 seconds); then
+	// * 12 attempts of requeues with slow exponential backoff (factor of 1.2, ~90 seconds in total); then
+	// * 10 attempts of requeues with fast exponential backoff (factor of 1.5, ~42 minutes in total);
+	// * afterwards, requeue with a delay of 15 minutes indefinitely.
+	requeueRateLimiter := workapplier.NewRequeueMultiStageWithExponentialBackoffRateLimiter(
+		globalOpts.ApplierOpts.RequeueRateLimiterAttemptsWithFixedDelay,
+		float64(globalOpts.ApplierOpts.RequeueRateLimiterFixedDelaySeconds),
+		globalOpts.ApplierOpts.RequeueRateLimiterExponentialBaseForSlowBackoff,
+		float64(globalOpts.ApplierOpts.RequeueRateLimiterInitialSlowBackoffDelaySeconds),
+		float64(globalOpts.ApplierOpts.RequeueRateLimiterMaxSlowBackoffDelaySeconds),
+		globalOpts.ApplierOpts.RequeueRateLimiterExponentialBaseForFastBackoff,
+		float64(globalOpts.ApplierOpts.RequeueRateLimiterMaxFastBackoffDelaySeconds),
+		globalOpts.ApplierOpts.RequeueRateLimiterSkipToFastBackoffForAvailableOrDiffReportedWorkObjs,
+	)
+
+	workApplier := workapplier.NewReconciler(
+		"work-applier",
+		hubMgr.GetClient(),
+		targetNS,
+		spokeDynamicClient,
+		memberMgr.GetClient(),
+		restMapper,
+		hubMgr.GetEventRecorderFor("work_applier"),
+		// The number of concurrent reconcilations. This is set to 5 to boost performance in
+		// resource processing.
+		5,
+		// Use the default worker count (4) for parallelized manifest processing.
+		parallelizer.NewParallelizer(parallelizer.DefaultNumOfWorkers),
+		time.Minute*time.Duration(globalOpts.ApplierOpts.ResourceForceDeletionWaitTimeMinutes),
+		requeueRateLimiter,
+		globalOpts.ApplierOpts.EnablePriorityQueue,
+		&globalOpts.ApplierOpts.PriorityLinearEquationCoEffA,
+		&globalOpts.ApplierOpts.PriorityLinearEquationCoEffB,
+	)
+
+	if err = workApplier.SetupWithManager(hubMgr); err != nil {
+		klog.ErrorS(err, "Failed to create v1beta1 controller", "controller", "work")
+		return err
 	}
 
-	if *enableV1Beta1APIs {
-		gvk := placementv1beta1.GroupVersion.WithKind(placementv1beta1.AppliedWorkKind)
-		if err = utils.CheckCRDInstalled(discoverClient, gvk); err != nil {
-			klog.ErrorS(err, "unable to find the required CRD", "GVK", gvk)
-			return err
-		}
-		// Set up the work applier. Note that it is referenced by the InternalMemberCluster controller.
+	klog.Info("Setting up the internalMemberCluster v1beta1 controller")
+	// Set up a provider provider (if applicable).
+	var pp propertyprovider.PropertyProvider
+	switch {
+	case globalOpts.PropertyProviderOpts.Name == azurePropertyProvider:
+		klog.V(2).Info("setting up the Azure property provider")
+		// Note that the property provider, though initialized here, is not started until
+		// the specific instance wins the leader election.
+		klog.V(1).InfoS("Property Provider is azure, loading cloud config", "cloudConfigFile", globalOpts.PropertyProviderOpts.CloudConfigFilePath)
+		// TODO (britaniar): load cloud config for Azure property provider.
+		pp = azure.New(
+			&globalOpts.PropertyProviderOpts.Region,
+			globalOpts.PropertyProviderOpts.EnableAzProviderCostProperties,
+			globalOpts.PropertyProviderOpts.EnableAzProviderAvailableResourceProperties,
+			globalOpts.PropertyProviderOpts.EnableAzProviderNamespaceCollection)
+	default:
+		// Fall back to not using any property provider if the provided type is none or
+		// not recognizable.
+		klog.V(2).Info("no property provider is specified, or the given type is not recognizable; start with no property provider")
+		pp = nil
+	}
 
-		// Set up the requeue rate limiter for the work applier.
-		//
-		// With default settings, the rate limiter will:
-		// * allow 1 attempt of fixed delay; this helps give objects a bit of headroom to get available (or have
-		//   diffs reported).
-		// * use a fixed delay of 5 seconds for the first attempt.
-		//
-		//   Important (chenyu1): before the introduction of the requeue rate limiter, the work
-		//   applier uses static requeue intervals, specifically 5 seconds (if the work object is unavailable),
-		//   and 15 seconds (if the work object is available). There are a number of test cases that
-		//   implicitly assume this behavior (e.g., a test case might expect that the availability check completes
-		//   w/in 10 seconds), which is why the rate limiter uses the 5 seconds fixed requeue delay by default.
-		//   If you need to change this value and see that some test cases begin to fail, update the test
-		//   cases accordingly.
-		// * after completing all attempts with fixed delay, switch to slow exponential backoff with a base of
-		//   1.2 with an initial delay of 2 seconds and a cap of 15 seconds (12 requeues in total, ~90 seconds in total);
-		//   this is to allow fast checkups in cases where objects are not yet available or have not yet reported diffs.
-		// * after completing the slow backoff stage, switch to a fast exponential backoff with a base of 1.5
-		//   with an initial delay of 15 seconds and a cap of 15 minutes (10 requeues in total, ~42 minutes in total).
-		// * for Work objects that are available or have diffs reported, skip the slow backoff stage and
-		//   start fast backoff immediately.
-		//
-		// The requeue pattern is essentially:
-		// * 1 attempts of requeue with fixed delay (5 seconds); then
-		// * 12 attempts of requeues with slow exponential backoff (factor of 1.2, ~90 seconds in total); then
-		// * 10 attempts of requeues with fast exponential backoff (factor of 1.5, ~42 minutes in total);
-		// * afterwards, requeue with a delay of 15 minutes indefinitely.
-		requeueRateLimiter := workapplier.NewRequeueMultiStageWithExponentialBackoffRateLimiter(
-			*workApplierRequeueRateLimiterAttemptsWithFixedDelay,
-			*workApplierRequeueRateLimiterFixedDelaySeconds,
-			*workApplierRequeueRateLimiterExponentialBaseForSlowBackoff,
-			*workApplierRequeueRateLimiterInitialSlowBackoffDelaySeconds,
-			*workApplierRequeueRateLimiterMaxSlowBackoffDelaySeconds,
-			*workApplierRequeueRateLimiterExponentialBaseForFastBackoff,
-			*workApplierRequeueRateLimiterMaxFastBackoffDelaySeconds,
-			*workApplierRequeueRateLimiterSkipToFastBackoffForAvailableOrDiffReportedWorkObjs,
-		)
-
-		workApplier := workapplier.NewReconciler(
-			"work-applier",
-			hubMgr.GetClient(),
-			targetNS,
-			spokeDynamicClient,
-			memberMgr.GetClient(),
-			restMapper,
-			hubMgr.GetEventRecorderFor("work_applier"),
-			// The number of concurrent reconcilations. This is set to 5 to boost performance in
-			// resource processing.
-			5,
-			// Use the default worker count (4) for parallelized manifest processing.
-			parallelizer.NewParallelizer(parallelizer.DefaultNumOfWorkers),
-			time.Minute*time.Duration(*deletionWaitTime),
-			requeueRateLimiter,
-			*enableWorkApplierPriorityQueue,
-			workApplierPriorityLinearEquationCoeffA,
-			workApplierPriorityLinearEquationCoeffB,
-		)
-
-		if err = workApplier.SetupWithManager(hubMgr); err != nil {
-			klog.ErrorS(err, "Failed to create v1beta1 controller", "controller", "work")
-			return err
-		}
-
-		klog.Info("Setting up the internalMemberCluster v1beta1 controller")
-		// Set up a provider provider (if applicable).
-		var pp propertyprovider.PropertyProvider
-		switch {
-		case propertyProvider != nil && *propertyProvider == azurePropertyProvider:
-			klog.V(2).Info("setting up the Azure property provider")
-			// Note that the property provider, though initialized here, is not started until
-			// the specific instance wins the leader election.
-			klog.V(1).InfoS("Property Provider is azure, loading cloud config", "cloudConfigFile", *cloudConfigFile)
-			// TODO (britaniar): load cloud config for Azure property provider.
-			pp = azure.New(region, *isAzProviderCostPropertiesEnabled, *isAzProviderAvailableResPropertiesEnabled, *enableNamespaceCollectionInPropertyProvider)
-		default:
-			// Fall back to not using any property provider if the provided type is none or
-			// not recognizable.
-			klog.V(2).Info("no property provider is specified, or the given type is not recognizable; start with no property provider")
-			pp = nil
-		}
-
-		// Set up the IMC controller.
-		imcReconciler, err := imcv1beta1.NewReconciler(
-			ctx,
-			hubMgr.GetClient(),
-			memberMgr.GetConfig(), memberMgr.GetClient(),
-			workApplier,
-			pp)
-		if err != nil {
-			klog.ErrorS(err, "Failed to create InternalMemberCluster v1beta1 reconciler")
-			return fmt.Errorf("failed to create InternalMemberCluster v1beta1 reconciler: %w", err)
-		}
-		if err := imcReconciler.SetupWithManager(hubMgr, "internalmembercluster-controller"); err != nil {
-			klog.ErrorS(err, "Failed to set up InternalMemberCluster v1beta1 controller with the controller manager")
-			return fmt.Errorf("failed to set up InternalMemberCluster v1beta1 controller with the controller manager: %w", err)
-		}
+	// Set up the IMC controller.
+	imcReconciler, err := imcv1beta1.NewReconciler(
+		ctx,
+		hubMgr.GetClient(),
+		memberMgr.GetConfig(), memberMgr.GetClient(),
+		workApplier,
+		pp)
+	if err != nil {
+		klog.ErrorS(err, "Failed to create InternalMemberCluster v1beta1 reconciler")
+		return fmt.Errorf("failed to create InternalMemberCluster v1beta1 reconciler: %w", err)
+	}
+	if err := imcReconciler.SetupWithManager(hubMgr, "internalmembercluster-controller"); err != nil {
+		klog.ErrorS(err, "Failed to set up InternalMemberCluster v1beta1 controller with the controller manager")
+		return fmt.Errorf("failed to set up InternalMemberCluster v1beta1 controller with the controller manager: %w", err)
 	}
 
 	klog.InfoS("starting hub manager")

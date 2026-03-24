@@ -13,13 +13,13 @@ COPY go.sum go.sum
 RUN go mod download
 
 # Copy the go source
-COPY cmd/memberagent/main.go main.go
+COPY cmd/memberagent cmd/memberagent/
 COPY apis/ apis/
 COPY pkg/ pkg/
 
 # Build
 RUN echo "Building images with GOOS=$GOOS GOARCH=$GOARCH"
-RUN CGO_ENABLED=1 GOOS=$GOOS GOARCH=$GOARCH GOEXPERIMENT=systemcrypto GO111MODULE=on go build -o memberagent main.go
+RUN CGO_ENABLED=1 GOOS=$GOOS GOARCH=$GOARCH GOEXPERIMENT=systemcrypto GO111MODULE=on go build -o memberagent cmd/memberagent/main.go
 
 # Use distroless as minimal base image to package the memberagent binary
 # Refer to https://github.com/GoogleContainerTools/distroless for more details
