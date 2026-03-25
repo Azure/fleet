@@ -21,6 +21,7 @@ import (
 	"github.com/kubefleet-dev/kubefleet/pkg/scheduler/framework"
 	"github.com/kubefleet-dev/kubefleet/pkg/scheduler/framework/plugins/clusteraffinity"
 	"github.com/kubefleet-dev/kubefleet/pkg/scheduler/framework/plugins/clustereligibility"
+	"github.com/kubefleet-dev/kubefleet/pkg/scheduler/framework/plugins/namespaceaffinity"
 	"github.com/kubefleet-dev/kubefleet/pkg/scheduler/framework/plugins/sameplacementaffinity"
 	"github.com/kubefleet-dev/kubefleet/pkg/scheduler/framework/plugins/tainttoleration"
 	"github.com/kubefleet-dev/kubefleet/pkg/scheduler/framework/plugins/topologyspreadconstraints"
@@ -51,13 +52,14 @@ func NewProfile(opts Options) *framework.Profile {
 		clusterAffinityPlugin = *opts.ClusterAffinityPlugin
 	}
 	clusterEligibilityPlugin := clustereligibility.New()
+	namespaceAffinityPlugin := namespaceaffinity.New()
 	samePlacementAffinityPlugin := sameplacementaffinity.New()
 	topologySpreadConstraintsPlugin := topologyspreadconstraints.New()
 	taintTolerationPlugin := tainttoleration.New()
 
 	p.WithPostBatchPlugin(&topologySpreadConstraintsPlugin).
-		WithPreFilterPlugin(&clusterAffinityPlugin).WithPreFilterPlugin(&topologySpreadConstraintsPlugin).
-		WithFilterPlugin(&clusterAffinityPlugin).WithFilterPlugin(&clusterEligibilityPlugin).WithFilterPlugin(&taintTolerationPlugin).WithFilterPlugin(&samePlacementAffinityPlugin).WithFilterPlugin(&topologySpreadConstraintsPlugin).
+		WithPreFilterPlugin(&clusterAffinityPlugin).WithPreFilterPlugin(&namespaceAffinityPlugin).WithPreFilterPlugin(&topologySpreadConstraintsPlugin).
+		WithFilterPlugin(&clusterAffinityPlugin).WithFilterPlugin(&clusterEligibilityPlugin).WithFilterPlugin(&namespaceAffinityPlugin).WithFilterPlugin(&taintTolerationPlugin).WithFilterPlugin(&samePlacementAffinityPlugin).WithFilterPlugin(&topologySpreadConstraintsPlugin).
 		WithPreScorePlugin(&clusterAffinityPlugin).WithPreScorePlugin(&topologySpreadConstraintsPlugin).
 		WithScorePlugin(&clusterAffinityPlugin).WithScorePlugin(&samePlacementAffinityPlugin).WithScorePlugin(&topologySpreadConstraintsPlugin)
 	return p

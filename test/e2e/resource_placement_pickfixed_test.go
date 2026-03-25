@@ -73,6 +73,10 @@ var _ = Describe("placing namespaced scoped resources using an RP with PickFixed
 	})
 
 	Context("pick some clusters", Ordered, func() {
+		It("should wait for namespace collection to sync on all member clusters", func() {
+			waitForNamespaceCollectionOnClusters(appNamespace().Name, allMemberClusterNames)
+		})
+
 		It("should create rp with pickFixed policy successfully", func() {
 			// Create the RP in the same namespace selecting namespaced resources.
 			rp := &placementv1beta1.ResourcePlacement{
@@ -112,6 +116,10 @@ var _ = Describe("placing namespaced scoped resources using an RP with PickFixed
 	})
 
 	Context("refreshing target clusters", Ordered, func() {
+		It("should wait for namespace collection to sync on all member clusters", func() {
+			waitForNamespaceCollectionOnClusters(appNamespace().Name, allMemberClusterNames)
+		})
+
 		It("should create an RP with pickFixed policy successfully", func() {
 			// Create the RP in the same namespace selecting namespaced resources.
 			rp := &placementv1beta1.ResourcePlacement{
@@ -171,6 +179,10 @@ var _ = Describe("placing namespaced scoped resources using an RP with PickFixed
 	})
 
 	Context("pick unhealthy and non-existent clusters", Ordered, func() {
+		It("should wait for namespace collection to sync on all member clusters", func() {
+			waitForNamespaceCollectionOnClusters(appNamespace().Name, allMemberClusterNames)
+		})
+
 		It("should create RP with pickFixed policy targeting unhealthy and non-existent clusters", func() {
 			// Create the RP in the same namespace selecting namespaced resources.
 			rp := &placementv1beta1.ResourcePlacement{
@@ -210,6 +222,10 @@ var _ = Describe("placing namespaced scoped resources using an RP with PickFixed
 		workNamespaceName := fmt.Sprintf(workNamespaceNameTemplate, GinkgoParallelProcess())
 		appConfigMapName := fmt.Sprintf(appConfigMapNameTemplate, GinkgoParallelProcess())
 		var currentConfigMap corev1.ConfigMap
+
+		It("should wait for namespace collection to sync on all member clusters", func() {
+			waitForNamespaceCollectionOnClusters(appNamespace().Name, allMemberClusterNames)
+		})
 
 		It("should create RP with pickFixed policy successfully", func() {
 			// Create the RP in the same namespace selecting namespaced resources.

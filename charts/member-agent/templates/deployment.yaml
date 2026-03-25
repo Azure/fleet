@@ -73,6 +73,9 @@ spec:
             - --work-applier-priority-linear-equation-coeff-a={{ .Values.priorityQueue.priorityLinearEquationCoeffA }}
             - --work-applier-priority-linear-equation-coeff-b={{ .Values.priorityQueue.priorityLinearEquationCoeffB }}
             {{- end }}
+            {{- if .Values.enableNamespaceCollectionInPropertyProvider }}
+            - --enable-namespace-collection-in-property-provider={{ .Values.enableNamespaceCollectionInPropertyProvider }}
+            {{- end }}
           env:
           - name: HUB_SERVER_URL
             value: "{{ .Values.config.hubURL }}"

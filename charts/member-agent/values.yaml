@@ -67,3 +67,5 @@ priorityQueue:
   enabled: false
   priorityLinearEquationCoeffA: -3
   priorityLinearEquationCoeffB: 100
+
+enableNamespaceCollectionInPropertyProvider: false

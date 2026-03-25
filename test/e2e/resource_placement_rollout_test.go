@@ -134,6 +134,10 @@ var _ = Describe("placing namespaced scoped resources using a RP with rollout", 
 			Eventually(crpStatusUpdatedActual, eventuallyDuration, eventuallyInterval).Should(Succeed(), "Failed to update CRP status as expected")
 		})
 
+		It("should wait for namespace collection on all member clusters", func() {
+			waitForNamespaceCollectionOnClusters(workNamespace.Name, allMemberClusterNames)
+		})
+
 		It("Create the RP that select the enveloped objects", func() {
 			rp := &placementv1beta1.ResourcePlacement{
 				ObjectMeta: metav1.ObjectMeta{
@@ -253,6 +257,10 @@ var _ = Describe("placing namespaced scoped resources using a RP with rollout", 
 			Eventually(crpStatusUpdatedActual, eventuallyDuration, eventuallyInterval).Should(Succeed(), "Failed to update CRP status as expected")
 		})
 
+		It("should wait for namespace collection on all member clusters", func() {
+			waitForNamespaceCollectionOnClusters(workNamespace.Name, allMemberClusterNames)
+		})
+
 		It("create the RP that select the deployment", func() {
 			rp := buildRPForSafeRollout(workNamespace.Name)
 			rp.Spec.ResourceSelectors = []placementv1beta1.ResourceSelectorTerm{
@@ -330,6 +338,10 @@ var _ = Describe("placing namespaced scoped resources using a RP with rollout", 
 		It("should update CRP status as expected", func() {
 			crpStatusUpdatedActual := crpStatusUpdatedActual(workNamespaceIdentifiers(), allMemberClusterNames, nil, "1")
 			Eventually(crpStatusUpdatedActual, eventuallyDuration, eventuallyInterval).Should(Succeed(), "Failed to update CRP status as expected")
+		})
+
+		It("should wait for namespace collection on all member clusters", func() {
+			waitForNamespaceCollectionOnClusters(workNamespace.Name, allMemberClusterNames)
 		})
 
 		It("create the RP that select the enveloped daemonset", func() {
@@ -416,6 +428,10 @@ var _ = Describe("placing namespaced scoped resources using a RP with rollout", 
 			Eventually(crpStatusUpdatedActual, eventuallyDuration, eventuallyInterval).Should(Succeed(), "Failed to update CRP status as expected")
 		})
 
+		It("should wait for namespace collection on all member clusters", func() {
+			waitForNamespaceCollectionOnClusters(workNamespace.Name, allMemberClusterNames)
+		})
+
 		It("create the RP that select the enveloped statefulset", func() {
 			rp := buildRPForSafeRollout(workNamespace.Name)
 			rp.Spec.ResourceSelectors = []placementv1beta1.ResourceSelectorTerm{
@@ -499,6 +515,10 @@ var _ = Describe("placing namespaced scoped resources using a RP with rollout", 
 			Eventually(crpStatusUpdatedActual, eventuallyDuration, eventuallyInterval).Should(Succeed(), "Failed to update CRP status as expected")
 		})
 
+		It("should wait for namespace collection on all member clusters", func() {
+			waitForNamespaceCollectionOnClusters(workNamespace.Name, allMemberClusterNames)
+		})
+
 		It("create the RP that select the service", func() {
 			rp := buildRPForSafeRollout(workNamespace.Name)
 			rp.Spec.ResourceSelectors = []placementv1beta1.ResourceSelectorTerm{
@@ -577,6 +597,10 @@ var _ = Describe("placing namespaced scoped resources using a RP with rollout", 
 		It("should update CRP status as expected", func() {
 			crpStatusUpdatedActual := crpStatusUpdatedActual(workNamespaceIdentifiers(), allMemberClusterNames, nil, "1")
 			Eventually(crpStatusUpdatedActual, eventuallyDuration, eventuallyInterval).Should(Succeed(), "Failed to update CRP status as expected")
+		})
+
+		It("should wait for namespace collection on all member clusters", func() {
+			waitForNamespaceCollectionOnClusters(workNamespace.Name, allMemberClusterNames)
 		})
 
 		It("create the RP that select the deployment", func() {
@@ -741,6 +765,10 @@ var _ = Describe("placing namespaced scoped resources using a RP with rollout", 
 		It("should update CRP status as expected", func() {
 			crpStatusUpdatedActual := crpStatusUpdatedActual(workNamespaceIdentifiers(), allMemberClusterNames, nil, "1")
 			Eventually(crpStatusUpdatedActual, eventuallyDuration, eventuallyInterval).Should(Succeed(), "Failed to update CRP status as expected")
+		})
+
+		It("should wait for namespace collection on all member clusters", func() {
+			waitForNamespaceCollectionOnClusters(workNamespace.Name, allMemberClusterNames)
 		})
 
 		It("create the RP that select the job", func() {

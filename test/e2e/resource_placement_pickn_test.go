@@ -73,6 +73,10 @@ var _ = Describe("placing namespaced scoped resources using a RP with PickN poli
 	})
 
 	Context("picking N clusters with no affinities/topology spread constraints (pick by cluster names in alphanumeric order)", Ordered, func() {
+		It("should wait for namespace collection to sync on all member clusters", func() {
+			waitForNamespaceCollectionOnClusters(appNamespace().Name, allMemberClusterNames)
+		})
+
 		It("should create rp with pickN policy successfully", func() {
 			// Create the RP in the same namespace selecting namespaced resources.
 			rp := &placementv1beta1.ResourcePlacement{
@@ -110,6 +114,10 @@ var _ = Describe("placing namespaced scoped resources using a RP with PickN poli
 	})
 
 	Context("upscaling", Ordered, func() {
+		It("should wait for namespace collection to sync on all member clusters", func() {
+			waitForNamespaceCollectionOnClusters(appNamespace().Name, allMemberClusterNames)
+		})
+
 		It("should create rp with pickN policy for upscaling test", func() {
 			// Create the RP in the same namespace selecting namespaced resources.
 			rp := &placementv1beta1.ResourcePlacement{
@@ -168,6 +176,10 @@ var _ = Describe("placing namespaced scoped resources using a RP with PickN poli
 	})
 
 	Context("downscaling", Ordered, func() {
+		It("should wait for namespace collection to sync on all member clusters", func() {
+			waitForNamespaceCollectionOnClusters(appNamespace().Name, allMemberClusterNames)
+		})
+
 		It("should create rp with pickN policy for downscaling test", func() {
 			// Create the RP in the same namespace selecting namespaced resources.
 			rp := &placementv1beta1.ResourcePlacement{
@@ -229,6 +241,10 @@ var _ = Describe("placing namespaced scoped resources using a RP with PickN poli
 	})
 
 	Context("picking N clusters with affinities and topology spread constraints", Ordered, func() {
+		It("should wait for namespace collection to sync on all member clusters", func() {
+			waitForNamespaceCollectionOnClusters(appNamespace().Name, allMemberClusterNames)
+		})
+
 		It("should create rp with pickN policy and constraints successfully", func() {
 			// Create the RP in the same namespace selecting namespaced resources.
 			rp := &placementv1beta1.ResourcePlacement{
@@ -297,6 +313,10 @@ var _ = Describe("placing namespaced scoped resources using a RP with PickN poli
 	})
 
 	Context("affinities and topology spread constraints updated", Ordered, func() {
+		It("should wait for namespace collection to sync on all member clusters", func() {
+			waitForNamespaceCollectionOnClusters(appNamespace().Name, allMemberClusterNames)
+		})
+
 		It("should create rp with initial constraints", func() {
 			// Create the RP in the same namespace selecting namespaced resources.
 			rp := &placementv1beta1.ResourcePlacement{
@@ -407,6 +427,10 @@ var _ = Describe("placing namespaced scoped resources using a RP with PickN poli
 	})
 
 	Context("not enough clusters to pick", Ordered, func() {
+		It("should wait for namespace collection to sync on all member clusters", func() {
+			waitForNamespaceCollectionOnClusters(appNamespace().Name, allMemberClusterNames)
+		})
+
 		It("should create rp with pickN policy requesting more clusters than available", func() {
 			// Create the RP in the same namespace selecting namespaced resources.
 			rp := &placementv1beta1.ResourcePlacement{
@@ -471,6 +495,10 @@ var _ = Describe("placing namespaced scoped resources using a RP with PickN poli
 	})
 
 	Context("downscaling to zero", Ordered, func() {
+		It("should wait for namespace collection to sync on all member clusters", func() {
+			waitForNamespaceCollectionOnClusters(appNamespace().Name, allMemberClusterNames)
+		})
+
 		It("should create rp with pickN policy for downscaling to zero test", func() {
 			// Create the RP in the same namespace selecting namespaced resources.
 			rp := &placementv1beta1.ResourcePlacement{
@@ -528,6 +556,10 @@ var _ = Describe("placing namespaced scoped resources using a RP with PickN poli
 	})
 
 	Context("picking N clusters with single property sorter", Ordered, func() {
+		It("should wait for namespace collection to sync on all member clusters", func() {
+			waitForNamespaceCollectionOnClusters(appNamespace().Name, allMemberClusterNames)
+		})
+
 		It("should create rp with pickN policy and single property sorter", func() {
 			// Have to add this check in each It() spec, instead of using BeforeAll().
 			// Otherwise, the AfterEach() would be skipped too and the namespace does not get cleaned up.
@@ -603,6 +635,10 @@ var _ = Describe("placing namespaced scoped resources using a RP with PickN poli
 	})
 
 	Context("picking N clusters with multiple property sorters", Ordered, func() {
+		It("should wait for namespace collection to sync on all member clusters", func() {
+			waitForNamespaceCollectionOnClusters(appNamespace().Name, allMemberClusterNames)
+		})
+
 		It("should create rp with pickN policy and multiple property sorters", func() {
 			if !isAzurePropertyProviderEnabled {
 				Skip("Skipping this test spec as Azure property provider is not enabled in the test environment")
@@ -685,6 +721,10 @@ var _ = Describe("placing namespaced scoped resources using a RP with PickN poli
 	})
 
 	Context("picking N clusters with label selector and property sorter", Ordered, func() {
+		It("should wait for namespace collection to sync on all member clusters", func() {
+			waitForNamespaceCollectionOnClusters(appNamespace().Name, allMemberClusterNames)
+		})
+
 		It("should create rp with pickN policy, label selector and property sorter", func() {
 			if !isAzurePropertyProviderEnabled {
 				Skip("Skipping this test spec as Azure property provider is not enabled in the test environment")
@@ -777,6 +817,10 @@ var _ = Describe("placing namespaced scoped resources using a RP with PickN poli
 	})
 
 	Context("picking N clusters with required and preferred affinity terms", Ordered, func() {
+		It("should wait for namespace collection to sync on all member clusters", func() {
+			waitForNamespaceCollectionOnClusters(appNamespace().Name, allMemberClusterNames)
+		})
+
 		It("should create rp with pickN policy, required and preferred affinity terms", func() {
 			if !isAzurePropertyProviderEnabled {
 				Skip("Skipping this test spec as Azure property provider is not enabled in the test environment")
