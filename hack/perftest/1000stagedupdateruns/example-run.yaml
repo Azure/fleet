@@ -1,0 +1,8 @@
+apiVersion: placement.kubernetes-fleet.io/v1beta1
+kind: ClusterStagedUpdateRun
+metadata:
+  name: run-0
+spec:
+  placementName: crp-0
+  stagedRolloutStrategyName: staging-canary-prod
+  state: Run

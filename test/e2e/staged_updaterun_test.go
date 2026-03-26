@@ -65,6 +65,10 @@ var _ = Describe("test RP rollout with staged update run", Label("resourceplacem
 		var strategy *placementv1beta1.StagedUpdateStrategy
 		var oldConfigMap, newConfigMap corev1.ConfigMap
 
+		It("should wait for namespace collection to sync on all member clusters", func() {
+			waitForNamespaceCollectionOnClusters(appNamespace().Name, allMemberClusterNames)
+		})
+
 		BeforeAll(func() {
 			// Create the RP with external rollout strategy.
 			rp := &placementv1beta1.ResourcePlacement{
@@ -244,6 +248,10 @@ var _ = Describe("test RP rollout with staged update run", Label("resourceplacem
 		updateRunNames := []string{}
 		var strategy *placementv1beta1.StagedUpdateStrategy
 		var oldConfigMap, newConfigMap corev1.ConfigMap
+
+		It("should wait for namespace collection to sync on all member clusters", func() {
+			waitForNamespaceCollectionOnClusters(appNamespace().Name, allMemberClusterNames)
+		})
 
 		BeforeAll(func() {
 			// Create the RP with external rollout strategy.
@@ -472,6 +480,10 @@ var _ = Describe("test RP rollout with staged update run", Label("resourceplacem
 		var strategy *placementv1beta1.StagedUpdateStrategy
 		updateRunNames := []string{}
 
+		It("should wait for namespace collection to sync on all member clusters", func() {
+			waitForNamespaceCollectionOnClusters(appNamespace().Name, allMemberClusterNames)
+		})
+
 		BeforeAll(func() {
 			// Create the RP with external rollout strategy and pick fixed policy.
 			rp := &placementv1beta1.ResourcePlacement{
@@ -679,6 +691,12 @@ var _ = Describe("test RP rollout with staged update run", Label("resourceplacem
 		updateRunNames := []string{}
 
 		BeforeAll(func() {
+			// Ensure the namespace collection is synced on all member clusters before creating the RP.
+			// We expect kind-cluster-3 to be picked by PickN with N=1 policy due to the alphabetical order of cluster names.
+			// If kind-cluster-3 does not have namespace synced during schedule time, the RP might pick kind-cluster-1 or kind-cluster-2.
+			By("should wait for namespace collection to sync on all member clusters")
+			waitForNamespaceCollectionOnClusters(appNamespace().Name, allMemberClusterNames)
+
 			// Create the RP with external rollout strategy and pick N=1 policy.
 			rp := &placementv1beta1.ResourcePlacement{
 				ObjectMeta: metav1.ObjectMeta{
@@ -889,6 +907,10 @@ var _ = Describe("test RP rollout with staged update run", Label("resourceplacem
 		var wantROs map[string][]placementv1beta1.NamespacedName
 		var wantROAnnotations map[string]string
 
+		It("should wait for namespace collection to sync on all member clusters", func() {
+			waitForNamespaceCollectionOnClusters(appNamespace().Name, allMemberClusterNames)
+		})
+
 		BeforeAll(func() {
 			// Create the ro before rp so that the observed resource index is predictable.
 			ro := &placementv1beta1.ResourceOverride{
@@ -1047,6 +1069,10 @@ var _ = Describe("test RP rollout with staged update run", Label("resourceplacem
 		var applyStrategy *placementv1beta1.ApplyStrategy
 		updateRunName := fmt.Sprintf(stagedUpdateRunNameWithSubIndexTemplate, GinkgoParallelProcess(), 0)
 
+		It("should wait for namespace collection to sync on all member clusters", func() {
+			waitForNamespaceCollectionOnClusters(appNamespace().Name, allMemberClusterNames)
+		})
+
 		BeforeAll(func() {
 			// Create the RP with external rollout strategy, pickAll policy and reportDiff apply strategy.
 			applyStrategy = &placementv1beta1.ApplyStrategy{
@@ -1141,6 +1167,10 @@ var _ = Describe("test RP rollout with staged update run", Label("resourceplacem
 		var strategy *placementv1beta1.StagedUpdateStrategy
 		updateRunName := fmt.Sprintf(stagedUpdateRunNameWithSubIndexTemplate, GinkgoParallelProcess(), 0)
 		var oldConfigMap, newConfigMap corev1.ConfigMap
+
+		It("should wait for namespace collection to sync on all member clusters", func() {
+			waitForNamespaceCollectionOnClusters(appNamespace().Name, allMemberClusterNames)
+		})
 
 		BeforeAll(func() {
 			// Create the RP with rollingUpdate strategy initially.
@@ -1258,6 +1288,10 @@ var _ = Describe("test RP rollout with staged update run", Label("resourceplacem
 		var strategy *placementv1beta1.StagedUpdateStrategy
 		updateRunName := fmt.Sprintf(stagedUpdateRunNameWithSubIndexTemplate, GinkgoParallelProcess(), 0)
 
+		It("should wait for namespace collection to sync on all member clusters", func() {
+			waitForNamespaceCollectionOnClusters(appNamespace().Name, allMemberClusterNames)
+		})
+
 		BeforeAll(func() {
 			// Create the RP with external rollout strategy.
 			rp := &placementv1beta1.ResourcePlacement{
@@ -1349,6 +1383,10 @@ var _ = Describe("test RP rollout with staged update run", Label("resourceplacem
 	Context("Test parallel cluster updates with maxConcurrency set to 70%", Ordered, func() {
 		var strategy *placementv1beta1.StagedUpdateStrategy
 		updateRunName := fmt.Sprintf(stagedUpdateRunNameWithSubIndexTemplate, GinkgoParallelProcess(), 0)
+
+		It("should wait for namespace collection to sync on all member clusters", func() {
+			waitForNamespaceCollectionOnClusters(appNamespace().Name, allMemberClusterNames)
+		})
 
 		BeforeAll(func() {
 			// Create the RP with external rollout strategy.
@@ -1443,6 +1481,10 @@ var _ = Describe("test RP rollout with staged update run", Label("resourceplacem
 	Context("Test resource rollout with staged update run by update run states - (Initialize -> Run -> Stop -> Run)", Ordered, func() {
 		updateRunNames := []string{}
 		var strategy *placementv1beta1.StagedUpdateStrategy
+
+		It("should wait for namespace collection to sync on all member clusters", func() {
+			waitForNamespaceCollectionOnClusters(appNamespace().Name, allMemberClusterNames)
+		})
 
 		BeforeAll(func() {
 			// Create the RP with external rollout strategy.

@@ -71,6 +71,9 @@ var _ = Describe("validating RP when using customized resourceSnapshotCreationMi
 		crpStatusUpdatedActual := crpStatusUpdatedActual(workNamespaceIdentifiers(), allMemberClusterNames, nil, "0")
 		Eventually(crpStatusUpdatedActual, eventuallyDuration, eventuallyInterval).Should(Succeed(), "Failed to update CRP status as expected")
 
+		By("waiting for namespace collection to sync on all member clusters")
+		waitForNamespaceCollectionOnClusters(appNamespace().Name, allMemberClusterNames)
+
 		By("creating RP")
 		rp := &placementv1beta1.ResourcePlacement{
 			ObjectMeta: metav1.ObjectMeta{

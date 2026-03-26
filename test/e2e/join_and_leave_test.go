@@ -272,6 +272,10 @@ var _ = Describe("Test member cluster join and leave flow", Label("joinleave"), 
 		})
 
 		Context("Test cluster join and leave flow with RP not deleted", Label("joinleave"), Ordered, Serial, func() {
+			It("should wait for namespace collection to sync on all member clusters", func() {
+				waitForNamespaceCollectionOnClusters(workNamespaceName, allMemberClusterNames)
+			})
+
 			It("Create the RP that select the config map and place it to all clusters", func() {
 				resourceSelectors := []placementv1beta1.ResourceSelectorTerm{
 					{

@@ -53,6 +53,10 @@ var _ = Describe("placing namespaced scoped resources using a RP with PickAll po
 	})
 
 	Context("with no placement policy specified", Ordered, func() {
+		It("should wait for namespace collection to sync on all member clusters", func() {
+			waitForNamespaceCollectionOnClusters(appNamespace().Name, allMemberClusterNames)
+		})
+
 		It("creating the RP should succeed", func() {
 			// Create the RP in the same namespace selecting namespaced resources with no placement policy.
 			rp := &placementv1beta1.ResourcePlacement{
@@ -83,6 +87,10 @@ var _ = Describe("placing namespaced scoped resources using a RP with PickAll po
 	})
 
 	Context("with no affinities specified", Ordered, func() {
+		It("should wait for namespace collection to sync on all member clusters", func() {
+			waitForNamespaceCollectionOnClusters(appNamespace().Name, allMemberClusterNames)
+		})
+
 		It("creating the RP should succeed", func() {
 			// Create the RP in the same namespace selecting namespaced resources.
 			rp := &placementv1beta1.ResourcePlacement{
@@ -116,6 +124,10 @@ var _ = Describe("placing namespaced scoped resources using a RP with PickAll po
 	})
 
 	Context("with affinities, label selector only, updated", Ordered, func() {
+		It("should wait for namespace collection to sync on all member clusters", func() {
+			waitForNamespaceCollectionOnClusters(appNamespace().Name, allMemberClusterNames)
+		})
+
 		It("creating the RP should succeed", func() {
 			// Create the RP in the same namespace selecting namespaced resources.
 			rp := &placementv1beta1.ResourcePlacement{
@@ -221,6 +233,10 @@ var _ = Describe("placing namespaced scoped resources using a RP with PickAll po
 	})
 
 	Context("with affinities, label selector only, no matching clusters", Ordered, func() {
+		It("should wait for namespace collection to sync on all member clusters", func() {
+			waitForNamespaceCollectionOnClusters(appNamespace().Name, allMemberClusterNames)
+		})
+
 		It("creating the RP should succeed", func() {
 			// Create the RP in the same namespace selecting namespaced resources.
 			rp := &placementv1beta1.ResourcePlacement{
@@ -278,6 +294,10 @@ var _ = Describe("placing namespaced scoped resources using a RP with PickAll po
 	})
 
 	Context("with affinities, property selector only (node count)", Ordered, func() {
+		It("should wait for namespace collection to sync on all member clusters", func() {
+			waitForNamespaceCollectionOnClusters(appNamespace().Name, allMemberClusterNames)
+		})
+
 		It("creating the RP should succeed", func() {
 			if !isAzurePropertyProviderEnabled {
 				Skip("Skipping this test spec as Azure property provider is not enabled in the test environment")
@@ -342,6 +362,10 @@ var _ = Describe("placing namespaced scoped resources using a RP with PickAll po
 	})
 
 	Context("with affinities, property selector only (node count + CPU/memory capacity), updated", Ordered, func() {
+		It("should wait for namespace collection to sync on all member clusters", func() {
+			waitForNamespaceCollectionOnClusters(appNamespace().Name, allMemberClusterNames)
+		})
+
 		It("creating the RP should succeed", func() {
 			if !isAzurePropertyProviderEnabled {
 				Skip("Skipping this test spec as Azure property provider is not enabled in the test environment")
@@ -485,6 +509,10 @@ var _ = Describe("placing namespaced scoped resources using a RP with PickAll po
 	})
 
 	Context("with affinities, property selector only (cost + CPU allocatable), no matching clusters", Ordered, func() {
+		It("should wait for namespace collection to sync on all member clusters", func() {
+			waitForNamespaceCollectionOnClusters(appNamespace().Name, allMemberClusterNames)
+		})
+
 		It("creating the RP should succeed", func() {
 			if !isAzurePropertyProviderEnabled {
 				Skip("Skipping this test spec as Azure property provider is not enabled in the test environment")
@@ -550,6 +578,10 @@ var _ = Describe("placing namespaced scoped resources using a RP with PickAll po
 	})
 
 	Context("with affinities, label and property selectors (node count)", Ordered, func() {
+		It("should wait for namespace collection to sync on all member clusters", func() {
+			waitForNamespaceCollectionOnClusters(appNamespace().Name, allMemberClusterNames)
+		})
+
 		It("creating the RP should succeed", func() {
 			if !isAzurePropertyProviderEnabled {
 				Skip("Skipping this test spec as Azure property provider is not enabled in the test environment")
@@ -616,6 +648,10 @@ var _ = Describe("placing namespaced scoped resources using a RP with PickAll po
 	})
 
 	Context("with affinities, label and property selectors (node count, CPU/memory allocatable, memory capacity), updated", Ordered, func() {
+		It("should wait for namespace collection to sync on all member clusters", func() {
+			waitForNamespaceCollectionOnClusters(appNamespace().Name, allMemberClusterNames)
+		})
+
 		It("creating the RP should succeed", func() {
 			if !isAzurePropertyProviderEnabled {
 				Skip("Skipping this test spec as Azure property provider is not enabled in the test environment")
@@ -783,6 +819,10 @@ var _ = Describe("placing namespaced scoped resources using a RP with PickAll po
 	})
 
 	Context("with affinities, label and property selectors (cost), no matching clusters", Ordered, func() {
+		It("should wait for namespace collection to sync on all member clusters", func() {
+			waitForNamespaceCollectionOnClusters(appNamespace().Name, allMemberClusterNames)
+		})
+
 		It("creating the RP should succeed", func() {
 			if !isAzurePropertyProviderEnabled {
 				Skip("Skipping this test spec as Azure property provider is not enabled in the test environment")
@@ -851,6 +891,10 @@ var _ = Describe("placing namespaced scoped resources using a RP with PickAll po
 	})
 
 	Context("with affinities, label and property selectors (VM size), no matching clusters", Ordered, func() {
+		It("should wait for namespace collection to sync on all member clusters", func() {
+			waitForNamespaceCollectionOnClusters(appNamespace().Name, allMemberClusterNames)
+		})
+
 		It("creating the RP should succeed", func() {
 			if !isAzurePropertyProviderEnabled {
 				Skip("Skipping this test spec as Azure property provider is not enabled in the test environment")

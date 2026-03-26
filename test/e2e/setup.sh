@@ -228,6 +228,7 @@ do
             --set workApplierRequeueRateLimiterMaxFastBackoffDelaySeconds=5 \
             --set propertyProvider=$PROPERTY_PROVIDER \
             --set region=${REGIONS[$i]} \
+            --set enableNamespaceCollectionInPropertyProvider=true \
             $( [ "$PROPERTY_PROVIDER" = "azure" ] && echo "-f azure_valid_config.yaml" )
     else
         helm install member-agent ../../charts/member-agent/ \
@@ -249,6 +250,7 @@ do
             --set workApplierRequeueRateLimiterMaxSlowBackoffDelaySeconds=5 \
             --set workApplierRequeueRateLimiterMaxFastBackoffDelaySeconds=5 \
             --set propertyProvider=$PROPERTY_PROVIDER \
+            --set enableNamespaceCollectionInPropertyProvider=true \
             $( [ "$PROPERTY_PROVIDER" = "azure" ] && echo "-f azure_valid_config.yaml" )
     fi
 done

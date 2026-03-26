@@ -82,6 +82,10 @@ var _ = Describe("testing RP selecting resources", Label("resourceplacement"), f
 			ensureRPAndRelatedResourcesDeleted(types.NamespacedName{Name: rpName, Namespace: appNamespace().Name}, allMemberClusters)
 		})
 
+		It("should wait for namespace collection to sync on all member clusters", func() {
+			waitForNamespaceCollectionOnClusters(appNamespace().Name, allMemberClusterNames)
+		})
+
 		It("should update RP status as expected", func() {
 			rpStatusUpdatedActual := rpStatusUpdatedActual(appConfigMapIdentifiers(), allMemberClusterNames, nil, "0")
 			Eventually(rpStatusUpdatedActual, eventuallyDuration, eventuallyInterval).Should(Succeed(), "Failed to update RP %s status as expected", rpName)
@@ -150,6 +154,10 @@ var _ = Describe("testing RP selecting resources", Label("resourceplacement"), f
 			ensureRPAndRelatedResourcesDeleted(types.NamespacedName{Name: rpName, Namespace: appNamespace().Name}, allMemberClusters)
 		})
 
+		It("should wait for namespace collection to sync on all member clusters", func() {
+			waitForNamespaceCollectionOnClusters(appNamespace().Name, allMemberClusterNames)
+		})
+
 		It("should update RP status as expected", func() {
 			rpStatusUpdatedActual := rpStatusUpdatedActual(appConfigMapIdentifiers(), allMemberClusterNames, nil, "0")
 			Eventually(rpStatusUpdatedActual, eventuallyDuration, eventuallyInterval).Should(Succeed(), "Failed to update RP %s status as expected", rpName)
@@ -215,6 +223,10 @@ var _ = Describe("testing RP selecting resources", Label("resourceplacement"), f
 
 		AfterAll(func() {
 			ensureRPAndRelatedResourcesDeleted(types.NamespacedName{Name: rpName, Namespace: appNamespace().Name}, allMemberClusters)
+		})
+
+		It("should wait for namespace collection to sync on all member clusters", func() {
+			waitForNamespaceCollectionOnClusters(appNamespace().Name, allMemberClusterNames)
 		})
 
 		It("should update RP status as expected", func() {
@@ -309,6 +321,10 @@ var _ = Describe("testing RP selecting resources", Label("resourceplacement"), f
 			ensureRPAndRelatedResourcesDeleted(types.NamespacedName{Name: rpName, Namespace: appNamespace().Name}, allMemberClusters)
 		})
 
+		It("should wait for namespace collection to sync on all member clusters", func() {
+			waitForNamespaceCollectionOnClusters(appNamespace().Name, allMemberClusterNames)
+		})
+
 		It("should update RP status as expected", func() {
 			rpStatusUpdatedActual := rpStatusUpdatedActual(appConfigMapIdentifiers(), allMemberClusterNames, nil, "0")
 			Eventually(rpStatusUpdatedActual, eventuallyDuration, eventuallyInterval).Should(Succeed(), "Failed to update RP %s status as expected", rpName)
@@ -389,6 +405,10 @@ var _ = Describe("testing RP selecting resources", Label("resourceplacement"), f
 			ensureRPAndRelatedResourcesDeleted(types.NamespacedName{Name: rpName, Namespace: appNamespace().Name}, allMemberClusters)
 		})
 
+		It("should wait for namespace collection to sync on all member clusters", func() {
+			waitForNamespaceCollectionOnClusters(appNamespace().Name, allMemberClusterNames)
+		})
+
 		It("should update RP status as expected", func() {
 			// The configMap should not be selected.
 			rpStatusUpdatedActual := rpStatusUpdatedActual([]placementv1beta1.ResourceIdentifier{}, allMemberClusterNames, nil, "0")
@@ -449,6 +469,10 @@ var _ = Describe("testing RP selecting resources", Label("resourceplacement"), f
 
 		AfterAll(func() {
 			ensureRPAndRelatedResourcesDeleted(types.NamespacedName{Name: rpName, Namespace: appNamespace().Name}, allMemberClusters)
+		})
+
+		It("should wait for namespace collection to sync on all member clusters", func() {
+			waitForNamespaceCollectionOnClusters(appNamespace().Name, allMemberClusterNames)
 		})
 
 		It("should update RP status as expected", func() {
@@ -532,6 +556,10 @@ var _ = Describe("testing RP selecting resources", Label("resourceplacement"), f
 
 			By(fmt.Sprintf("garbage collect all things related to placement %s/%s", rpName, appNamespace().Name))
 			ensureRPAndRelatedResourcesDeleted(types.NamespacedName{Name: rpName, Namespace: appNamespace().Name}, allMemberClusters)
+		})
+
+		It("should wait for namespace collection to sync on all member clusters", func() {
+			waitForNamespaceCollectionOnClusters(appNamespace().Name, allMemberClusterNames)
 		})
 
 		It("should update RP status as expected", func() {
@@ -666,6 +694,10 @@ var _ = Describe("testing RP selecting resources", Label("resourceplacement"), f
 			ensureRPAndRelatedResourcesDeleted(types.NamespacedName{Name: rpName, Namespace: workNamespace}, allMemberClusters)
 		})
 
+		It("should wait for namespace collection to sync on all member clusters", func() {
+			waitForNamespaceCollectionOnClusters(appNamespace().Name, allMemberClusterNames)
+		})
+
 		It("should update RP status as expected", func() {
 			rpStatusUpdatedActual := rpStatusUpdatedActual(nil, allMemberClusterNames, nil, "0")
 			Eventually(rpStatusUpdatedActual, eventuallyDuration, eventuallyInterval).Should(Succeed(), "Failed to update RP %s status as expected", rpName)
@@ -757,6 +789,10 @@ var _ = Describe("testing RP selecting resources", Label("resourceplacement"), f
 
 		AfterAll(func() {
 			ensureRPAndRelatedResourcesDeleted(types.NamespacedName{Name: rpName, Namespace: workNamespace}, allMemberClusters)
+		})
+
+		It("should wait for namespace collection to sync on all member clusters", func() {
+			waitForNamespaceCollectionOnClusters(appNamespace().Name, allMemberClusterNames)
 		})
 
 		It("should update RP status as expected", func() {
@@ -866,6 +902,10 @@ var _ = Describe("testing RP selecting resources", Label("resourceplacement"), f
 				}
 			}
 			ensureRPAndRelatedResourcesDeleted(types.NamespacedName{Name: rpName, Namespace: workNamespace}, allMemberClusters, secrets...)
+		})
+
+		It("should wait for namespace collection to sync on all member clusters", func() {
+			waitForNamespaceCollectionOnClusters(appNamespace().Name, allMemberClusterNames)
 		})
 
 		It("check if created resource snapshots are as expected", func() {
@@ -1009,6 +1049,10 @@ var _ = Describe("testing RP selecting resources", Label("resourceplacement"), f
 		AfterAll(func() {
 			By(fmt.Sprintf("garbage collect all things related to placement %s/%s", rpName, nsName))
 			ensureRPAndRelatedResourcesDeleted(types.NamespacedName{Name: rpName, Namespace: nsName}, allMemberClusters, configMap, secret, pvc, role)
+		})
+
+		It("should wait for namespace collection to sync on all member clusters", func() {
+			waitForNamespaceCollectionOnClusters(appNamespace().Name, allMemberClusterNames)
 		})
 
 		It("should update RP status with the correct order of the selected resources", func() {

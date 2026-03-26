@@ -1,5 +1,5 @@
 # Build the memberagent binary
-FROM mcr.microsoft.com/oss/go/microsoft/golang:1.24.13 AS builder
+FROM mcr.microsoft.com/oss/go/microsoft/golang:1.25.8 AS builder
 
 ARG GOOS=linux
 ARG GOARCH=amd64
@@ -13,13 +13,13 @@ COPY go.sum go.sum
 RUN go mod download
 
 # Copy the go source
-COPY cmd/memberagent/main.go main.go
+COPY cmd/memberagent cmd/memberagent/
 COPY apis/ apis/
 COPY pkg/ pkg/
 
-# Build with CGO enabled and GOEXPERIMENT=systemcrypto for internal usage
-RUN echo "Building for GOOS=$GOOS GOARCH=$GOARCH"
-RUN CGO_ENABLED=1 GOOS=$GOOS GOARCH=$GOARCH GOEXPERIMENT=systemcrypto GO111MODULE=on go build -o memberagent main.go
+# Build
+RUN echo "Building images with GOOS=$GOOS GOARCH=$GOARCH"
+RUN CGO_ENABLED=1 GOOS=$GOOS GOARCH=$GOARCH GOEXPERIMENT=systemcrypto GO111MODULE=on go build -o memberagent cmd/memberagent/main.go
 
 # Use Azure Linux distroless base image to package the memberagent binary
 # Refer to https://mcr.microsoft.com/en-us/artifact/mar/azurelinux/distroless/base/about for more details
