@@ -49,7 +49,7 @@ TOOLS_BIN_DIR := $(abspath $(TOOLS_DIR)/bin)
 # Binaries
 # Note: Need to use abspath so we can invoke these from subdirectories
 
-CONTROLLER_GEN_VER := v0.16.0
+CONTROLLER_GEN_VER := v0.20.0
 CONTROLLER_GEN_BIN := controller-gen
 CONTROLLER_GEN := $(abspath $(TOOLS_BIN_DIR)/$(CONTROLLER_GEN_BIN)-$(CONTROLLER_GEN_VER))
 
