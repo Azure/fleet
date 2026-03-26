@@ -60,7 +60,7 @@ func TestBuildFleetValidatingWebhooks(t *testing.T) {
 				serviceURL:           "test-url",
 				clientConnectionType: &url,
 			},
-			wantLength: 8,
+			wantLength: 9,
 		},
 		"enable workload": {
 			config: Config{
@@ -70,7 +70,17 @@ func TestBuildFleetValidatingWebhooks(t *testing.T) {
 				clientConnectionType: &url,
 				enableWorkload:       true,
 			},
-			wantLength: 6,
+			wantLength: 7,
+		},
+		"enable PDBs": {
+			config: Config{
+				serviceNamespace:     "test-namespace",
+				servicePort:          8080,
+				serviceURL:           "test-url",
+				clientConnectionType: &url,
+				enablePDBs:           true,
+			},
+			wantLength: 8,
 		},
 	}
 
@@ -118,6 +128,7 @@ func TestNewWebhookConfig(t *testing.T) {
 		enableGuardRail               bool
 		denyModifyMemberClusterLabels bool
 		enableWorkload                bool
+		enablePDBs                    bool
 		useCertManager                bool
 		want                          *Config
 		wantErr                       bool
@@ -132,6 +143,7 @@ func TestNewWebhookConfig(t *testing.T) {
 			enableGuardRail:               true,
 			denyModifyMemberClusterLabels: true,
 			enableWorkload:                false,
+			enablePDBs:                    false,
 			useCertManager:                false,
 			want: &Config{
 				serviceNamespace:              "test-namespace",
@@ -141,12 +153,13 @@ func TestNewWebhookConfig(t *testing.T) {
 				enableGuardRail:               true,
 				denyModifyMemberClusterLabels: true,
 				enableWorkload:                false,
+				enablePDBs:                    false,
 				useCertManager:                false,
 			},
 			wantErr: false,
 		},
 		{
-			name:                          "valid input with cert-manager",
+			name:                          "valid input with cert-manager and PDBs enabled",
 			mgr:                           nil,
 			webhookServiceName:            "test-webhook",
 			port:                          8080,
@@ -155,6 +168,7 @@ func TestNewWebhookConfig(t *testing.T) {
 			enableGuardRail:               true,
 			denyModifyMemberClusterLabels: true,
 			enableWorkload:                true,
+			enablePDBs:                    true,
 			useCertManager:                true,
 			want: &Config{
 				serviceNamespace:              "test-namespace",
@@ -164,6 +178,7 @@ func TestNewWebhookConfig(t *testing.T) {
 				enableGuardRail:               true,
 				denyModifyMemberClusterLabels: true,
 				enableWorkload:                true,
+				enablePDBs:                    true,
 				useCertManager:                true,
 			},
 			wantErr: false,
@@ -173,7 +188,7 @@ func TestNewWebhookConfig(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			t.Setenv("POD_NAMESPACE", "test-namespace")
 
-			got, err := NewWebhookConfig(tt.mgr, tt.webhookServiceName, tt.port, tt.clientConnectionType, tt.certDir, tt.enableGuardRail, tt.denyModifyMemberClusterLabels, tt.enableWorkload, tt.useCertManager, "fleet-webhook-server-cert", nil, false)
+			got, err := NewWebhookConfig(tt.mgr, tt.webhookServiceName, tt.port, tt.clientConnectionType, tt.certDir, tt.enableGuardRail, tt.denyModifyMemberClusterLabels, tt.enableWorkload, tt.enablePDBs, tt.useCertManager, "fleet-webhook-server-cert", nil, false)
 			if (err != nil) != tt.wantErr {
 				t.Errorf("NewWebhookConfig() error = %v, wantErr %v", err, tt.wantErr)
 				return
@@ -212,6 +227,7 @@ func TestNewWebhookConfig_SelfSignedCertError(t *testing.T) {
 		false,                       // enableGuardRail
 		false,                       // denyModifyMemberClusterLabels
 		false,                       // enableWorkload
+		false,                       // enablePDBs
 		false,                       // useCertManager = false to trigger self-signed path
 		"fleet-webhook-server-cert", // webhookCertName
 		nil,                         // whiteListedUsers
@@ -244,6 +260,7 @@ func TestNewWebhookConfigFromOptions(t *testing.T) {
 					EnableGuardRail:                        true,
 					GuardRailDenyModifyMemberClusterLabels: true,
 					EnableWorkload:                         true,
+					EnablePDBs:                             true,
 					UseCertManager:                         true,
 					GuardRailWhitelistedUsers:              "user1,user2,user3",
 				},
@@ -259,6 +276,7 @@ func TestNewWebhookConfigFromOptions(t *testing.T) {
 				enableGuardRail:               true,
 				denyModifyMemberClusterLabels: true,
 				enableWorkload:                true,
+				enablePDBs:                    true,
 				useCertManager:                true,
 				webhookCertName:               "fleet-webhook-certificate",
 				whiteListedUsers:              []string{"user1", "user2", "user3"},
@@ -273,6 +291,7 @@ func TestNewWebhookConfigFromOptions(t *testing.T) {
 					EnableGuardRail:                        false,
 					GuardRailDenyModifyMemberClusterLabels: false,
 					EnableWorkload:                         false,
+					EnablePDBs:                             false,
 					UseCertManager:                         false,
 					GuardRailWhitelistedUsers:              "admin",
 				},
@@ -288,6 +307,7 @@ func TestNewWebhookConfigFromOptions(t *testing.T) {
 				enableGuardRail:               false,
 				denyModifyMemberClusterLabels: false,
 				enableWorkload:                false,
+				enablePDBs:                    false,
 				useCertManager:                false,
 				webhookCertName:               "fleet-webhook-certificate",
 				whiteListedUsers:              []string{"admin"},

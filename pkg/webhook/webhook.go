@@ -61,6 +61,7 @@ import (
 	"github.com/kubefleet-dev/kubefleet/pkg/webhook/clusterresourceplacementeviction"
 	"github.com/kubefleet-dev/kubefleet/pkg/webhook/fleetresourcehandler"
 	"github.com/kubefleet-dev/kubefleet/pkg/webhook/membercluster"
+	"github.com/kubefleet-dev/kubefleet/pkg/webhook/pdb"
 	"github.com/kubefleet-dev/kubefleet/pkg/webhook/pod"
 	"github.com/kubefleet-dev/kubefleet/pkg/webhook/replicaset"
 	"github.com/kubefleet-dev/kubefleet/pkg/webhook/resourceoverride"
@@ -170,6 +171,7 @@ type Config struct {
 
 	denyModifyMemberClusterLabels bool
 	enableWorkload                bool
+	enablePDBs                    bool
 	// useCertManager indicates whether cert-manager is used for certificate management
 	useCertManager bool
 	// webhookCertName is the name of the Certificate resource created by cert-manager.
@@ -181,7 +183,21 @@ type Config struct {
 	networkingAgentsEnabled bool
 }
 
-func NewWebhookConfig(mgr manager.Manager, webhookServiceName string, port int32, clientConnectionType *options.WebhookClientConnectionType, certDir string, enableGuardRail bool, denyModifyMemberClusterLabels bool, enableWorkload bool, useCertManager bool, webhookCertName string, whiteListedUsers []string, networkingAgentsEnabled bool) (*Config, error) {
+func NewWebhookConfig(
+	mgr manager.Manager,
+	webhookServiceName string,
+	port int32,
+	clientConnectionType *options.WebhookClientConnectionType,
+	certDir string,
+	enableGuardRail bool,
+	denyModifyMemberClusterLabels bool,
+	enableWorkload bool,
+	enablePDBs bool,
+	useCertManager bool,
+	webhookCertName string,
+	whiteListedUsers []string,
+	networkingAgentsEnabled bool,
+) (*Config, error) {
 	// We assume the Pod namespace should be passed to env through downward API in the Pod spec.
 	namespace := os.Getenv("POD_NAMESPACE")
 	if namespace == "" {
@@ -197,6 +213,7 @@ func NewWebhookConfig(mgr manager.Manager, webhookServiceName string, port int32
 		enableGuardRail:               enableGuardRail,
 		denyModifyMemberClusterLabels: denyModifyMemberClusterLabels,
 		enableWorkload:                enableWorkload,
+		enablePDBs:                    enablePDBs,
 		useCertManager:                useCertManager,
 		webhookCertName:               webhookCertName,
 		whiteListedUsers:              whiteListedUsers,
@@ -229,10 +246,20 @@ func NewWebhookConfigFromOptions(mgr manager.Manager, opts *options.Options, web
 	webhookClientConnectionType := options.WebhookClientConnectionType(opts.WebhookOpts.ClientConnectionType)
 	whiteListedUsers := strings.Split(opts.WebhookOpts.GuardRailWhitelistedUsers, ",")
 
-	return NewWebhookConfig(mgr, opts.WebhookOpts.ServiceName, webhookPort,
-		&webhookClientConnectionType, FleetWebhookCertDir, opts.WebhookOpts.EnableGuardRail,
-		opts.WebhookOpts.GuardRailDenyModifyMemberClusterLabels, opts.WebhookOpts.EnableWorkload, opts.WebhookOpts.UseCertManager,
-		FleetWebhookCertName, whiteListedUsers, opts.ClusterMgmtOpts.NetworkingAgentsEnabled)
+	return NewWebhookConfig(
+		mgr,
+		opts.WebhookOpts.ServiceName,
+		webhookPort,
+		&webhookClientConnectionType,
+		FleetWebhookCertDir,
+		opts.WebhookOpts.EnableGuardRail,
+		opts.WebhookOpts.GuardRailDenyModifyMemberClusterLabels,
+		opts.WebhookOpts.EnableWorkload,
+		opts.WebhookOpts.EnablePDBs,
+		opts.WebhookOpts.UseCertManager,
+		FleetWebhookCertName,
+		whiteListedUsers,
+		opts.ClusterMgmtOpts.NetworkingAgentsEnabled)
 }
 
 func (w *Config) Start(ctx context.Context) error {
@@ -459,6 +486,23 @@ func (w *Config) buildFleetValidatingWebhooks() []admv1.ValidatingWebhook {
 				{
 					Operations: []admv1.OperationType{admv1.Create},
 					Rule:       createRule([]string{appsv1.SchemeGroupVersion.Group}, []string{appsv1.SchemeGroupVersion.Version}, []string{replicaSetResourceName}, &namespacedScope),
+				},
+			},
+			TimeoutSeconds: longWebhookTimeout,
+		})
+	}
+
+	if !w.enablePDBs {
+		webHooks = append(webHooks, admv1.ValidatingWebhook{
+			Name:                    "fleet.poddisruptionbudget.validating",
+			ClientConfig:            w.createClientConfig(pdb.ValidationPath),
+			FailurePolicy:           &failFailurePolicy,
+			SideEffects:             &sideEffortsNone,
+			AdmissionReviewVersions: admissionReviewVersions,
+			Rules: []admv1.RuleWithOperations{
+				{
+					Operations: []admv1.OperationType{admv1.Create},
+					Rule:       createRule([]string{policyv1.SchemeGroupVersion.Group}, []string{policyv1.SchemeGroupVersion.Version}, []string{podDisruptionBudgetsResourceName}, &namespacedScope),
 				},
 			},
 			TimeoutSeconds: longWebhookTimeout,

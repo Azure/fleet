@@ -25,12 +25,14 @@ import (
 	admissionv1 "k8s.io/api/admission/v1"
 	appsv1 "k8s.io/api/apps/v1"
 	corev1 "k8s.io/api/core/v1"
+	policyv1 "k8s.io/api/policy/v1"
 	rbacv1 "k8s.io/api/rbac/v1"
 	k8sErrors "k8s.io/apimachinery/pkg/api/errors"
 	"k8s.io/apimachinery/pkg/api/resource"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/types"
+	"k8s.io/apimachinery/pkg/util/intstr"
 	utilrand "k8s.io/apimachinery/pkg/util/rand"
 	"k8s.io/utils/ptr"
 
@@ -1153,6 +1155,119 @@ var _ = Describe("fleet guard rail for pods and replicasets in fleet/kube namesp
 				},
 			}
 			Expect(checkIfStatusErrorWithMessage(impersonateHubClient.Create(ctx, &rs), fmt.Sprintf(validation.ResourceDeniedFormat, testUser, utils.GenerateGroupString(testGroups), admissionv1.Create, &replicaSetGVK, "", types.NamespacedName{Name: rs.Name, Namespace: rs.Namespace}))).Should(Succeed())
+		})
+	})
+})
+
+// Note: even though the PDB webhook allows creation of PDBs in reserved namespaces, the guard rail webhook would still block
+// such creation requests if they do not come from whitelisted users.
+var _ = Describe("fleet guard rail webhook tests for PodDisruptionBudgets", Serial, Ordered, func() {
+	var (
+		pdbGVK = metav1.GroupVersionKind{Group: policyv1.SchemeGroupVersion.Group, Version: policyv1.SchemeGroupVersion.Version, Kind: "PodDisruptionBudget"}
+	)
+
+	Context("deny PDB operations in fleet-system namespace", func() {
+		It("should deny CREATE operation on PDB in fleet-system namespace for non-whitelisted users", func() {
+			pdb := policyv1.PodDisruptionBudget{
+				ObjectMeta: metav1.ObjectMeta{
+					Name:      "test-pdb-fleet-system",
+					Namespace: "fleet-system",
+				},
+				Spec: policyv1.PodDisruptionBudgetSpec{
+					MinAvailable: ptr.To(intstr.FromInt32(1)),
+					Selector: &metav1.LabelSelector{
+						MatchLabels: map[string]string{"app": "test"},
+					},
+				},
+			}
+			Expect(checkIfStatusErrorWithMessage(impersonateHubClient.Create(ctx, &pdb), fmt.Sprintf(validation.ResourceDeniedFormat, testUser, utils.GenerateGroupString(testGroups), admissionv1.Create, &pdbGVK, "", types.NamespacedName{Name: pdb.Name, Namespace: pdb.Namespace}))).Should(Succeed())
+		})
+	})
+
+	Context("deny PDB operations in fleet-member namespace", func() {
+		var (
+			mcName       string
+			imcNamespace string
+		)
+
+		BeforeAll(func() {
+			mcName = fmt.Sprintf(mcNameTemplate, GinkgoParallelProcess())
+			imcNamespace = fmt.Sprintf(utils.NamespaceNameFormat, mcName)
+			createMemberCluster(mcName, testIdentity, nil, map[string]string{fleetClusterResourceIDAnnotationKey: clusterID1})
+			checkInternalMemberClusterExists(mcName, imcNamespace)
+		})
+
+		AfterAll(func() {
+			ensureMemberClusterAndRelatedResourcesDeletion(mcName)
+		})
+
+		It("should deny CREATE operation on PDB in fleet-member namespace for user not in MC identity", func() {
+			pdb := policyv1.PodDisruptionBudget{
+				ObjectMeta: metav1.ObjectMeta{
+					Name:      "test-pdb-member",
+					Namespace: imcNamespace,
+				},
+				Spec: policyv1.PodDisruptionBudgetSpec{
+					MinAvailable: ptr.To(intstr.FromInt32(1)),
+					Selector: &metav1.LabelSelector{
+						MatchLabels: map[string]string{"app": "test"},
+					},
+				},
+			}
+			Expect(checkIfStatusErrorWithMessage(impersonateHubClient.Create(ctx, &pdb), fmt.Sprintf(validation.ResourceDeniedFormat, testUser, utils.GenerateGroupString(testGroups), admissionv1.Create, &pdbGVK, "", types.NamespacedName{Name: pdb.Name, Namespace: pdb.Namespace}))).Should(Succeed())
+		})
+
+		It("should deny UPDATE operation on PDB in fleet-member namespace for user not in MC identity", func() {
+			// First create a PDB as admin.
+			pdb := policyv1.PodDisruptionBudget{
+				ObjectMeta: metav1.ObjectMeta{
+					Name:      "test-pdb-member-update",
+					Namespace: imcNamespace,
+				},
+				Spec: policyv1.PodDisruptionBudgetSpec{
+					MinAvailable: ptr.To(intstr.FromInt32(1)),
+					Selector: &metav1.LabelSelector{
+						MatchLabels: map[string]string{"app": "test"},
+					},
+				},
+			}
+			Expect(hubClient.Create(ctx, &pdb)).Should(Succeed())
+
+			// Try to update as non-admin.
+			Eventually(func(g Gomega) error {
+				var p policyv1.PodDisruptionBudget
+				err := hubClient.Get(ctx, types.NamespacedName{Name: pdb.Name, Namespace: pdb.Namespace}, &p)
+				if err != nil {
+					return err
+				}
+				p.Labels = map[string]string{testKey: testValue}
+				err = impersonateHubClient.Update(ctx, &p)
+				if k8sErrors.IsConflict(err) {
+					return err
+				}
+				return checkIfStatusErrorWithMessage(err, fmt.Sprintf(validation.ResourceDeniedFormat, testUser, utils.GenerateGroupString(testGroups), admissionv1.Update, &pdbGVK, "", types.NamespacedName{Name: p.Name, Namespace: p.Namespace}))
+			}, eventuallyDuration, eventuallyInterval).Should(Succeed())
+
+			// Cleanup.
+			Expect(hubClient.Delete(ctx, &pdb)).Should(Succeed())
+		})
+	})
+
+	Context("deny PDB operations in kube-system namespace", func() {
+		It("should deny CREATE operation on PDB in kube-system namespace for non-whitelisted users", func() {
+			pdb := policyv1.PodDisruptionBudget{
+				ObjectMeta: metav1.ObjectMeta{
+					Name:      "test-pdb-kube",
+					Namespace: "kube-system",
+				},
+				Spec: policyv1.PodDisruptionBudgetSpec{
+					MinAvailable: ptr.To(intstr.FromInt32(1)),
+					Selector: &metav1.LabelSelector{
+						MatchLabels: map[string]string{"app": "test"},
+					},
+				},
+			}
+			Expect(checkIfStatusErrorWithMessage(impersonateHubClient.Create(ctx, &pdb), fmt.Sprintf(validation.ResourceDeniedFormat, testUser, utils.GenerateGroupString(testGroups), admissionv1.Create, &pdbGVK, "", types.NamespacedName{Name: pdb.Name, Namespace: pdb.Namespace}))).Should(Succeed())
 		})
 	})
 })

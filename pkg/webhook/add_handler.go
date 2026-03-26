@@ -7,6 +7,7 @@ import (
 	"github.com/kubefleet-dev/kubefleet/pkg/webhook/clusterresourceplacementeviction"
 	"github.com/kubefleet-dev/kubefleet/pkg/webhook/fleetresourcehandler"
 	"github.com/kubefleet-dev/kubefleet/pkg/webhook/membercluster"
+	"github.com/kubefleet-dev/kubefleet/pkg/webhook/pdb"
 	"github.com/kubefleet-dev/kubefleet/pkg/webhook/pod"
 	"github.com/kubefleet-dev/kubefleet/pkg/webhook/replicaset"
 	"github.com/kubefleet-dev/kubefleet/pkg/webhook/resourceoverride"
@@ -23,6 +24,7 @@ func init() {
 	AddToManagerFuncs = append(AddToManagerFuncs, resourceplacement.Add)
 	AddToManagerFuncs = append(AddToManagerFuncs, pod.Add)
 	AddToManagerFuncs = append(AddToManagerFuncs, replicaset.Add)
+	AddToManagerFuncs = append(AddToManagerFuncs, pdb.Add)
 	AddToManagerFuncs = append(AddToManagerFuncs, clusterresourceoverride.Add)
 	AddToManagerFuncs = append(AddToManagerFuncs, resourceoverride.Add)
 	AddToManagerFuncs = append(AddToManagerFuncs, clusterresourceplacementeviction.Add)

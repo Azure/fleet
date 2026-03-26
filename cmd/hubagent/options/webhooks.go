@@ -52,9 +52,14 @@ type WebhookOptions struct {
 
 	// Enable workload resources (pods and replicaSets) to be created in the hub cluster or not.
 	// If set to false, the KubeFleet pod and replicaset validating webhooks, which blocks the creation
-	// of pods and replicaSets outside KubeFleet reserved namespaces for most users, will be disabled.
+	// of pods and replicaSets outside KubeFleet reserved namespaces for most users, will be enabled.
 	// This option only applies if webhooks are enabled.
 	EnableWorkload bool
+
+	// Enable PodDisruptionBudgets to be created in the hub cluster or not. If set to false, the KubeFleet
+	// PodDisruptionBudget validating webhook, which blocks the creation of PodDisruptionBudgets outside KubeFleet
+	// reserved namespaces, will be enabled. This option only applies if webhooks are enabled.
+	EnablePDBs bool
 
 	// Use the cert-manager project for managing KubeFleet webhook server certificates or not.
 	// If set to false, the system will use self-signed certificates.
@@ -109,7 +114,14 @@ func (o *WebhookOptions) AddFlags(flags *flag.FlagSet) {
 		&o.EnableWorkload,
 		"enable-workload",
 		false,
-		"Enable workload resources (pods and replicaSets) to be created in the hub cluster or not. If set to false, the KubeFleet pod and replicaset validating webhooks, which blocks the creation of pods and replicaSets outside KubeFleet reserved namespaces for most users, will be disabled. This option only applies if webhooks are enabled.",
+		"Enable workload resources (pods and replicaSets) to be created directly in the hub cluster or not. If set to true, the KubeFleet pod and replicaset validating webhooks, which blocks the creation of pods and replicaSets outside KubeFleet reserved namespaces for most users, will be disabled. This option only applies if webhooks are enabled.",
+	)
+
+	flags.BoolVar(
+		&o.EnablePDBs,
+		"enable-pdbs",
+		false,
+		"Enable PodDisruptionBudgets to be created directly in the hub cluster or not. If set to true, the KubeFleet PodDisruptionBudget validating webhook, which blocks the creation of PodDisruptionBudgets outside KubeFleet reserved namespaces, will be disabled. This option only applies if webhooks are enabled.",
 	)
 
 	flags.BoolVar(
