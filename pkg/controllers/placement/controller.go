@@ -742,7 +742,7 @@ func (r *Reconciler) determineRolloutStateForPlacementWithExternalRolloutStrateg
 			Type:               getPlacementRolloutStartedConditionType(placementObj),
 			Status:             metav1.ConditionUnknown,
 			Reason:             condition.RolloutControlledByExternalControllerReason,
-			Message:            "Rollout is controlled by an external controller and no resource snapshot name is observed across clusters, probably rollout has not started yet",
+			Message:            fmt.Sprintf("Rollout is controlled by an external controller and no resource snapshot name is observed across clusters. To determine rollout status, check the %s resources with spec.placementName matching this placement", getStagedUpdateRunResourceName(placementObj)),
 			ObservedGeneration: placementObj.GetGeneration(),
 		})
 		// As placement status will refresh even if the spec has not changed, we reset any unused conditions to avoid confusion.

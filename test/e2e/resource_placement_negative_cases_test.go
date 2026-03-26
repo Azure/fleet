@@ -149,6 +149,10 @@ var _ = Describe("handling errors and failures gracefully for resource placement
 			Expect(hubClient.Create(ctx, rp)).To(Succeed(), "Failed to create ResourcePlacement")
 		})
 
+		It("should wait for namespace collection to sync on all member clusters", func() {
+			waitForNamespaceCollectionOnClusters(appNamespace().Name, allMemberClusterNames)
+		})
+
 		It("should update ResourcePlacement status as expected", func() {
 			Eventually(func() error {
 				rp := &placementv1beta1.ResourcePlacement{}
@@ -311,6 +315,10 @@ var _ = Describe("handling errors and failures gracefully for resource placement
 			Expect(hubClient.Create(ctx, rp)).To(Succeed(), "Failed to create ResourcePlacement")
 		})
 
+		It("should wait for namespace collection to sync on all member clusters", func() {
+			waitForNamespaceCollectionOnClusters(appNamespace().Name, allMemberClusterNames)
+		})
+
 		It("should update ResourcePlacement status as expected", func() {
 			Eventually(func() error {
 				rp := &placementv1beta1.ResourcePlacement{}
@@ -439,6 +447,10 @@ var _ = Describe("handling errors and failures gracefully for resource placement
 				},
 			}
 			Expect(hubClient.Create(ctx, rp)).To(Succeed(), "Failed to create ResourcePlacement")
+		})
+
+		It("should wait for namespace collection to sync on all member clusters", func() {
+			waitForNamespaceCollectionOnClusters(appNamespace().Name, allMemberClusterNames)
 		})
 
 		It("should update ResourcePlacement status as expected", func() {

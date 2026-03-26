@@ -519,6 +519,11 @@ func summarizeAKSClusterProperties(memberCluster *framework.Cluster, mcObj *clus
 				Status:             metav1.ConditionTrue,
 				ObservedGeneration: mcObj.Generation,
 			},
+			{
+				Type:               propertyprovider.NamespaceCollectionSucceededCondType,
+				Status:             metav1.ConditionTrue,
+				ObservedGeneration: mcObj.Generation,
+			},
 		},
 	}
 
@@ -836,6 +841,70 @@ func createNamespace() {
 	}, eventuallyDuration, eventuallyInterval).Should(Succeed(), "Failed to create namespace %s", ns.Name)
 }
 
+// isNamespaceCollectionEnabled checks (without waiting) whether namespace collection
+// is currently enabled on the given cluster. Returns false if the cluster cannot be
+// fetched or the condition is absent.
+func isNamespaceCollectionEnabled(clusterName string) bool {
+	mc := &clusterv1beta1.MemberCluster{}
+	if err := hubClient.Get(ctx, types.NamespacedName{Name: clusterName}, mc); err != nil {
+		return false
+	}
+	for _, cond := range mc.Status.Conditions {
+		if cond.Type == propertyprovider.NamespaceCollectionSucceededCondType {
+			return true
+		}
+	}
+	return false
+}
+
+// waitForNamespaceCollectionOnClusters waits for the specified namespace to appear in
+// MemberCluster.Status.Namespaces for all specified clusters. This ensures namespace collection
+// has synced before creating ResourcePlacements, avoiding race conditions where the scheduler
+// might filter out clusters before they report having the namespace.
+//
+// This is a no-op when namespace collection is not enabled (i.e. no property provider is
+// configured), preserving backward compatibility for tests that run without PROPERTY_PROVIDER=azure.
+//
+// This is particularly important when:
+// - CRPs dynamically create namespaces on member clusters
+// - ResourcePlacements need to use those newly created namespaces
+// - Namespace affinity plugin filtering is enabled
+func waitForNamespaceCollectionOnClusters(namespaceName string, clusterNames []string) {
+	GinkgoHelper()
+
+	// Skip waiting entirely when namespace collection is not  nabled on any cluster.
+	// The namespace affinity plugin skips filtering in this case (backward compatibility),
+	// so there is no race to protect against.
+	// Note: In the test environment, namespace collection is configured in an all-or-nothing
+	// manner across all clusters, so checking the first cluster is sufficient.
+	if len(clusterNames) == 0 || !isNamespaceCollectionEnabled(clusterNames[0]) {
+		return
+	}
+
+	// Wait for the specific namespace to appear in the collection on every cluster.
+	for _, clusterName := range clusterNames {
+		Eventually(func() error {
+			mc := &clusterv1beta1.MemberCluster{}
+			if err := hubClient.Get(ctx, types.NamespacedName{Name: clusterName}, mc); err != nil {
+				return fmt.Errorf("failed to get member cluster %s: %w", clusterName, err)
+			}
+
+			// Check if the namespace exists in the status
+			if mc.Status.Namespaces == nil {
+				return fmt.Errorf("cluster %s has namespace collection enabled but Status.Namespaces is nil", clusterName)
+			}
+
+			if _, exists := mc.Status.Namespaces[namespaceName]; !exists {
+				return fmt.Errorf("namespace %s not yet collected on cluster %s (has %d namespaces)",
+					namespaceName, clusterName, len(mc.Status.Namespaces))
+			}
+
+			return nil
+		}, longEventuallyDuration, eventuallyInterval).Should(Succeed(),
+			"Failed to wait for namespace %s to be collected on cluster %s", namespaceName, clusterName)
+	}
+}
+
 func createConfigMap() {
 	configMap := appConfigMap()
 	Expect(hubClient.Create(ctx, &configMap)).To(Succeed(), "Failed to create config map %s", configMap.Name)
@@ -1059,17 +1128,11 @@ func checkIfRemovedConfigMapFromMemberClustersConsistently(clusters []*framework
 
 // createCRPWithSelectors creates a ClusterResourcePlacement with the given selectors.
 func createCRPWithSelectors(crpName string, selectors []placementv1beta1.ResourceSelectorTerm) {
-	crp := &placementv1beta1.ClusterResourcePlacement{
-		ObjectMeta: metav1.ObjectMeta{
-			Name:       crpName,
-			Finalizers: []string{customDeletionBlockerFinalizer},
-		},
-		Spec: placementv1beta1.PlacementSpec{
-			ResourceSelectors: selectors,
-		},
-	}
-	By(fmt.Sprintf("creating CRP %s", crpName))
-	Expect(hubClient.Create(ctx, crp)).To(Succeed(), "Failed to create CRP %s", crpName)
+	// Use default strategy (empty strategy will use API defaults)
+	defaultStrategy := placementv1beta1.RolloutStrategy{}
+
+	// Use the generic CRP creator with custom selectors, nil policy, and default strategy
+	createGenericCRP(crpName, selectors, nil, defaultStrategy)
 }
 
 // checkNamespacePlacedOnClusters verifies a namespace is placed on all member clusters.
@@ -1740,31 +1803,25 @@ func createRPWithApplyStrategy(rpNamespace, rpName string, applyStrategy *placem
 
 // createCRPWithApplyStrategy creates a ClusterResourcePlacement with the given name and apply strategy.
 func createCRPWithApplyStrategy(crpName string, applyStrategy *placementv1beta1.ApplyStrategy, resourceSelectors []placementv1beta1.ResourceSelectorTerm) {
-	crp := &placementv1beta1.ClusterResourcePlacement{
-		ObjectMeta: metav1.ObjectMeta{
-			Name: crpName,
-			// Add a custom finalizer; this would allow us to better observe
-			// the behavior of the controllers.
-			Finalizers: []string{customDeletionBlockerFinalizer},
-		},
-		Spec: placementv1beta1.PlacementSpec{
-			ResourceSelectors: workResourceSelector(),
-			Strategy: placementv1beta1.RolloutStrategy{
-				Type: placementv1beta1.RollingUpdateRolloutStrategyType,
-				RollingUpdate: &placementv1beta1.RollingUpdateConfig{
-					UnavailablePeriodSeconds: ptr.To(2),
-				},
-			},
+	// Build the strategy with optional apply strategy
+	strategy := placementv1beta1.RolloutStrategy{
+		Type: placementv1beta1.RollingUpdateRolloutStrategyType,
+		RollingUpdate: &placementv1beta1.RollingUpdateConfig{
+			UnavailablePeriodSeconds: ptr.To(2),
 		},
 	}
 	if applyStrategy != nil {
-		crp.Spec.Strategy.ApplyStrategy = applyStrategy
+		strategy.ApplyStrategy = applyStrategy
 	}
+
+	// Use workResourceSelector as default if no selectors provided
+	selectors := workResourceSelector()
 	if resourceSelectors != nil {
-		crp.Spec.ResourceSelectors = resourceSelectors
+		selectors = resourceSelectors
 	}
-	By(fmt.Sprintf("creating placement %s", crpName))
-	Expect(hubClient.Create(ctx, crp)).To(Succeed(), "Failed to create CRP %s", crpName)
+
+	// Use the generic CRP creator with nil placement policy (defaults to PickAll)
+	createGenericCRP(crpName, selectors, nil, strategy)
 }
 
 // createRP creates a ResourcePlacement with the given name.
@@ -1780,6 +1837,56 @@ func createCRP(crpName string) {
 // createNamespaceOnlyCRP creates a ClusterResourcePlacement with namespace-only selector.
 func createNamespaceOnlyCRP(crpName string) {
 	createCRPWithApplyStrategy(crpName, nil, namespaceOnlySelector())
+}
+
+// createGenericCRP creates a CRP with full customization as suggested by michaelawyu
+// This provides the most flexible CRP creation utility for E2E tests
+func createGenericCRP(name string, resourceSelectors []placementv1beta1.ResourceSelectorTerm, placementPolicy *placementv1beta1.PlacementPolicy, strategy placementv1beta1.RolloutStrategy) {
+	crp := &placementv1beta1.ClusterResourcePlacement{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:       name,
+			Finalizers: []string{customDeletionBlockerFinalizer},
+		},
+		Spec: placementv1beta1.PlacementSpec{
+			ResourceSelectors: resourceSelectors,
+			Policy:            placementPolicy,
+			Strategy:          strategy,
+		},
+	}
+	By(fmt.Sprintf("creating placement %s", name))
+	Expect(hubClient.Create(ctx, crp)).To(Succeed(), "Failed to create CRP %s", name)
+}
+
+// createNamespaceOnlyCRPWithFixedClusters creates a CRP with PickFixed policy that places
+// the namespace on the specified clusters. Uses the new generic CRP creator.
+func createNamespaceOnlyCRPWithFixedClusters(crpName string, clusterNames []string) {
+	policy := &placementv1beta1.PlacementPolicy{
+		PlacementType: placementv1beta1.PickFixedPlacementType,
+		ClusterNames:  clusterNames,
+	}
+	strategy := placementv1beta1.RolloutStrategy{
+		Type: placementv1beta1.RollingUpdateRolloutStrategyType,
+		RollingUpdate: &placementv1beta1.RollingUpdateConfig{
+			UnavailablePeriodSeconds: ptr.To(2),
+		},
+	}
+	createGenericCRP(crpName, namespaceOnlySelector(), policy, strategy)
+}
+
+// createNamespaceOnlyCRPForTwoClusters creates a CRP with PickFixed policy that places the
+// namespace on cluster-1 and cluster-2 only. Used by namespace affinity e2e tests to set up
+// a state where only 2 out of 3 member clusters have the target namespace.
+func createNamespaceOnlyCRPForTwoClusters(crpName string) {
+	createNamespaceOnlyCRPWithFixedClusters(crpName, []string{
+		memberCluster1EastProdName,
+		memberCluster2EastCanaryName,
+	})
+}
+
+func createNamespaceOnlyCRPForOneCluster(crpName string) {
+	createNamespaceOnlyCRPWithFixedClusters(crpName, []string{
+		memberCluster1EastProdName,
+	})
 }
 
 // ensureClusterStagedUpdateRunDeletion deletes the cluster staged update run with the given name and checks all related cluster approval requests are also deleted.
