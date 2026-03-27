@@ -195,7 +195,7 @@ var (
 	lessFuncPlacementStatus = func(a, b placementv1beta1.PerClusterPlacementStatus) bool {
 		return a.ClusterName < b.ClusterName
 	}
-	lessFuncPlacementStatusV1 = func(a, b placementv1.ResourcePlacementStatus) bool {
+	lessFuncPlacementStatusV1 = func(a, b placementv1.PerClusterPlacementStatus) bool {
 		return a.ClusterName < b.ClusterName
 	}
 	lessFuncPlacementStatusByConditions = func(a, b placementv1beta1.PerClusterPlacementStatus) bool {

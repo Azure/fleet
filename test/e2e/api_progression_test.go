@@ -102,8 +102,8 @@ var _ = Describe("takeover, drift detection, and reportDiff mode (v1beta1 to v1)
 				ObjectMeta: metav1.ObjectMeta{
 					Name: crpName,
 				},
-				Spec: placementv1.ClusterResourcePlacementSpec{
-					ResourceSelectors: []placementv1.ClusterResourceSelector{
+				Spec: placementv1.PlacementSpec{
+					ResourceSelectors: []placementv1.ResourceSelectorTerm{
 						{
 							Group:   "",
 							Version: "v1",
@@ -134,8 +134,8 @@ var _ = Describe("takeover, drift detection, and reportDiff mode (v1beta1 to v1)
 		})
 
 		It("should update CRP status as expected", func() {
-			buildWantCRPStatus := func(crpGeneration int64) *placementv1.ClusterResourcePlacementStatus {
-				return &placementv1.ClusterResourcePlacementStatus{
+			buildWantCRPStatus := func(crpGeneration int64) *placementv1.PlacementStatus {
+				return &placementv1.PlacementStatus{
 					Conditions: crpAppliedFailedConditions(crpGeneration),
 					SelectedResources: []placementv1.ResourceIdentifier{
 						{
@@ -144,10 +144,11 @@ var _ = Describe("takeover, drift detection, and reportDiff mode (v1beta1 to v1)
 							Name:    nsName,
 						},
 					},
-					PlacementStatuses: []placementv1.ResourcePlacementStatus{
+					PerClusterPlacementStatuses: []placementv1.PerClusterPlacementStatus{
 						{
-							ClusterName: memberCluster1EastProdName,
-							Conditions:  perClusterApplyFailedConditions(crpGeneration),
+							ClusterName:           memberCluster1EastProdName,
+							ObservedResourceIndex: "0",
+							Conditions:            perClusterApplyFailedConditions(crpGeneration),
 							FailedPlacements: []placementv1.FailedResourcePlacement{
 								{
 									ResourceIdentifier: placementv1.ResourceIdentifier{
@@ -231,8 +232,8 @@ var _ = Describe("takeover, drift detection, and reportDiff mode (v1beta1 to v1)
 				ObjectMeta: metav1.ObjectMeta{
 					Name: crpName,
 				},
-				Spec: placementv1.ClusterResourcePlacementSpec{
-					ResourceSelectors: []placementv1.ClusterResourceSelector{
+				Spec: placementv1.PlacementSpec{
+					ResourceSelectors: []placementv1.ResourceSelectorTerm{
 						{
 							Group:   "",
 							Version: "v1",
@@ -281,8 +282,8 @@ var _ = Describe("takeover, drift detection, and reportDiff mode (v1beta1 to v1)
 		})
 
 		It("should update CRP status as expected", func() {
-			buildWantCRPStatus := func(crpGeneration int64) *placementv1.ClusterResourcePlacementStatus {
-				return &placementv1.ClusterResourcePlacementStatus{
+			buildWantCRPStatus := func(crpGeneration int64) *placementv1.PlacementStatus {
+				return &placementv1.PlacementStatus{
 					Conditions: crpAppliedFailedConditions(crpGeneration),
 					SelectedResources: []placementv1.ResourceIdentifier{
 						{
@@ -291,10 +292,11 @@ var _ = Describe("takeover, drift detection, and reportDiff mode (v1beta1 to v1)
 							Name:    nsName,
 						},
 					},
-					PlacementStatuses: []placementv1.ResourcePlacementStatus{
+					PerClusterPlacementStatuses: []placementv1.PerClusterPlacementStatus{
 						{
-							ClusterName: memberCluster1EastProdName,
-							Conditions:  perClusterApplyFailedConditions(crpGeneration),
+							ClusterName:           memberCluster1EastProdName,
+							ObservedResourceIndex: "0",
+							Conditions:            perClusterApplyFailedConditions(crpGeneration),
 							FailedPlacements: []placementv1.FailedResourcePlacement{
 								{
 									ResourceIdentifier: placementv1.ResourceIdentifier{
@@ -385,8 +387,8 @@ var _ = Describe("takeover, drift detection, and reportDiff mode (v1beta1 to v1)
 				ObjectMeta: metav1.ObjectMeta{
 					Name: crpName,
 				},
-				Spec: placementv1.ClusterResourcePlacementSpec{
-					ResourceSelectors: []placementv1.ClusterResourceSelector{
+				Spec: placementv1.PlacementSpec{
+					ResourceSelectors: []placementv1.ResourceSelectorTerm{
 						{
 							Group:   "",
 							Version: "v1",
@@ -418,8 +420,8 @@ var _ = Describe("takeover, drift detection, and reportDiff mode (v1beta1 to v1)
 		})
 
 		It("should update CRP status as expected", func() {
-			buildWantCRPStatus := func(crpGeneration int64) *placementv1.ClusterResourcePlacementStatus {
-				return &placementv1.ClusterResourcePlacementStatus{
+			buildWantCRPStatus := func(crpGeneration int64) *placementv1.PlacementStatus {
+				return &placementv1.PlacementStatus{
 					Conditions: crpDiffReportedConditions(crpGeneration, false),
 					SelectedResources: []placementv1.ResourceIdentifier{
 						{
@@ -428,10 +430,11 @@ var _ = Describe("takeover, drift detection, and reportDiff mode (v1beta1 to v1)
 							Name:    nsName,
 						},
 					},
-					PlacementStatuses: []placementv1.ResourcePlacementStatus{
+					PerClusterPlacementStatuses: []placementv1.PerClusterPlacementStatus{
 						{
-							ClusterName: memberCluster1EastProdName,
-							Conditions:  perClusterDiffReportedConditions(crpGeneration),
+							ClusterName:           memberCluster1EastProdName,
+							ObservedResourceIndex: "0",
+							Conditions:            perClusterDiffReportedConditions(crpGeneration),
 							DiffedPlacements: []placementv1.DiffedResourcePlacement{
 								{
 									ResourceIdentifier: placementv1.ResourceIdentifier{
