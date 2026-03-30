@@ -476,10 +476,10 @@ spec:
                             object. Empty if the envelope object is cluster scoped.
                           type: string
                         type:
-                          default: ConfigMap
                           description: Type of the envelope object.
                           enum:
-                          - ConfigMap
+                          - ClusterResourceEnvelope
+                          - ResourceEnvelope
                           type: string
                       required:
                       - name
@@ -589,10 +589,10 @@ spec:
                             object. Empty if the envelope object is cluster scoped.
                           type: string
                         type:
-                          default: ConfigMap
                           description: Type of the envelope object.
                           enum:
-                          - ConfigMap
+                          - ClusterResourceEnvelope
+                          - ResourceEnvelope
                           type: string
                       required:
                       - name
@@ -752,10 +752,10 @@ spec:
                             object. Empty if the envelope object is cluster scoped.
                           type: string
                         type:
-                          default: ConfigMap
                           description: Type of the envelope object.
                           enum:
-                          - ConfigMap
+                          - ClusterResourceEnvelope
+                          - ResourceEnvelope
                           type: string
                       required:
                       - name

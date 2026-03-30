@@ -526,29 +526,38 @@ spec:
                       type: object
                     type: array
                 type: object
+                x-kubernetes-validations:
+                - message: placement type is immutable
+                  rule: '!(self.placementType != oldSelf.placementType)'
               resourceSelectors:
                 description: |-
                   ResourceSelectors is an array of selectors used to select cluster scoped resources. The selectors are `ORed`.
                   You can have 1-100 selectors.
                 items:
                   description: |-
-                    ClusterResourceSelector is used to select cluster scoped resources as the target resources to be placed.
+                    ResourceSelectorTerm is used to select cluster scoped resources as the target resources to be placed.
                     If a namespace is selected, ALL the resources under the namespace are selected automatically.
                     All the fields are `ANDed`. In other words, a resource must match all the fields to be selected.
                   properties:
                     group:
                       description: |-
-                        Group name of the cluster-scoped resource.
+                        Group name of the resource to be selected.
                         Use an empty string to select resources under the core API group (e.g., namespaces).
                       type: string
                     kind:
                       description: |-
-                        Kind of the cluster-scoped resource.
-                        Note: When `Kind` is `namespace`, ALL the resources under the selected namespaces are selected.
+                        Kind of the resource to be selected.
+
+                        Special behavior when Kind is `namespace` (ClusterResourcePlacement only):
+                        Note: ResourcePlacement cannot select namespaces since it is namespace-scoped and selects resources within a namespace.
+
+                        For ClusterResourcePlacement, you can use SelectionScope to control what gets selected:
+                        - NamespaceOnly: Only the namespace object itself
+                        - NamespaceWithResources: The namespace AND all resources within it (default)
                       type: string
                     labelSelector:
                       description: |-
-                        A label query over all the cluster-scoped resources. Resources matching the query are selected.
+                        A label query over all the resources to be selected. Resources matching the query are selected.
                         Note that namespace-scoped resources can't be selected even if they match the query.
                       properties:
                         matchExpressions:
@@ -595,10 +604,20 @@ spec:
                       type: object
                       x-kubernetes-map-type: atomic
                     name:
-                      description: Name of the cluster-scoped resource.
+                      description: Name of the resource to be selected.
+                      type: string
+                    selectionScope:
+                      default: NamespaceWithResources
+                      description: |-
+                        SelectionScope defines the scope of resource selections when the Kind is `namespace`.
+                        This field is only applicable when Kind is "Namespace" and is ignored for other resource kinds.
+                        See the Kind field documentation for detailed examples and usage patterns.
+                      enum:
+                      - NamespaceOnly
+                      - NamespaceWithResources
                       type: string
                     version:
-                      description: Version of the cluster-scoped resource.
+                      description: Version of the resource to be selected.
                       type: string
                   required:
                   - group
@@ -611,22 +630,33 @@ spec:
               revisionHistoryLimit:
                 default: 10
                 description: |-
-                  The number of old ClusterSchedulingPolicySnapshot or ClusterResourceSnapshot resources to retain to allow rollback.
+                  The number of old SchedulingPolicySnapshot or ResourceSnapshot resources to retain to allow rollback.
                   This is a pointer to distinguish between explicit zero and not specified.
                   Defaults to 10.
                 format: int32
                 maximum: 1000
                 minimum: 1
                 type: integer
+              statusReportingScope:
+                default: ClusterScopeOnly
+                description: |-
+                  StatusReportingScope controls where ClusterResourcePlacement status information is made available.
+                  When set to "ClusterScopeOnly", status is accessible only through the cluster-scoped ClusterResourcePlacement object.
+                  When set to "NamespaceAccessible", a ClusterResourcePlacementStatus object is created in the target namespace,
+                  providing namespace-scoped access to the placement status alongside the cluster-scoped status. This option is only
+                  supported when the ClusterResourcePlacement targets exactly one namespace.
+                  Defaults to "ClusterScopeOnly".
+                enum:
+                - ClusterScopeOnly
+                - NamespaceAccessible
+                type: string
               strategy:
                 description: The rollout strategy to use to replace existing placement
                   with new ones.
                 properties:
                   applyStrategy:
-                    description: |-
-                      ApplyStrategy describes how to resolve the conflict if the resource to be placed already exists in the target cluster
-                      and is owned by other appliers.
-                      This field is a beta-level feature.
+                    description: ApplyStrategy describes when and how to apply the
+                      selected resources to the target cluster.
                     properties:
                       allowCoOwnership:
                         description: |-
@@ -906,21 +936,42 @@ spec:
                     type: object
                   type:
                     default: RollingUpdate
-                    description: Type of rollout. The only supported type is "RollingUpdate".
+                    description: |-
+                      Type of rollout. The only supported types are "RollingUpdate" and "External".
                       Default is "RollingUpdate".
                     enum:
                     - RollingUpdate
+                    - External
                     type: string
+                    x-kubernetes-validations:
+                    - message: cannot change rollout strategy type from 'External'
+                        to other types
+                      rule: '!(self != ''External'' && oldSelf == ''External'')'
                 type: object
             required:
             - resourceSelectors
             type: object
+            x-kubernetes-validations:
+            - message: policy cannot be removed once set
+              rule: '!(has(oldSelf.policy) && !has(self.policy))'
+            - message: when statusReportingScope is NamespaceAccessible, exactly one
+                resourceSelector with kind 'Namespace' is required
+              rule: '!(self.statusReportingScope == ''NamespaceAccessible'' && size(self.resourceSelectors.filter(x,
+                x.kind == ''Namespace'')) != 1)'
+            - message: statusReportingScope is immutable
+              rule: '!has(oldSelf.statusReportingScope) || self.statusReportingScope
+                == oldSelf.statusReportingScope'
           status:
             description: The observed status of ClusterResourcePlacement.
             properties:
               conditions:
-                description: Conditions is an array of current observed conditions
-                  for ClusterResourcePlacement.
+                description: |-
+                  Conditions is an array of current observed conditions for ClusterResourcePlacement.
+                  All conditions except `ClusterResourcePlacementScheduled` correspond to the resource snapshot at the index specified by `ObservedResourceIndex`.
+                  For example, a condition of `ClusterResourcePlacementWorkSynchronized` type
+                  is observing the synchronization status of the resource snapshot with index `ObservedResourceIndex`.
+                  If the rollout strategy type is `External`, and `ObservedResourceIndex` is unset due to clusters reporting different resource indices,
+                  conditions except `ClusterResourcePlacementScheduled` will be empty or set to Unknown.
                 items:
                   description: Condition contains details for one aspect of the current
                     state of this API Resource.
@@ -986,21 +1037,21 @@ spec:
                   Each snapshot has a different resource index.
                   One resource snapshot can contain multiple clusterResourceSnapshots CRs in order to store large amount of resources.
                   To get clusterResourceSnapshot of a given resource index, use the following command:
-                  `kubectl get ClusterResourceSnapshot --selector=kubernetes-fleet.io/resource-index=$ObservedResourceIndex `
-                  ObservedResourceIndex is the resource index that the conditions in the ClusterResourcePlacementStatus observe.
-                  For example, a condition of `ClusterResourcePlacementWorkSynchronized` type
-                  is observing the synchronization status of the resource snapshot with the resource index $ObservedResourceIndex.
+                  `kubectl get ClusterResourceSnapshot --selector=kubernetes-fleet.io/resource-index=$ObservedResourceIndex`
+                  If the rollout strategy type is `RollingUpdate`, `ObservedResourceIndex` is the default-latest resource snapshot index.
+                  If the rollout strategy type is `External`, rollout and version control are managed by an external controller,
+                  and this field is not empty only if all targeted clusters observe the same resource index in `PlacementStatuses`.
                 type: string
               placementStatuses:
                 description: |-
-                  PlacementStatuses contains a list of placement status on the clusters that are selected by PlacementPolicy.
-                  Each selected cluster according to the latest resource placement is guaranteed to have a corresponding placementStatuses.
+                  PerClusterPlacementStatuses contains a list of placement status on the clusters that are selected by PlacementPolicy.
+                  Each selected cluster according to the observed resource placement is guaranteed to have a corresponding placementStatuses.
                   In the pickN case, there are N placement statuses where N = NumberOfClusters; Or in the pickFixed case, there are
                   N placement statuses where N = ClusterNames.
                   In these cases, some of them may not have assigned clusters when we cannot fill the required number of clusters.
                 items:
-                  description: ResourcePlacementStatus represents the placement status
-                    of selected resources for one target cluster.
+                  description: PerClusterPlacementStatus represents the placement
+                    status of selected resources for one target cluster.
                   properties:
                     applicableClusterResourceOverrides:
                       description: |-
@@ -1040,8 +1091,10 @@ spec:
                         If it is not empty, its value should be unique cross all placement decisions for the Placement.
                       type: string
                     conditions:
-                      description: Conditions is an array of current observed conditions
-                        for ResourcePlacementStatus.
+                      description: |-
+                        Conditions is an array of current observed conditions on the cluster.
+                        Each condition corresponds to the resource snapshot at the index specified by `ObservedResourceIndex`.
+                        For example, the condition of type `RolloutStarted` is observing the rollout status of the resource snapshot with index `ObservedResourceIndex`.
                       items:
                         description: Condition contains details for one aspect of
                           the current state of this API Resource.
@@ -1128,10 +1181,10 @@ spec:
                                   scoped.
                                 type: string
                               type:
-                                default: ConfigMap
                                 description: Type of the envelope object.
                                 enum:
-                                - ConfigMap
+                                - ClusterResourceEnvelope
+                                - ResourceEnvelope
                                 type: string
                             required:
                             - name
@@ -1243,10 +1296,10 @@ spec:
                                   scoped.
                                 type: string
                               type:
-                                default: ConfigMap
                                 description: Type of the envelope object.
                                 enum:
-                                - ConfigMap
+                                - ClusterResourceEnvelope
+                                - ResourceEnvelope
                                 type: string
                             required:
                             - name
@@ -1410,10 +1463,10 @@ spec:
                                   scoped.
                                 type: string
                               type:
-                                default: ConfigMap
                                 description: Type of the envelope object.
                                 enum:
-                                - ConfigMap
+                                - ClusterResourceEnvelope
+                                - ResourceEnvelope
                                 type: string
                             required:
                             - name
@@ -1443,11 +1496,17 @@ spec:
                         type: object
                       maxItems: 100
                       type: array
+                    observedResourceIndex:
+                      description: |-
+                        ObservedResourceIndex is the index of the resource snapshot that is currently being rolled out to the given cluster.
+                        This field is only meaningful if the `ClusterName` is not empty.
+                      type: string
                   type: object
                 type: array
               selectedResources:
-                description: SelectedResources contains a list of resources selected
-                  by ResourceSelectors.
+                description: |-
+                  SelectedResources contains a list of resources selected by ResourceSelectors.
+                  This field is only meaningful if the `ObservedResourceIndex` is not empty.
                 items:
                   description: ResourceIdentifier identifies one Kubernetes resource.
                   properties:
@@ -1463,10 +1522,10 @@ spec:
                             object. Empty if the envelope object is cluster scoped.
                           type: string
                         type:
-                          default: ConfigMap
                           description: Type of the envelope object.
                           enum:
-                          - ConfigMap
+                          - ClusterResourceEnvelope
+                          - ResourceEnvelope
                           type: string
                       required:
                       - name
