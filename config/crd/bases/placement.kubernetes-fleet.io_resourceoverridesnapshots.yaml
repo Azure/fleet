@@ -66,6 +66,7 @@ spec:
                       The recommended way is to set the placement so that the override can be rolled out immediately.
                     properties:
                       name:
+                        description: Name is the reference to the name of placement.
                         type: string
                       scope:
                         default: Cluster
