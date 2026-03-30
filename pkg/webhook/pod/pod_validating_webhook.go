@@ -43,7 +43,7 @@ var (
 	ValidationPath = fmt.Sprintf(utils.ValidationPathFmt, corev1.SchemeGroupVersion.Group, corev1.SchemeGroupVersion.Version, "pod")
 )
 
-// Add registers the webhook for K8s bulit-in object types.
+// Add registers the webhook for K8s built-in object types.
 func Add(mgr manager.Manager) error {
 	hookServer := mgr.GetWebhookServer()
 	hookServer.Register(ValidationPath, &webhook.Admission{Handler: &podValidator{admission.NewDecoder(mgr.GetScheme())}})

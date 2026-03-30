@@ -102,6 +102,7 @@ var (
 	once   = sync.Once{}
 
 	hubCluster               *framework.Cluster
+	impersonateHubClient     client.Client
 	memberCluster1EastProd   *framework.Cluster
 	memberCluster2EastCanary *framework.Cluster
 	memberCluster3WestProd   *framework.Cluster
@@ -194,7 +195,7 @@ var (
 	lessFuncPlacementStatus = func(a, b placementv1beta1.PerClusterPlacementStatus) bool {
 		return a.ClusterName < b.ClusterName
 	}
-	lessFuncPlacementStatusV1 = func(a, b placementv1.ResourcePlacementStatus) bool {
+	lessFuncPlacementStatusV1 = func(a, b placementv1.PerClusterPlacementStatus) bool {
 		return a.ClusterName < b.ClusterName
 	}
 	lessFuncPlacementStatusByConditions = func(a, b placementv1beta1.PerClusterPlacementStatus) bool {
@@ -348,6 +349,8 @@ func beforeSuiteForAllProcesses() {
 	framework.GetClusterClient(hubCluster)
 	hubClient = hubCluster.KubeClient
 	Expect(hubClient).NotTo(BeNil(), "Failed to initialize client for accessing Kubernetes cluster")
+	impersonateHubClient = hubCluster.ImpersonateKubeClient
+	Expect(impersonateHubClient).NotTo(BeNil(), "Failed to initialize impersonate client for accessing Kubernetes cluster")
 	notMasterUser = hubCluster.ImpersonateKubeClient
 	Expect(notMasterUser).NotTo(BeNil(), "Failed to initialize impersonate client for accessing Kubernetes cluster")
 	sysMastersClient = hubCluster.SystemMastersClient
