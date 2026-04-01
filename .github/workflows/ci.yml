@@ -76,7 +76,7 @@ jobs:
           KUBEFLEET_CI_TEST_RUNNER_NAME: 'ginkgo'
       
       - name: Upload Codecov report
-        uses: codecov/codecov-action@v5
+        uses: codecov/codecov-action@v6
         with:
           ## Repository upload token - get it from codecov.io. Required only for private repositories
           token: ${{ secrets.CODECOV_TOKEN }}
