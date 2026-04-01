@@ -1683,6 +1683,8 @@ var _ = Describe("webhook tests for ResourceOverride UPDATE operations", Ordered
 var _ = Describe("webhook tests for PodDisruptionBudget CREATE operations", func() {
 	Context("deny PDB creation in non-reserved namespaces", func() {
 		It("should deny CREATE operation on PDB in default namespace", func() {
+			Skip("PDB webhook is temporarily disabled.")
+
 			pdb := policyv1.PodDisruptionBudget{
 				ObjectMeta: metav1.ObjectMeta{
 					Name:      "test-pdb",
@@ -1707,6 +1709,8 @@ var _ = Describe("webhook tests for PodDisruptionBudget CREATE operations", func
 		})
 
 		It("should allow CREATE operation on PDB in kube-system namespace for master users", func() {
+			Skip("PDB webhook is temporarily disabled.")
+
 			pdb = policyv1.PodDisruptionBudget{
 				ObjectMeta: metav1.ObjectMeta{
 					Name:      "test-pdb-kube-system",
