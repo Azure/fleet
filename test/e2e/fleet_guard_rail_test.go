@@ -1168,6 +1168,8 @@ var _ = Describe("fleet guard rail webhook tests for PodDisruptionBudgets", Seri
 
 	Context("deny PDB operations in fleet-system namespace", func() {
 		It("should deny CREATE operation on PDB in fleet-system namespace for non-whitelisted users", func() {
+			Skip("PDB webhook is temporarily disabled.")
+
 			pdb := policyv1.PodDisruptionBudget{
 				ObjectMeta: metav1.ObjectMeta{
 					Name:      "test-pdb-fleet-system",
@@ -1191,6 +1193,8 @@ var _ = Describe("fleet guard rail webhook tests for PodDisruptionBudgets", Seri
 		)
 
 		BeforeAll(func() {
+			Skip("PDB webhook is temporarily disabled.")
+
 			mcName = fmt.Sprintf(mcNameTemplate, GinkgoParallelProcess())
 			imcNamespace = fmt.Sprintf(utils.NamespaceNameFormat, mcName)
 			createMemberCluster(mcName, testIdentity, nil, map[string]string{fleetClusterResourceIDAnnotationKey: clusterID1})
@@ -1202,6 +1206,8 @@ var _ = Describe("fleet guard rail webhook tests for PodDisruptionBudgets", Seri
 		})
 
 		It("should deny CREATE operation on PDB in fleet-member namespace for user not in MC identity", func() {
+			Skip("PDB webhook is temporarily disabled.")
+
 			pdb := policyv1.PodDisruptionBudget{
 				ObjectMeta: metav1.ObjectMeta{
 					Name:      "test-pdb-member",
@@ -1218,6 +1224,8 @@ var _ = Describe("fleet guard rail webhook tests for PodDisruptionBudgets", Seri
 		})
 
 		It("should deny UPDATE operation on PDB in fleet-member namespace for user not in MC identity", func() {
+			Skip("PDB webhook is temporarily disabled.")
+
 			// First create a PDB as admin.
 			pdb := policyv1.PodDisruptionBudget{
 				ObjectMeta: metav1.ObjectMeta{
@@ -1255,6 +1263,8 @@ var _ = Describe("fleet guard rail webhook tests for PodDisruptionBudgets", Seri
 
 	Context("deny PDB operations in kube-system namespace", func() {
 		It("should deny CREATE operation on PDB in kube-system namespace for non-whitelisted users", func() {
+			Skip("PDB webhook is temporarily disabled.")
+
 			pdb := policyv1.PodDisruptionBudget{
 				ObjectMeta: metav1.ObjectMeta{
 					Name:      "test-pdb-kube",

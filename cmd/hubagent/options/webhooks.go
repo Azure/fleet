@@ -120,7 +120,8 @@ func (o *WebhookOptions) AddFlags(flags *flag.FlagSet) {
 	flags.BoolVar(
 		&o.EnablePDBs,
 		"enable-pdbs",
-		false,
+		// TO-DO (chenyu1): use the true value for compatibility reasons; this will be set to false in a later release.
+		true,
 		"Enable PodDisruptionBudgets to be created directly in the hub cluster or not. If set to true, the KubeFleet PodDisruptionBudget validating webhook, which blocks the creation of PodDisruptionBudgets outside KubeFleet reserved namespaces, will be disabled. This option only applies if webhooks are enabled.",
 	)
 
