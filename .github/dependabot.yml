@@ -7,6 +7,13 @@ updates:
     commit-message:
       prefix: "chore"
 
+  - package-ecosystem: "docker"
+    directory: "/docker"
+    schedule:
+      interval: "weekly"
+    commit-message:
+      prefix: "chore"
+
   - package-ecosystem: "gomod"
     directory: "/"
     schedule:

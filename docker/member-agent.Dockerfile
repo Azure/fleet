@@ -23,7 +23,7 @@ RUN CGO_ENABLED=1 GOOS=$GOOS GOARCH=$GOARCH GOEXPERIMENT=systemcrypto GO111MODUL
 
 # Use distroless as minimal base image to package the memberagent binary
 # Refer to https://github.com/GoogleContainerTools/distroless for more details
-FROM gcr.io/distroless/base:nonroot
+FROM gcr.io/distroless/base:nonroot@sha256:a696c7c8545ba9b2b2807ee60b8538d049622f0addd85aee8cec3ec1910de1f9
 WORKDIR /
 COPY --from=builder /workspace/memberagent .
 USER 65532:65532
