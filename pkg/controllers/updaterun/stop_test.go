@@ -93,6 +93,49 @@ func TestStopUpdatingStage(t *testing.T) {
 			},
 		},
 		{
+			name: "missing binding in map lookup during stopping - nil pointer guard",
+			updateRun: &placementv1beta1.ClusterStagedUpdateRun{
+				ObjectMeta: metav1.ObjectMeta{
+					Name:       "test-update-run",
+					Generation: 1,
+				},
+				Spec: placementv1beta1.UpdateRunSpec{
+					PlacementName:         "test-placement",
+					ResourceSnapshotIndex: "1",
+				},
+				Status: placementv1beta1.UpdateRunStatus{
+					StagesStatus: []placementv1beta1.StageUpdatingStatus{
+						{
+							StageName: "test-stage",
+							Clusters: []placementv1beta1.ClusterUpdatingStatus{
+								{
+									ClusterName: "cluster-1",
+									Conditions: []metav1.Condition{
+										{
+											Type:               string(placementv1beta1.ClusterUpdatingConditionStarted),
+											Status:             metav1.ConditionTrue,
+											ObservedGeneration: 1,
+											Reason:             condition.ClusterUpdatingStartedReason,
+										},
+									},
+								},
+							},
+						},
+					},
+				},
+			},
+			bindings:     nil, // No bindings provided, so cluster-1 will not be found in the map.
+			wantErr:      errors.New("the binding for cluster `cluster-1` in stage `test-stage` is not found in the toBeUpdatedBindings map during stopping"),
+			wantFinished: false,
+			wantWaitTime: 0,
+			wantProgressCond: metav1.Condition{
+				Type:               string(placementv1beta1.StageUpdatingConditionProgressing),
+				Status:             metav1.ConditionUnknown,
+				ObservedGeneration: 1,
+				Reason:             condition.StageUpdatingStoppingReason,
+			},
+		},
+		{
 			name: "binding synced, bound, rolloutStarted true, but binding has failed condition",
 			updateRun: &placementv1beta1.ClusterStagedUpdateRun{
 				ObjectMeta: metav1.ObjectMeta{

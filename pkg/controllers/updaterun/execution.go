@@ -173,7 +173,13 @@ func (r *Reconciler) executeUpdatingStage(
 		}
 		// The cluster needs to be processed.
 		clusterStartedCond := meta.FindStatusCondition(clusterStatus.Conditions, string(placementv1beta1.ClusterUpdatingConditionStarted))
-		binding := toBeUpdatedBindingsMap[clusterStatus.ClusterName]
+		binding, exists := toBeUpdatedBindingsMap[clusterStatus.ClusterName]
+		if !exists || binding == nil {
+			missingBindingErr := controller.NewUnexpectedBehaviorError(fmt.Errorf("the binding for cluster `%s` in stage `%s` is not found in the toBeUpdatedBindings map", clusterStatus.ClusterName, updatingStageStatus.StageName))
+			klog.ErrorS(missingBindingErr, "Cannot find the binding for the cluster in the updating stage", "cluster", clusterStatus.ClusterName, "stage", updatingStageStatus.StageName, "updateRun", updateRunRef)
+			clusterUpdateErrors = append(clusterUpdateErrors, fmt.Errorf("%w: %s", errStagedUpdatedAborted, missingBindingErr.Error()))
+			continue
+		}
 		if !condition.IsConditionStatusTrue(clusterStartedCond, updateRun.GetGeneration()) {
 			// The cluster has not started updating yet.
 			if !isBindingSyncedWithClusterStatus(resourceSnapshotName, updateRun, binding, clusterStatus) {

@@ -92,7 +92,13 @@ func (r *Reconciler) stopUpdatingStage(
 
 		clusterUpdatingCount++
 
-		binding := toBeUpdatedBindingsMap[clusterStatus.ClusterName]
+		binding, exists := toBeUpdatedBindingsMap[clusterStatus.ClusterName]
+		if !exists || binding == nil {
+			missingBindingErr := controller.NewUnexpectedBehaviorError(fmt.Errorf("the binding for cluster `%s` in stage `%s` is not found in the toBeUpdatedBindings map during stopping", clusterStatus.ClusterName, updatingStageStatus.StageName))
+			klog.ErrorS(missingBindingErr, "Cannot find the binding for the cluster in the updating stage during stopping", "cluster", clusterStatus.ClusterName, "stage", updatingStageStatus.StageName, "updateRun", updateRunRef)
+			clusterUpdateErrors = append(clusterUpdateErrors, fmt.Errorf("%w: %s", errStagedUpdatedAborted, missingBindingErr.Error()))
+			continue
+		}
 		finished, updateErr := checkClusterUpdateResult(binding, clusterStatus, updatingStageStatus, updateRun)
 		if updateErr != nil {
 			clusterUpdateErrors = append(clusterUpdateErrors, updateErr)
