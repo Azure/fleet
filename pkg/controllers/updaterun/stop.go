@@ -48,7 +48,8 @@ func (r *Reconciler) stop(
 	markUpdateRunStopping(updateRun)
 
 	if updatingStageIndex < len(updateRunStatus.StagesStatus) {
-		return r.stopUpdatingStage(updateRun, updatingStageIndex, toBeUpdatedBindings)
+		updatingStageStatus = &updateRunStatus.StagesStatus[updatingStageIndex]
+		return r.stopUpdatingStage(updateRun, updatingStageStatus, toBeUpdatedBindings)
 	}
 	// All the stages have finished, stop the delete stage.
 	finished, stopErr = r.stopDeleteStage(updateRun, toBeDeletedBindings)
@@ -58,11 +59,9 @@ func (r *Reconciler) stop(
 // stopUpdatingStage stops the updating stage by letting the updating bindings finish and not starting new updates.
 func (r *Reconciler) stopUpdatingStage(
 	updateRun placementv1beta1.UpdateRunObj,
-	updatingStageIndex int,
+	updatingStageStatus *placementv1beta1.StageUpdatingStatus,
 	toBeUpdatedBindings []placementv1beta1.BindingObj,
 ) (bool, time.Duration, error) {
-	updateRunStatus := updateRun.GetUpdateRunStatus()
-	updatingStageStatus := &updateRunStatus.StagesStatus[updatingStageIndex]
 	updateRunRef := klog.KObj(updateRun)
 	// Create the map of the toBeUpdatedBindings.
 	toBeUpdatedBindingsMap := make(map[string]placementv1beta1.BindingObj, len(toBeUpdatedBindings))
