@@ -34,8 +34,7 @@ helm install hub-agent kubefleet/hub-agent --namespace fleet-system --create-nam
 ### Local Installation from Source
 
 ```console
-# Helm install with fleet-system namespace already created
-helm install hub-agent ./charts/hub-agent/
+helm install hub-agent ./charts/hub-agent/ --namespace fleet-system --create-namespace
 ```
 
 ### Installation with cert-manager
