@@ -40,6 +40,7 @@ HUB_SERVER_URL ?= https://172.19.0.2:6443
 HUB_KIND_CLUSTER_NAME = hub-testing
 MEMBER_KIND_CLUSTER_NAME = member-testing
 MEMBER_CLUSTER_COUNT ?= 3
+JOIN_MEMBERS ?= false
 
 # Directories
 ROOT_DIR := $(shell dirname $(realpath $(firstword $(MAKEFILE_LIST))))
@@ -175,6 +176,18 @@ e2e-tests-custom: setup-clusters ## Run custom E2E tests with labels
 .PHONY: setup-clusters
 setup-clusters: ## Set up Kind clusters for E2E testing
 	cd ./test/e2e && chmod +x ./setup.sh && ./setup.sh $(MEMBER_CLUSTER_COUNT)
+ifeq ($(JOIN_MEMBERS),true)
+	$(MAKE) join-members
+else
+	@echo ""
+	@echo "Clusters are ready but member clusters have not been joined to the hub."
+	@echo "To join them, run: make join-members"
+	@echo "Or re-run with: JOIN_MEMBERS=true make setup-clusters"
+endif
+
+.PHONY: join-members
+join-members: ## Join member clusters to the hub cluster (run after setup-clusters)
+	cd ./test/e2e && chmod +x ./join.sh && ./join.sh $(MEMBER_CLUSTER_COUNT)
 
 .PHONY: collect-e2e-logs
 collect-e2e-logs: ## Collect logs from hub and member agent pods after e2e tests
