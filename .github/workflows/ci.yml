@@ -13,7 +13,7 @@ on:
     paths-ignore: [docs/**, "**.md", "**.mdx", "**.png", "**.jpg"]
 
 env:
-  GO_VERSION: '1.25.8'
+  GO_VERSION: '1.25.9'
   CERT_MANAGER_VERSION: 'v1.16.2'
 
 jobs:

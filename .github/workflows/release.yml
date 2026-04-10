@@ -20,7 +20,7 @@ env:
   HUB_AGENT_IMAGE_NAME: hub-agent
   MEMBER_AGENT_IMAGE_NAME: member-agent
   REFRESH_TOKEN_IMAGE_NAME: refresh-token
-  GO_VERSION: "1.25.8"
+  GO_VERSION: "1.25.9"
 
 jobs:
   export-registry:
