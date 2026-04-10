@@ -525,6 +525,43 @@ func TestExecuteUpdatingStage_Error(t *testing.T) {
 			wantWaitTime: 0,
 		},
 		{
+			name: "missing binding in map lookup - nil pointer guard",
+			updateRun: &placementv1beta1.ClusterStagedUpdateRun{
+				ObjectMeta: metav1.ObjectMeta{
+					Name:       "test-update-run",
+					Generation: 1,
+				},
+				Spec: placementv1beta1.UpdateRunSpec{
+					PlacementName:         "test-placement",
+					ResourceSnapshotIndex: "1",
+				},
+				Status: placementv1beta1.UpdateRunStatus{
+					StagesStatus: []placementv1beta1.StageUpdatingStatus{
+						{
+							StageName: "test-stage",
+							Clusters: []placementv1beta1.ClusterUpdatingStatus{
+								{
+									ClusterName: "cluster-1",
+								},
+							},
+						},
+					},
+					UpdateStrategySnapshot: &placementv1beta1.UpdateStrategySpec{
+						Stages: []placementv1beta1.StageConfig{
+							{
+								Name:           "test-stage",
+								MaxConcurrency: &intstr.IntOrString{Type: intstr.Int, IntVal: 1},
+							},
+						},
+					},
+				},
+			},
+			bindings:     nil, // No bindings provided, so cluster-1 will not be found in the map.
+			wantErr:      errors.New("the binding for cluster `cluster-1` in stage `test-stage` is not found in the toBeUpdatedBindings map"),
+			wantAbortErr: true,
+			wantWaitTime: 0,
+		},
+		{
 			name: "binding preemption",
 			updateRun: &placementv1beta1.ClusterStagedUpdateRun{
 				ObjectMeta: metav1.ObjectMeta{
