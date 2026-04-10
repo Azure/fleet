@@ -40,3 +40,7 @@ Azure:
     httpsProxy: ""
     noProxy: ""
     proxyCert: ""
+  Extension:
+    name: ""
+  Identity:
+    MSIAdapterYaml: ""
