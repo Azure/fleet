@@ -64,6 +64,8 @@ done
 # Install the hub agent to the hub cluster.
 kind export kubeconfig --name $HUB_CLUSTER
 helm install hub-agent charts/hub-agent/ \
+    --namespace fleet-system \
+    --create-namespace \
     --set image.pullPolicy=Never \
     --set image.repository=$REGISTRY/$HUB_AGENT_IMAGE \
     --set image.tag=$IMAGE_TAG \
@@ -114,6 +116,8 @@ for (( i=0; i<${MEMBER_CLUSTER_COUNT}; i++ ));
 do
     kind export kubeconfig --name "${MEMBER_CLUSTERS[$i]}"
     helm install member-agent charts/member-agent/ \
+        --namespace fleet-system \
+        --create-namespace \
         --set config.hubURL=$HUB_SERVER_URL \
         --set image.repository=$REGISTRY/$MEMBER_AGENT_IMAGE \
         --set image.tag=$IMAGE_TAG \

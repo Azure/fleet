@@ -53,6 +53,7 @@ if [ -n "$UPGRADE_HUB_SIDE" ]; then
     echo "Upgrading the hub agent in the hub cluster..."
     kind export kubeconfig --name $HUB_CLUSTER
     helm upgrade hub-agent charts/hub-agent/ \
+        --namespace fleet-system \
         --set image.pullPolicy=Never \
         --set image.repository=$REGISTRY/$HUB_AGENT_IMAGE \
         --set image.tag=$IMAGE_TAG \
@@ -76,6 +77,7 @@ if [ -n "$UPGRADE_MEMBER_SIDE" ]; then
     do
         kind export kubeconfig --name "${MEMBER_CLUSTERS[$i]}"
         helm upgrade member-agent charts/member-agent/ \
+            --namespace fleet-system \
             --set config.hubURL=$HUB_SERVER_URL \
             --set image.repository=$REGISTRY/$MEMBER_AGENT_IMAGE \
             --set image.tag=$IMAGE_TAG \

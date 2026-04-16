@@ -2,7 +2,7 @@
 
 ## Chart Versioning
 
-Chart versions match the KubeFleet release versions. For example, to install KubeFleet v0.2.1, use chart version `0.2.1`.
+Chart versions match the KubeFleet release versions. For example, to install KubeFleet v0.3.0, use chart version `0.3.0`.
 
 ## Install Chart
 

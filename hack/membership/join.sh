@@ -117,6 +117,8 @@ kubectl delete secret hub-kubeconfig-secret --ignore-not-found --wait
 kubectl create secret generic hub-kubeconfig-secret --from-literal=token=$TOKEN
 helm uninstall member-agent --ignore-not-found --wait
 helm install member-agent charts/member-agent/ \
+    --namespace fleet-system \
+    --create-namespace \
     --set config.hubURL=$HUB_CLUSTER_ADDRESS \
     --set image.repository=$REGISTRY/$MEMBER_AGENT_IMAGE \
     --set image.tag=$FLEET_VERSION \

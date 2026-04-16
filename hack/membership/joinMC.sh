@@ -113,6 +113,8 @@ kubectl create secret generic hub-kubeconfig-secret --from-literal=token=$TOKEN
 
 echo "Installing member-agent..."
 helm upgrade --install member-agent charts/member-agent/ \
+        --namespace fleet-system \
+        --create-namespace \
         --set config.hubURL=$HUB_CLUSTER_ADDRESS  \
         --set image.repository=$REGISTRY/$MEMBER_AGENT_IMAGE \
         --set image.tag=$IMAGE_TAG \

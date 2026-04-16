@@ -79,6 +79,8 @@ helm uninstall member-agent --wait
 
 echo "Installing member-agent..."
 helm install member-agent charts/member-agent/ \
+        --namespace fleet-system \
+        --create-namespace \
         --set config.hubURL=$HUB_CLUSTER_ADDRESS  \
         --set image.repository=$REGISTRY/$MEMBER_AGENT_IMAGE \
         --set image.tag=$FLEET_VERSION \
