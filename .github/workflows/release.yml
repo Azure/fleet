@@ -46,7 +46,7 @@ jobs:
           ref: ${{ needs.export-registry.outputs.tag }}
 
       - name: Login to ghcr.io
-        uses: docker/login-action@c94ce9fb468520275223c153574b00df6fe4bcc9
+        uses: docker/login-action@4907a6ddec9925e35a0a9e82d7399ccc52663121
         with:
           registry: ghcr.io
           username: ${{ github.actor }}
