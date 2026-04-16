@@ -130,7 +130,8 @@ var _ = Describe("Test Work Generator Controller for clusterResourcePlacement", 
 				ObjectMeta: metav1.ObjectMeta{
 					Name: memberClusterName,
 					Labels: map[string]string{
-						"override": "true",
+						"override":                       "true",
+						placementv1beta1.MemberNameLabel: memberClusterName,
 					},
 				},
 			}
@@ -1732,6 +1733,9 @@ var _ = Describe("Test Work Generator Controller for clusterResourcePlacement", 
 			memberCluster := clusterv1beta1.MemberCluster{
 				ObjectMeta: metav1.ObjectMeta{
 					Name: memberClusterName,
+					Labels: map[string]string{
+						placementv1beta1.MemberNameLabel: memberClusterName,
+					},
 				},
 			}
 			Expect(k8sClient.Create(ctx, &memberCluster)).Should(Succeed(), "Failed to create member cluster")
@@ -1854,6 +1858,9 @@ var _ = Describe("Test Work Generator Controller for clusterResourcePlacement", 
 			memberCluster := clusterv1beta1.MemberCluster{
 				ObjectMeta: metav1.ObjectMeta{
 					Name: memberClusterName,
+					Labels: map[string]string{
+						placementv1beta1.MemberNameLabel: memberClusterName,
+					},
 				},
 			}
 			Expect(k8sClient.Create(ctx, &memberCluster)).Should(Succeed(), "Failed to create member cluster")
@@ -1980,6 +1987,9 @@ var _ = Describe("Test Work Generator Controller for clusterResourcePlacement", 
 			memberCluster := clusterv1beta1.MemberCluster{
 				ObjectMeta: metav1.ObjectMeta{
 					Name: memberClusterName,
+					Labels: map[string]string{
+						placementv1beta1.MemberNameLabel: memberClusterName,
+					},
 				},
 			}
 			Expect(k8sClient.Create(ctx, &memberCluster)).Should(Succeed(), "Failed to create member cluster")
@@ -2108,6 +2118,9 @@ var _ = Describe("Test Work Generator Controller for clusterResourcePlacement", 
 			memberCluster := clusterv1beta1.MemberCluster{
 				ObjectMeta: metav1.ObjectMeta{
 					Name: memberClusterName,
+					Labels: map[string]string{
+						placementv1beta1.MemberNameLabel: memberClusterName,
+					},
 				},
 			}
 			Expect(k8sClient.Create(ctx, &memberCluster)).Should(Succeed(), "Failed to create member cluster")
@@ -2239,6 +2252,9 @@ var _ = Describe("Test Work Generator Controller for clusterResourcePlacement", 
 			memberCluster := clusterv1beta1.MemberCluster{
 				ObjectMeta: metav1.ObjectMeta{
 					Name: memberClusterName,
+					Labels: map[string]string{
+						placementv1beta1.MemberNameLabel: memberClusterName,
+					},
 				},
 			}
 			Expect(k8sClient.Create(ctx, &memberCluster)).Should(Succeed(), "Failed to create member cluster")
@@ -2613,6 +2629,9 @@ var _ = Describe("Test Work Generator Controller for clusterResourcePlacement", 
 			memberCluster := clusterv1beta1.MemberCluster{
 				ObjectMeta: metav1.ObjectMeta{
 					Name: memberClusterName,
+					Labels: map[string]string{
+						placementv1beta1.MemberNameLabel: memberClusterName,
+					},
 				},
 			}
 			Expect(k8sClient.Create(ctx, &memberCluster)).Should(Succeed(), "Failed to create member cluster")
@@ -4751,7 +4770,8 @@ var _ = Describe("Test Work Generator Controller for ResourcePlacement", func() 
 				ObjectMeta: metav1.ObjectMeta{
 					Name: memberClusterName,
 					Labels: map[string]string{
-						"override": "true",
+						"override":                       "true",
+						placementv1beta1.MemberNameLabel: memberClusterName,
 					},
 				},
 			}
