@@ -111,6 +111,9 @@ done
 kind export kubeconfig --name $HUB_CLUSTER
 HUB_SERVER_URL="https://$(docker inspect $HUB_CLUSTER-control-plane --format='{{range .NetworkSettings.Networks}}{{.IPAddress}}{{end}}'):6443"
 
+# Extract the hub cluster CA for secure TLS verification
+HUB_CA=$(kubectl config view --raw -o jsonpath='{.clusters[?(@.name=="kind-'$HUB_CLUSTER'")].cluster.certificate-authority-data}')
+
 # Install the member agents and related components.
 for (( i=0; i<${MEMBER_CLUSTER_COUNT}; i++ ));
 do
@@ -119,6 +122,7 @@ do
         --namespace fleet-system \
         --create-namespace \
         --set config.hubURL=$HUB_SERVER_URL \
+        --set config.hubCA=$HUB_CA \
         --set image.repository=$REGISTRY/$MEMBER_AGENT_IMAGE \
         --set image.tag=$IMAGE_TAG \
         --set refreshtoken.repository=$REGISTRY/$REFRESH_TOKEN_IMAGE \

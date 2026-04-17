@@ -43,7 +43,10 @@ helm install hub-agent oci://ghcr.io/kubefleet-dev/kubefleet/charts/hub-agent \
 helm install member-agent oci://ghcr.io/kubefleet-dev/kubefleet/charts/member-agent \
   --version VERSION \
   --namespace fleet-system \
-  --create-namespace
+  --create-namespace \
+  --set config.hubURL=https://<hub-api-server> \
+  --set config.hubCA=<base64-encoded-hub-ca> \
+  --set config.memberClusterName=<member-cluster-name>
 ```
 
 ### Option 2: Traditional Helm Repository
@@ -65,7 +68,10 @@ helm install hub-agent kubefleet/hub-agent \
 # Install member-agent
 helm install member-agent kubefleet/member-agent \
   --namespace fleet-system \
-  --create-namespace
+  --create-namespace \
+  --set config.hubURL=https://<hub-api-server> \
+  --set config.hubCA=<base64-encoded-hub-ca> \
+  --set config.memberClusterName=<member-cluster-name>
 ```
 
 ### Installing Specific Versions
@@ -137,7 +143,12 @@ For development and testing, you can install charts directly from the local repo
 ```bash
 # Install from local path
 helm install hub-agent ./charts/hub-agent --namespace fleet-system --create-namespace
-helm install member-agent ./charts/member-agent --namespace fleet-system --create-namespace
+helm install member-agent ./charts/member-agent \
+  --namespace fleet-system \
+  --create-namespace \
+  --set config.hubURL=https://<hub-api-server> \
+  --set config.hubCA=<base64-encoded-hub-ca> \
+  --set config.memberClusterName=<member-cluster-name>
 ```
 
 ### Linting

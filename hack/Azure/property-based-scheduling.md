@@ -172,6 +172,7 @@ do
 done
 
 # Install the member agent.
+export HUB_CA=$(kubectl config view --raw -o jsonpath="{.clusters[?(@.name==\"$HUB_CLUSTER\")].cluster.certificate-authority-data}")
 for (( i=0; i<3; i++ ));
 do
     kubectl config use-context "${MEMBER_CLUSTERS[$i]}-admin"
@@ -179,6 +180,7 @@ do
       --namespace fleet-system \
       --create-namespace \
         --set config.hubURL=$HUB_SERVER_ADDR \
+        --set config.hubCA=$HUB_CA \
         --set image.repository=$REGISTRY/member-agent \
         --set image.tag=$TAG \
         --set refreshtoken.repository=$REGISTRY/refresh-token \

@@ -197,6 +197,9 @@ done
 kind export kubeconfig --name $HUB_CLUSTER
 HUB_SERVER_URL="https://$(docker inspect $HUB_CLUSTER-control-plane --format='{{range .NetworkSettings.Networks}}{{.IPAddress}}{{end}}'):6443"
 
+# Extract the hub cluster CA for secure TLS verification
+HUB_CA=$(kubectl config view --raw -o jsonpath='{.clusters[?(@.name=="kind-'$HUB_CLUSTER'")].cluster.certificate-authority-data}')
+
 # Install the member agents and related components
 # Note that the work applier in the member agent are set to requeue at max. every 5 seconds instead of using the default 
 # exponential backoff behavior; this is to accommodate some of the timeout settings in the E2E test specs.
@@ -208,6 +211,7 @@ do
             --namespace fleet-system \
             --create-namespace \
             --set config.hubURL=$HUB_SERVER_URL \
+            --set config.hubCA=$HUB_CA \
             --set image.repository=$REGISTRY/$MEMBER_AGENT_IMAGE \
             --set image.tag=$TAG \
             --set refreshtoken.repository=$REGISTRY/$REFRESH_TOKEN_IMAGE \
@@ -229,6 +233,7 @@ do
             --namespace fleet-system \
             --create-namespace \
             --set config.hubURL=$HUB_SERVER_URL \
+            --set config.hubCA=$HUB_CA \
             --set image.repository=$REGISTRY/$MEMBER_AGENT_IMAGE \
             --set image.tag=$TAG \
             --set refreshtoken.repository=$REGISTRY/$REFRESH_TOKEN_IMAGE \
