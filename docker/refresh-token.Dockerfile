@@ -16,9 +16,9 @@ RUN go mod download
 COPY cmd/authtoken/main.go main.go
 COPY pkg/authtoken pkg/authtoken
 
-# Build with CGO enabled and GOEXPERIMENT=systemcrypto for internal usage
+# Build with CGO enabled for internal usage
 RUN echo "Building for GOOS=${GOOS} GOARCH=${GOARCH}"
-RUN CGO_ENABLED=1 GOOS=$GOOS GOARCH=$GOARCH GOEXPERIMENT=systemcrypto GO111MODULE=on go build -o refreshtoken main.go
+RUN CGO_ENABLED=1 GOOS=$GOOS GOARCH=$GOARCH GO111MODULE=on go build -o refreshtoken main.go
 
 # Use Azure Linux distroless base image to package the refreshtoken binary
 # Refer to https://mcr.microsoft.com/en-us/artifact/mar/azurelinux/distroless/base/about for more details
