@@ -66,6 +66,9 @@ var (
 		memberCluster := &clusterv1beta1.MemberCluster{
 			ObjectMeta: metav1.ObjectMeta{
 				Name: name,
+				Labels: map[string]string{
+					placementv1beta1.MemberNameLabel: name,
+				},
 			},
 		}
 		controllerutil.AddFinalizer(memberCluster, placementv1beta1.MemberClusterFinalizer)

@@ -95,6 +95,10 @@ export SERVICE_ACCOUNT="$MEMBER_CLUSTER_NAME-hub-cluster-access"
 
 echo "Switching into hub cluster context..."
 kubectl config use $HUB_CLUSTER_NAME
+
+# Extract the hub cluster CA for secure TLS verification
+export HUB_CA=$(kubectl config view --raw -o jsonpath="{.clusters[?(@.name==\"$HUB_CLUSTER_NAME\")].cluster.certificate-authority-data}")
+
 # The service account can, in theory, be created in any namespace; for simplicity reasons,
 # here you will use the namespace reserved by Fleet installation, `fleet-system`.
 #
@@ -149,6 +153,7 @@ echo "Installing member-agent..."
 helm install member-agent oci://ghcr.io/kubefleet-dev/kubefleet/charts/member-agent \
   --version $KUBEFLEET_VERSION \
   --set config.hubURL=$HUB_CONTROL_PLANE_URL \
+  --set config.hubCA=$HUB_CA \
   --set config.memberClusterName=$MEMBER_CLUSTER_NAME \
   --set logFileMaxSize=100000 \
   --namespace fleet-system \

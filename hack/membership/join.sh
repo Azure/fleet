@@ -49,6 +49,10 @@ fi
 
 [ -z "$HUB_CLUSTER_ADDRESS" ] && echo "Environment variable HUB_CLUSTER_ADDRESS is not set." #&& exit 1
 
+# Extract the hub cluster CA for secure TLS verification
+HUB_CLUSTER_NAME=$(kubectl config view -o jsonpath="{.contexts[?(@.name==\"$HUB_CLUSTER_CONTEXT\")].context.cluster}")
+HUB_CA=$(kubectl config view --raw -o jsonpath="{.clusters[?(@.name==\"$HUB_CLUSTER_NAME\")].cluster.certificate-authority-data}")
+
 [ -z "$MEMBER_CLUSTER" ] && echo "Environment variable MEMBER_CLUSTER is not set." #&& exit 1
 
 [ -z "$MEMBER_CLUSTER_CONTEXT" ] && echo "Environment variable MEMBER_CLUSTER_CONTEXT is not set; will use the value of MEMBER_CLUSTER instead." #&& exit 1
@@ -117,7 +121,10 @@ kubectl delete secret hub-kubeconfig-secret --ignore-not-found --wait
 kubectl create secret generic hub-kubeconfig-secret --from-literal=token=$TOKEN
 helm uninstall member-agent --ignore-not-found --wait
 helm install member-agent charts/member-agent/ \
+    --namespace fleet-system \
+    --create-namespace \
     --set config.hubURL=$HUB_CLUSTER_ADDRESS \
+    --set config.hubCA=$HUB_CA \
     --set image.repository=$REGISTRY/$MEMBER_AGENT_IMAGE \
     --set image.tag=$FLEET_VERSION \
     --set image.pullPolicy=Never \

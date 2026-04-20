@@ -4,6 +4,7 @@
 export HUB_CLUSTER="$1"
 export HUB_CLUSTER_CONTEXT=$(kubectl config view -o jsonpath="{.contexts[?(@.context.cluster==\"$HUB_CLUSTER\")].name}")
 export HUB_CLUSTER_ADDRESS=$(kubectl config view -o jsonpath="{.clusters[?(@.name==\"$HUB_CLUSTER\")].cluster.server}")
+export HUB_CA=$(kubectl config view --raw -o jsonpath="{.clusters[?(@.name==\"$HUB_CLUSTER\")].cluster.certificate-authority-data}")
 
 for MC in "${@:2}"; do
 
@@ -79,7 +80,10 @@ helm uninstall member-agent --wait
 
 echo "Installing member-agent..."
 helm install member-agent charts/member-agent/ \
+        --namespace fleet-system \
+        --create-namespace \
         --set config.hubURL=$HUB_CLUSTER_ADDRESS  \
+        --set config.hubCA=$HUB_CA \
         --set image.repository=$REGISTRY/$MEMBER_AGENT_IMAGE \
         --set image.tag=$FLEET_VERSION \
         --set refreshtoken.repository=$REGISTRY/$REFRESH_TOKEN_IMAGE \

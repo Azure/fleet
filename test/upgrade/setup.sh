@@ -68,6 +68,8 @@ done
 # Install the hub agent to the hub cluster.
 kind export kubeconfig --name $HUB_CLUSTER
 helm install hub-agent charts/hub-agent/ \
+    --namespace fleet-system \
+    --create-namespace \
     --set image.pullPolicy=Never \
     --set image.repository=$REGISTRY/$HUB_AGENT_IMAGE \
     --set image.tag=$IMAGE_TAG \
@@ -119,12 +121,18 @@ done
 kind export kubeconfig --name $HUB_CLUSTER
 HUB_SERVER_URL="https://$(docker inspect $HUB_CLUSTER-control-plane --format='{{range .NetworkSettings.Networks}}{{.IPAddress}}{{end}}'):6443"
 
+# Extract the hub cluster CA for secure TLS verification
+HUB_CA=$(kubectl config view --raw -o jsonpath='{.clusters[?(@.name=="kind-'$HUB_CLUSTER'")].cluster.certificate-authority-data}')
+
 # Install the member agents and related components.
 for (( i=0; i<${MEMBER_CLUSTER_COUNT}; i++ ));
 do
     kind export kubeconfig --name "${MEMBER_CLUSTERS[$i]}"
     helm install member-agent charts/member-agent/ \
+        --namespace fleet-system \
+        --create-namespace \
         --set config.hubURL=$HUB_SERVER_URL \
+        --set config.hubCA=$HUB_CA \
         --set image.repository=$REGISTRY/$MEMBER_AGENT_IMAGE \
         --set image.tag=$IMAGE_TAG \
         --set crdInstaller.enabled=true \

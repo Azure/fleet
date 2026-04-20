@@ -285,6 +285,11 @@ func checkIfMemberClusterHasJoined(memberCluster *framework.Cluster) {
 			return fmt.Errorf("agent status diff (-got, +want): %s", diff)
 		}
 
+		// Verify the member cluster name label is set.
+		if mcObj.Labels[placementv1beta1.MemberNameLabel] != memberCluster.ClusterName {
+			return fmt.Errorf("member cluster name label = %q, want %q", mcObj.Labels[placementv1beta1.MemberNameLabel], memberCluster.ClusterName)
+		}
+
 		return nil
 	}, longEventuallyDuration, eventuallyInterval).Should(Succeed(), "Member cluster has not joined yet")
 }

@@ -105,6 +105,13 @@ func (r *Reconciler) Reconcile(ctx context.Context, req runtime.Request) (runtim
 		klog.ErrorS(err, "Failed to add the finalizer to member cluster", "memberCluster", mcObjRef)
 		return runtime.Result{}, err
 	}
+
+	// Ensure the member cluster has the name label for override selection by member name.
+	if err := r.ensureMemberNameLabel(ctx, &mc); err != nil {
+		klog.ErrorS(err, "Failed to ensure the name label on member cluster", "memberCluster", mcObjRef)
+		return runtime.Result{}, err
+	}
+
 	currentIMC, err := r.getInternalMemberCluster(ctx, mc.GetName())
 	if err != nil {
 		return runtime.Result{}, err
@@ -270,6 +277,22 @@ func (r *Reconciler) ensureFinalizer(ctx context.Context, mc *clusterv1beta1.Mem
 	}
 	klog.InfoS("Added the member cluster finalizer", "memberCluster", klog.KObj(mc))
 	controllerutil.AddFinalizer(mc, placementv1beta1.MemberClusterFinalizer)
+	return r.Update(ctx, mc, client.FieldOwner(utils.MCControllerFieldManagerName))
+}
+
+// ensureMemberNameLabel makes sure that the member cluster has a label with its own name.
+// This enables selecting clusters by name in ResourceOverride and ClusterResourceOverride via labelSelector.
+func (r *Reconciler) ensureMemberNameLabel(ctx context.Context, mc *clusterv1beta1.MemberCluster) error {
+	if mc.Labels != nil && mc.Labels[placementv1beta1.MemberNameLabel] == mc.Name {
+		return nil
+	}
+
+	if mc.Labels == nil {
+		mc.Labels = make(map[string]string)
+	}
+	mc.Labels[placementv1beta1.MemberNameLabel] = mc.Name
+
+	klog.InfoS("Ensured the member cluster name label", "memberCluster", klog.KObj(mc))
 	return r.Update(ctx, mc, client.FieldOwner(utils.MCControllerFieldManagerName))
 }
 
