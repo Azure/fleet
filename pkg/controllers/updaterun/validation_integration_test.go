@@ -111,7 +111,7 @@ var _ = Describe("UpdateRun validation tests", func() {
 			Expect(k8sClient.Create(ctx, updateRun)).To(Succeed())
 
 			By("Validating the initialization succeeded")
-			initialized := generateSucceededInitializationStatus(crp, updateRun, testResourceSnapshotIndex, policySnapshot, updateStrategy, clusterResourceOverride)
+			initialized := generateInitializedStatus(crp, updateRun, testResourceSnapshotIndex, policySnapshot, updateStrategy, 10, generateTenClusterStagesStatus(clusterResourceOverride), generateTenClusterDeletionStageStatus())
 			wantStatus = generateExecutionNotStartedStatus(updateRun, initialized)
 			validateClusterStagedUpdateRunStatus(ctx, updateRun, wantStatus, "")
 		})
@@ -446,7 +446,7 @@ var _ = Describe("UpdateRun validation tests", func() {
 			Expect(k8sClient.Create(ctx, updateRun)).To(Succeed())
 
 			By("Validating the initialization succeeded")
-			initialized := generateSucceededInitializationStatus(crp, updateRun, testResourceSnapshotIndex, policySnapshot, updateStrategy, clusterResourceOverride)
+			initialized := generateInitializedStatus(crp, updateRun, testResourceSnapshotIndex, policySnapshot, updateStrategy, 10, generateTenClusterStagesStatus(clusterResourceOverride), generateTenClusterDeletionStageStatus())
 			wantStatus = generateExecutionNotStartedStatus(updateRun, initialized)
 			validateClusterStagedUpdateRunStatus(ctx, updateRun, wantStatus, "")
 		})
@@ -568,7 +568,7 @@ func generateFailedValidationStatus(
 	updateRun *placementv1beta1.ClusterStagedUpdateRun,
 	started *placementv1beta1.UpdateRunStatus,
 ) *placementv1beta1.UpdateRunStatus {
-	started.Conditions[1] = generateFalseProgressingCondition(updateRun, placementv1beta1.StagedUpdateRunConditionProgressing, condition.UpdateRunFailedReason)
+	started.Conditions[1] = generateFalseConditionWithReason(updateRun, placementv1beta1.StagedUpdateRunConditionProgressing, condition.UpdateRunFailedReason)
 	started.Conditions = append(started.Conditions, generateFalseCondition(updateRun, placementv1beta1.StagedUpdateRunConditionSucceeded))
 	return started
 }

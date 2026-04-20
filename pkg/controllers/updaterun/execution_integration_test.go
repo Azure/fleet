@@ -161,7 +161,7 @@ var _ = Describe("UpdateRun execution tests - double stages", func() {
 			Expect(k8sClient.Create(ctx, updateRun)).To(Succeed())
 
 			By("Validating the initialization succeeded and the execution has not started")
-			initialized := generateSucceededInitializationStatus(crp, updateRun, testResourceSnapshotIndex, policySnapshot, updateStrategy, clusterResourceOverride)
+			initialized := generateInitializedStatus(crp, updateRun, testResourceSnapshotIndex, policySnapshot, updateStrategy, 10, generateTenClusterStagesStatus(clusterResourceOverride), generateTenClusterDeletionStageStatus())
 			wantStatus = generateExecutionNotStartedStatus(updateRun, initialized)
 			validateClusterStagedUpdateRunStatus(ctx, updateRun, wantStatus, "")
 
@@ -220,7 +220,7 @@ var _ = Describe("UpdateRun execution tests - double stages", func() {
 		It("Should mark the 1st cluster in the 1st stage as succeeded after marking the binding available", func() {
 			By("Validating the 1st clusterResourceBinding is updated to Bound")
 			binding := resourceBindings[numTargetClusters-1] // cluster-9
-			validateBindingState(ctx, binding, resourceSnapshot.Name, updateRun, 0)
+			validateBindingState(ctx, binding, resourceSnapshot.Name, updateRun, &updateRun.Status.StagesStatus[0].Clusters[0])
 
 			By("Updating the 1st clusterResourceBinding to Available")
 			meta.SetStatusCondition(&binding.Status.Conditions, generateTrueCondition(binding, placementv1beta1.ResourceBindingAvailable))
@@ -245,7 +245,7 @@ var _ = Describe("UpdateRun execution tests - double stages", func() {
 		It("Should mark the 2nd cluster in the 1st stage as succeeded after marking the binding available", func() {
 			By("Validating the 2nd clusterResourceBinding is updated to Bound")
 			binding := resourceBindings[numTargetClusters-3] // cluster-7
-			validateBindingState(ctx, binding, resourceSnapshot.Name, updateRun, 0)
+			validateBindingState(ctx, binding, resourceSnapshot.Name, updateRun, &updateRun.Status.StagesStatus[0].Clusters[1])
 
 			By("Updating the 2nd clusterResourceBinding to Available")
 			meta.SetStatusCondition(&binding.Status.Conditions, generateTrueCondition(binding, placementv1beta1.ResourceBindingAvailable))
@@ -264,7 +264,7 @@ var _ = Describe("UpdateRun execution tests - double stages", func() {
 		It("Should mark the 3rd cluster in the 1st stage as succeeded after marking the binding available", func() {
 			By("Validating the 3rd clusterResourceBinding is updated to Bound")
 			binding := resourceBindings[numTargetClusters-5] // cluster-5
-			validateBindingState(ctx, binding, resourceSnapshot.Name, updateRun, 0)
+			validateBindingState(ctx, binding, resourceSnapshot.Name, updateRun, &updateRun.Status.StagesStatus[0].Clusters[2])
 
 			By("Updating the 3rd clusterResourceBinding to Available")
 			meta.SetStatusCondition(&binding.Status.Conditions, generateTrueCondition(binding, placementv1beta1.ResourceBindingAvailable))
@@ -283,7 +283,7 @@ var _ = Describe("UpdateRun execution tests - double stages", func() {
 		It("Should mark the 4th cluster in the 1st stage as succeeded after marking the binding available", func() {
 			By("Validating the 4th clusterResourceBinding is updated to Bound")
 			binding := resourceBindings[numTargetClusters-7] // cluster-3
-			validateBindingState(ctx, binding, resourceSnapshot.Name, updateRun, 0)
+			validateBindingState(ctx, binding, resourceSnapshot.Name, updateRun, &updateRun.Status.StagesStatus[0].Clusters[3])
 
 			By("Updating the 4th clusterResourceBinding to Available")
 			meta.SetStatusCondition(&binding.Status.Conditions, generateTrueCondition(binding, placementv1beta1.ResourceBindingAvailable))
@@ -302,7 +302,7 @@ var _ = Describe("UpdateRun execution tests - double stages", func() {
 		It("Should mark the 5th cluster in the 1st stage as succeeded after marking the binding available", func() {
 			By("Validating the 5th clusterResourceBinding is updated to Bound")
 			binding := resourceBindings[numTargetClusters-9] // cluster-1
-			validateBindingState(ctx, binding, resourceSnapshot.Name, updateRun, 0)
+			validateBindingState(ctx, binding, resourceSnapshot.Name, updateRun, &updateRun.Status.StagesStatus[0].Clusters[4])
 
 			By("Updating the 5th clusterResourceBinding to Available")
 			meta.SetStatusCondition(&binding.Status.Conditions, generateTrueCondition(binding, placementv1beta1.ResourceBindingAvailable))
@@ -352,7 +352,7 @@ var _ = Describe("UpdateRun execution tests - double stages", func() {
 			wantStatus.StagesStatus[0].AfterStageTaskStatus[1].Conditions = append(wantStatus.StagesStatus[0].AfterStageTaskStatus[1].Conditions,
 				generateTrueCondition(updateRun, placementv1beta1.StageTaskConditionApprovalRequestApproved))
 			// 1st stage completed, mark progressing condition reason as succeeded and add succeeded condition.
-			wantStatus.StagesStatus[0].Conditions[0] = generateFalseProgressingCondition(updateRun, placementv1beta1.StageUpdatingConditionProgressing, condition.StageUpdatingSucceededReason)
+			wantStatus.StagesStatus[0].Conditions[0] = generateFalseConditionWithReason(updateRun, placementv1beta1.StageUpdatingConditionProgressing, condition.StageUpdatingSucceededReason)
 			wantStatus.StagesStatus[0].Conditions = append(wantStatus.StagesStatus[0].Conditions, generateTrueCondition(updateRun, placementv1beta1.StageUpdatingConditionSucceeded))
 			// 2nd stage waiting for before stage tasks.
 			wantStatus.StagesStatus[1].Conditions = append(wantStatus.StagesStatus[1].Conditions, generateFalseCondition(updateRun, placementv1beta1.StageUpdatingConditionProgressing))
@@ -435,7 +435,7 @@ var _ = Describe("UpdateRun execution tests - double stages", func() {
 		It("Should mark the 1st cluster in the 2nd stage as succeeded after approving request and marking the binding available", func() {
 			By("Validating the 1st clusterResourceBinding is updated to Bound")
 			binding := resourceBindings[0] // cluster-0
-			validateBindingState(ctx, binding, resourceSnapshot.Name, updateRun, 1)
+			validateBindingState(ctx, binding, resourceSnapshot.Name, updateRun, &updateRun.Status.StagesStatus[1].Clusters[0])
 
 			By("Updating the 1st clusterResourceBinding to Available")
 			meta.SetStatusCondition(&binding.Status.Conditions, generateTrueCondition(binding, placementv1beta1.ResourceBindingAvailable))
@@ -462,7 +462,7 @@ var _ = Describe("UpdateRun execution tests - double stages", func() {
 		It("Should mark the 2nd cluster in the 2nd stage as succeeded after marking the binding available", func() {
 			By("Validating the 2nd clusterResourceBinding is updated to Bound")
 			binding := resourceBindings[2] // cluster-2
-			validateBindingState(ctx, binding, resourceSnapshot.Name, updateRun, 1)
+			validateBindingState(ctx, binding, resourceSnapshot.Name, updateRun, &updateRun.Status.StagesStatus[1].Clusters[1])
 
 			By("Updating the 2nd clusterResourceBinding to Available")
 			meta.SetStatusCondition(&binding.Status.Conditions, generateTrueCondition(binding, placementv1beta1.ResourceBindingAvailable))
@@ -481,7 +481,7 @@ var _ = Describe("UpdateRun execution tests - double stages", func() {
 		It("Should mark the 3rd cluster in the 2nd stage as succeeded after marking the binding available", func() {
 			By("Validating the 3rd clusterResourceBinding is updated to Bound")
 			binding := resourceBindings[4] // cluster-4
-			validateBindingState(ctx, binding, resourceSnapshot.Name, updateRun, 1)
+			validateBindingState(ctx, binding, resourceSnapshot.Name, updateRun, &updateRun.Status.StagesStatus[1].Clusters[2])
 
 			By("Updating the 3rd clusterResourceBinding to Available")
 			meta.SetStatusCondition(&binding.Status.Conditions, generateTrueCondition(binding, placementv1beta1.ResourceBindingAvailable))
@@ -500,7 +500,7 @@ var _ = Describe("UpdateRun execution tests - double stages", func() {
 		It("Should mark the 4th cluster in the 2nd stage as succeeded after marking the binding available", func() {
 			By("Validating the 4th clusterResourceBinding is updated to Bound")
 			binding := resourceBindings[6] // cluster-6
-			validateBindingState(ctx, binding, resourceSnapshot.Name, updateRun, 1)
+			validateBindingState(ctx, binding, resourceSnapshot.Name, updateRun, &updateRun.Status.StagesStatus[1].Clusters[3])
 
 			By("Updating the 4th clusterResourceBinding to Available")
 			meta.SetStatusCondition(&binding.Status.Conditions, generateTrueCondition(binding, placementv1beta1.ResourceBindingAvailable))
@@ -519,7 +519,7 @@ var _ = Describe("UpdateRun execution tests - double stages", func() {
 		It("Should mark the 5th cluster in the 2nd stage as succeeded after marking the binding available", func() {
 			By("Validating the 5th clusterResourceBinding is updated to Bound")
 			binding := resourceBindings[8] // cluster-8
-			validateBindingState(ctx, binding, resourceSnapshot.Name, updateRun, 1)
+			validateBindingState(ctx, binding, resourceSnapshot.Name, updateRun, &updateRun.Status.StagesStatus[1].Clusters[4])
 
 			By("Updating the 5th clusterResourceBinding to Available")
 			meta.SetStatusCondition(&binding.Status.Conditions, generateTrueCondition(binding, placementv1beta1.ResourceBindingAvailable))
@@ -565,7 +565,7 @@ var _ = Describe("UpdateRun execution tests - double stages", func() {
 				generateTrueCondition(updateRun, placementv1beta1.StageTaskConditionApprovalRequestApproved))
 			wantStatus.StagesStatus[1].AfterStageTaskStatus[1].Conditions = append(wantStatus.StagesStatus[1].AfterStageTaskStatus[1].Conditions,
 				generateTrueCondition(updateRun, placementv1beta1.StageTaskConditionWaitTimeElapsed))
-			wantStatus.StagesStatus[1].Conditions[0] = generateFalseProgressingCondition(updateRun, placementv1beta1.StageUpdatingConditionProgressing, condition.StageUpdatingSucceededReason)
+			wantStatus.StagesStatus[1].Conditions[0] = generateFalseConditionWithReason(updateRun, placementv1beta1.StageUpdatingConditionProgressing, condition.StageUpdatingSucceededReason)
 			wantStatus.StagesStatus[1].Conditions = append(wantStatus.StagesStatus[1].Conditions, generateTrueCondition(updateRun, placementv1beta1.StageUpdatingConditionSucceeded))
 			meta.SetStatusCondition(&wantStatus.Conditions, generateTrueCondition(updateRun, placementv1beta1.StagedUpdateRunConditionProgressing))
 
@@ -623,10 +623,10 @@ var _ = Describe("UpdateRun execution tests - double stages", func() {
 				wantStatus.DeletionStageStatus.Clusters[i].Conditions = append(wantStatus.DeletionStageStatus.Clusters[i].Conditions, generateTrueCondition(updateRun, placementv1beta1.ClusterUpdatingConditionSucceeded))
 			}
 			// Mark the stage progressing condition as false with succeeded reason and add succeeded condition.
-			wantStatus.DeletionStageStatus.Conditions[0] = generateFalseProgressingCondition(updateRun, placementv1beta1.StageUpdatingConditionProgressing, condition.StageUpdatingSucceededReason)
+			wantStatus.DeletionStageStatus.Conditions[0] = generateFalseConditionWithReason(updateRun, placementv1beta1.StageUpdatingConditionProgressing, condition.StageUpdatingSucceededReason)
 			wantStatus.DeletionStageStatus.Conditions = append(wantStatus.DeletionStageStatus.Conditions, generateTrueCondition(updateRun, placementv1beta1.StageUpdatingConditionSucceeded))
 			// Mark updateRun progressing condition as false with succeeded reason and add succeeded condition.
-			meta.SetStatusCondition(&wantStatus.Conditions, generateFalseProgressingCondition(updateRun, placementv1beta1.StagedUpdateRunConditionProgressing, condition.UpdateRunSucceededReason))
+			meta.SetStatusCondition(&wantStatus.Conditions, generateFalseConditionWithReason(updateRun, placementv1beta1.StagedUpdateRunConditionProgressing, condition.UpdateRunSucceededReason))
 			wantStatus.Conditions = append(wantStatus.Conditions, generateTrueCondition(updateRun, placementv1beta1.StagedUpdateRunConditionSucceeded))
 			validateClusterStagedUpdateRunStatus(ctx, updateRun, wantStatus, "")
 
@@ -648,7 +648,7 @@ var _ = Describe("UpdateRun execution tests - double stages", func() {
 			Expect(k8sClient.Create(ctx, updateRun)).To(Succeed())
 
 			By("Validating the initialization succeeded and the execution has not started")
-			initialized := generateSucceededInitializationStatus(crp, updateRun, testResourceSnapshotIndex, policySnapshot, updateStrategy, clusterResourceOverride)
+			initialized := generateInitializedStatus(crp, updateRun, testResourceSnapshotIndex, policySnapshot, updateStrategy, 10, generateTenClusterStagesStatus(clusterResourceOverride), generateTenClusterDeletionStageStatus())
 			wantStatus = generateExecutionNotStartedStatus(updateRun, initialized)
 			validateClusterStagedUpdateRunStatus(ctx, updateRun, wantStatus, "")
 
@@ -682,7 +682,7 @@ var _ = Describe("UpdateRun execution tests - double stages", func() {
 
 			By("Validating the 1st clusterResourceBinding is updated to Bound")
 			binding := resourceBindings[numTargetClusters-1] // cluster-9
-			validateBindingState(ctx, binding, resourceSnapshot.Name, updateRun, 0)
+			validateBindingState(ctx, binding, resourceSnapshot.Name, updateRun, &updateRun.Status.StagesStatus[0].Clusters[0])
 
 			By("Updating the 1st clusterResourceBinding to ApplyFailed")
 			meta.SetStatusCondition(&binding.Status.Conditions, generateFalseCondition(binding, placementv1beta1.ResourceBindingApplied))
@@ -703,7 +703,7 @@ var _ = Describe("UpdateRun execution tests - double stages", func() {
 		It("Should abort the execution if the binding has unexpected state", func() {
 			By("Validating the 1st clusterResourceBinding is updated to Bound")
 			binding := resourceBindings[numTargetClusters-1] // cluster-9
-			validateBindingState(ctx, binding, resourceSnapshot.Name, updateRun, 0)
+			validateBindingState(ctx, binding, resourceSnapshot.Name, updateRun, &updateRun.Status.StagesStatus[0].Clusters[0])
 
 			By("Updating the 1st clusterResourceBinding's state to Scheduled (from Bound)")
 			binding.Spec.State = placementv1beta1.BindingStateScheduled
@@ -711,15 +711,173 @@ var _ = Describe("UpdateRun execution tests - double stages", func() {
 
 			By("Validating the updateRun has failed")
 			wantStatus.StagesStatus[0].Clusters[0].Conditions = append(wantStatus.StagesStatus[0].Clusters[0].Conditions, generateFalseCondition(updateRun, placementv1beta1.ClusterUpdatingConditionSucceeded))
-			wantStatus.StagesStatus[0].Conditions[0] = generateFalseProgressingCondition(updateRun, placementv1beta1.StageUpdatingConditionProgressing, condition.StageUpdatingFailedReason)
+			wantStatus.StagesStatus[0].Conditions[0] = generateFalseConditionWithReason(updateRun, placementv1beta1.StageUpdatingConditionProgressing, condition.StageUpdatingFailedReason)
 			wantStatus.StagesStatus[0].Conditions = append(wantStatus.StagesStatus[0].Conditions, generateFalseCondition(updateRun, placementv1beta1.StageUpdatingConditionSucceeded))
-			meta.SetStatusCondition(&wantStatus.Conditions, generateFalseProgressingCondition(updateRun, placementv1beta1.StagedUpdateRunConditionProgressing, condition.UpdateRunFailedReason))
+			meta.SetStatusCondition(&wantStatus.Conditions, generateFalseConditionWithReason(updateRun, placementv1beta1.StagedUpdateRunConditionProgressing, condition.UpdateRunFailedReason))
 			wantStatus.Conditions = append(wantStatus.Conditions, generateFalseCondition(updateRun, placementv1beta1.StagedUpdateRunConditionSucceeded))
 			validateClusterStagedUpdateRunStatus(ctx, updateRun, wantStatus, "")
 
 			By("Checking update run status metrics are emitted")
 			validateUpdateRunMetricsEmitted(generateWaitingMetric(placementv1beta1.StateRun, updateRun), generateProgressingMetric(placementv1beta1.StateRun, updateRun), generateStuckMetric(placementv1beta1.StateRun, updateRun), generateFailedMetric(placementv1beta1.StateRun, updateRun))
 		})
+	})
+
+	Context("Cluster staged update run should skip entire stage with zero clusters", Ordered, func() {
+		var wantApprovalRequest *placementv1beta1.ClusterApprovalRequest
+		BeforeAll(func() {
+			By("Reassigning the strategy to have 2 stages: one selecting all clusters and one empty")
+			sortingKey := "index"
+			updateStrategy.Spec.Stages = []placementv1beta1.StageConfig{
+				{
+					Name:            "stage1",
+					LabelSelector:   &metav1.LabelSelector{}, // Empty label selector selects all clusters.
+					SortingLabelKey: &sortingKey,
+					AfterStageTasks: []placementv1beta1.StageTask{
+						{
+							Type: placementv1beta1.StageTaskTypeApproval,
+						},
+					},
+				},
+				{
+					Name:          "stage2",
+					LabelSelector: nil,
+					BeforeStageTasks: []placementv1beta1.StageTask{
+						{
+							Type: placementv1beta1.StageTaskTypeApproval,
+						},
+					},
+					AfterStageTasks: []placementv1beta1.StageTask{
+						{
+							Type: placementv1beta1.StageTaskTypeTimedWait,
+							WaitTime: &metav1.Duration{
+								Duration: time.Second * 10,
+							},
+						},
+						{
+							Type: placementv1beta1.StageTaskTypeApproval,
+						},
+					},
+				},
+			}
+			Expect(k8sClient.Update(ctx, updateStrategy)).To(Succeed())
+
+			By("Creating a new clusterStagedUpdateRun")
+			Expect(k8sClient.Create(ctx, updateRun)).To(Succeed())
+
+			By("Validating the initialization succeeded")
+			initialized := generateInitializedStatus(
+				crp, updateRun, testResourceSnapshotIndex, policySnapshot, updateStrategy, 10,
+				generateTenClusterSingleStageStatus(clusterResourceOverride), generateTenClusterDeletionStageStatus(),
+			)
+			wantStatus = generateExecutionStartedStatus(updateRun, initialized)
+			validateClusterStagedUpdateRunStatus(ctx, updateRun, wantStatus, "")
+
+			// Build wantStatus based on the current updateRun status after initialization.
+			wantStatus = updateRun.Status.DeepCopy()
+
+			By("Checking update run status metrics are emitted")
+			validateUpdateRunMetricsEmitted(generateProgressingMetric(placementv1beta1.StateRun, updateRun))
+		})
+
+		It("Should complete executing the clusters in the first stage and wait for after-stage tasks", func() {
+			By("Validating the 1st stage has startTime set")
+			Expect(updateRun.Status.StagesStatus[0].StartTime).ShouldNot(BeNil())
+
+			By("Marking all bindings in the first stage as available and validating all clusters have completed")
+			for i := 0; i < numTargetClusters; i++ {
+				binding := resourceBindings[numTargetClusters-1-i]
+				validateBindingState(ctx, binding, resourceSnapshot.Name, updateRun, &updateRun.Status.StagesStatus[0].Clusters[i])
+				meta.SetStatusCondition(&binding.Status.Conditions, generateTrueCondition(binding, placementv1beta1.ResourceBindingAvailable))
+				Expect(k8sClient.Status().Update(ctx, binding)).Should(Succeed(), "failed to update the binding status")
+
+				meta.SetStatusCondition(&wantStatus.StagesStatus[0].Clusters[i].Conditions, generateTrueCondition(updateRun, placementv1beta1.ClusterUpdatingConditionStarted))
+				meta.SetStatusCondition(&wantStatus.StagesStatus[0].Clusters[i].Conditions, generateTrueCondition(updateRun, placementv1beta1.ClusterUpdatingConditionSucceeded))
+			}
+
+			wantStatus.StagesStatus[0].Conditions[0] = generateFalseCondition(updateRun, placementv1beta1.StageUpdatingConditionProgressing) // The progressing condition now becomes false with waiting reason.
+			wantStatus.StagesStatus[0].AfterStageTaskStatus[0].Conditions = append(wantStatus.StagesStatus[0].AfterStageTaskStatus[0].Conditions,
+				generateTrueCondition(updateRun, placementv1beta1.StageTaskConditionApprovalRequestCreated))
+			meta.SetStatusCondition(&wantStatus.Conditions, generateFalseCondition(updateRun, placementv1beta1.StagedUpdateRunConditionProgressing))
+			validateClusterStagedUpdateRunStatus(ctx, updateRun, wantStatus, "")
+
+			By("Validating the approvalRequest has been created")
+			wantApprovalRequest = &placementv1beta1.ClusterApprovalRequest{
+				ObjectMeta: metav1.ObjectMeta{
+					Name: updateRun.Status.StagesStatus[0].AfterStageTaskStatus[0].ApprovalRequestName,
+					Labels: map[string]string{
+						placementv1beta1.TargetUpdatingStageNameLabel:   updateRun.Status.StagesStatus[0].StageName,
+						placementv1beta1.TargetUpdateRunLabel:           updateRun.Name,
+						placementv1beta1.TaskTypeLabel:                  placementv1beta1.AfterStageTaskLabelValue,
+						placementv1beta1.IsLatestUpdateRunApprovalLabel: "true",
+					},
+				},
+				Spec: placementv1beta1.ApprovalRequestSpec{
+					TargetUpdateRun: updateRun.Name,
+					TargetStage:     updateRun.Status.StagesStatus[0].StageName,
+				},
+			}
+			validateApprovalRequestCreated(wantApprovalRequest)
+
+			By("Checking update run status metrics are emitted")
+			validateUpdateRunMetricsEmitted(generateProgressingMetric(placementv1beta1.StateRun, updateRun), generateWaitingMetric(placementv1beta1.StateRun, updateRun))
+		})
+
+		It("Should accept the approval request", func() {
+			By("Approving the approvalRequest")
+			approveClusterApprovalRequest(ctx, wantApprovalRequest.Name)
+
+			By("Validating the approvalRequest has ApprovalAccepted status")
+			Eventually(func() (bool, error) {
+				var approvalRequest placementv1beta1.ClusterApprovalRequest
+				if err := k8sClient.Get(ctx, types.NamespacedName{Name: wantApprovalRequest.Name}, &approvalRequest); err != nil {
+					return false, err
+				}
+				return condition.IsConditionStatusTrue(meta.FindStatusCondition(approvalRequest.Status.Conditions, string(placementv1beta1.ApprovalRequestConditionApprovalAccepted)), approvalRequest.Generation), nil
+			}, timeout, interval).Should(BeTrue(), "failed to validate the approvalRequest approval accepted")
+			// Approval task has been approved.
+			wantStatus.StagesStatus[0].AfterStageTaskStatus[0].Conditions = append(wantStatus.StagesStatus[0].AfterStageTaskStatus[0].Conditions,
+				generateTrueCondition(updateRun, placementv1beta1.StageTaskConditionApprovalRequestApproved))
+
+			By("Checking update run status metrics are emitted")
+			validateUpdateRunApprovalStageTaskMetric(generateApprovalStageTaskMetric(updateRun, placementv1beta1.AfterStageTaskLabelValue, 1))
+		})
+
+		It("Should skip the entire empty stage (stage2) and complete update run", func() {
+			// 1st stage completed, mark progressing condition reason as succeeded and add succeeded condition.
+			wantStatus.StagesStatus[0].Conditions[0] = generateFalseConditionWithReason(updateRun, placementv1beta1.StageUpdatingConditionProgressing, condition.StageUpdatingSucceededReason)
+			wantStatus.StagesStatus[0].Conditions = append(wantStatus.StagesStatus[0].Conditions, generateTrueCondition(updateRun, placementv1beta1.StageUpdatingConditionSucceeded))
+
+			By("Validating the 2nd stage has been skipped and the update run completed")
+			// 2nd stage will not have before-stage or after-stage conditions.
+			// 2nd stage will not have any clusters.
+			// 2nd stage conditions should populate as skipped.
+			wantStatus.StagesStatus[1].Conditions = append(wantStatus.StagesStatus[1].Conditions, generateFalseConditionWithReason(updateRun, placementv1beta1.StageUpdatingConditionProgressing, condition.StageUpdatingSkippedNoClustersReason))
+			wantStatus.StagesStatus[1].Conditions = append(wantStatus.StagesStatus[1].Conditions, generateTrueConditionWithReason(updateRun, placementv1beta1.StageUpdatingConditionSucceeded, condition.StageUpdatingSkippedNoClustersReason))
+			meta.SetStatusCondition(&wantStatus.Conditions, generateTrueCondition(updateRun, placementv1beta1.StagedUpdateRunConditionProgressing))
+
+			for i := range wantStatus.DeletionStageStatus.Clusters {
+				wantStatus.DeletionStageStatus.Clusters[i].Conditions = append(wantStatus.DeletionStageStatus.Clusters[i].Conditions, generateTrueCondition(updateRun, placementv1beta1.ClusterUpdatingConditionStarted))
+				wantStatus.DeletionStageStatus.Clusters[i].Conditions = append(wantStatus.DeletionStageStatus.Clusters[i].Conditions, generateTrueCondition(updateRun, placementv1beta1.ClusterUpdatingConditionSucceeded))
+			}
+			wantStatus.DeletionStageStatus.Conditions = append(wantStatus.DeletionStageStatus.Conditions, generateFalseConditionWithReason(updateRun, placementv1beta1.StageUpdatingConditionProgressing, condition.StageUpdatingSucceededReason))
+			wantStatus.DeletionStageStatus.Conditions = append(wantStatus.DeletionStageStatus.Conditions, generateTrueCondition(updateRun, placementv1beta1.StageUpdatingConditionSucceeded))
+			// Complete update run.
+			meta.SetStatusCondition(&wantStatus.Conditions, generateFalseConditionWithReason(updateRun, placementv1beta1.StagedUpdateRunConditionProgressing, condition.UpdateRunSucceededReason))
+			meta.SetStatusCondition(&wantStatus.Conditions, generateTrueCondition(updateRun, placementv1beta1.StagedUpdateRunConditionSucceeded))
+			validateClusterStagedUpdateRunStatus(ctx, updateRun, wantStatus, "")
+
+			By("Validating the 1st stage has endTime set")
+			Expect(updateRun.Status.StagesStatus[0].EndTime).ShouldNot(BeNil())
+
+			By("Validating the 2nd stage has no startTime or endTime set")
+			Expect(updateRun.Status.StagesStatus[1].StartTime).ShouldNot(BeNil())
+			Expect(updateRun.Status.StagesStatus[1].EndTime).ShouldNot(BeNil())
+
+			By("Checking update run status metrics are emitted")
+			validateUpdateRunMetricsEmitted(generateWaitingMetric(placementv1beta1.StateRun, updateRun), generateProgressingMetric(placementv1beta1.StateRun, updateRun), generateSucceededMetric(placementv1beta1.StateRun, updateRun))
+			validateUpdateRunApprovalStageTaskMetric(generateApprovalStageTaskMetric(updateRun, placementv1beta1.AfterStageTaskLabelValue, 1))
+		})
+
 	})
 })
 
@@ -825,7 +983,7 @@ var _ = Describe("UpdateRun execution tests - single stage", func() {
 			Expect(k8sClient.Create(ctx, updateRun)).To(Succeed())
 
 			By("Validating the initialization succeeded and the execution started")
-			initialized := generateSucceededInitializationStatusForSmallClusters(crp, updateRun, testResourceSnapshotIndex, policySnapshot, updateStrategy, 0)
+			initialized := generateInitializedStatus(crp, updateRun, testResourceSnapshotIndex, policySnapshot, updateStrategy, 3, generateThreeClusterStagesStatus(), generateDeletionStageStatus(0))
 			wantStatus = generateExecutionStartedStatus(updateRun, initialized)
 			validateClusterStagedUpdateRunStatus(ctx, updateRun, wantStatus, "")
 
@@ -836,7 +994,7 @@ var _ = Describe("UpdateRun execution tests - single stage", func() {
 		It("Should mark the 1st cluster in the 1st stage as succeeded after marking the binding available", func() {
 			By("Validating the 1st clusterResourceBinding is updated to Bound")
 			binding := resourceBindings[0] // cluster-0
-			validateBindingState(ctx, binding, resourceSnapshot.Name, updateRun, 0)
+			validateBindingState(ctx, binding, resourceSnapshot.Name, updateRun, &updateRun.Status.StagesStatus[0].Clusters[0])
 
 			By("Updating the 1st clusterResourceBinding to Available")
 			meta.SetStatusCondition(&binding.Status.Conditions, generateTrueCondition(binding, placementv1beta1.ResourceBindingAvailable))
@@ -857,7 +1015,7 @@ var _ = Describe("UpdateRun execution tests - single stage", func() {
 		It("Should mark the 2nd cluster in the 1st stage as succeeded after marking the binding available", func() {
 			By("Validating the 2nd clusterResourceBinding is updated to Bound")
 			binding := resourceBindings[1] // cluster-1
-			validateBindingState(ctx, binding, resourceSnapshot.Name, updateRun, 0)
+			validateBindingState(ctx, binding, resourceSnapshot.Name, updateRun, &updateRun.Status.StagesStatus[0].Clusters[1])
 
 			By("Updating the 2nd clusterResourceBinding to Available")
 			meta.SetStatusCondition(&binding.Status.Conditions, generateTrueCondition(binding, placementv1beta1.ResourceBindingAvailable))
@@ -875,7 +1033,7 @@ var _ = Describe("UpdateRun execution tests - single stage", func() {
 		It("Should mark the 3rd cluster in the 1st stage as succeeded after marking the binding available and complete the updateRun", func() {
 			By("Validating the 3rd clusterResourceBinding is updated to Bound")
 			binding := resourceBindings[2] // cluster-2
-			validateBindingState(ctx, binding, resourceSnapshot.Name, updateRun, 0)
+			validateBindingState(ctx, binding, resourceSnapshot.Name, updateRun, &updateRun.Status.StagesStatus[0].Clusters[2])
 
 			By("Updating the 3rd clusterResourceBinding to Available")
 			meta.SetStatusCondition(&binding.Status.Conditions, generateTrueCondition(binding, placementv1beta1.ResourceBindingAvailable))
@@ -884,13 +1042,13 @@ var _ = Describe("UpdateRun execution tests - single stage", func() {
 			By("Validating the 3rd cluster has succeeded and stage waiting for AfterStageTasks")
 			wantStatus.StagesStatus[0].Clusters[2].Conditions = append(wantStatus.StagesStatus[0].Clusters[2].Conditions, generateTrueCondition(updateRun, placementv1beta1.ClusterUpdatingConditionSucceeded))
 			// 1st stage completed.
-			wantStatus.StagesStatus[0].Conditions[0] = generateFalseProgressingCondition(updateRun, placementv1beta1.StageUpdatingConditionProgressing, condition.StageUpdatingSucceededReason)
+			wantStatus.StagesStatus[0].Conditions[0] = generateFalseConditionWithReason(updateRun, placementv1beta1.StageUpdatingConditionProgressing, condition.StageUpdatingSucceededReason)
 			wantStatus.StagesStatus[0].Conditions = append(wantStatus.StagesStatus[0].Conditions, generateTrueCondition(updateRun, placementv1beta1.StageUpdatingConditionSucceeded))
 			// Mark the deletion stage progressing condition as false with succeeded reason and add succeeded condition.
-			wantStatus.DeletionStageStatus.Conditions = append(wantStatus.DeletionStageStatus.Conditions, generateFalseProgressingCondition(updateRun, placementv1beta1.StageUpdatingConditionProgressing, condition.StageUpdatingSucceededReason))
+			wantStatus.DeletionStageStatus.Conditions = append(wantStatus.DeletionStageStatus.Conditions, generateFalseConditionWithReason(updateRun, placementv1beta1.StageUpdatingConditionProgressing, condition.StageUpdatingSucceededReason))
 			wantStatus.DeletionStageStatus.Conditions = append(wantStatus.DeletionStageStatus.Conditions, generateTrueCondition(updateRun, placementv1beta1.StageUpdatingConditionSucceeded))
 			// Mark updateRun progressing condition as false with succeeded reason and add succeeded condition.
-			meta.SetStatusCondition(&wantStatus.Conditions, generateFalseProgressingCondition(updateRun, placementv1beta1.StagedUpdateRunConditionProgressing, condition.UpdateRunSucceededReason))
+			meta.SetStatusCondition(&wantStatus.Conditions, generateFalseConditionWithReason(updateRun, placementv1beta1.StagedUpdateRunConditionProgressing, condition.UpdateRunSucceededReason))
 			wantStatus.Conditions = append(wantStatus.Conditions, generateTrueCondition(updateRun, placementv1beta1.StagedUpdateRunConditionSucceeded))
 			validateClusterStagedUpdateRunStatus(ctx, updateRun, wantStatus, "")
 
@@ -919,7 +1077,7 @@ var _ = Describe("UpdateRun execution tests - single stage", func() {
 			Expect(k8sClient.Create(ctx, updateRun)).To(Succeed())
 
 			By("Validating the initialization succeeded and the execution started")
-			initialized := generateSucceededInitializationStatusForSmallClusters(crp, updateRun, testResourceSnapshotIndex, policySnapshot, updateStrategy, 0)
+			initialized := generateInitializedStatus(crp, updateRun, testResourceSnapshotIndex, policySnapshot, updateStrategy, 3, generateThreeClusterStagesStatus(), generateDeletionStageStatus(0))
 			wantStatus = generateExecutionNotStartedStatus(updateRun, initialized)
 			validateClusterStagedUpdateRunStatus(ctx, updateRun, wantStatus, "")
 
@@ -978,7 +1136,7 @@ var _ = Describe("UpdateRun execution tests - single stage", func() {
 		It("Should mark the 1st cluster in the 1st stage as succeeded after marking the binding available", func() {
 			By("Validating the 1st clusterResourceBinding is updated to Bound")
 			binding := resourceBindings[0] // cluster-0
-			validateBindingState(ctx, binding, resourceSnapshot.Name, updateRun, 0)
+			validateBindingState(ctx, binding, resourceSnapshot.Name, updateRun, &updateRun.Status.StagesStatus[0].Clusters[0])
 
 			By("Updating the 1st clusterResourceBinding to Available")
 			meta.SetStatusCondition(&binding.Status.Conditions, generateTrueCondition(binding, placementv1beta1.ResourceBindingAvailable))
@@ -999,7 +1157,7 @@ var _ = Describe("UpdateRun execution tests - single stage", func() {
 		It("Should mark the 2nd cluster in the 1st stage as succeeded after marking the binding available", func() {
 			By("Validating the 2nd clusterResourceBinding is updated to Bound")
 			binding := resourceBindings[1] // cluster-1
-			validateBindingState(ctx, binding, resourceSnapshot.Name, updateRun, 0)
+			validateBindingState(ctx, binding, resourceSnapshot.Name, updateRun, &updateRun.Status.StagesStatus[0].Clusters[1])
 
 			By("Updating the 2nd clusterResourceBinding to Available")
 			meta.SetStatusCondition(&binding.Status.Conditions, generateTrueCondition(binding, placementv1beta1.ResourceBindingAvailable))
@@ -1017,7 +1175,7 @@ var _ = Describe("UpdateRun execution tests - single stage", func() {
 		It("Should Should complete the 1st stage and complete the updateRun after the 3rd cluster succeeds", func() {
 			By("Validating the 3rd clusterResourceBinding is updated to Bound")
 			binding := resourceBindings[2] // cluster-2
-			validateBindingState(ctx, binding, resourceSnapshot.Name, updateRun, 0)
+			validateBindingState(ctx, binding, resourceSnapshot.Name, updateRun, &updateRun.Status.StagesStatus[0].Clusters[2])
 
 			By("Updating the 3rd clusterResourceBinding to Available")
 			meta.SetStatusCondition(&binding.Status.Conditions, generateTrueCondition(binding, placementv1beta1.ResourceBindingAvailable))
@@ -1025,17 +1183,17 @@ var _ = Describe("UpdateRun execution tests - single stage", func() {
 
 			By("Validating the 3rd cluster has succeeded")
 			wantStatus.StagesStatus[0].Clusters[2].Conditions = append(wantStatus.StagesStatus[0].Clusters[2].Conditions, generateTrueCondition(updateRun, placementv1beta1.ClusterUpdatingConditionSucceeded))
-			meta.SetStatusCondition(&wantStatus.StagesStatus[0].Conditions, generateFalseProgressingCondition(updateRun, placementv1beta1.StageUpdatingConditionProgressing, condition.StageUpdatingSucceededReason))
+			meta.SetStatusCondition(&wantStatus.StagesStatus[0].Conditions, generateFalseConditionWithReason(updateRun, placementv1beta1.StageUpdatingConditionProgressing, condition.StageUpdatingSucceededReason))
 
 			By("Validating the 1st stage has completed and the updateRun has completed")
 			// 1st stage completed.
-			wantStatus.StagesStatus[0].Conditions[0] = generateFalseProgressingCondition(updateRun, placementv1beta1.StageUpdatingConditionProgressing, condition.StageUpdatingSucceededReason)
+			wantStatus.StagesStatus[0].Conditions[0] = generateFalseConditionWithReason(updateRun, placementv1beta1.StageUpdatingConditionProgressing, condition.StageUpdatingSucceededReason)
 			wantStatus.StagesStatus[0].Conditions = append(wantStatus.StagesStatus[0].Conditions, generateTrueCondition(updateRun, placementv1beta1.StageUpdatingConditionSucceeded))
 			// Mark the deletion stage progressing condition as false with succeeded reason and add succeeded condition.
-			wantStatus.DeletionStageStatus.Conditions = append(wantStatus.DeletionStageStatus.Conditions, generateFalseProgressingCondition(updateRun, placementv1beta1.StageUpdatingConditionProgressing, condition.StageUpdatingSucceededReason))
+			wantStatus.DeletionStageStatus.Conditions = append(wantStatus.DeletionStageStatus.Conditions, generateFalseConditionWithReason(updateRun, placementv1beta1.StageUpdatingConditionProgressing, condition.StageUpdatingSucceededReason))
 			wantStatus.DeletionStageStatus.Conditions = append(wantStatus.DeletionStageStatus.Conditions, generateTrueCondition(updateRun, placementv1beta1.StageUpdatingConditionSucceeded))
 			// Mark updateRun progressing condition as false with succeeded reason and add succeeded condition.
-			meta.SetStatusCondition(&wantStatus.Conditions, generateFalseProgressingCondition(updateRun, placementv1beta1.StagedUpdateRunConditionProgressing, condition.UpdateRunSucceededReason))
+			meta.SetStatusCondition(&wantStatus.Conditions, generateFalseConditionWithReason(updateRun, placementv1beta1.StagedUpdateRunConditionProgressing, condition.UpdateRunSucceededReason))
 			wantStatus.Conditions = append(wantStatus.Conditions, generateTrueCondition(updateRun, placementv1beta1.StagedUpdateRunConditionSucceeded))
 			validateClusterStagedUpdateRunStatus(ctx, updateRun, wantStatus, "")
 
@@ -1066,7 +1224,7 @@ var _ = Describe("UpdateRun execution tests - single stage", func() {
 			Expect(k8sClient.Create(ctx, updateRun)).To(Succeed())
 
 			By("Validating the initialization succeeded and the execution started")
-			initialized := generateSucceededInitializationStatusForSmallClusters(crp, updateRun, testResourceSnapshotIndex, policySnapshot, updateStrategy, 0)
+			initialized := generateInitializedStatus(crp, updateRun, testResourceSnapshotIndex, policySnapshot, updateStrategy, 3, generateThreeClusterStagesStatus(), generateDeletionStageStatus(0))
 			wantStatus = generateExecutionStartedStatus(updateRun, initialized)
 			validateClusterStagedUpdateRunStatus(ctx, updateRun, wantStatus, "")
 
@@ -1077,7 +1235,7 @@ var _ = Describe("UpdateRun execution tests - single stage", func() {
 		It("Should mark the 1st cluster in the 1st stage as succeeded after marking the binding available", func() {
 			By("Validating the 1st clusterResourceBinding is updated to Bound")
 			binding := resourceBindings[0] // cluster-0
-			validateBindingState(ctx, binding, resourceSnapshot.Name, updateRun, 0)
+			validateBindingState(ctx, binding, resourceSnapshot.Name, updateRun, &updateRun.Status.StagesStatus[0].Clusters[0])
 
 			By("Updating the 1st clusterResourceBinding to Available")
 			meta.SetStatusCondition(&binding.Status.Conditions, generateTrueCondition(binding, placementv1beta1.ResourceBindingAvailable))
@@ -1098,7 +1256,7 @@ var _ = Describe("UpdateRun execution tests - single stage", func() {
 		It("Should mark the 2nd cluster in the 1st stage as succeeded after marking the binding available", func() {
 			By("Validating the 2nd clusterResourceBinding is updated to Bound")
 			binding := resourceBindings[1] // cluster-1
-			validateBindingState(ctx, binding, resourceSnapshot.Name, updateRun, 0)
+			validateBindingState(ctx, binding, resourceSnapshot.Name, updateRun, &updateRun.Status.StagesStatus[0].Clusters[1])
 
 			By("Updating the 2nd clusterResourceBinding to Available")
 			meta.SetStatusCondition(&binding.Status.Conditions, generateTrueCondition(binding, placementv1beta1.ResourceBindingAvailable))
@@ -1116,7 +1274,7 @@ var _ = Describe("UpdateRun execution tests - single stage", func() {
 		It("Should mark the 3rd cluster in the 1st stage as succeeded after marking the binding available", func() {
 			By("Validating the 3rd clusterResourceBinding is updated to Bound")
 			binding := resourceBindings[2] // cluster-2
-			validateBindingState(ctx, binding, resourceSnapshot.Name, updateRun, 0)
+			validateBindingState(ctx, binding, resourceSnapshot.Name, updateRun, &updateRun.Status.StagesStatus[0].Clusters[2])
 
 			By("Updating the 3rd clusterResourceBinding to Available")
 			meta.SetStatusCondition(&binding.Status.Conditions, generateTrueCondition(binding, placementv1beta1.ResourceBindingAvailable))
@@ -1137,13 +1295,13 @@ var _ = Describe("UpdateRun execution tests - single stage", func() {
 			wantStatus.StagesStatus[0].AfterStageTaskStatus[0].Conditions = append(wantStatus.StagesStatus[0].AfterStageTaskStatus[0].Conditions,
 				generateTrueCondition(updateRun, placementv1beta1.StageTaskConditionWaitTimeElapsed))
 			// 1st stage completed.
-			wantStatus.StagesStatus[0].Conditions[0] = generateFalseProgressingCondition(updateRun, placementv1beta1.StageUpdatingConditionProgressing, condition.StageUpdatingSucceededReason)
+			wantStatus.StagesStatus[0].Conditions[0] = generateFalseConditionWithReason(updateRun, placementv1beta1.StageUpdatingConditionProgressing, condition.StageUpdatingSucceededReason)
 			wantStatus.StagesStatus[0].Conditions = append(wantStatus.StagesStatus[0].Conditions, generateTrueCondition(updateRun, placementv1beta1.StageUpdatingConditionSucceeded))
 			// Mark the deletion stage progressing condition as false with succeeded reason and add succeeded condition.
-			wantStatus.DeletionStageStatus.Conditions = append(wantStatus.DeletionStageStatus.Conditions, generateFalseProgressingCondition(updateRun, placementv1beta1.StageUpdatingConditionProgressing, condition.StageUpdatingSucceededReason))
+			wantStatus.DeletionStageStatus.Conditions = append(wantStatus.DeletionStageStatus.Conditions, generateFalseConditionWithReason(updateRun, placementv1beta1.StageUpdatingConditionProgressing, condition.StageUpdatingSucceededReason))
 			wantStatus.DeletionStageStatus.Conditions = append(wantStatus.DeletionStageStatus.Conditions, generateTrueCondition(updateRun, placementv1beta1.StageUpdatingConditionSucceeded))
 			// Mark updateRun progressing condition as false with succeeded reason and add succeeded condition.
-			meta.SetStatusCondition(&wantStatus.Conditions, generateFalseProgressingCondition(updateRun, placementv1beta1.StagedUpdateRunConditionProgressing, condition.UpdateRunSucceededReason))
+			meta.SetStatusCondition(&wantStatus.Conditions, generateFalseConditionWithReason(updateRun, placementv1beta1.StagedUpdateRunConditionProgressing, condition.UpdateRunSucceededReason))
 			wantStatus.Conditions = append(wantStatus.Conditions, generateTrueCondition(updateRun, placementv1beta1.StagedUpdateRunConditionSucceeded))
 			validateClusterStagedUpdateRunStatus(ctx, updateRun, wantStatus, "")
 
@@ -1176,7 +1334,7 @@ var _ = Describe("UpdateRun execution tests - single stage", func() {
 			Expect(k8sClient.Create(ctx, updateRun)).To(Succeed())
 
 			By("Validating the initialization succeeded and the execution started")
-			initialized := generateSucceededInitializationStatusForSmallClusters(crp, updateRun, testResourceSnapshotIndex, policySnapshot, updateStrategy, 0)
+			initialized := generateInitializedStatus(crp, updateRun, testResourceSnapshotIndex, policySnapshot, updateStrategy, 3, generateThreeClusterStagesStatus(), generateDeletionStageStatus(0))
 			wantStatus = generateExecutionStartedStatus(updateRun, initialized)
 			validateClusterStagedUpdateRunStatus(ctx, updateRun, wantStatus, "")
 
@@ -1187,7 +1345,7 @@ var _ = Describe("UpdateRun execution tests - single stage", func() {
 		It("Should mark the 1st cluster in the 1st stage as succeeded after marking the binding available", func() {
 			By("Validating the 1st clusterResourceBinding is updated to Bound")
 			binding := resourceBindings[0] // cluster-0
-			validateBindingState(ctx, binding, resourceSnapshot.Name, updateRun, 0)
+			validateBindingState(ctx, binding, resourceSnapshot.Name, updateRun, &updateRun.Status.StagesStatus[0].Clusters[0])
 
 			By("Updating the 1st clusterResourceBinding to Available")
 			meta.SetStatusCondition(&binding.Status.Conditions, generateTrueCondition(binding, placementv1beta1.ResourceBindingAvailable))
@@ -1208,7 +1366,7 @@ var _ = Describe("UpdateRun execution tests - single stage", func() {
 		It("Should mark the 2nd cluster in the 1st stage as succeeded after marking the binding available", func() {
 			By("Validating the 2nd clusterResourceBinding is updated to Bound")
 			binding := resourceBindings[1] // cluster-1
-			validateBindingState(ctx, binding, resourceSnapshot.Name, updateRun, 0)
+			validateBindingState(ctx, binding, resourceSnapshot.Name, updateRun, &updateRun.Status.StagesStatus[0].Clusters[1])
 
 			By("Updating the 2nd clusterResourceBinding to Available")
 			meta.SetStatusCondition(&binding.Status.Conditions, generateTrueCondition(binding, placementv1beta1.ResourceBindingAvailable))
@@ -1226,7 +1384,7 @@ var _ = Describe("UpdateRun execution tests - single stage", func() {
 		It("Should mark the 3rd cluster in the 1st stage as succeeded after marking the binding available", func() {
 			By("Validating the 3rd clusterResourceBinding is updated to Bound")
 			binding := resourceBindings[2] // cluster-2
-			validateBindingState(ctx, binding, resourceSnapshot.Name, updateRun, 0)
+			validateBindingState(ctx, binding, resourceSnapshot.Name, updateRun, &updateRun.Status.StagesStatus[0].Clusters[2])
 
 			By("Updating the 3rd clusterResourceBinding to Available")
 			meta.SetStatusCondition(&binding.Status.Conditions, generateTrueCondition(binding, placementv1beta1.ResourceBindingAvailable))
@@ -1271,13 +1429,13 @@ var _ = Describe("UpdateRun execution tests - single stage", func() {
 			wantStatus.StagesStatus[0].AfterStageTaskStatus[0].Conditions = append(wantStatus.StagesStatus[0].AfterStageTaskStatus[0].Conditions,
 				generateTrueCondition(updateRun, placementv1beta1.StageTaskConditionApprovalRequestApproved))
 			// 1st stage completed.
-			wantStatus.StagesStatus[0].Conditions[0] = generateFalseProgressingCondition(updateRun, placementv1beta1.StageUpdatingConditionProgressing, condition.StageUpdatingSucceededReason)
+			wantStatus.StagesStatus[0].Conditions[0] = generateFalseConditionWithReason(updateRun, placementv1beta1.StageUpdatingConditionProgressing, condition.StageUpdatingSucceededReason)
 			wantStatus.StagesStatus[0].Conditions = append(wantStatus.StagesStatus[0].Conditions, generateTrueCondition(updateRun, placementv1beta1.StageUpdatingConditionSucceeded))
 			// Mark the deletion stage progressing condition as false with succeeded reason and add succeeded condition.
-			wantStatus.DeletionStageStatus.Conditions = append(wantStatus.DeletionStageStatus.Conditions, generateFalseProgressingCondition(updateRun, placementv1beta1.StageUpdatingConditionProgressing, condition.StageUpdatingSucceededReason))
+			wantStatus.DeletionStageStatus.Conditions = append(wantStatus.DeletionStageStatus.Conditions, generateFalseConditionWithReason(updateRun, placementv1beta1.StageUpdatingConditionProgressing, condition.StageUpdatingSucceededReason))
 			wantStatus.DeletionStageStatus.Conditions = append(wantStatus.DeletionStageStatus.Conditions, generateTrueCondition(updateRun, placementv1beta1.StageUpdatingConditionSucceeded))
 			// Mark updateRun progressing condition as false with succeeded reason and add succeeded condition.
-			meta.SetStatusCondition(&wantStatus.Conditions, generateFalseProgressingCondition(updateRun, placementv1beta1.StagedUpdateRunConditionProgressing, condition.UpdateRunSucceededReason))
+			meta.SetStatusCondition(&wantStatus.Conditions, generateFalseConditionWithReason(updateRun, placementv1beta1.StagedUpdateRunConditionProgressing, condition.UpdateRunSucceededReason))
 			wantStatus.Conditions = append(wantStatus.Conditions, generateTrueCondition(updateRun, placementv1beta1.StagedUpdateRunConditionSucceeded))
 			validateClusterStagedUpdateRunStatus(ctx, updateRun, wantStatus, "")
 
@@ -1310,7 +1468,7 @@ var _ = Describe("UpdateRun execution tests - single stage", func() {
 			Expect(k8sClient.Create(ctx, updateRun)).To(Succeed())
 
 			By("Validating the initialization succeeded and the execution started")
-			initialized := generateSucceededInitializationStatusForSmallClusters(crp, updateRun, testResourceSnapshotIndex, policySnapshot, updateStrategy, 0)
+			initialized := generateInitializedStatus(crp, updateRun, testResourceSnapshotIndex, policySnapshot, updateStrategy, 3, generateThreeClusterStagesStatus(), generateDeletionStageStatus(0))
 			wantStatus = generateExecutionStartedStatus(updateRun, initialized)
 			validateClusterStagedUpdateRunStatus(ctx, updateRun, wantStatus, "")
 
@@ -1318,10 +1476,10 @@ var _ = Describe("UpdateRun execution tests - single stage", func() {
 			validateUpdateRunMetricsEmitted(generateProgressingMetric(placementv1beta1.StateRun, updateRun))
 		})
 
-		It("Should mark the 1st cluster in the 1st stage as succeeded after marking the binding diff reported", func() {
+		It("Should mark the 1st cluster in the 1st stage as succeeded after marking the binding available", func() {
 			By("Validating the 1st clusterResourceBinding is updated to Bound")
 			binding := resourceBindings[0] // cluster-0
-			validateBindingState(ctx, binding, resourceSnapshot.Name, updateRun, 0)
+			validateBindingState(ctx, binding, resourceSnapshot.Name, updateRun, &updateRun.Status.StagesStatus[0].Clusters[0])
 
 			By("Updating the 1st clusterResourceBinding to Diff Reported")
 			meta.SetStatusCondition(&binding.Status.Conditions, generateTrueCondition(binding, placementv1beta1.ResourceBindingDiffReported))
@@ -1342,7 +1500,7 @@ var _ = Describe("UpdateRun execution tests - single stage", func() {
 		It("Should mark the 2nd cluster in the 1st stage as succeeded after marking the binding diff reported", func() {
 			By("Validating the 2nd clusterResourceBinding is updated to Bound")
 			binding := resourceBindings[1] // cluster-1
-			validateBindingState(ctx, binding, resourceSnapshot.Name, updateRun, 0)
+			validateBindingState(ctx, binding, resourceSnapshot.Name, updateRun, &updateRun.Status.StagesStatus[0].Clusters[1])
 
 			By("Updating the 2nd clusterResourceBinding to Diff Reported")
 			meta.SetStatusCondition(&binding.Status.Conditions, generateTrueCondition(binding, placementv1beta1.ResourceBindingDiffReported))
@@ -1360,7 +1518,7 @@ var _ = Describe("UpdateRun execution tests - single stage", func() {
 		It("Should mark the 3rd cluster in the 1st stage as succeeded after marking the binding diff reported and complete the updateRun", func() {
 			By("Validating the 3rd clusterResourceBinding is updated to Bound")
 			binding := resourceBindings[2] // cluster-2
-			validateBindingState(ctx, binding, resourceSnapshot.Name, updateRun, 0)
+			validateBindingState(ctx, binding, resourceSnapshot.Name, updateRun, &updateRun.Status.StagesStatus[0].Clusters[2])
 
 			By("Updating the 3rd clusterResourceBinding to Diff Reported")
 			meta.SetStatusCondition(&binding.Status.Conditions, generateTrueCondition(binding, placementv1beta1.ResourceBindingDiffReported))
@@ -1369,13 +1527,13 @@ var _ = Describe("UpdateRun execution tests - single stage", func() {
 			By("Validating the 3rd cluster has succeeded and stage waiting for AfterStageTasks")
 			wantStatus.StagesStatus[0].Clusters[2].Conditions = append(wantStatus.StagesStatus[0].Clusters[2].Conditions, generateTrueCondition(updateRun, placementv1beta1.ClusterUpdatingConditionSucceeded))
 			// 1st stage completed.
-			wantStatus.StagesStatus[0].Conditions[0] = generateFalseProgressingCondition(updateRun, placementv1beta1.StageUpdatingConditionProgressing, condition.StageUpdatingSucceededReason)
+			wantStatus.StagesStatus[0].Conditions[0] = generateFalseConditionWithReason(updateRun, placementv1beta1.StageUpdatingConditionProgressing, condition.StageUpdatingSucceededReason)
 			wantStatus.StagesStatus[0].Conditions = append(wantStatus.StagesStatus[0].Conditions, generateTrueCondition(updateRun, placementv1beta1.StageUpdatingConditionSucceeded))
 			// Mark the deletion stage progressing condition as false with succeeded reason and add succeeded condition.
-			wantStatus.DeletionStageStatus.Conditions = append(wantStatus.DeletionStageStatus.Conditions, generateFalseProgressingCondition(updateRun, placementv1beta1.StageUpdatingConditionProgressing, condition.StageUpdatingSucceededReason))
+			wantStatus.DeletionStageStatus.Conditions = append(wantStatus.DeletionStageStatus.Conditions, generateFalseConditionWithReason(updateRun, placementv1beta1.StageUpdatingConditionProgressing, condition.StageUpdatingSucceededReason))
 			wantStatus.DeletionStageStatus.Conditions = append(wantStatus.DeletionStageStatus.Conditions, generateTrueCondition(updateRun, placementv1beta1.StageUpdatingConditionSucceeded))
 			// Mark updateRun progressing condition as false with succeeded reason and add succeeded condition.
-			meta.SetStatusCondition(&wantStatus.Conditions, generateFalseProgressingCondition(updateRun, placementv1beta1.StagedUpdateRunConditionProgressing, condition.UpdateRunSucceededReason))
+			meta.SetStatusCondition(&wantStatus.Conditions, generateFalseConditionWithReason(updateRun, placementv1beta1.StagedUpdateRunConditionProgressing, condition.UpdateRunSucceededReason))
 			wantStatus.Conditions = append(wantStatus.Conditions, generateTrueCondition(updateRun, placementv1beta1.StagedUpdateRunConditionSucceeded))
 			validateClusterStagedUpdateRunStatus(ctx, updateRun, wantStatus, "")
 
@@ -1403,7 +1561,7 @@ var _ = Describe("UpdateRun execution tests - single stage", func() {
 			Expect(k8sClient.Create(ctx, updateRun)).To(Succeed())
 
 			By("Validating the initialization succeeded and the execution started")
-			initialized := generateSucceededInitializationStatusForSmallClusters(crp, updateRun, testResourceSnapshotIndex, policySnapshot, updateStrategy, 0)
+			initialized := generateInitializedStatus(crp, updateRun, testResourceSnapshotIndex, policySnapshot, updateStrategy, 3, generateThreeClusterStagesStatus(), generateDeletionStageStatus(0))
 			wantStatus = generateExecutionStartedStatus(updateRun, initialized)
 			validateClusterStagedUpdateRunStatus(ctx, updateRun, wantStatus, "")
 
@@ -1419,7 +1577,7 @@ var _ = Describe("UpdateRun execution tests - single stage", func() {
 		It("Should become stuck if the binding diff reporting fails", func() {
 			By("Validating the 1st clusterResourceBinding is updated to Bound")
 			binding := resourceBindings[0] // cluster-0
-			validateBindingState(ctx, binding, resourceSnapshot.Name, updateRun, 0)
+			validateBindingState(ctx, binding, resourceSnapshot.Name, updateRun, &updateRun.Status.StagesStatus[0].Clusters[0])
 
 			By("Updating the 1st clusterResourceBinding to diff reported failed")
 			meta.SetStatusCondition(&binding.Status.Conditions, generateFalseCondition(binding, placementv1beta1.ResourceBindingDiffReported))
@@ -1466,7 +1624,7 @@ var _ = Describe("UpdateRun execution tests - single stage", func() {
 			Expect(k8sClient.Create(ctx, updateRun)).To(Succeed())
 
 			By("Validating the initialization succeeded and the execution has not started")
-			initialized := generateSucceededInitializationStatusForSmallClusters(crp, updateRun, testResourceSnapshotIndex, policySnapshot, updateStrategy, 0)
+			initialized := generateInitializedStatus(crp, updateRun, testResourceSnapshotIndex, policySnapshot, updateStrategy, 3, generateThreeClusterStagesStatus(), generateDeletionStageStatus(0))
 			wantStatus = generateExecutionNotStartedStatus(updateRun, initialized)
 			validateClusterStagedUpdateRunStatus(ctx, updateRun, wantStatus, "")
 
@@ -1557,7 +1715,7 @@ var _ = Describe("UpdateRun execution tests - single stage", func() {
 		It("Should mark the 1st cluster in the 1st stage as succeeded after marking the binding available", func() {
 			By("Validating the 1st clusterResourceBinding is updated to Bound")
 			binding := resourceBindings[0] // cluster-0
-			validateBindingState(ctx, binding, resourceSnapshot.Name, updateRun, 0)
+			validateBindingState(ctx, binding, resourceSnapshot.Name, updateRun, &updateRun.Status.StagesStatus[0].Clusters[0])
 
 			By("Updating the 1st clusterResourceBinding to Available")
 			meta.SetStatusCondition(&binding.Status.Conditions, generateTrueCondition(binding, placementv1beta1.ResourceBindingAvailable))
@@ -1575,7 +1733,7 @@ var _ = Describe("UpdateRun execution tests - single stage", func() {
 		It("Should mark the 2nd cluster in the 1st stage as succeeded after marking the binding available", func() {
 			By("Validating the 2nd clusterResourceBinding is updated to Bound")
 			binding := resourceBindings[1] // cluster-1
-			validateBindingState(ctx, binding, resourceSnapshot.Name, updateRun, 0)
+			validateBindingState(ctx, binding, resourceSnapshot.Name, updateRun, &updateRun.Status.StagesStatus[0].Clusters[1])
 
 			By("Updating the 2nd clusterResourceBinding to Available")
 			meta.SetStatusCondition(&binding.Status.Conditions, generateTrueCondition(binding, placementv1beta1.ResourceBindingAvailable))
@@ -1590,7 +1748,7 @@ var _ = Describe("UpdateRun execution tests - single stage", func() {
 		It("Should mark the 3rd cluster in the 1st stage as succeeded after marking the binding available", func() {
 			By("Validating the 3rd clusterResourceBinding is updated to Bound")
 			binding := resourceBindings[2] // cluster-3
-			validateBindingState(ctx, binding, resourceSnapshot.Name, updateRun, 0)
+			validateBindingState(ctx, binding, resourceSnapshot.Name, updateRun, &updateRun.Status.StagesStatus[0].Clusters[2])
 
 			By("Updating the 3rd clusterResourceBinding to Available")
 			meta.SetStatusCondition(&binding.Status.Conditions, generateTrueCondition(binding, placementv1beta1.ResourceBindingAvailable))
@@ -1658,13 +1816,13 @@ var _ = Describe("UpdateRun execution tests - single stage", func() {
 			By("Validating the 1st stage has completed")
 			wantStatus.StagesStatus[0].AfterStageTaskStatus[1].Conditions = append(wantStatus.StagesStatus[0].AfterStageTaskStatus[1].Conditions,
 				generateTrueCondition(updateRun, placementv1beta1.StageTaskConditionWaitTimeElapsed))
-			wantStatus.StagesStatus[0].Conditions[0] = generateFalseProgressingCondition(updateRun, placementv1beta1.StageUpdatingConditionProgressing, condition.StageUpdatingSucceededReason)
+			wantStatus.StagesStatus[0].Conditions[0] = generateFalseConditionWithReason(updateRun, placementv1beta1.StageUpdatingConditionProgressing, condition.StageUpdatingSucceededReason)
 			wantStatus.StagesStatus[0].Conditions = append(wantStatus.StagesStatus[0].Conditions, generateTrueCondition(updateRun, placementv1beta1.StageUpdatingConditionSucceeded))
 			// Mark the deletion stage progressing condition as false with succeeded reason and add succeeded condition.
-			wantStatus.DeletionStageStatus.Conditions = append(wantStatus.DeletionStageStatus.Conditions, generateFalseProgressingCondition(updateRun, placementv1beta1.StageUpdatingConditionProgressing, condition.StageUpdatingSucceededReason))
+			wantStatus.DeletionStageStatus.Conditions = append(wantStatus.DeletionStageStatus.Conditions, generateFalseConditionWithReason(updateRun, placementv1beta1.StageUpdatingConditionProgressing, condition.StageUpdatingSucceededReason))
 			wantStatus.DeletionStageStatus.Conditions = append(wantStatus.DeletionStageStatus.Conditions, generateTrueCondition(updateRun, placementv1beta1.StageUpdatingConditionSucceeded))
 			// Mark updateRun progressing condition as false with succeeded reason and add succeeded condition.
-			meta.SetStatusCondition(&wantStatus.Conditions, generateFalseProgressingCondition(updateRun, placementv1beta1.StagedUpdateRunConditionProgressing, condition.UpdateRunSucceededReason))
+			meta.SetStatusCondition(&wantStatus.Conditions, generateFalseConditionWithReason(updateRun, placementv1beta1.StagedUpdateRunConditionProgressing, condition.UpdateRunSucceededReason))
 			wantStatus.Conditions = append(wantStatus.Conditions, generateTrueCondition(updateRun, placementv1beta1.StagedUpdateRunConditionSucceeded))
 			// Need to have a longer wait time for the test to pass, because of the long wait time specified in the update strategy.
 			timeout = time.Second * 90
@@ -1699,7 +1857,7 @@ var _ = Describe("UpdateRun execution tests - single stage", func() {
 			Expect(k8sClient.Create(ctx, updateRun)).To(Succeed())
 
 			By("Validating the initialization succeeded and but not execution started")
-			wantStatus = generateSucceededInitializationStatusForSmallClusters(crp, updateRun, testResourceSnapshotIndex, policySnapshot, updateStrategy, 0)
+			wantStatus = generateInitializedStatus(crp, updateRun, testResourceSnapshotIndex, policySnapshot, updateStrategy, 3, generateThreeClusterStagesStatus(), generateDeletionStageStatus(0))
 			validateClusterStagedUpdateRunStatus(ctx, updateRun, wantStatus, "")
 
 			By("Checking update run status metrics are emitted")
@@ -1739,7 +1897,7 @@ var _ = Describe("UpdateRun execution tests - single stage", func() {
 		It("Should mark the 1st cluster in the 1st stage as succeeded after marking the binding available", func() {
 			By("Validating the 1st clusterResourceBinding is updated to Bound")
 			binding := resourceBindings[0] // cluster-0
-			validateBindingState(ctx, binding, resourceSnapshot.Name, updateRun, 0)
+			validateBindingState(ctx, binding, resourceSnapshot.Name, updateRun, &updateRun.Status.StagesStatus[0].Clusters[0])
 
 			By("Updating the 1st clusterResourceBinding to Available")
 			meta.SetStatusCondition(&binding.Status.Conditions, generateTrueCondition(binding, placementv1beta1.ResourceBindingAvailable))
@@ -1760,7 +1918,7 @@ var _ = Describe("UpdateRun execution tests - single stage", func() {
 		It("Should mark the 2nd cluster in the 1st stage as succeeded after marking the binding available", func() {
 			By("Validating the 2nd clusterResourceBinding is updated to Bound")
 			binding := resourceBindings[1] // cluster-1
-			validateBindingState(ctx, binding, resourceSnapshot.Name, updateRun, 0)
+			validateBindingState(ctx, binding, resourceSnapshot.Name, updateRun, &updateRun.Status.StagesStatus[0].Clusters[1])
 
 			By("Updating the 2nd clusterResourceBinding to Available")
 			meta.SetStatusCondition(&binding.Status.Conditions, generateTrueCondition(binding, placementv1beta1.ResourceBindingAvailable))
@@ -1778,7 +1936,7 @@ var _ = Describe("UpdateRun execution tests - single stage", func() {
 		It("Should mark the 3rd cluster in the 1st stage as succeeded after marking the binding available and complete the updateRun", func() {
 			By("Validating the 3rd clusterResourceBinding is updated to Bound")
 			binding := resourceBindings[2] // cluster-2
-			validateBindingState(ctx, binding, resourceSnapshot.Name, updateRun, 0)
+			validateBindingState(ctx, binding, resourceSnapshot.Name, updateRun, &updateRun.Status.StagesStatus[0].Clusters[2])
 
 			By("Updating the 3rd clusterResourceBinding to Available")
 			meta.SetStatusCondition(&binding.Status.Conditions, generateTrueCondition(binding, placementv1beta1.ResourceBindingAvailable))
@@ -1787,13 +1945,13 @@ var _ = Describe("UpdateRun execution tests - single stage", func() {
 			By("Validating the 3rd cluster has succeeded and stage waiting for AfterStageTasks")
 			wantStatus.StagesStatus[0].Clusters[2].Conditions = append(wantStatus.StagesStatus[0].Clusters[2].Conditions, generateTrueCondition(updateRun, placementv1beta1.ClusterUpdatingConditionSucceeded))
 			// 1st stage completed.
-			wantStatus.StagesStatus[0].Conditions[0] = generateFalseProgressingCondition(updateRun, placementv1beta1.StageUpdatingConditionProgressing, condition.StageUpdatingSucceededReason)
+			wantStatus.StagesStatus[0].Conditions[0] = generateFalseConditionWithReason(updateRun, placementv1beta1.StageUpdatingConditionProgressing, condition.StageUpdatingSucceededReason)
 			wantStatus.StagesStatus[0].Conditions = append(wantStatus.StagesStatus[0].Conditions, generateTrueCondition(updateRun, placementv1beta1.StageUpdatingConditionSucceeded))
 			// Mark the deletion stage progressing condition as false with succeeded reason and add succeeded condition.
-			wantStatus.DeletionStageStatus.Conditions = append(wantStatus.DeletionStageStatus.Conditions, generateFalseProgressingCondition(updateRun, placementv1beta1.StageUpdatingConditionProgressing, condition.StageUpdatingSucceededReason))
+			wantStatus.DeletionStageStatus.Conditions = append(wantStatus.DeletionStageStatus.Conditions, generateFalseConditionWithReason(updateRun, placementv1beta1.StageUpdatingConditionProgressing, condition.StageUpdatingSucceededReason))
 			wantStatus.DeletionStageStatus.Conditions = append(wantStatus.DeletionStageStatus.Conditions, generateTrueCondition(updateRun, placementv1beta1.StageUpdatingConditionSucceeded))
 			// Mark updateRun progressing condition as false with succeeded reason and add succeeded condition.
-			wantStatus.Conditions[1] = generateFalseProgressingCondition(updateRun, placementv1beta1.StagedUpdateRunConditionProgressing, condition.UpdateRunSucceededReason)
+			wantStatus.Conditions[1] = generateFalseConditionWithReason(updateRun, placementv1beta1.StagedUpdateRunConditionProgressing, condition.UpdateRunSucceededReason)
 			wantStatus.Conditions = append(wantStatus.Conditions, generateTrueCondition(updateRun, placementv1beta1.StagedUpdateRunConditionSucceeded))
 			validateClusterStagedUpdateRunStatus(ctx, updateRun, wantStatus, "")
 
@@ -1807,7 +1965,7 @@ var _ = Describe("UpdateRun execution tests - single stage", func() {
 	})
 })
 
-func validateBindingState(ctx context.Context, binding *placementv1beta1.ClusterResourceBinding, resourceSnapshotName string, updateRun *placementv1beta1.ClusterStagedUpdateRun, stage int) {
+func validateBindingState(ctx context.Context, binding *placementv1beta1.ClusterResourceBinding, resourceSnapshotName string, updateRun *placementv1beta1.ClusterStagedUpdateRun, clusterStatus *placementv1beta1.ClusterUpdatingStatus) {
 	Eventually(func() error {
 		if err := k8sClient.Get(ctx, types.NamespacedName{Name: binding.Name}, binding); err != nil {
 			return err
@@ -1819,10 +1977,10 @@ func validateBindingState(ctx context.Context, binding *placementv1beta1.Cluster
 		if binding.Spec.ResourceSnapshotName != resourceSnapshotName {
 			return fmt.Errorf("binding %s has different resourceSnapshot name, got %s, want %s", binding.Name, binding.Spec.ResourceSnapshotName, resourceSnapshotName)
 		}
-		if diff := cmp.Diff(binding.Spec.ResourceOverrideSnapshots, updateRun.Status.StagesStatus[stage].Clusters[0].ResourceOverrideSnapshots); diff != "" {
+		if diff := cmp.Diff(binding.Spec.ResourceOverrideSnapshots, clusterStatus.ResourceOverrideSnapshots); diff != "" {
 			return fmt.Errorf("binding %s has different resourceOverrideSnapshots (-want +got):\n%s", binding.Name, diff)
 		}
-		if diff := cmp.Diff(binding.Spec.ClusterResourceOverrideSnapshots, updateRun.Status.StagesStatus[stage].Clusters[0].ClusterResourceOverrideSnapshots); diff != "" {
+		if diff := cmp.Diff(binding.Spec.ClusterResourceOverrideSnapshots, clusterStatus.ClusterResourceOverrideSnapshots); diff != "" {
 			return fmt.Errorf("binding %s has different clusterResourceOverrideSnapshots(-want +got):\n%s", binding.Name, diff)
 		}
 		if diff := cmp.Diff(binding.Spec.ApplyStrategy, updateRun.Status.ApplyStrategy); diff != "" {
@@ -1834,7 +1992,7 @@ func validateBindingState(ctx context.Context, binding *placementv1beta1.Cluster
 			return fmt.Errorf("binding %s does not have RolloutStarted condition", binding.Name)
 		}
 		return nil
-	}, timeout, interval).Should(Succeed(), "failed to validate the binding state")
+	}, timeout*3, interval).Should(Succeed(), "failed to validate the binding state")
 }
 
 func validateNotBoundBindingState(ctx context.Context, binding *placementv1beta1.ClusterResourceBinding) {

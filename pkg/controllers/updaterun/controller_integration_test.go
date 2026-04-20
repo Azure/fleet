@@ -963,16 +963,16 @@ func generateFalseCondition(obj client.Object, condType any) metav1.Condition {
 	}
 }
 
-func generateFalseProgressingCondition(obj client.Object, condType any, reason string) metav1.Condition {
+func generateFalseConditionWithReason(obj client.Object, condType any, reason string) metav1.Condition {
 	falseCond := generateFalseCondition(obj, condType)
 	falseCond.Reason = reason
 	return falseCond
 }
 
-func generateFalseConditionWithReason(obj client.Object, condType any, reason string) metav1.Condition {
-	falseCond := generateFalseCondition(obj, condType)
-	falseCond.Reason = reason
-	return falseCond
+func generateTrueConditionWithReason(obj client.Object, condType any, reason string) metav1.Condition {
+	trueCond := generateTrueCondition(obj, condType)
+	trueCond.Reason = reason
+	return trueCond
 }
 
 func generateProgressingUnknownConditionWithReason(obj client.Object, reason string) metav1.Condition {
