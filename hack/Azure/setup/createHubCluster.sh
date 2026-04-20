@@ -23,6 +23,8 @@ export OUTPUT_TYPE="${OUTPUT_TYPE:-type=docker}"
 echo "Installing hub-agent..."
 # Install the hub agent helm chart on the hub cluster
 helm install hub-agent charts/hub-agent/ \
+  --namespace fleet-system \
+  --create-namespace \
   --set image.pullPolicy=Always \
   --set image.repository=$REGISTRY/hub-agent \
   --set image.tag=$TAG \

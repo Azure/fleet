@@ -217,6 +217,9 @@ func createMemberCluster(name string, taints []clusterv1beta1.Taint) {
 	memberCluster := clusterv1beta1.MemberCluster{
 		ObjectMeta: metav1.ObjectMeta{
 			Name: name,
+			Labels: map[string]string{
+				placementv1beta1.MemberNameLabel: name,
+			},
 		},
 		Spec: clusterv1beta1.MemberClusterSpec{
 			Identity: rbacv1.Subject{

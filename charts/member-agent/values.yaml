@@ -65,7 +65,7 @@ secret:
 azure:
   clientid: <member_cluster_clientID>
 
-tlsClientInsecure: true #TODO should be false in the production
+tlsClientInsecure: false
 useCAAuth: false
 
 enablePprof: true

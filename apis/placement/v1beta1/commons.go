@@ -74,6 +74,11 @@ const (
 	// MemberClusterFinalizer is used to make sure that we handle gc of all the member cluster resources on the hub cluster.
 	MemberClusterFinalizer = FleetPrefix + "membercluster-finalizer"
 
+	// MemberNameLabel is a label automatically added to MemberCluster objects
+	// with the value set to the MemberCluster's name. This enables selecting clusters
+	// by name in ResourceOverride and ClusterResourceOverride via labelSelector.
+	MemberNameLabel = FleetPrefix + "member-name"
+
 	// WorkFinalizer is used by the work generator to make sure that the binding is not deleted until the work objects
 	// it generates are all deleted, or used by the work controller to make sure the work has been deleted in the member
 	// cluster.

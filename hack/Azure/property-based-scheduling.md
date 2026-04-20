@@ -116,6 +116,8 @@ kubectl config use-context $HUB_CLUSTER-admin
 export REGISTRY=fleetdemo.azurecr.io
 export TAG=demo
 helm install hub-agent charts/hub-agent/ \
+    --namespace fleet-system \
+    --create-namespace \
     --set image.pullPolicy=Always \
     --set image.repository=$REGISTRY/hub-agent \
     --set image.tag=$TAG \
@@ -170,11 +172,15 @@ do
 done
 
 # Install the member agent.
+export HUB_CA=$(kubectl config view --raw -o jsonpath="{.clusters[?(@.name==\"$HUB_CLUSTER\")].cluster.certificate-authority-data}")
 for (( i=0; i<3; i++ ));
 do
     kubectl config use-context "${MEMBER_CLUSTERS[$i]}-admin"
     helm install member-agent charts/member-agent/ \
+      --namespace fleet-system \
+      --create-namespace \
         --set config.hubURL=$HUB_SERVER_ADDR \
+        --set config.hubCA=$HUB_CA \
         --set image.repository=$REGISTRY/member-agent \
         --set image.tag=$TAG \
         --set refreshtoken.repository=$REGISTRY/refresh-token \

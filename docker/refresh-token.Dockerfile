@@ -1,5 +1,5 @@
 # Build the refreshtoken binary
-FROM mcr.microsoft.com/oss/go/microsoft/golang:1.25.8 AS builder
+FROM mcr.microsoft.com/oss/go/microsoft/golang:1.25.9 AS builder
 
 ARG GOOS="linux"
 ARG GOARCH="amd64"
@@ -16,8 +16,10 @@ RUN go mod download
 COPY cmd/authtoken/main.go main.go
 COPY pkg/authtoken pkg/authtoken
 
-# Build with CGO enabled and GOEXPERIMENT=systemcrypto for internal usage
-RUN echo "Building for GOOS=${GOOS} GOARCH=${GOARCH}"
+ARG TARGETARCH
+
+# Build
+RUN echo "Building images with GOOS=${GOOS} GOARCH=${GOARCH}"
 RUN CGO_ENABLED=1 GOOS=$GOOS GOARCH=$GOARCH GOEXPERIMENT=systemcrypto GO111MODULE=on go build -o refreshtoken main.go
 
 # Use Azure Linux distroless base image to package the refreshtoken binary
