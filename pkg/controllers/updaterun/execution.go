@@ -256,7 +256,7 @@ func (r *Reconciler) executeUpdatingStage(
 				"bindingSpecInSync", inSync, "bindingState", bindingSpec.State,
 				"bindingRolloutStarted", rolloutStarted, "binding", klog.KObj(binding), "updateRun", updateRunRef)
 			markClusterUpdatingFailed(clusterStatus, updateRun.GetGeneration(), preemptedErr.Error())
-			clusterUpdateErrors = append(clusterUpdateErrors, fmt.Errorf("%w: %s", errStagedUpdatedAborted, preemptedErr.Error()))
+			clusterUpdateErrors = append(clusterUpdateErrors, fmt.Errorf("%w: %w", errStagedUpdatedAborted, preemptedErr))
 			continue
 		}
 

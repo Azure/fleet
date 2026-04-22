@@ -33,6 +33,7 @@ import (
 
 	clusterv1beta1 "github.com/kubefleet-dev/kubefleet/apis/cluster/v1beta1"
 	placementv1beta1 "github.com/kubefleet-dev/kubefleet/apis/placement/v1beta1"
+	hubmetrics "github.com/kubefleet-dev/kubefleet/pkg/metrics/hub"
 	"github.com/kubefleet-dev/kubefleet/pkg/utils"
 	"github.com/kubefleet-dev/kubefleet/pkg/utils/condition"
 )
@@ -49,6 +50,7 @@ var _ = Describe("UpdateRun validation tests", func() {
 		var resourceSnapshot *placementv1beta1.ClusterResourceSnapshot
 		var clusterResourceOverride *placementv1beta1.ClusterResourceOverrideSnapshot
 		var wantStatus *placementv1beta1.UpdateRunStatus
+		var failureType hubmetrics.UpdateRunFailureType
 
 		BeforeEach(func() {
 			testUpdateRunName = "updaterun-" + utils.RandStr()
@@ -114,6 +116,11 @@ var _ = Describe("UpdateRun validation tests", func() {
 			initialized := generateInitializedStatus(crp, updateRun, testResourceSnapshotIndex, policySnapshot, updateStrategy, 10, generateTenClusterStagesStatus(clusterResourceOverride), generateTenClusterDeletionStageStatus())
 			wantStatus = generateExecutionNotStartedStatus(updateRun, initialized)
 			validateClusterStagedUpdateRunStatus(ctx, updateRun, wantStatus, "")
+
+			// Tests that fail below will report internal errors, if not user error, because only the updaterun controller
+			// is running in this test environment. Other controllers (e.g., rollout, work generator,
+			// binding controllers) are not set up, causing operations that depend on them to fail.
+			failureType = hubmetrics.UpdateRunFailureTypeInternalError
 		})
 
 		AfterEach(func() {
@@ -165,7 +172,7 @@ var _ = Describe("UpdateRun validation tests", func() {
 		Context("Test validateCRP", func() {
 			AfterEach(func() {
 				By("Checking update run status metrics are emitted")
-				validateUpdateRunMetricsEmitted(generateWaitingMetric(placementv1beta1.StateRun, updateRun), generateFailedMetric(placementv1beta1.StateRun, updateRun))
+				validateUpdateRunMetricsEmitted(generateWaitingMetric(placementv1beta1.StateRun, updateRun), generateFailedMetric(placementv1beta1.StateRun, updateRun, string(failureType)))
 			})
 
 			It("Should fail to validate if the CRP is not found", func() {
@@ -173,6 +180,7 @@ var _ = Describe("UpdateRun validation tests", func() {
 				Expect(k8sClient.Delete(ctx, crp)).Should(Succeed())
 
 				By("Validating the validation failed")
+				failureType = hubmetrics.UpdateRunFailureTypeUserError
 				wantStatus = generateFailedValidationStatus(updateRun, wantStatus)
 				validateClusterStagedUpdateRunStatus(ctx, updateRun, wantStatus, "parent placement not found")
 			})
@@ -186,6 +194,7 @@ var _ = Describe("UpdateRun validation tests", func() {
 				Expect(k8sClient.Create(ctx, crp)).To(Succeed())
 
 				By("Validating the validation failed")
+				failureType = hubmetrics.UpdateRunFailureTypeUserError
 				wantStatus = generateFailedValidationStatus(updateRun, wantStatus)
 				validateClusterStagedUpdateRunStatus(ctx, updateRun, wantStatus,
 					"parent placement does not have an external rollout strategy")
@@ -197,6 +206,7 @@ var _ = Describe("UpdateRun validation tests", func() {
 				Expect(k8sClient.Update(ctx, crp)).To(Succeed())
 
 				By("Validating the validation failed")
+				failureType = hubmetrics.UpdateRunFailureTypeUserError
 				wantStatus = generateFailedValidationStatus(updateRun, wantStatus)
 				validateClusterStagedUpdateRunStatus(ctx, updateRun, wantStatus, "the applyStrategy in the updateRun is outdated")
 			})
@@ -212,7 +222,7 @@ var _ = Describe("UpdateRun validation tests", func() {
 				validateClusterStagedUpdateRunStatus(ctx, updateRun, wantStatus, "no latest policy snapshot associated")
 
 				By("Checking update run status metrics are emitted")
-				validateUpdateRunMetricsEmitted(generateWaitingMetric(placementv1beta1.StateRun, updateRun), generateFailedMetric(placementv1beta1.StateRun, updateRun))
+				validateUpdateRunMetricsEmitted(generateWaitingMetric(placementv1beta1.StateRun, updateRun), generateFailedMetric(placementv1beta1.StateRun, updateRun, string(failureType)))
 			})
 
 			It("Should fail to validate if the latest policySnapshot has changed", func() {
@@ -241,7 +251,7 @@ var _ = Describe("UpdateRun validation tests", func() {
 				Expect(k8sClient.Delete(ctx, newPolicySnapshot)).Should(Succeed())
 
 				By("Checking update run status metrics are emitted")
-				validateUpdateRunMetricsEmitted(generateWaitingMetric(placementv1beta1.StateRun, updateRun), generateFailedMetric(placementv1beta1.StateRun, updateRun))
+				validateUpdateRunMetricsEmitted(generateWaitingMetric(placementv1beta1.StateRun, updateRun), generateFailedMetric(placementv1beta1.StateRun, updateRun, string(failureType)))
 			})
 
 			It("Should fail to validate if the cluster count has changed", func() {
@@ -255,14 +265,14 @@ var _ = Describe("UpdateRun validation tests", func() {
 					"the cluster count initialized in the updateRun is outdated")
 
 				By("Checking update run status metrics are emitted")
-				validateUpdateRunMetricsEmitted(generateWaitingMetric(placementv1beta1.StateRun, updateRun), generateFailedMetric(placementv1beta1.StateRun, updateRun))
+				validateUpdateRunMetricsEmitted(generateWaitingMetric(placementv1beta1.StateRun, updateRun), generateFailedMetric(placementv1beta1.StateRun, updateRun, string(failureType)))
 			})
 		})
 
 		Context("Test validateStagesStatus", func() {
 			AfterEach(func() {
 				By("Checking update run status metrics are emitted")
-				validateUpdateRunMetricsEmitted(generateWaitingMetric(placementv1beta1.StateRun, updateRun), generateFailedMetric(placementv1beta1.StateRun, updateRun))
+				validateUpdateRunMetricsEmitted(generateWaitingMetric(placementv1beta1.StateRun, updateRun), generateFailedMetric(placementv1beta1.StateRun, updateRun, string(failureType)))
 			})
 
 			It("Should fail to validate if the UpdateStrategySnapshot is nil", func() {
@@ -379,6 +389,7 @@ var _ = Describe("UpdateRun validation tests", func() {
 		var resourceSnapshot *placementv1beta1.ClusterResourceSnapshot
 		var clusterResourceOverride *placementv1beta1.ClusterResourceOverrideSnapshot
 		var wantStatus *placementv1beta1.UpdateRunStatus
+
 		BeforeEach(func() {
 			testUpdateRunName = "updaterun-" + utils.RandStr()
 			testCRPName = "crp-" + utils.RandStr()

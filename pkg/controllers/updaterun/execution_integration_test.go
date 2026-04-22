@@ -31,6 +31,7 @@ import (
 
 	clusterv1beta1 "github.com/kubefleet-dev/kubefleet/apis/cluster/v1beta1"
 	placementv1beta1 "github.com/kubefleet-dev/kubefleet/apis/placement/v1beta1"
+	hubmetrics "github.com/kubefleet-dev/kubefleet/pkg/metrics/hub"
 	"github.com/kubefleet-dev/kubefleet/pkg/utils"
 	"github.com/kubefleet-dev/kubefleet/pkg/utils/condition"
 )
@@ -718,7 +719,7 @@ var _ = Describe("UpdateRun execution tests - double stages", func() {
 			validateClusterStagedUpdateRunStatus(ctx, updateRun, wantStatus, "")
 
 			By("Checking update run status metrics are emitted")
-			validateUpdateRunMetricsEmitted(generateWaitingMetric(placementv1beta1.StateRun, updateRun), generateProgressingMetric(placementv1beta1.StateRun, updateRun), generateStuckMetric(placementv1beta1.StateRun, updateRun), generateFailedMetric(placementv1beta1.StateRun, updateRun))
+			validateUpdateRunMetricsEmitted(generateWaitingMetric(placementv1beta1.StateRun, updateRun), generateProgressingMetric(placementv1beta1.StateRun, updateRun), generateStuckMetric(placementv1beta1.StateRun, updateRun), generateFailedMetric(placementv1beta1.StateRun, updateRun, string(hubmetrics.UpdateRunFailureTypeUserError)))
 		})
 	})
 

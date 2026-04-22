@@ -109,8 +109,12 @@ func (r *Reconciler) Reconcile(ctx context.Context, req runtime.Request) (runtim
 		return runtime.Result{}, err
 	}
 
+	// Track errors for metrics emission. The error is used to determine the failure type
+	// (user_error vs internal_error) in the emitted metrics.
+	var reconcileErr error
 	// Emit the update run status metric based on status conditions in the updateRun.
-	defer emitUpdateRunStatusMetric(updateRun)
+	// Use a closure to capture reconcileErr by reference, so it reflects any updates made during reconciliation.
+	defer func() { emitUpdateRunStatusMetric(updateRun, reconcileErr) }()
 
 	state := updateRun.GetUpdateRunSpec().State
 
@@ -126,14 +130,13 @@ func (r *Reconciler) Reconcile(ctx context.Context, req runtime.Request) (runtim
 		}
 
 		// Initialize the updateRun.
-		var initErr error
-		if toBeUpdatedBindings, toBeDeletedBindings, initErr = r.initialize(ctx, updateRun); initErr != nil {
-			klog.ErrorS(initErr, "Failed to initialize the updateRun", "updateRun", runObjRef)
+		if toBeUpdatedBindings, toBeDeletedBindings, reconcileErr = r.initialize(ctx, updateRun); reconcileErr != nil {
+			klog.ErrorS(reconcileErr, "Failed to initialize the updateRun", "updateRun", runObjRef)
 			// errStagedUpdatedAborted cannot be retried.
-			if errors.Is(initErr, errStagedUpdatedAborted) {
-				return runtime.Result{}, r.recordInitializationFailed(ctx, updateRun, initErr.Error())
+			if errors.Is(reconcileErr, errStagedUpdatedAborted) {
+				return runtime.Result{}, r.recordInitializationFailed(ctx, updateRun, reconcileErr.Error())
 			}
-			return runtime.Result{}, initErr
+			return runtime.Result{}, reconcileErr
 		}
 		updatingStageIndex = 0 // start from the first stage (typically for Initialize or Run states).
 		klog.V(2).InfoS("Initialized the updateRun", "state", state, "updateRun", runObjRef)
@@ -145,14 +148,13 @@ func (r *Reconciler) Reconcile(ctx context.Context, req runtime.Request) (runtim
 			klog.V(2).InfoS("The updateRun is finished", "finishedSuccessfully", finishedCond.Status, "updateRun", runObjRef)
 			return runtime.Result{}, nil
 		}
-		var validateErr error
 		// Validate the updateRun status to ensure the update can be continued and get the updating stage index and cluster indices.
-		if updatingStageIndex, toBeUpdatedBindings, toBeDeletedBindings, validateErr = r.validate(ctx, updateRun); validateErr != nil {
+		if updatingStageIndex, toBeUpdatedBindings, toBeDeletedBindings, reconcileErr = r.validate(ctx, updateRun); reconcileErr != nil {
 			// errStagedUpdatedAborted cannot be retried.
-			if errors.Is(validateErr, errStagedUpdatedAborted) {
-				return runtime.Result{}, r.recordUpdateRunFailed(ctx, updateRun, validateErr.Error())
+			if errors.Is(reconcileErr, errStagedUpdatedAborted) {
+				return runtime.Result{}, r.recordUpdateRunFailed(ctx, updateRun, reconcileErr.Error())
 			}
-			return runtime.Result{}, validateErr
+			return runtime.Result{}, reconcileErr
 		}
 		klog.V(2).InfoS("The updateRun is validated", "updateRun", runObjRef)
 	}
@@ -163,16 +165,18 @@ func (r *Reconciler) Reconcile(ctx context.Context, req runtime.Request) (runtim
 		return runtime.Result{}, r.recordUpdateRunSucceeded(ctx, updateRun)
 	}
 
+	var finished bool
+	var waitTime time.Duration
 	switch state {
 	case placementv1beta1.StateInitialize:
 		klog.V(2).InfoS("The updateRun is initialized but not executed, waiting to execute", "state", state, "updateRun", runObjRef)
 	case placementv1beta1.StateRun:
 		// Execute the updateRun.
 		klog.V(2).InfoS("Continue to execute the updateRun", "updatingStageIndex", updatingStageIndex, "updateRun", runObjRef)
-		finished, waitTime, execErr := r.execute(ctx, updateRun, updatingStageIndex, toBeUpdatedBindings, toBeDeletedBindings)
-		if errors.Is(execErr, errStagedUpdatedAborted) {
+		finished, waitTime, reconcileErr = r.execute(ctx, updateRun, updatingStageIndex, toBeUpdatedBindings, toBeDeletedBindings)
+		if errors.Is(reconcileErr, errStagedUpdatedAborted) {
 			// errStagedUpdatedAborted cannot be retried.
-			return runtime.Result{}, r.recordUpdateRunFailed(ctx, updateRun, execErr.Error())
+			return runtime.Result{}, r.recordUpdateRunFailed(ctx, updateRun, reconcileErr.Error())
 		}
 
 		if finished {
@@ -180,14 +184,14 @@ func (r *Reconciler) Reconcile(ctx context.Context, req runtime.Request) (runtim
 			return runtime.Result{}, r.recordUpdateRunSucceeded(ctx, updateRun)
 		}
 
-		return r.handleIncompleteUpdateRun(ctx, updateRun, waitTime, execErr, state, runObjRef)
+		return r.handleIncompleteUpdateRun(ctx, updateRun, waitTime, reconcileErr, state, runObjRef)
 	case placementv1beta1.StateStop:
 		// Stop the updateRun.
 		klog.V(2).InfoS("Stopping the updateRun", "state", state, "updatingStageIndex", updatingStageIndex, "updateRun", runObjRef)
-		finished, waitTime, stopErr := r.stop(updateRun, updatingStageIndex, toBeUpdatedBindings, toBeDeletedBindings)
-		if errors.Is(stopErr, errStagedUpdatedAborted) {
+		finished, waitTime, reconcileErr = r.stop(updateRun, updatingStageIndex, toBeUpdatedBindings, toBeDeletedBindings)
+		if errors.Is(reconcileErr, errStagedUpdatedAborted) {
 			// errStagedUpdatedAborted cannot be retried.
-			return runtime.Result{}, r.recordUpdateRunFailed(ctx, updateRun, stopErr.Error())
+			return runtime.Result{}, r.recordUpdateRunFailed(ctx, updateRun, reconcileErr.Error())
 		}
 
 		if finished {
@@ -195,13 +199,14 @@ func (r *Reconciler) Reconcile(ctx context.Context, req runtime.Request) (runtim
 			return runtime.Result{}, r.recordUpdateRunStopped(ctx, updateRun)
 		}
 
-		return r.handleIncompleteUpdateRun(ctx, updateRun, waitTime, stopErr, state, runObjRef)
+		return r.handleIncompleteUpdateRun(ctx, updateRun, waitTime, reconcileErr, state, runObjRef)
 
 	default:
 		// Initialize, Run, or Stop are the only supported states.
-		unexpectedErr := controller.NewUnexpectedBehaviorError(fmt.Errorf("found unsupported updateRun state: %s", state))
-		klog.ErrorS(unexpectedErr, "Invalid updateRun state", "state", state, "updateRun", runObjRef)
-		return runtime.Result{}, r.recordUpdateRunFailed(ctx, updateRun, unexpectedErr.Error())
+		reconcileErr = controller.NewUnexpectedBehaviorError(fmt.Errorf("found unsupported updateRun state: %s", state))
+		klog.ErrorS(reconcileErr, "Invalid updateRun state", "state", state, "updateRun", runObjRef)
+		// This is an internal error - unsupported state should not happen
+		return runtime.Result{}, r.recordUpdateRunFailed(ctx, updateRun, reconcileErr.Error())
 	}
 	return runtime.Result{}, nil
 }
