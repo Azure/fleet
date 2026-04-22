@@ -1,11 +1,103 @@
-kind: ClusterRoleBinding
+# The member-agent applies arbitrary user-defined resources from Work objects
+# using a dynamic client. Consequences of that design:
+#   - It must hold broad permissions (verbs=["*"] on resources=["*"]) on the
+#     local member cluster, i.e. this ClusterRole is effectively cluster-admin
+#     minus impersonate on its own cluster. Member-agent compromise
+#     approximately equals member-cluster takeover.
+#   - bind/escalate ARE required because user workloads may include RBAC
+#     resources (Roles, RoleBindings, ClusterRoles, ClusterRoleBindings).
+#   - impersonate is NOT granted: prevents a compromised member-agent from
+#     spoofing other identities.
+#   - Hub-side access (Work objects, InternalMemberCluster status) is NOT in
+#     this role. It is granted by the per-member Role the hub-agent creates
+#     on the hub cluster, bound to the identity in MemberCluster.Spec.Identity.
 apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  name: {{ include "member-agent.fullname" . }}-role
+rules:
+  # Fleet placement APIs on the member cluster (spoke client). list/watch are
+  # required because workapplier reads AppliedWork via the cached
+  # controller-runtime client, which starts an informer on first Get. The
+  # spec is never updated (only created and deleted); status is written via
+  # Status().Update.
+  - apiGroups: ["placement.kubernetes-fleet.io"]
+    resources:
+      - appliedworks
+    verbs: ["get", "list", "watch", "create", "delete"]
+  - apiGroups: ["placement.kubernetes-fleet.io"]
+    resources:
+      - appliedworks/status
+    verbs: ["update"]
+
+  # Node, pod, and namespace read access. Consumers:
+  #   - internalmembercluster/v1beta1 lists Nodes and Pods for resource-capacity
+  #     reporting (see updateResourceStats).
+  #   - The Azure property provider (pkg/propertyprovider/azure) runs its own
+  #     controller-runtime manager inside the member-agent pod and watches
+  #     Nodes (always), Pods (when available-resources collection is enabled),
+  #     and Namespaces (when namespace collection is enabled).
+  # list/watch are required because these reads go through cached clients.
+  - apiGroups: [""]
+    resources: ["nodes", "pods", "namespaces"]
+    verbs: ["get", "list", "watch"]
+
+  # Leader election. The member-agent runs two controller-runtime managers
+  # (one hub-client, one member-client) and places both leases on the member
+  # cluster — see the LeaderElectionID values in cmd/memberagent/main.go. Split
+  # into two rules so that only these two leases can be mutated; a compromised
+  # member-agent cannot hijack another controller's leader election by racing
+  # to update its lease. create cannot be scoped by resourceNames (the RBAC
+  # authorizer has no name on POST requests), so any lease may be created —
+  # but stale/orphan leases without an owning controller have no effect.
+  - apiGroups: ["coordination.k8s.io"]
+    resources: ["leases"]
+    verbs: ["get", "list", "watch", "create"]
+  - apiGroups: ["coordination.k8s.io"]
+    resources: ["leases"]
+    resourceNames:
+      - 136224848560.hub.fleet.azure.com
+      - 136224848560.member.fleet.azure.com
+    verbs: ["update", "patch"]
+
+  # Events for controller recording.
+  - apiGroups: [""]
+    resources: ["events"]
+    verbs: ["create", "patch"]
+
+  # Broad resource access for applying arbitrary user workloads from Work
+  # objects. The member-agent uses an uncached dynamic client to read and
+  # mutate any resource type specified in Work manifests, so list/watch are
+  # intentionally omitted — nothing on this path consumes informers.
+  - apiGroups: ["*"]
+    resources: ["*"]
+    verbs: ["get", "create", "update", "patch", "delete"]
+
+  # User workloads may include RBAC resources. Creating RoleBindings requires
+  # the bind verb, and creating Roles with elevated permissions requires escalate.
+  - apiGroups: ["rbac.authorization.k8s.io"]
+    resources: ["clusterroles", "roles"]
+    verbs: ["bind", "escalate"]
+
+  # API discovery for dynamic resource mapping and CRD detection.
+  - nonResourceURLs: ["/api", "/api/*", "/apis", "/apis/*", "/version", "/healthz", "/readyz"]
+    verbs: ["get"]
+
+---
+# The metadata.name is kept as "cluster-admin-binding" for Helm upgrade
+# compatibility: renaming would create a new binding without deleting the
+# old one, leaving the old binding (which references cluster-admin) in
+# place and silently reverting this PR's least-privilege hardening for
+# upgrading installs. The roleRef below, not the binding name, determines
+# what this grants.
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRoleBinding
 metadata:
   name: {{ include "member-agent.fullname" . }}-cluster-admin-binding
 roleRef:
   apiGroup: rbac.authorization.k8s.io
   kind: ClusterRole
-  name: cluster-admin
+  name: {{ include "member-agent.fullname" . }}-role
 subjects:
   - kind: ServiceAccount
     name: {{ include "member-agent.fullname" . }}-sa
