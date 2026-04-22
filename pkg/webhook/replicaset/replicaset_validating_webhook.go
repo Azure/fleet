@@ -63,8 +63,8 @@ func (v *replicaSetValidator) Handle(_ context.Context, req admission.Request) a
 		if err := v.decoder.Decode(req, rs); err != nil {
 			return admission.Errored(http.StatusBadRequest, err)
 		}
-		if !utils.IsReservedNamespace(rs.Namespace) {
-			klog.V(2).InfoS(deniedReplicaSetResource, "user", req.UserInfo.Username, "groups", req.UserInfo.Groups, "operation", req.Operation, "GVK", req.RequestKind, "subResource", req.SubResource, "namespacedName", namespacedName)
+		if !utils.IsReservedNamespace(rs.Namespace) && !utils.HasReconcileLabel(rs.Labels) {
+			klog.V(2).InfoS(deniedReplicaSetResource, "user", req.UserInfo.Username, "groups", req.UserInfo.Groups, "operation", req.Operation, "GVK", req.RequestKind, "subResource", req.SubResource, "namespacedName", namespacedName, "hasReconcileLabel", utils.HasReconcileLabel(rs.Labels))
 			return admission.Denied(fmt.Sprintf(replicaSetDeniedFormat, rs.Namespace, rs.Name))
 		}
 	}

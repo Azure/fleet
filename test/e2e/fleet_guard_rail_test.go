@@ -35,6 +35,7 @@ import (
 	"k8s.io/apimachinery/pkg/util/intstr"
 	utilrand "k8s.io/apimachinery/pkg/util/rand"
 	"k8s.io/utils/ptr"
+	"sigs.k8s.io/controller-runtime/pkg/client"
 
 	clusterv1beta1 "go.goms.io/fleet/apis/cluster/v1beta1"
 	placementv1beta1 "go.goms.io/fleet/apis/placement/v1beta1"
@@ -1302,5 +1303,307 @@ var _ = Describe("fleet guard rail restrict internal fleet resources from being 
 	It("should deny CREATE operation on internal service export resource in kube-system namespace for invalid user", func() {
 		ise := internalServiceExport("test-ise", "kube-system")
 		Expect(checkIfStatusErrorWithMessage(notMasterUser.Create(ctx, &ise), fmt.Sprintf(validation.ResourceDeniedFormat, testUser, utils.GenerateGroupString(testGroups), admissionv1.Create, &iseGVK, "", types.NamespacedName{Name: ise.Name, Namespace: ise.Namespace}))).Should(Succeed())
+	})
+})
+
+var _ = Describe("fleet deployment webhook tests for validating and mutating deployments", Serial, Ordered, func() {
+	const (
+		testNS = "default"
+	)
+
+	newDeployment := func(name, namespace string, deployLabels, podTemplateLabels map[string]string) *appsv1.Deployment {
+		mergeMaps := func(ms ...map[string]string) map[string]string {
+			result := make(map[string]string)
+			for _, m := range ms {
+				for k, v := range m {
+					result[k] = v
+				}
+			}
+			return result
+		}
+		return &appsv1.Deployment{
+			ObjectMeta: metav1.ObjectMeta{
+				Name:      name,
+				Namespace: namespace,
+				Labels:    deployLabels,
+			},
+			Spec: appsv1.DeploymentSpec{
+				Replicas: ptr.To(int32(1)),
+				Selector: &metav1.LabelSelector{
+					MatchLabels: map[string]string{"app": name},
+				},
+				Template: corev1.PodTemplateSpec{
+					ObjectMeta: metav1.ObjectMeta{
+						Labels: mergeMaps(map[string]string{"app": name}, podTemplateLabels),
+					},
+					Spec: corev1.PodSpec{
+						Containers: []corev1.Container{
+							{
+								Name:  "test-container",
+								Image: "nginx:latest",
+							},
+						},
+					},
+				},
+			},
+		}
+	}
+
+	Context("validating webhook - deny regular user from setting reconcile label", func() {
+		It("should deny regular user from creating a deployment with reconcile label on deployment metadata", func() {
+			deploy := newDeployment("test-deploy-val-1", testNS,
+				map[string]string{utils.ReconcileLabelKey: utils.ReconcileLabelValue},
+				nil,
+			)
+			// Deployment creation should be denied; no cleanup needed.
+			err := notMasterUser.Create(ctx, deploy)
+			var statusErr *k8sErrors.StatusError
+			Expect(errors.As(err, &statusErr)).To(BeTrue(), fmt.Sprintf("Create deployment call produced error %s, want StatusError", fmt.Sprintf("%T", err)))
+			Expect(statusErr.ErrStatus.Message).Should(ContainSubstring(utils.ReconcileLabelKey))
+		})
+
+		It("should deny regular user from creating a deployment with reconcile label on pod template", func() {
+			deploy := newDeployment("test-deploy-val-2", testNS,
+				nil,
+				map[string]string{utils.ReconcileLabelKey: utils.ReconcileLabelValue},
+			)
+			// Deployment creation should be denied; no cleanup needed.
+			err := notMasterUser.Create(ctx, deploy)
+			var statusErr *k8sErrors.StatusError
+			Expect(errors.As(err, &statusErr)).To(BeTrue(), fmt.Sprintf("Create deployment call produced error %s, want StatusError", fmt.Sprintf("%T", err)))
+			Expect(statusErr.ErrStatus.Message).Should(ContainSubstring(utils.ReconcileLabelKey))
+		})
+
+		It("should deny regular user from updating a deployment to add reconcile label", func() {
+			// First create a deployment without reconcile label as admin.
+			deploy := newDeployment("test-deploy-val-3", testNS, nil, nil)
+			Expect(hubClient.Create(ctx, deploy)).Should(Succeed())
+			DeferCleanup(func() {
+				_ = hubClient.Delete(ctx, deploy)
+			})
+
+			// Try to update as non-admin to add reconcile label.
+			Eventually(func(g Gomega) error {
+				var d appsv1.Deployment
+				err := hubClient.Get(ctx, types.NamespacedName{Name: deploy.Name, Namespace: deploy.Namespace}, &d)
+				if err != nil {
+					return err
+				}
+				if d.Labels == nil {
+					d.Labels = map[string]string{}
+				}
+				d.Labels[utils.ReconcileLabelKey] = utils.ReconcileLabelValue
+				err = notMasterUser.Update(ctx, &d)
+				if k8sErrors.IsConflict(err) {
+					return err
+				}
+				var statusErr *k8sErrors.StatusError
+				g.Expect(errors.As(err, &statusErr)).To(BeTrue(), fmt.Sprintf("Update deployment call produced error %s, want StatusError", fmt.Sprintf("%T", err)))
+				g.Expect(statusErr.ErrStatus.Message).Should(ContainSubstring(utils.ReconcileLabelKey))
+				return nil
+			}, eventuallyDuration, eventuallyInterval).Should(Succeed())
+		})
+	})
+
+	Context("validating webhook - allow aksService user to set reconcile label", func() {
+		It("should allow aksService user to create a deployment with reconcile label", func() {
+			deploy := newDeployment("test-deploy-val-aks-1", testNS,
+				map[string]string{utils.ReconcileLabelKey: utils.ReconcileLabelValue},
+				map[string]string{utils.ReconcileLabelKey: utils.ReconcileLabelValue},
+			)
+			DeferCleanup(func() {
+				_ = hubClient.Delete(ctx, deploy)
+			})
+			Expect(sysMastersClient.Create(ctx, deploy)).Should(Succeed())
+		})
+
+		It("should allow aksService user to create a deployment with reconcile label in kube-system", func() {
+			deploy := newDeployment("test-deploy-val-aks-2", "kube-system",
+				map[string]string{utils.ReconcileLabelKey: utils.ReconcileLabelValue},
+				map[string]string{utils.ReconcileLabelKey: utils.ReconcileLabelValue},
+			)
+			DeferCleanup(func() {
+				_ = hubClient.Delete(ctx, deploy)
+			})
+			Expect(sysMastersClient.Create(ctx, deploy)).Should(Succeed())
+		})
+	})
+
+	Context("validating webhook - allow deployment without reconcile label", func() {
+		It("should allow regular user to create a deployment without reconcile label", func() {
+			deploy := newDeployment("test-deploy-val-norc", testNS, nil, nil)
+			DeferCleanup(func() {
+				_ = hubClient.Delete(ctx, deploy)
+			})
+			Expect(notMasterUser.Create(ctx, deploy)).Should(Succeed())
+		})
+
+		It("should allow aksService user to create a deployment without reconcile label", func() {
+			deploy := newDeployment("test-deploy-val-norc", testNS, nil, nil)
+			DeferCleanup(func() {
+				_ = hubClient.Delete(ctx, deploy)
+			})
+			Expect(sysMastersClient.Create(ctx, deploy)).Should(Succeed())
+		})
+	})
+
+	Context("mutating webhook - inject reconcile label for aksService user", func() {
+		It("should inject reconcile label when aksService creates a deployment", func() {
+			deploy := newDeployment("test-deploy-mut-1", testNS, nil, nil)
+			DeferCleanup(func() {
+				_ = hubClient.Delete(ctx, deploy)
+			})
+			Expect(sysMastersClient.Create(ctx, deploy)).Should(Succeed())
+
+			// Verify the reconcile label was injected. The mutating webhook runs
+			// synchronously during admission, but Eventually is used defensively
+			// to handle brief etcd/cache propagation lag.
+			Eventually(func(g Gomega) {
+				var d appsv1.Deployment
+				g.Expect(hubClient.Get(ctx, types.NamespacedName{Name: deploy.Name, Namespace: deploy.Namespace}, &d)).Should(Succeed())
+				g.Expect(d.Labels).Should(HaveKeyWithValue(utils.ReconcileLabelKey, utils.ReconcileLabelValue),
+					"deployment metadata should have reconcile label injected by mutating webhook")
+				g.Expect(d.Spec.Template.Labels).Should(HaveKeyWithValue(utils.ReconcileLabelKey, utils.ReconcileLabelValue),
+					"pod template should have reconcile label injected by mutating webhook")
+			}, eventuallyDuration, eventuallyInterval).Should(Succeed())
+		})
+	})
+
+	Context("mutating webhook - no injection for regular user", func() {
+		It("should not inject reconcile label when regular user creates a deployment", func() {
+			deploy := newDeployment("test-deploy-mut-2", testNS, nil, nil)
+			DeferCleanup(func() {
+				_ = hubClient.Delete(ctx, deploy)
+			})
+			Expect(notMasterUser.Create(ctx, deploy)).Should(Succeed())
+
+			// Verify the reconcile label was NOT injected.
+			Eventually(func(g Gomega) {
+				var d appsv1.Deployment
+				g.Expect(hubClient.Get(ctx, types.NamespacedName{Name: deploy.Name, Namespace: deploy.Namespace}, &d)).Should(Succeed())
+				g.Expect(d.Labels).ShouldNot(HaveKey(utils.ReconcileLabelKey),
+					"deployment metadata should NOT have reconcile label for regular user")
+				g.Expect(d.Spec.Template.Labels).ShouldNot(HaveKey(utils.ReconcileLabelKey),
+					"pod template should NOT have reconcile label for regular user")
+			}, eventuallyDuration, eventuallyInterval).Should(Succeed())
+		})
+	})
+
+	Context("mutating webhook - no injection in reserved namespaces", func() {
+		It("should not inject reconcile label for deployment in kube-system even for aksService", func() {
+			deploy := newDeployment("test-deploy-mut-3", "kube-system", nil, nil)
+			DeferCleanup(func() {
+				_ = hubClient.Delete(ctx, deploy)
+			})
+			Expect(sysMastersClient.Create(ctx, deploy)).Should(Succeed())
+
+			// Verify the reconcile label was NOT injected for reserved namespace.
+			Eventually(func(g Gomega) {
+				var d appsv1.Deployment
+				g.Expect(hubClient.Get(ctx, types.NamespacedName{Name: deploy.Name, Namespace: deploy.Namespace}, &d)).Should(Succeed())
+				g.Expect(d.Labels).ShouldNot(HaveKey(utils.ReconcileLabelKey),
+					"deployment in kube-system should NOT have reconcile label auto-injected")
+				g.Expect(d.Spec.Template.Labels).ShouldNot(HaveKey(utils.ReconcileLabelKey),
+					"pod template in kube-system should NOT have reconcile label auto-injected")
+			}, eventuallyDuration, eventuallyInterval).Should(Succeed())
+		})
+	})
+
+	Context("end-to-end deployment lifecycle with webhook enforcement", func() {
+		It("should block RS and Pod creation when non-aksService user creates a deployment", func() {
+			deployName := "test-deploy-e2e-noaks"
+			deploy := newDeployment(deployName, testNS, nil, nil)
+			DeferCleanup(func() {
+				_ = hubClient.Delete(ctx, deploy)
+			})
+
+			By("creating deployment as non-aksService user")
+			Expect(notMasterUser.Create(ctx, deploy)).Should(Succeed())
+
+			By("waiting for deployment to appear in the cache")
+			Eventually(func(g Gomega) {
+				var d appsv1.Deployment
+				g.Expect(hubClient.Get(ctx, types.NamespacedName{Name: deployName, Namespace: testNS}, &d)).Should(Succeed())
+			}, eventuallyDuration, eventuallyInterval).Should(Succeed())
+
+			By("verifying deployment exists but has no available replicas because RS creation is blocked")
+			Consistently(func(g Gomega) {
+				var d appsv1.Deployment
+				g.Expect(hubClient.Get(ctx, types.NamespacedName{Name: deployName, Namespace: testNS}, &d)).Should(Succeed())
+				g.Expect(d.Status.AvailableReplicas).Should(Equal(int32(0)),
+					"deployment should have 0 available replicas because RS/Pod creation is blocked by validating webhooks")
+				g.Expect(d.Status.ReadyReplicas).Should(Equal(int32(0)),
+					"deployment should have 0 ready replicas")
+
+				// Verify no ReplicaSets exist for this deployment.
+				var rsList appsv1.ReplicaSetList
+				g.Expect(hubClient.List(ctx, &rsList, client.InNamespace(testNS), client.MatchingLabels{"app": deployName})).Should(Succeed())
+				g.Expect(rsList.Items).Should(BeEmpty(),
+					"no ReplicaSets should exist because the RS validating webhook blocks creation without the reconcile label")
+
+				// Verify no Pods exist for this deployment.
+				var podList corev1.PodList
+				g.Expect(hubClient.List(ctx, &podList, client.InNamespace(testNS), client.MatchingLabels{"app": deployName})).Should(Succeed())
+				g.Expect(podList.Items).Should(BeEmpty(),
+					"no Pods should exist because the Pod validating webhook blocks creation without the reconcile label")
+			}, consistentlyDuration, consistentlyInterval).Should(Succeed())
+		})
+
+		It("should allow RS and Pod creation when aksService user creates a deployment", func() {
+			deployName := "test-deploy-e2e-aks"
+			deploy := newDeployment(deployName, testNS, nil, nil)
+			DeferCleanup(func() {
+				_ = hubClient.Delete(ctx, deploy)
+			})
+
+			By("creating deployment as aksService user (mutating webhook injects reconcile label)")
+			Expect(sysMastersClient.Create(ctx, deploy)).Should(Succeed())
+
+			By("verifying the mutating webhook injected the reconcile label")
+			Eventually(func(g Gomega) {
+				var d appsv1.Deployment
+				g.Expect(hubClient.Get(ctx, types.NamespacedName{Name: deployName, Namespace: testNS}, &d)).Should(Succeed())
+				g.Expect(d.Labels).Should(HaveKeyWithValue(utils.ReconcileLabelKey, utils.ReconcileLabelValue),
+					"deployment metadata should have reconcile label injected by mutating webhook")
+				g.Expect(d.Spec.Template.Labels).Should(HaveKeyWithValue(utils.ReconcileLabelKey, utils.ReconcileLabelValue),
+					"pod template should have reconcile label injected by mutating webhook")
+			}, eventuallyDuration, eventuallyInterval).Should(Succeed())
+
+			By("verifying ReplicaSet is created with the reconcile label")
+			Eventually(func(g Gomega) {
+				var rsList appsv1.ReplicaSetList
+				g.Expect(hubClient.List(ctx, &rsList, client.InNamespace(testNS), client.MatchingLabels{"app": deployName})).Should(Succeed())
+				g.Expect(rsList.Items).ShouldNot(BeEmpty(),
+					"at least one ReplicaSet should be created for the deployment")
+
+				rs := rsList.Items[0]
+				g.Expect(rs.Labels).Should(HaveKeyWithValue(utils.ReconcileLabelKey, utils.ReconcileLabelValue),
+					"ReplicaSet should inherit the reconcile label from the pod template")
+			}, workloadEventuallyDuration, eventuallyInterval).Should(Succeed())
+
+			By("verifying Pods are running with the reconcile label")
+			Eventually(func(g Gomega) {
+				var podList corev1.PodList
+				g.Expect(hubClient.List(ctx, &podList, client.InNamespace(testNS), client.MatchingLabels{"app": deployName})).Should(Succeed())
+				g.Expect(podList.Items).ShouldNot(BeEmpty(),
+					"at least one Pod should be created for the deployment")
+
+				pod := podList.Items[0]
+				g.Expect(pod.Labels).Should(HaveKeyWithValue(utils.ReconcileLabelKey, utils.ReconcileLabelValue),
+					"Pod should inherit the reconcile label from the pod template")
+				g.Expect(pod.Status.Phase).Should(Equal(corev1.PodRunning),
+					"Pod should be in Running phase")
+			}, workloadEventuallyDuration, eventuallyInterval).Should(Succeed())
+
+			By("verifying deployment reports available replicas")
+			Eventually(func(g Gomega) {
+				var d appsv1.Deployment
+				g.Expect(hubClient.Get(ctx, types.NamespacedName{Name: deployName, Namespace: testNS}, &d)).Should(Succeed())
+				g.Expect(d.Status.AvailableReplicas).Should(Equal(int32(1)),
+					"deployment should have 1 available replica")
+				g.Expect(d.Status.ReadyReplicas).Should(Equal(int32(1)),
+					"deployment should have 1 ready replica")
+			}, workloadEventuallyDuration, eventuallyInterval).Should(Succeed())
+		})
 	})
 })

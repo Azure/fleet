@@ -148,11 +148,11 @@ helm install hub-agent ../../charts/hub-agent/ \
     --set crdInstaller.image.pullPolicy=Never \
     --set namespace=fleet-system \
     --set logVerbosity=5 \
-    --set replicaCount=3 \
-    --set useCertManager=true \
+    --set replicaCount=1 \
+    --set useCertManager=false \
     --set webhookCertSecretName=fleet-webhook-server-cert \
     --set enableWebhook=true \
-    --set enableWorkload=true \
+    --set enableWorkload=false \
     --set webhookClientConnectionType=service \
     --set forceDeleteWaitTime="1m0s" \
     --set clusterUnhealthyThreshold="3m0s" \
