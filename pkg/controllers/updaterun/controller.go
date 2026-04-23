@@ -150,6 +150,7 @@ func (r *Reconciler) Reconcile(ctx context.Context, req runtime.Request) (runtim
 		}
 		// Validate the updateRun status to ensure the update can be continued and get the updating stage index and cluster indices.
 		if updatingStageIndex, toBeUpdatedBindings, toBeDeletedBindings, reconcileErr = r.validate(ctx, updateRun); reconcileErr != nil {
+			klog.ErrorS(reconcileErr, "Failed to validate the updateRun", "updateRun", runObjRef)
 			// errStagedUpdatedAborted cannot be retried.
 			if errors.Is(reconcileErr, errStagedUpdatedAborted) {
 				return runtime.Result{}, r.recordUpdateRunFailed(ctx, updateRun, reconcileErr.Error())

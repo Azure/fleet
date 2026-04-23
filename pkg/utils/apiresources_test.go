@@ -19,11 +19,12 @@ package utils
 import (
 	"testing"
 
-	"github.com/kubefleet-dev/kubefleet/test/utils/resource"
 	"k8s.io/apimachinery/pkg/api/meta"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime/schema"
 	"k8s.io/client-go/restmapper"
+
+	"github.com/kubefleet-dev/kubefleet/test/utils/resource"
 )
 
 func TestResourceConfigGVKParse(t *testing.T) {
@@ -527,6 +528,47 @@ func TestDefaultResourceConfigGroupVersionKindParse(t *testing.T) {
 			Group:   "placement.kubernetes-fleet.io",
 			Version: "v1",
 			Kind:    "ResourceOverrideSnapshot",
+		},
+		// Namespaced staged update resources (should also be disabled)
+		{
+			Group:   "placement.kubernetes-fleet.io",
+			Version: "v1beta1",
+			Kind:    "StagedUpdateRun",
+		},
+		{
+			Group:   "placement.kubernetes-fleet.io",
+			Version: "v1",
+			Kind:    "StagedUpdateRun",
+		},
+		{
+			Group:   "placement.kubernetes-fleet.io",
+			Version: "v1beta1",
+			Kind:    "StagedUpdateStrategy",
+		},
+		{
+			Group:   "placement.kubernetes-fleet.io",
+			Version: "v1",
+			Kind:    "StagedUpdateStrategy",
+		},
+		{
+			Group:   "placement.kubernetes-fleet.io",
+			Version: "v1beta1",
+			Kind:    "ApprovalRequest",
+		},
+		{
+			Group:   "placement.kubernetes-fleet.io",
+			Version: "v1",
+			Kind:    "ApprovalRequest",
+		},
+		{
+			Group:   "placement.kubernetes-fleet.io",
+			Version: "v1beta1",
+			Kind:    "ClusterResourcePlacementStatus",
+		},
+		{
+			Group:   "placement.kubernetes-fleet.io",
+			Version: "v1",
+			Kind:    "ClusterResourcePlacementStatus",
 		},
 	}
 
