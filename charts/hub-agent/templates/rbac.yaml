@@ -1,11 +1,190 @@
-kind: ClusterRoleBinding
 apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  name: {{ include "hub-agent.fullname" . }}-role
+rules:
+  # User-created placement resources. The hub-agent does not create or delete
+  # these; it only adds/removes its cleanup finalizer via update.
+  - apiGroups: ["placement.kubernetes-fleet.io"]
+    resources:
+      - clusterresourceplacements
+      - resourceplacements
+      - clusterresourceoverrides
+      - resourceoverrides
+      - clusterstagedupdateruns
+      - stagedupdateruns
+      - clusterresourceplacementevictions
+    verbs: ["get", "list", "watch", "update"]
+
+  # User-created placement resources that the hub-agent only reads.
+  - apiGroups: ["placement.kubernetes-fleet.io"]
+    resources:
+      - clusterstagedupdatestrategies
+      - stagedupdatestrategies
+      - clusterresourceplacementdisruptionbudgets
+    verbs: ["get", "list", "watch"]
+
+  # Hub-agent-managed placement resources: snapshots, bindings, status,
+  # generated work objects, and approval requests. deletecollection is
+  # required because snapshot and approval-request cleanup uses
+  # client.DeleteAllOf (see policy_snapshot_resolver.go, resource_snapshot_resolver.go,
+  # overrider/common.go, updaterun/controller.go). The Kubernetes RBAC
+  # authorizer treats deletecollection as a distinct verb from delete.
+  - apiGroups: ["placement.kubernetes-fleet.io"]
+    resources:
+      - clusterresourcebindings
+      - resourcebindings
+      - clusterresourcesnapshots
+      - resourcesnapshots
+      - clusterschedulingpolicysnapshots
+      - schedulingpolicysnapshots
+      - clusterresourceoverridesnapshots
+      - resourceoverridesnapshots
+      - clusterresourceplacementstatuses
+      - works
+      - clusterapprovalrequests
+      - approvalrequests
+    verbs: ["get", "list", "watch", "create", "update", "patch", "delete", "deletecollection"]
+
+  # Fleet placement status subresources. Hub controllers use Status().Update
+  # (never Status().Patch), so patch is intentionally omitted.
+  # schedulingpolicysnapshots/status are written by the scheduler framework
+  # (pkg/scheduler/framework/framework.go — Status().Update on the selected
+  # policy snapshot); they were previously covered by a broad `*/*/status`
+  # wildcard which has since been removed.
+  - apiGroups: ["placement.kubernetes-fleet.io"]
+    resources:
+      - clusterresourceplacements/status
+      - resourceplacements/status
+      - clusterresourcebindings/status
+      - resourcebindings/status
+      - clusterschedulingpolicysnapshots/status
+      - schedulingpolicysnapshots/status
+      - clusterstagedupdateruns/status
+      - stagedupdateruns/status
+      - clusterresourceplacementevictions/status
+      - clusterapprovalrequests/status
+      - approvalrequests/status
+    verbs: ["get", "update"]
+
+  # Fleet cluster APIs. MemberCluster is user-created and user-deleted; the
+  # hub-agent only adds/removes its finalizer (update) and writes status.
+  # InternalMemberCluster is created by the hub-agent and cleaned up via
+  # owner-reference garbage collection, so no explicit delete is issued.
+  - apiGroups: ["cluster.kubernetes-fleet.io"]
+    resources:
+      - memberclusters
+    verbs: ["get", "list", "watch", "update"]
+  - apiGroups: ["cluster.kubernetes-fleet.io"]
+    resources:
+      - internalmemberclusters
+    verbs: ["get", "list", "watch", "create", "update"]
+  # Only memberclusters/status is written by the hub-agent. internalmemberclusters/status
+  # is owned by the member-agent (via its per-member Role on the hub cluster) and is
+  # intentionally not granted here.
+  - apiGroups: ["cluster.kubernetes-fleet.io"]
+    resources:
+      - memberclusters/status
+    verbs: ["get", "update"]
+
+  # Cluster inventory API - ClusterProfile generation.
+  - apiGroups: ["multicluster.x-k8s.io"]
+    resources: ["clusterprofiles"]
+    verbs: ["get", "list", "watch", "create", "update", "delete"]
+  - apiGroups: ["multicluster.x-k8s.io"]
+    resources: ["clusterprofiles/status"]
+    verbs: ["get", "update"]
+
+  # Namespace management for member cluster namespaces. The hub-agent creates
+  # the per-member namespace, patches labels via client.MergeFrom, and deletes
+  # it on MemberCluster removal. list/watch come from the broad */* watch
+  # used for resource-change detection; full Update is not exercised.
+  - apiGroups: [""]
+    resources: ["namespaces"]
+    verbs: ["get", "create", "patch", "delete"]
+
+  # RBAC setup in member cluster namespaces. The hub-agent creates Roles and
+  # RoleBindings that grant each member-agent access to its own namespace.
+  # bind/escalate are required because the per-member Role (built in
+  # pkg/utils/common.go) uses wildcard verbs/resources on fleet API groups
+  # (e.g. verbs=["*"], resources=["*"]). The API server's RBAC escalation
+  # check requires the creator to hold a rule covering every verb/resource
+  # being granted, and an explicit verb list does not cover "*". Without
+  # escalate, the hub-agent cannot create per-member Roles and new member
+  # onboarding fails.
+  # list/watch are required because the cached controller-runtime client
+  # starts an informer on first Get. delete is omitted — the per-member Role
+  # and RoleBinding are owned by the MemberCluster and reaped by owner-ref GC.
+  - apiGroups: ["rbac.authorization.k8s.io"]
+    resources: ["roles", "rolebindings"]
+    verbs: ["get", "list", "watch", "create", "update", "bind", "escalate"]
+
+  # Webhook configuration management. Split into two rules: reads and creates
+  # must be cluster-wide (list/watch are required because checkMutatingWebhookCABundle
+  # / checkValidatingWebhookCABundle read via the controller-runtime cached
+  # client, which starts an informer on first Get; create cannot be scoped by
+  # resourceNames because the RBAC authorizer sees no name on POST requests),
+  # but delete is scoped to the three fleet-owned webhook configurations. This
+  # prevents a compromised hub-agent from deleting unrelated admission
+  # controllers as a DoS vector. update/patch are intentionally omitted —
+  # webhook configs are always replaced wholesale via delete+create (see
+  # createMutatingWebhookConfiguration), never modified in place.
+  - apiGroups: ["admissionregistration.k8s.io"]
+    resources: ["validatingwebhookconfigurations", "mutatingwebhookconfigurations"]
+    verbs: ["get", "list", "watch", "create"]
+  - apiGroups: ["admissionregistration.k8s.io"]
+    resources: ["validatingwebhookconfigurations", "mutatingwebhookconfigurations"]
+    resourceNames:
+      - fleet-mutating-webhook-configuration
+      - fleet-validating-webhook-configuration
+      - fleet-guard-rail-webhook-configuration
+    verbs: ["delete"]
+
+  # Leader election. Split into two rules so that only the hub-agent's own
+  # election lease can be mutated; a compromised hub-agent cannot hijack
+  # another controller's leader election by racing to update its lease.
+  # create cannot be scoped by resourceNames (the RBAC authorizer has no name
+  # on POST requests), so any lease may be created — but stale/orphan leases
+  # without an owning controller have no effect. The lease name matches the
+  # LeaderElectionID configured in cmd/hubagent/main.go.
+  - apiGroups: ["coordination.k8s.io"]
+    resources: ["leases"]
+    verbs: ["get", "list", "watch", "create"]
+  - apiGroups: ["coordination.k8s.io"]
+    resources: ["leases"]
+    resourceNames: ["136224848560.hub.fleet.azure.com"]
+    verbs: ["update", "patch"]
+
+  # Events for controller recording.
+  - apiGroups: [""]
+    resources: ["events"]
+    verbs: ["create", "patch"]
+
+  # CRD discovery for resource change detection.
+  - apiGroups: ["apiextensions.k8s.io"]
+    resources: ["customresourcedefinitions"]
+    verbs: ["get", "list", "watch"]
+
+  # Broad read access required for resource change detection.
+  # The hub-agent monitors all cluster-scoped and namespaced resources
+  # to detect changes that affect placement decisions.
+  - apiGroups: ["*"]
+    resources: ["*"]
+    verbs: ["get", "list", "watch"]
+
+  # API discovery for dynamic resource mapping, CRD detection, and health checks.
+  - nonResourceURLs: ["/api", "/api/*", "/apis", "/apis/*", "/version", "/healthz", "/readyz"]
+    verbs: ["get"]
+
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRoleBinding
 metadata:
   name: {{ include "hub-agent.fullname" . }}-role-binding
 roleRef:
   apiGroup: rbac.authorization.k8s.io
   kind: ClusterRole
-  name: cluster-admin
+  name: {{ include "hub-agent.fullname" . }}-role
 subjects:
   - kind: ServiceAccount
     name: {{ include "hub-agent.fullname" . }}-sa
