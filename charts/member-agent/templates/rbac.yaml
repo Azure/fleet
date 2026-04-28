@@ -79,6 +79,16 @@ rules:
     resources: ["clusterroles", "roles"]
     verbs: ["bind", "escalate"]
 
+  # ValidatingAdmissionPolicy + binding for managed admission resources.
+  # AzureFleet-only: the internalmembercluster controller calls EnsureVAP /
+  # EnsureNoVAP via the cached controller-runtime client, which starts an
+  # informer (list+watch) on first access. get/create/update/delete are
+  # already covered by the broad */* rule above; only list/watch need to be
+  # granted explicitly here.
+  - apiGroups: ["admissionregistration.k8s.io"]
+    resources: ["validatingadmissionpolicies", "validatingadmissionpolicybindings"]
+    verbs: ["list", "watch"]
+
   # API discovery for dynamic resource mapping and CRD detection.
   - nonResourceURLs: ["/api", "/api/*", "/apis", "/apis/*", "/version", "/healthz", "/readyz"]
     verbs: ["get"]

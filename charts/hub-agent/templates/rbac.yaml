@@ -140,6 +140,16 @@ rules:
       - fleet-guard-rail-webhook-configuration
     verbs: ["delete"]
 
+  # ValidatingAdmissionPolicy + binding for managed admission resources.
+  # AzureFleet-only: kubefleet does not have pkg/webhook/managedresource. The
+  # hub-agent calls EnsureVAP at startup (cmd/hubagent/main.go), which uses
+  # controllerutil.CreateOrUpdate (Get → Create or Update). get/list/watch are
+  # already covered by the broad */* read rule below; only create/update need
+  # to be granted explicitly here.
+  - apiGroups: ["admissionregistration.k8s.io"]
+    resources: ["validatingadmissionpolicies", "validatingadmissionpolicybindings"]
+    verbs: ["create", "update"]
+
   # Leader election. Split into two rules so that only the hub-agent's own
   # election lease can be mutated; a compromised hub-agent cannot hijack
   # another controller's leader election by racing to update its lease.
@@ -160,10 +170,14 @@ rules:
     resources: ["events"]
     verbs: ["create", "patch"]
 
-  # CRD discovery for resource change detection.
+  # CRD discovery for resource change detection (get, list, watch).
+  # create/update are AzureFleet-only: the crd-installer init container shares
+  # hub-agent-sa and uses controllerutil.CreateOrUpdate (Get → Create or
+  # Update) to install fleet CRDs at pod startup. Not needed upstream in
+  # kubefleet, which has no crd-installer.
   - apiGroups: ["apiextensions.k8s.io"]
     resources: ["customresourcedefinitions"]
-    verbs: ["get", "list", "watch"]
+    verbs: ["get", "list", "watch", "create", "update"]
 
   # Broad read access required for resource change detection.
   # The hub-agent monitors all cluster-scoped and namespaced resources
