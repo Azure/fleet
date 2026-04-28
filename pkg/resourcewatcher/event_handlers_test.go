@@ -132,7 +132,7 @@ func (t *fakeController) Enqueue(_ interface{}) {
 	t.Enqueued = true
 }
 
+// Run is a no-op; the fake is only used to verify that Enqueue is called.
 func (t *fakeController) Run(_ context.Context, _ int) error {
-	//TODO implement me
-	panic("implement me")
+	return nil
 }
