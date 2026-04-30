@@ -64,8 +64,8 @@ func (v *podValidator) Handle(_ context.Context, req admission.Request) admissio
 		if err != nil {
 			return admission.Errored(http.StatusBadRequest, err)
 		}
-		if !utils.IsReservedNamespace(pod.Namespace) {
-			klog.V(2).InfoS(deniedPodResource, "user", req.UserInfo.Username, "groups", req.UserInfo.Groups, "operation", req.Operation, "GVK", req.RequestKind, "subResource", req.SubResource, "namespacedName", namespacedName)
+		if !utils.IsReservedNamespace(pod.Namespace) && !utils.HasReconcileLabel(pod.Labels) {
+			klog.V(2).InfoS(deniedPodResource, "user", req.UserInfo.Username, "groups", req.UserInfo.Groups, "operation", req.Operation, "GVK", req.RequestKind, "subResource", req.SubResource, "namespacedName", namespacedName, "hasReconcileLabel", utils.HasReconcileLabel(pod.Labels))
 			return admission.Denied(fmt.Sprintf(podDeniedFormat, pod.Namespace, pod.Name))
 		}
 	}

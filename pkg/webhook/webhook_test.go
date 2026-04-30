@@ -33,7 +33,7 @@ func TestBuildFleetMutatingWebhooks(t *testing.T) {
 				serviceURL:           "test-url",
 				clientConnectionType: &url,
 			},
-			wantLength: 1,
+			wantLength: 2,
 		},
 	}
 
@@ -60,7 +60,7 @@ func TestBuildFleetValidatingWebhooks(t *testing.T) {
 				serviceURL:           "test-url",
 				clientConnectionType: &url,
 			},
-			wantLength: 9,
+			wantLength: 10,
 		},
 		"enable workload": {
 			config: Config{
@@ -70,7 +70,7 @@ func TestBuildFleetValidatingWebhooks(t *testing.T) {
 				clientConnectionType: &url,
 				enableWorkload:       true,
 			},
-			wantLength: 7,
+			wantLength: 8,
 		},
 		"enable PDBs": {
 			config: Config{
@@ -80,7 +80,7 @@ func TestBuildFleetValidatingWebhooks(t *testing.T) {
 				clientConnectionType: &url,
 				enablePDBs:           true,
 			},
-			wantLength: 8,
+			wantLength: 9,
 		},
 	}
 
