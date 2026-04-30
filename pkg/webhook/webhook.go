@@ -641,12 +641,9 @@ func (w *Config) buildFleetGuardRailValidatingWebhooks() []admv1.ValidatingWebho
 
 	// Build core v1 resources list, conditionally including pods if workload is enabled
 	coreV1Resources := []string{bindingResourceName, configMapResourceName, endPointResourceName,
-		limitRangeResourceName, persistentVolumeClaimsName, persistentVolumeClaimsName + "/status", podTemplateResourceName,
+		limitRangeResourceName, persistentVolumeClaimsName, persistentVolumeClaimsName + "/status", podTemplateResourceName, podResourceName, podResourceName + "/status",
 		replicationControllerResourceName, replicationControllerResourceName + "/status", resourceQuotaResourceName, resourceQuotaResourceName + "/status", secretResourceName,
 		serviceAccountResourceName, servicesResourceName, servicesResourceName + "/status"}
-	if w.enableWorkload {
-		coreV1Resources = append(coreV1Resources, podResourceName, podResourceName+"/status")
-	}
 
 	namespacedResourcesRules = append(namespacedResourcesRules, admv1.RuleWithOperations{
 		Operations: cuOperations,
@@ -654,11 +651,8 @@ func (w *Config) buildFleetGuardRailValidatingWebhooks() []admv1.ValidatingWebho
 	})
 
 	// Build apps/v1 resources list, conditionally including replicasets if workload is enabled
-	appsV1Resources := []string{controllerRevisionResourceName, daemonSetResourceName, daemonSetResourceName + "/status",
+	appsV1Resources := []string{controllerRevisionResourceName, daemonSetResourceName, daemonSetResourceName + "/status", replicaSetResourceName, replicaSetResourceName + "/status",
 		deploymentResourceName, deploymentResourceName + "/status", statefulSetResourceName, statefulSetResourceName + "/status"}
-	if w.enableWorkload {
-		appsV1Resources = append(appsV1Resources, replicaSetResourceName, replicaSetResourceName+"/status")
-	}
 
 	namespacedResourcesRules = append(namespacedResourcesRules, admv1.RuleWithOperations{
 		Operations: cuOperations,

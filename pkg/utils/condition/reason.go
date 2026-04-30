@@ -197,6 +197,9 @@ const (
 	// StageUpdatingSucceededReason is the reason string of condition if the stage updating succeeded.
 	StageUpdatingSucceededReason = "StageUpdatingSucceeded"
 
+	// StageUpdatingSkippedNoClustersReason is the reason string of condition if the stage was skipped because it has no clusters.
+	StageUpdatingSkippedNoClustersReason = "StageUpdatingSkippedNoClusters"
+
 	// ClusterUpdatingStartedReason is the reason string of condition if the cluster updating has started.
 	ClusterUpdatingStartedReason = "ClusterUpdatingStarted"
 

@@ -25,6 +25,7 @@ import (
 	"time"
 
 	"github.com/google/go-cmp/cmp"
+	"github.com/google/go-cmp/cmp/cmpopts"
 	"k8s.io/apimachinery/pkg/api/meta"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
@@ -1282,6 +1283,162 @@ func TestGenerateStuckClustersString(t *testing.T) {
 
 			if got != tt.wantClusterString {
 				t.Fatalf("generateStuckClustersString() = %v, want %v", got, tt.wantClusterString)
+			}
+		})
+	}
+}
+
+func TestExecute_ZeroClustersSkipsEntireStage(t *testing.T) {
+	tests := []struct {
+		name            string
+		updateRun       *placementv1beta1.ClusterStagedUpdateRun
+		stageIndex      int
+		wantWaitTime    time.Duration
+		wantErr         bool
+		wantStageStatus placementv1beta1.StageUpdatingStatus
+	}{
+		{
+			name: "zero clusters should skip entire stage including before-stage tasks",
+			updateRun: &placementv1beta1.ClusterStagedUpdateRun{
+				ObjectMeta: metav1.ObjectMeta{
+					Name:       "test-update-run",
+					Generation: 1,
+				},
+				Spec: placementv1beta1.UpdateRunSpec{
+					PlacementName:         "test-placement",
+					ResourceSnapshotIndex: "1",
+					State:                 placementv1beta1.StateRun,
+				},
+				Status: placementv1beta1.UpdateRunStatus{
+					ResourceSnapshotIndexUsed: "1",
+					StagesStatus: []placementv1beta1.StageUpdatingStatus{
+						{
+							StageName: "empty-stage",
+							Clusters:  []placementv1beta1.ClusterUpdatingStatus{}, // Zero clusters.
+							BeforeStageTaskStatus: []placementv1beta1.StageTaskStatus{
+								{
+									Type:                placementv1beta1.StageTaskTypeApproval,
+									ApprovalRequestName: "test-update-run-empty-before-stage",
+								},
+							},
+							AfterStageTaskStatus: []placementv1beta1.StageTaskStatus{
+								{
+									Type: placementv1beta1.StageTaskTypeTimedWait,
+								},
+								{
+									Type:                placementv1beta1.StageTaskTypeApproval,
+									ApprovalRequestName: "test-update-run-after-empty-stage",
+								},
+							},
+						},
+					},
+					UpdateStrategySnapshot: &placementv1beta1.UpdateStrategySpec{
+						Stages: []placementv1beta1.StageConfig{
+							{
+								Name:           "empty-stage",
+								MaxConcurrency: &intstr.IntOrString{Type: intstr.Int, IntVal: 1},
+								BeforeStageTasks: []placementv1beta1.StageTask{
+									{
+										Type: placementv1beta1.StageTaskTypeApproval,
+									},
+								},
+								AfterStageTasks: []placementv1beta1.StageTask{
+									{
+										Type:     placementv1beta1.StageTaskTypeTimedWait,
+										WaitTime: &metav1.Duration{Duration: 5 * time.Minute},
+									},
+									{
+										Type: placementv1beta1.StageTaskTypeApproval,
+									},
+								},
+							},
+						},
+					},
+				},
+			},
+			stageIndex:   0,
+			wantWaitTime: 0, // No wait time, stage is skipped.
+			wantErr:      false,
+			wantStageStatus: placementv1beta1.StageUpdatingStatus{
+				StageName: "empty-stage",
+				Clusters:  []placementv1beta1.ClusterUpdatingStatus{}, // Zero clusters.
+				BeforeStageTaskStatus: []placementv1beta1.StageTaskStatus{
+					{
+						Type:                placementv1beta1.StageTaskTypeApproval,
+						ApprovalRequestName: "test-update-run-empty-before-stage",
+					},
+				},
+				AfterStageTaskStatus: []placementv1beta1.StageTaskStatus{
+					{
+						Type: placementv1beta1.StageTaskTypeTimedWait,
+					},
+					{
+						Type:                placementv1beta1.StageTaskTypeApproval,
+						ApprovalRequestName: "test-update-run-after-empty-stage",
+					},
+				},
+				StartTime: &metav1.Time{Time: time.Now()},
+				EndTime:   &metav1.Time{Time: time.Now()},
+				Conditions: []metav1.Condition{
+					{
+						Type:               string(placementv1beta1.StageUpdatingConditionProgressing),
+						Status:             metav1.ConditionFalse,
+						ObservedGeneration: 1,
+						Reason:             condition.StageUpdatingSkippedNoClustersReason,
+						Message:            "Stage skipped because it has no clusters",
+					},
+					{
+						Type:               string(placementv1beta1.StageUpdatingConditionSucceeded),
+						Status:             metav1.ConditionTrue,
+						ObservedGeneration: 1,
+						Reason:             condition.StageUpdatingSkippedNoClustersReason,
+						Message:            "Stage skipped because it has no clusters",
+					},
+				},
+			},
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			scheme := runtime.NewScheme()
+			_ = placementv1beta1.AddToScheme(scheme)
+			fakeClient := fake.NewClientBuilder().
+				WithScheme(scheme).
+				WithObjects(tt.updateRun).
+				WithStatusSubresource(tt.updateRun).
+				Build()
+			r := Reconciler{
+				Client: fakeClient,
+			}
+			ctx := context.Background()
+
+			_, waitTime, gotErr := r.execute(ctx, tt.updateRun, tt.stageIndex, nil, nil)
+
+			if (gotErr != nil) != tt.wantErr {
+				t.Fatalf("execute() error = %v, wantErr %v", gotErr, tt.wantErr)
+			}
+
+			if waitTime != tt.wantWaitTime {
+				t.Fatalf("execute() waitTime = %v, want %v", waitTime, tt.wantWaitTime)
+			}
+
+			gotStageStatus := tt.updateRun.Status.StagesStatus[tt.stageIndex]
+
+			// Verify StartTime and EndTime are set for skipped stages.
+			if gotStageStatus.StartTime == nil {
+				t.Fatal("execute() StartTime should be set for skipped stage")
+			}
+			if gotStageStatus.EndTime == nil {
+				t.Fatal("execute() EndTime should be set for skipped stage")
+			}
+
+			// Compare stage status using cmp.Diff, ignoring time fields.
+			if diff := cmp.Diff(tt.wantStageStatus, gotStageStatus,
+				cmpopts.IgnoreFields(metav1.Condition{}, "LastTransitionTime"),
+				cmpopts.IgnoreFields(placementv1beta1.StageUpdatingStatus{}, "StartTime", "EndTime"),
+			); diff != "" {
+				t.Fatalf("execute() stage status mismatch (-want +got):\n%s", diff)
 			}
 		})
 	}

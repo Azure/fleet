@@ -121,6 +121,21 @@ var (
 		Kind:  placementv1beta1.ClusterApprovalRequestKind,
 	}
 
+	StagedUpdateRunGK = schema.GroupKind{
+		Group: placementv1beta1.GroupVersion.Group,
+		Kind:  placementv1beta1.StagedUpdateRunKind,
+	}
+
+	StagedUpdateStrategyGK = schema.GroupKind{
+		Group: placementv1beta1.GroupVersion.Group,
+		Kind:  placementv1beta1.StagedUpdateStrategyKind,
+	}
+
+	ApprovalRequestGK = schema.GroupKind{
+		Group: placementv1beta1.GroupVersion.Group,
+		Kind:  placementv1beta1.ApprovalRequestKind,
+	}
+
 	ClusterResourcePlacementEvictionGK = schema.GroupKind{
 		Group: placementv1beta1.GroupVersion.Group,
 		Kind:  placementv1beta1.ClusterResourcePlacementEvictionKind,
@@ -210,6 +225,9 @@ func NewResourceConfig(isAllowList bool) *ResourceConfig {
 	r.AddGroupKind(ClusterStagedUpdateRunGK)
 	r.AddGroupKind(ClusterStagedUpdateStrategyGK)
 	r.AddGroupKind(ClusterApprovalRequestGK)
+	r.AddGroupKind(StagedUpdateRunGK)
+	r.AddGroupKind(StagedUpdateStrategyGK)
+	r.AddGroupKind(ApprovalRequestGK)
 	r.AddGroupKind(ClusterResourcePlacementEvictionGK)
 	r.AddGroupKind(ClusterResourcePlacementDisruptionBudgetGK)
 	r.AddGroupKind(ClusterResourceOverrideGK)
