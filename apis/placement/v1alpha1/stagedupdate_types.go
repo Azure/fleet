@@ -153,7 +153,7 @@ type AfterStageTask struct {
 	Type AfterStageTaskType `json:"type"`
 
 	// The time to wait after all the clusters in the current stage complete the update before moving to the next stage.
-	// +kubebuilder:validation:Pattern="^0|([0-9]+(\\.[0-9]+)?(s|m|h))+$"
+	// +kubebuilder:validation:Pattern="^(?:0|(?:(?:0|[1-9][0-9]*)(\\.[0-9]+)?(?:s|m|h))+)$"
 	// +kubebuilder:validation:Type=string
 	// +kubebuilder:validation:Optional
 	WaitTime metav1.Duration `json:"waitTime,omitempty"`
