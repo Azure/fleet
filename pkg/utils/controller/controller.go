@@ -63,6 +63,19 @@ var (
 
 	// ErrUserError indicates the error is caused by the user and customer needs to take the action.
 	ErrUserError = errors.New("failed to process the request due to a client error")
+
+	// ErrNoLatestPolicySnapshot indicates that no active (latest) policy snapshot was found for a
+	// placement. This is a transient condition during placement creation or rotation and is typically
+	// recoverable by the next reconcile; callers branch on it via errors.Is to distinguish it from
+	// real API or invariant-violation errors.
+	ErrNoLatestPolicySnapshot = errors.New("no latest policy snapshot found")
+
+	// ErrMultipleActivePolicySnapshots indicates that more than one policy snapshot for the same
+	// placement carries IsLatestSnapshot=true, violating the "exactly one active snapshot"
+	// invariant. Callers branch on it via errors.Is so they can fail fast on a real invariant
+	// violation without misclassifying transient cache errors that share the ErrUnexpectedBehavior
+	// category.
+	ErrMultipleActivePolicySnapshots = errors.New("multiple active policy snapshots found")
 )
 
 // NewUnexpectedBehaviorError returns ErrUnexpectedBehavior type error when err is not nil.

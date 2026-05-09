@@ -18,6 +18,8 @@ package scheduler
 
 import (
 	"context"
+	"errors"
+	"fmt"
 	"log"
 	"os"
 	"strconv"
@@ -30,10 +32,13 @@ import (
 	"github.com/prometheus/client_golang/prometheus/testutil"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/client-go/kubernetes/scheme"
+	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/client/fake"
+	"sigs.k8s.io/controller-runtime/pkg/client/interceptor"
 
 	fleetv1beta1 "github.com/kubefleet-dev/kubefleet/apis/placement/v1beta1"
 	hubmetrics "github.com/kubefleet-dev/kubefleet/pkg/metrics/hub"
+	"github.com/kubefleet-dev/kubefleet/pkg/utils/controller"
 )
 
 const (
@@ -588,6 +593,40 @@ func TestLookupLatestPolicySnapshot(t *testing.T) {
 				t.Errorf("active policy snapshot diff (-got, +want): %s", diff)
 			}
 		})
+	}
+}
+
+// TestLookupLatestPolicySnapshot_ListError covers the error path: when the underlying
+// controller.LookupLatestPolicySnapshot returns an error, the scheduler logs and propagates
+// it without panicking on the nil snapshot.
+func TestLookupLatestPolicySnapshot_ListError(t *testing.T) {
+	placement := &fleetv1beta1.ClusterResourcePlacement{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:       crpName,
+			Finalizers: []string{fleetv1beta1.SchedulerCleanupFinalizer},
+		},
+	}
+	listErr := fmt.Errorf("simulated cache failure")
+	fakeClient := interceptor.NewClient(
+		fake.NewClientBuilder().WithScheme(scheme.Scheme).WithObjects(placement).Build(),
+		interceptor.Funcs{
+			List: func(_ context.Context, _ client.WithWatch, _ client.ObjectList, _ ...client.ListOption) error {
+				return listErr
+			},
+		},
+	)
+
+	s := &Scheduler{client: fakeClient, uncachedReader: fakeClient}
+
+	got, err := s.lookupLatestPolicySnapshot(context.Background(), placement)
+	if err == nil {
+		t.Fatalf("lookupLatestPolicySnapshot() = %v, nil; want non-nil error", got)
+	}
+	if got != nil {
+		t.Errorf("lookupLatestPolicySnapshot() returned snapshot %v, want nil on error", got)
+	}
+	if !errors.Is(err, controller.ErrUnexpectedBehavior) {
+		t.Errorf("lookupLatestPolicySnapshot() error = %v, want wrapping ErrUnexpectedBehavior", err)
 	}
 }
 

@@ -219,7 +219,7 @@ var _ = Describe("UpdateRun validation tests", func() {
 
 				By("Validating the validation failed")
 				wantStatus = generateFailedValidationStatus(updateRun, wantStatus)
-				validateClusterStagedUpdateRunStatus(ctx, updateRun, wantStatus, "no latest policy snapshot associated")
+				validateClusterStagedUpdateRunStatus(ctx, updateRun, wantStatus, "no latest policy snapshot found")
 
 				By("Checking update run status metrics are emitted")
 				validateUpdateRunMetricsEmitted(generateWaitingMetric(placementv1beta1.StateRun, updateRun), generateFailedMetric(placementv1beta1.StateRun, updateRun, string(failureType)))
