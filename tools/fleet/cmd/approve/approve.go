@@ -20,11 +20,11 @@ import (
 	"context"
 	"fmt"
 	"log"
+	"time"
 
 	"github.com/spf13/cobra"
 	"k8s.io/apimachinery/pkg/api/meta"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
-	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/types"
 	"k8s.io/client-go/util/retry"
 	"sigs.k8s.io/controller-runtime/pkg/client"
@@ -87,6 +87,7 @@ type approveOptions struct {
 	hubClusterContext string
 	name              string
 	namespace         string
+	timeout           time.Duration
 
 	hubClient client.Client
 }
@@ -119,16 +120,19 @@ For namespace-scoped resources (approvalrequest), you must also specify the --na
 			if err := o.setupClient(); err != nil {
 				return err
 			}
-			return o.run(cmd.Context(), cfg)
+			ctx, cancel := context.WithTimeout(cmd.Context(), o.timeout)
+			defer cancel()
+			return o.run(ctx, cfg)
 		},
 	}
 
-	cmd.Flags().StringVar(&o.hubClusterContext, "hubClusterContext", "", "The name of the kubeconfig context to use for the hub cluster")
+	cmd.Flags().StringVar(&o.hubClusterContext, "hub-cluster-context", "", "The name of the kubeconfig context to use for the hub cluster")
 	cmd.Flags().StringVar(&o.name, "name", "", "The name of the resource to approve")
 	cmd.Flags().StringVarP(&o.namespace, "namespace", "n", "", "The namespace of the resource to approve (required for namespace-scoped resources)")
+	cmd.Flags().DurationVar(&o.timeout, "timeout", 5*time.Minute, "Maximum time to wait for the operation to complete")
 
 	// Mark required flags.
-	_ = cmd.MarkFlagRequired("hubClusterContext")
+	_ = cmd.MarkFlagRequired("hub-cluster-context")
 	_ = cmd.MarkFlagRequired("name")
 
 	return cmd
@@ -208,10 +212,9 @@ func (o *approveOptions) approveApprovalRequest(ctx context.Context) error {
 
 // setupClient creates and configures the Kubernetes client
 func (o *approveOptions) setupClient() error {
-	scheme := runtime.NewScheme()
-
-	if err := placementv1beta1.AddToScheme(scheme); err != nil {
-		return fmt.Errorf("failed to add custom APIs (placement) to the runtime scheme: %w", err)
+	scheme, err := toolsutils.NewFleetScheme()
+	if err != nil {
+		return fmt.Errorf("failed to create runtime scheme: %w", err)
 	}
 
 	hubClient, err := toolsutils.GetClusterClientFromClusterContext(o.hubClusterContext, scheme)

@@ -507,25 +507,23 @@ func (r *Reconciler) ensureLatestPolicySnapshot(ctx context.Context, placementOb
 // 2 & 3 should never happen.
 func (r *Reconciler) lookupLatestSchedulingPolicySnapshot(ctx context.Context, placement fleetv1beta1.PlacementObj) (fleetv1beta1.PolicySnapshotObj, int, error) {
 	placementKey := types.NamespacedName{Name: placement.GetName(), Namespace: placement.GetNamespace()}
-	snapshotList, err := controller.FetchLatestPolicySnapshot(ctx, r.Client, placementKey)
-	if err != nil {
+	placementKObj := klog.KObj(placement)
+	activeSnapshot, err := controller.LookupLatestPolicySnapshot(ctx, r.Client, placementKey)
+	switch {
+	case err == nil:
+		policyIndex, parseErr := labels.ParsePolicyIndexFromLabel(activeSnapshot)
+		if parseErr != nil {
+			klog.ErrorS(parseErr, "Failed to parse the policy index label", "placement", placementKObj, "policySnapshot", klog.KObj(activeSnapshot))
+			return nil, -1, controller.NewUnexpectedBehaviorError(parseErr)
+		}
+		return activeSnapshot, policyIndex, nil
+	case errors.Is(err, controller.ErrNoLatestPolicySnapshot):
+		// No active snapshot found; recover below by picking the largest-index snapshot.
+	default:
+		// API or invariant-violation error — propagate.
 		return nil, -1, err
 	}
-	placementKObj := klog.KObj(placement)
-	policySnapshotItems := snapshotList.GetPolicySnapshotObjs()
-	if len(policySnapshotItems) == 1 {
-		policyIndex, err := labels.ParsePolicyIndexFromLabel(policySnapshotItems[0])
-		if err != nil {
-			klog.ErrorS(err, "Failed to parse the policy index label", "placement", placementKObj, "policySnapshot", klog.KObj(policySnapshotItems[0]))
-			return nil, -1, controller.NewUnexpectedBehaviorError(err)
-		}
-		return policySnapshotItems[0], policyIndex, nil
-	} else if len(policySnapshotItems) > 1 {
-		// It means there are multiple active snapshots and should never happen.
-		err := fmt.Errorf("there are %d active schedulingPolicySnapshots owned by placement %v", len(policySnapshotItems), placementKey)
-		klog.ErrorS(err, "Invalid schedulingPolicySnapshots", "placement", placementKObj)
-		return nil, -1, controller.NewUnexpectedBehaviorError(err)
-	}
+
 	// When there are no active snapshots, find the one who has the largest policy index.
 	// It should be rare only when placement controller is crashed before creating the new active snapshot.
 	sortedList, err := r.listSortedSchedulingPolicySnapshots(ctx, placement)

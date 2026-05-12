@@ -360,8 +360,8 @@ var _ = Describe("Drain is allowed on one cluster, blocked on others - ClusterRe
 func runDrainClusterBinary(hubClusterName, memberClusterName string) {
 	By(fmt.Sprintf("draining cluster %s", memberClusterName))
 	cmd := exec.Command(fleetBinaryPath, "draincluster",
-		"--hubClusterContext", hubClusterName,
-		"--clusterName", memberClusterName)
+		"--hub-cluster-context", hubClusterName,
+		"--cluster-name", memberClusterName)
 	_, err := cmd.CombinedOutput()
 	Expect(err).ToNot(HaveOccurred(), "Drain command failed with error: %v", err)
 }
@@ -369,8 +369,8 @@ func runDrainClusterBinary(hubClusterName, memberClusterName string) {
 func runUncordonClusterBinary(hubClusterName, memberClusterName string) {
 	By(fmt.Sprintf("uncordoning cluster %s", memberClusterName))
 	cmd := exec.Command(fleetBinaryPath, "uncordoncluster",
-		"--hubClusterContext", hubClusterName,
-		"--clusterName", memberClusterName)
+		"--hub-cluster-context", hubClusterName,
+		"--cluster-name", memberClusterName)
 	_, err := cmd.CombinedOutput()
 	Expect(err).ToNot(HaveOccurred(), "Uncordon command failed with error: %v", err)
 }

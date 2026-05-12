@@ -22,6 +22,7 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 
 	placementv1beta1 "go.goms.io/fleet/apis/placement/v1beta1"
+	"go.goms.io/fleet/pkg/utils/condition"
 )
 
 func TestHasBindingFailed(t *testing.T) {
@@ -321,6 +322,102 @@ func TestHasBindingFailed(t *testing.T) {
 			got := HasBindingFailed(tc.binding)
 			if got != tc.want {
 				t.Errorf("HasBindingFailed test `%s` failed got: %v, want: %v", tc.name, got, tc.want)
+			}
+		})
+	}
+}
+
+// TestHasBindingFailed_NonTerminalReasons verifies that conditions with Status=False but a
+// known in-progress reason (WorkNotSynchronizedYet, NotAvailableYet, OverriddenPending,
+// ApplyPending) are NOT treated as failures. This is the bug fix for issue #648.
+func TestHasBindingFailed_NonTerminalReasons(t *testing.T) {
+	bindingWithCondition := func(condType string, reason string) *placementv1beta1.ClusterResourceBinding {
+		return &placementv1beta1.ClusterResourceBinding{
+			ObjectMeta: metav1.ObjectMeta{Name: "test-binding", Generation: 1},
+			Status: placementv1beta1.ResourceBindingStatus{
+				Conditions: []metav1.Condition{
+					{
+						Type:               condType,
+						Status:             metav1.ConditionFalse,
+						ObservedGeneration: 1,
+						Reason:             reason,
+						Message:            "in progress",
+					},
+				},
+			},
+		}
+	}
+
+	tests := []struct {
+		name    string
+		binding *placementv1beta1.ClusterResourceBinding
+		want    bool
+	}{
+		{
+			name:    "WorkSynchronized=False with WorkNotSynchronizedYet is in-progress, not a failure",
+			binding: bindingWithCondition(string(placementv1beta1.ResourceBindingWorkSynchronized), condition.WorkNotSynchronizedYetReason),
+			want:    false,
+		},
+		{
+			name:    "Available=False with NotAvailableYet is in-progress, not a failure",
+			binding: bindingWithCondition(string(placementv1beta1.ResourceBindingAvailable), condition.NotAvailableYetReason),
+			want:    false,
+		},
+		{
+			name:    "Overridden=False with OverriddenPending is in-progress, not a failure",
+			binding: bindingWithCondition(string(placementv1beta1.ResourceBindingOverridden), condition.OverriddenPendingReason),
+			want:    false,
+		},
+		{
+			name:    "Applied=False with ApplyPending is in-progress, not a failure",
+			binding: bindingWithCondition(string(placementv1beta1.ResourceBindingApplied), condition.ApplyPendingReason),
+			want:    false,
+		},
+		{
+			name:    "Applied=False with ApplyFailed is a terminal failure",
+			binding: bindingWithCondition(string(placementv1beta1.ResourceBindingApplied), condition.ApplyFailedReason),
+			want:    true,
+		},
+		{
+			name:    "Overridden=False with OverriddenFailed is a terminal failure",
+			binding: bindingWithCondition(string(placementv1beta1.ResourceBindingOverridden), condition.OverriddenFailedReason),
+			want:    true,
+		},
+		{
+			name:    "Status=False with an unknown reason defaults to terminal (safer default)",
+			binding: bindingWithCondition(string(placementv1beta1.ResourceBindingApplied), "SomeReasonNobodyAddedToTheAllowlist"),
+			want:    true,
+		},
+		{
+			name: "non-terminal reason on one condition does not mask a terminal failure on another",
+			binding: &placementv1beta1.ClusterResourceBinding{
+				ObjectMeta: metav1.ObjectMeta{Name: "test-binding", Generation: 1},
+				Status: placementv1beta1.ResourceBindingStatus{
+					Conditions: []metav1.Condition{
+						{
+							Type:               string(placementv1beta1.ResourceBindingOverridden),
+							Status:             metav1.ConditionFalse,
+							ObservedGeneration: 1,
+							Reason:             condition.OverriddenPendingReason,
+						},
+						{
+							Type:               string(placementv1beta1.ResourceBindingApplied),
+							Status:             metav1.ConditionFalse,
+							ObservedGeneration: 1,
+							Reason:             condition.ApplyFailedReason,
+						},
+					},
+				},
+			},
+			want: true,
+		},
+	}
+
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			got := HasBindingFailed(tc.binding)
+			if got != tc.want {
+				t.Errorf("HasBindingFailed(%v) = %v, want %v", tc.binding, got, tc.want)
 			}
 		})
 	}

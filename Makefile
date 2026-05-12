@@ -275,6 +275,7 @@ build: generate fmt vet ## Build agent binaries
 	go build -o bin/hubagent cmd/hubagent/main.go
 	go build -o bin/memberagent cmd/memberagent/main.go
 	go build -o bin/crdinstaller cmd/crdinstaller/main.go
+	go build -o bin/kubectl-fleet ./tools/fleet/
 
 .PHONY: run-hubagent
 run-hubagent: manifests generate fmt vet ## Run hub-agent from your host

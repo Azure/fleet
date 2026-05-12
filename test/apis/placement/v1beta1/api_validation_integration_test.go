@@ -27,6 +27,7 @@ import (
 	apiextensionsv1 "k8s.io/apiextensions-apiserver/pkg/apis/apiextensions/v1"
 	k8sErrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
 	"k8s.io/apimachinery/pkg/util/intstr"
 
 	placementv1beta1 "go.goms.io/fleet/apis/placement/v1beta1"
@@ -1685,6 +1686,60 @@ var _ = Describe("Test placement v1beta1 API validation", func() {
 			Expect(*strategy.Spec.Stages[0].MaxConcurrency).Should(Equal(maxConcurrency))
 			Expect(hubClient.Delete(ctx, &strategy)).Should(Succeed())
 		})
+
+		It("Should allow creation of ClusterStagedUpdateStrategy with waitTime set to '0s'", func() {
+			obj := &unstructured.Unstructured{
+				Object: map[string]interface{}{
+					"apiVersion": "placement.kubernetes-fleet.io/v1beta1",
+					"kind":       "ClusterStagedUpdateStrategy",
+					"metadata": map[string]interface{}{
+						"name": fmt.Sprintf(updateRunStrategyNameTemplate, GinkgoParallelProcess()),
+					},
+					"spec": map[string]interface{}{
+						"stages": []interface{}{
+							map[string]interface{}{
+								"name": fmt.Sprintf(updateRunStageNameTemplate, GinkgoParallelProcess(), 1),
+								"afterStageTasks": []interface{}{
+									map[string]interface{}{
+										"type":     "TimedWait",
+										"waitTime": "0s",
+									},
+								},
+							},
+						},
+					},
+				},
+			}
+			Expect(hubClient.Create(ctx, obj)).Should(Succeed())
+			Expect(hubClient.Delete(ctx, obj)).Should(Succeed())
+		})
+
+		It("Should allow creation of ClusterStagedUpdateStrategy with waitTime as a compound duration '1h30m'", func() {
+			obj := &unstructured.Unstructured{
+				Object: map[string]interface{}{
+					"apiVersion": "placement.kubernetes-fleet.io/v1beta1",
+					"kind":       "ClusterStagedUpdateStrategy",
+					"metadata": map[string]interface{}{
+						"name": fmt.Sprintf(updateRunStrategyNameTemplate, GinkgoParallelProcess()),
+					},
+					"spec": map[string]interface{}{
+						"stages": []interface{}{
+							map[string]interface{}{
+								"name": fmt.Sprintf(updateRunStageNameTemplate, GinkgoParallelProcess(), 1),
+								"afterStageTasks": []interface{}{
+									map[string]interface{}{
+										"type":     "TimedWait",
+										"waitTime": "1h30m",
+									},
+								},
+							},
+						},
+					},
+				},
+			}
+			Expect(hubClient.Create(ctx, obj)).Should(Succeed())
+			Expect(hubClient.Delete(ctx, obj)).Should(Succeed())
+		})
 	})
 
 	Context("Test ClusterStagedUpdateStrategy API validation - invalid cases", func() {
@@ -2096,6 +2151,123 @@ var _ = Describe("Test placement v1beta1 API validation", func() {
 			Expect(errors.As(err, &statusErr)).To(BeTrue(), fmt.Sprintf("Create updateRunStrategy call produced error %s. Error type wanted is %s.", reflect.TypeOf(err), reflect.TypeOf(&k8sErrors.StatusError{})))
 			Expect(statusErr.ErrStatus.Message).Should(MatchRegexp("spec.stages\\[0\\].maxConcurrency in body should match"))
 		})
+
+		It("Should deny creation of ClusterStagedUpdateStrategy with invalid waitTime '0abc'", func() {
+			obj := &unstructured.Unstructured{
+				Object: map[string]interface{}{
+					"apiVersion": "placement.kubernetes-fleet.io/v1beta1",
+					"kind":       "ClusterStagedUpdateStrategy",
+					"metadata": map[string]interface{}{
+						"name": fmt.Sprintf(updateRunStrategyNameTemplate, GinkgoParallelProcess()),
+					},
+					"spec": map[string]interface{}{
+						"stages": []interface{}{
+							map[string]interface{}{
+								"name": fmt.Sprintf(updateRunStageNameTemplate, GinkgoParallelProcess(), 1),
+								"afterStageTasks": []interface{}{
+									map[string]interface{}{
+										"type":     "TimedWait",
+										"waitTime": "0abc",
+									},
+								},
+							},
+						},
+					},
+				},
+			}
+			err := hubClient.Create(ctx, obj)
+			var statusErr *k8sErrors.StatusError
+			Expect(errors.As(err, &statusErr)).To(BeTrue(), fmt.Sprintf("Create updateRunStrategy call produced error %s. Error type wanted is %s.", reflect.TypeOf(err), reflect.TypeOf(&k8sErrors.StatusError{})))
+			Expect(statusErr.ErrStatus.Message).Should(MatchRegexp("spec.stages\\[0\\].afterStageTasks\\[0\\].waitTime in body should match"))
+		})
+
+		It("Should deny creation of ClusterStagedUpdateStrategy with invalid waitTime '1' (number without unit)", func() {
+			obj := &unstructured.Unstructured{
+				Object: map[string]interface{}{
+					"apiVersion": "placement.kubernetes-fleet.io/v1beta1",
+					"kind":       "ClusterStagedUpdateStrategy",
+					"metadata": map[string]interface{}{
+						"name": fmt.Sprintf(updateRunStrategyNameTemplate, GinkgoParallelProcess()),
+					},
+					"spec": map[string]interface{}{
+						"stages": []interface{}{
+							map[string]interface{}{
+								"name": fmt.Sprintf(updateRunStageNameTemplate, GinkgoParallelProcess(), 1),
+								"afterStageTasks": []interface{}{
+									map[string]interface{}{
+										"type":     "TimedWait",
+										"waitTime": "1",
+									},
+								},
+							},
+						},
+					},
+				},
+			}
+			err := hubClient.Create(ctx, obj)
+			var statusErr *k8sErrors.StatusError
+			Expect(errors.As(err, &statusErr)).To(BeTrue(), fmt.Sprintf("Create updateRunStrategy call produced error %s. Error type wanted is %s.", reflect.TypeOf(err), reflect.TypeOf(&k8sErrors.StatusError{})))
+			Expect(statusErr.ErrStatus.Message).Should(MatchRegexp("spec.stages\\[0\\].afterStageTasks\\[0\\].waitTime in body should match"))
+		})
+
+		It("Should deny creation of ClusterStagedUpdateStrategy with invalid waitTime '1d' (unsupported unit)", func() {
+			obj := &unstructured.Unstructured{
+				Object: map[string]interface{}{
+					"apiVersion": "placement.kubernetes-fleet.io/v1beta1",
+					"kind":       "ClusterStagedUpdateStrategy",
+					"metadata": map[string]interface{}{
+						"name": fmt.Sprintf(updateRunStrategyNameTemplate, GinkgoParallelProcess()),
+					},
+					"spec": map[string]interface{}{
+						"stages": []interface{}{
+							map[string]interface{}{
+								"name": fmt.Sprintf(updateRunStageNameTemplate, GinkgoParallelProcess(), 1),
+								"afterStageTasks": []interface{}{
+									map[string]interface{}{
+										"type":     "TimedWait",
+										"waitTime": "1d",
+									},
+								},
+							},
+						},
+					},
+				},
+			}
+			err := hubClient.Create(ctx, obj)
+			var statusErr *k8sErrors.StatusError
+			Expect(errors.As(err, &statusErr)).To(BeTrue(), fmt.Sprintf("Create updateRunStrategy call produced error %s. Error type wanted is %s.", reflect.TypeOf(err), reflect.TypeOf(&k8sErrors.StatusError{})))
+			Expect(statusErr.ErrStatus.Message).Should(MatchRegexp("spec.stages\\[0\\].afterStageTasks\\[0\\].waitTime in body should match"))
+		})
+
+		It("Should deny creation of ClusterStagedUpdateStrategy with invalid waitTime '01h' (leading zero)", func() {
+			obj := &unstructured.Unstructured{
+				Object: map[string]interface{}{
+					"apiVersion": "placement.kubernetes-fleet.io/v1beta1",
+					"kind":       "ClusterStagedUpdateStrategy",
+					"metadata": map[string]interface{}{
+						"name": fmt.Sprintf(updateRunStrategyNameTemplate, GinkgoParallelProcess()),
+					},
+					"spec": map[string]interface{}{
+						"stages": []interface{}{
+							map[string]interface{}{
+								"name": fmt.Sprintf(updateRunStageNameTemplate, GinkgoParallelProcess(), 1),
+								"afterStageTasks": []interface{}{
+									map[string]interface{}{
+										"type":     "TimedWait",
+										"waitTime": "01h",
+									},
+								},
+							},
+						},
+					},
+				},
+			}
+			err := hubClient.Create(ctx, obj)
+			var statusErr *k8sErrors.StatusError
+			Expect(errors.As(err, &statusErr)).To(BeTrue(), fmt.Sprintf("Create updateRunStrategy call produced error %s. Error type wanted is %s.", reflect.TypeOf(err), reflect.TypeOf(&k8sErrors.StatusError{})))
+			Expect(statusErr.ErrStatus.Message).Should(MatchRegexp("spec.stages\\[0\\].afterStageTasks\\[0\\].waitTime in body should match"))
+		})
+
 	})
 
 	Context("Test ClusterApprovalRequest API validation - valid cases", func() {

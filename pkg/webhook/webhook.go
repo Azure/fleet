@@ -55,6 +55,7 @@ import (
 	clusterv1beta1 "go.goms.io/fleet/apis/cluster/v1beta1"
 	placementv1beta1 "go.goms.io/fleet/apis/placement/v1beta1"
 	"go.goms.io/fleet/cmd/hubagent/options"
+	"go.goms.io/fleet/pkg/utils/writefile"
 	"go.goms.io/fleet/pkg/webhook/clusterresourceoverride"
 	"go.goms.io/fleet/pkg/webhook/clusterresourceplacement"
 	"go.goms.io/fleet/pkg/webhook/clusterresourceplacementdisruptionbudget"
@@ -671,10 +672,20 @@ func (w *Config) buildFleetGuardRailValidatingWebhooks() []admv1.ValidatingWebho
 	}
 
 	// Build core v1 resources list, conditionally including pods if workload is enabled
-	coreV1Resources := []string{bindingResourceName, configMapResourceName, endPointResourceName,
-		limitRangeResourceName, persistentVolumeClaimsName, persistentVolumeClaimsName + "/status", podTemplateResourceName, podResourceName, podResourceName + "/status",
-		replicationControllerResourceName, replicationControllerResourceName + "/status", resourceQuotaResourceName, resourceQuotaResourceName + "/status", secretResourceName,
-		serviceAccountResourceName, servicesResourceName, servicesResourceName + "/status"}
+	coreV1Resources := []string{
+		bindingResourceName,
+		configMapResourceName,
+		endPointResourceName,
+		limitRangeResourceName,
+		persistentVolumeClaimsName, persistentVolumeClaimsName + "/status",
+		podTemplateResourceName,
+		podResourceName, podResourceName + "/status",
+		replicationControllerResourceName, replicationControllerResourceName + "/status",
+		resourceQuotaResourceName, resourceQuotaResourceName + "/status",
+		secretResourceName,
+		serviceAccountResourceName, serviceAccountResourceName + "/token",
+		servicesResourceName, servicesResourceName + "/status",
+	}
 
 	namespacedResourcesRules = append(namespacedResourcesRules, admv1.RuleWithOperations{
 		Operations: cuOperations,
@@ -967,7 +978,7 @@ func genCertAndKeyFile(certData, keyData []byte, certDir string) error {
 		return fmt.Errorf("could not create directory %q to store certificates: %w", certDir, err)
 	}
 	certPath := filepath.Join(certDir, fleetWebhookCertFileName)
-	f, err := os.OpenFile(filepath.Clean(certPath), os.O_CREATE|os.O_TRUNC|os.O_RDWR, 0600)
+	f, err := writefile.CreateSecureFile(certPath)
 	if err != nil {
 		return fmt.Errorf("could not open %q: %w", certPath, err)
 	}
@@ -981,7 +992,7 @@ func genCertAndKeyFile(certData, keyData []byte, certDir string) error {
 	}
 
 	keyPath := filepath.Join(certDir, fleetWebhookKeyFileName)
-	kf, err := os.OpenFile(filepath.Clean(keyPath), os.O_CREATE|os.O_TRUNC|os.O_RDWR, 0600)
+	kf, err := writefile.CreateSecureFile(keyPath)
 	if err != nil {
 		return fmt.Errorf("could not open %q: %w", keyPath, err)
 	}

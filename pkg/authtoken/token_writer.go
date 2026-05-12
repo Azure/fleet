@@ -18,9 +18,10 @@ package authtoken
 import (
 	"fmt"
 	"io"
-	"os"
 
 	"k8s.io/klog/v2"
+
+	"go.goms.io/fleet/pkg/utils/writefile"
 )
 
 type Factory struct {
@@ -31,8 +32,11 @@ func NewFactory(filePath string) Factory {
 	return Factory{filePath: filePath}
 }
 
+// Create opens the token file for writing using CreateSecureFile.
+// The member-agent container runs as the same UID and reads this file via client-go's
+// BearerTokenFile (O_RDONLY), so owner permission is sufficient for both writer and reader.
 func (w Factory) Create() (io.WriteCloser, error) {
-	wc, err := os.Create(w.filePath)
+	wc, err := writefile.CreateSecureFile(w.filePath)
 	if err != nil {
 		return nil, err
 	}

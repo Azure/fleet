@@ -20,11 +20,11 @@ import (
 	"context"
 	"fmt"
 	"log"
+	"time"
 
 	"github.com/spf13/cobra"
 	k8errors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
-	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/types"
 	"k8s.io/apimachinery/pkg/util/uuid"
 	"k8s.io/apimachinery/pkg/util/validation"
@@ -49,6 +49,7 @@ const (
 type drainOptions struct {
 	hubClusterContext string
 	clusterName       string
+	timeout           time.Duration
 
 	hubClient client.Client
 }
@@ -70,18 +71,20 @@ func NewCmdDrainCluster() *cobra.Command {
 	}
 
 	// Add flags specific to drain command
-	cmd.Flags().StringVar(&o.hubClusterContext, "hubClusterContext", "", "kubectl context for the hub cluster (required)")
-	cmd.Flags().StringVar(&o.clusterName, "clusterName", "", "name of the member cluster (required)")
+	cmd.Flags().StringVar(&o.hubClusterContext, "hub-cluster-context", "", "kubectl context for the hub cluster (required)")
+	cmd.Flags().StringVar(&o.clusterName, "cluster-name", "", "name of the member cluster (required)")
+	cmd.Flags().DurationVar(&o.timeout, "timeout", 5*time.Minute, "Maximum time to wait for the operation to complete")
 
 	// Mark required flags
-	_ = cmd.MarkFlagRequired("hubClusterContext")
-	_ = cmd.MarkFlagRequired("clusterName")
+	_ = cmd.MarkFlagRequired("hub-cluster-context")
+	_ = cmd.MarkFlagRequired("cluster-name")
 
 	return cmd
 }
 
 func (o *drainOptions) runDrain() error {
-	ctx := context.Background()
+	ctx, cancel := context.WithTimeout(context.Background(), o.timeout)
+	defer cancel()
 
 	isDrainSuccessful, err := o.drain(ctx)
 	if err != nil {
@@ -111,13 +114,9 @@ func (o *drainOptions) runDrain() error {
 
 // setupClient creates and configures the Kubernetes client
 func (o *drainOptions) setupClient() error {
-	scheme := runtime.NewScheme()
-
-	if err := clusterv1beta1.AddToScheme(scheme); err != nil {
-		return fmt.Errorf("failed to add custom APIs (cluster) to the runtime scheme: %w", err)
-	}
-	if err := placementv1beta1.AddToScheme(scheme); err != nil {
-		return fmt.Errorf("failed to add custom APIs (placement) to the runtime scheme: %w", err)
+	scheme, err := toolsutils.NewFleetScheme()
+	if err != nil {
+		return fmt.Errorf("failed to create runtime scheme: %w", err)
 	}
 
 	hubClient, err := toolsutils.GetClusterClientFromClusterContext(o.hubClusterContext, scheme)
