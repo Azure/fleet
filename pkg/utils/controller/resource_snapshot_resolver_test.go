@@ -1683,10 +1683,12 @@ func TestDeleteResourceSnapshots(t *testing.T) {
 	}
 
 	tests := []struct {
-		name          string
-		placementObj  fleetv1beta1.PlacementObj
-		objects       []client.Object
-		expectedError string
+		name         string
+		placementObj fleetv1beta1.PlacementObj
+		objects      []client.Object
+		// Snapshots that must still exist after the delete. Nil means every seeded object should be deleted.
+		wantSurvivors []types.NamespacedName
+		wantError     string
 	}{
 		{
 			name: "delete resource snapshots - namespaced",
@@ -1770,8 +1772,8 @@ func TestDeleteResourceSnapshots(t *testing.T) {
 						},
 					},
 				},
-				// Namespaced snapshots with same placement name (should NOT be deleted)
-				// TODO: find a way to test this
+				// Namespaced snapshot sharing the same placement name; cross-scope isolation
+				// requires it to survive a cluster-scoped delete.
 				&fleetv1beta1.ResourceSnapshot{
 					ObjectMeta: metav1.ObjectMeta{
 						Name:      "test-namespaced-snapshot",
@@ -1781,6 +1783,9 @@ func TestDeleteResourceSnapshots(t *testing.T) {
 						},
 					},
 				},
+			},
+			wantSurvivors: []types.NamespacedName{
+				{Namespace: "test-namespace", Name: "test-namespaced-snapshot"},
 			},
 		},
 		{
@@ -1792,8 +1797,8 @@ func TestDeleteResourceSnapshots(t *testing.T) {
 				},
 			},
 			objects: []client.Object{
-				// Cluster-scoped snapshots with same placement name (should NOT be deleted)
-				// TODO: find a way to test this
+				// Cluster-scoped snapshot sharing the same placement name; cross-scope isolation
+				// requires it to survive a namespaced delete.
 				&fleetv1beta1.ClusterResourceSnapshot{
 					ObjectMeta: metav1.ObjectMeta{
 						Name: "test-cluster-snapshot",
@@ -1832,6 +1837,12 @@ func TestDeleteResourceSnapshots(t *testing.T) {
 					},
 				},
 			},
+			wantSurvivors: []types.NamespacedName{
+				// Cluster-scoped survivor (different scope, same placement name).
+				{Name: "test-cluster-snapshot"},
+				// Different-namespace survivor (same scope, different namespace).
+				{Namespace: "other-namespace", Name: "other-namespaced-snapshot"},
+			},
 		},
 	}
 
@@ -1841,12 +1852,12 @@ func TestDeleteResourceSnapshots(t *testing.T) {
 
 			err := DeleteResourceSnapshots(context.Background(), k8Client, tt.placementObj)
 
-			if tt.expectedError != "" {
+			if tt.wantError != "" {
 				if err == nil {
 					t.Fatalf("Expected error but got nil")
 				}
-				if !strings.Contains(err.Error(), tt.expectedError) {
-					t.Errorf("Expected error to contain: %s, but got: %v", tt.expectedError, err)
+				if !strings.Contains(err.Error(), tt.wantError) {
+					t.Errorf("Expected error to contain: %s, but got: %v", tt.wantError, err)
 				}
 				return
 			}
@@ -1855,18 +1866,30 @@ func TestDeleteResourceSnapshots(t *testing.T) {
 				t.Fatalf("Expected no error but got: %v", err)
 			}
 
-			// Verify snapshots were deleted by checking they no longer exist
-			placementKey := types.NamespacedName{
-				Name:      tt.placementObj.GetName(),
-				Namespace: tt.placementObj.GetNamespace(),
+			// Unfiltered list of both scopes; exact match guards the cross-scope regression.
+			var clusterList fleetv1beta1.ClusterResourceSnapshotList
+			if err := k8Client.List(context.Background(), &clusterList); err != nil {
+				t.Fatalf("Failed to list ClusterResourceSnapshots after deletion: %v", err)
 			}
-			result, err := ListAllResourceSnapshots(context.Background(), k8Client, placementKey)
-			if err != nil {
-				t.Fatalf("Expected no error when listing snapshots after deletion, but got: %v", err)
+			var nsList fleetv1beta1.ResourceSnapshotList
+			if err := k8Client.List(context.Background(), &nsList); err != nil {
+				t.Fatalf("Failed to list ResourceSnapshots after deletion: %v", err)
 			}
-
-			if len(result.GetResourceSnapshotObjs()) != 0 {
-				t.Errorf("Expected 0 resource snapshots after deletion, got %d", len(result.GetResourceSnapshotObjs()))
+			got := make([]types.NamespacedName, 0, len(clusterList.Items)+len(nsList.Items))
+			for _, s := range clusterList.Items {
+				got = append(got, types.NamespacedName{Name: s.Name})
+			}
+			for _, s := range nsList.Items {
+				got = append(got, types.NamespacedName{Namespace: s.Namespace, Name: s.Name})
+			}
+			less := func(a, b types.NamespacedName) bool {
+				if a.Namespace != b.Namespace {
+					return a.Namespace < b.Namespace
+				}
+				return a.Name < b.Name
+			}
+			if diff := cmp.Diff(tt.wantSurvivors, got, cmpopts.SortSlices(less), cmpopts.EquateEmpty()); diff != "" {
+				t.Errorf("surviving snapshots mismatch (-want +got):\n%s", diff)
 			}
 		})
 	}
