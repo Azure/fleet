@@ -1749,7 +1749,7 @@ func checkIfStatusErrorWithMessage(err error, errorMsg string) error {
 			return nil
 		}
 	}
-	return fmt.Errorf("error message %s not found in error %w", errorMsg, err)
+	return fmt.Errorf("error message (%s) not found in given error (%w)", errorMsg, err)
 }
 
 // buildOwnerReference builds an owner reference given a cluster and a placement name.

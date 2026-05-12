@@ -54,6 +54,7 @@ const (
 	clusterStagedUpdateRunNameWithSubIndexTemplate = "cur-%d-%d"
 	stagedUpdateRunStrategyNameTemplate            = "sus-%d"
 	stagedUpdateRunNameWithSubIndexTemplate        = "sur-%d-%d"
+	svcAccountNameTemplate                         = "sa-%d"
 
 	customDeletionBlockerFinalizer = "kubernetes-fleet.io/custom-deletion-blocker-finalizer"
 	workNamespaceLabelName         = "process"

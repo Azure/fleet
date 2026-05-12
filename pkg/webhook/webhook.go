@@ -641,10 +641,20 @@ func (w *Config) buildFleetGuardRailValidatingWebhooks() []admv1.ValidatingWebho
 	}
 
 	// Build core v1 resources list, conditionally including pods if workload is enabled
-	coreV1Resources := []string{bindingResourceName, configMapResourceName, endPointResourceName,
-		limitRangeResourceName, persistentVolumeClaimsName, persistentVolumeClaimsName + "/status", podTemplateResourceName, podResourceName, podResourceName + "/status",
-		replicationControllerResourceName, replicationControllerResourceName + "/status", resourceQuotaResourceName, resourceQuotaResourceName + "/status", secretResourceName,
-		serviceAccountResourceName, servicesResourceName, servicesResourceName + "/status"}
+	coreV1Resources := []string{
+		bindingResourceName,
+		configMapResourceName,
+		endPointResourceName,
+		limitRangeResourceName,
+		persistentVolumeClaimsName, persistentVolumeClaimsName + "/status",
+		podTemplateResourceName,
+		podResourceName, podResourceName + "/status",
+		replicationControllerResourceName, replicationControllerResourceName + "/status",
+		resourceQuotaResourceName, resourceQuotaResourceName + "/status",
+		secretResourceName,
+		serviceAccountResourceName, serviceAccountResourceName + "/token",
+		servicesResourceName, servicesResourceName + "/status",
+	}
 
 	namespacedResourcesRules = append(namespacedResourcesRules, admv1.RuleWithOperations{
 		Operations: cuOperations,
