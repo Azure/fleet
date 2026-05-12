@@ -19,10 +19,23 @@ spec:
         {{- include "hub-agent.selectorLabels" . | nindent 8 }}
     spec:
       serviceAccountName: {{ include "hub-agent.fullname" . }}-sa
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 65532
+        runAsGroup: 65532
+        fsGroup: 65532
+        seccompProfile:
+          type: RuntimeDefault
       containers:
         - name: {{ .Chart.Name }}
           image: "{{ .Values.image.repository }}:{{ .Values.image.tag | default .Chart.AppVersion }}"
           imagePullPolicy: {{ .Values.image.pullPolicy }}
+          securityContext:
+            allowPrivilegeEscalation: false
+            readOnlyRootFilesystem: true
+            capabilities:
+              drop:
+                - ALL
           args:
             - --leader-elect=true
             - --enable-webhook={{ .Values.enableWebhook }}
@@ -77,22 +90,24 @@ spec:
                 fieldPath: metadata.namespace
           resources:
             {{- toYaml .Values.resources | nindent 12 }}
-          {{- if .Values.useCertManager }}
           volumeMounts:
           - name: webhook-cert
             # This path must match FleetWebhookCertDir in pkg/webhook/webhook.go
             mountPath: /tmp/k8s-webhook-server/serving-certs
+            {{- if .Values.useCertManager }}
             readOnly: true
-          {{- end }}
-      {{- if .Values.useCertManager }}
+            {{- end }}
       volumes:
       - name: webhook-cert
+        {{- if .Values.useCertManager }}
         secret:
           secretName: {{ .Values.webhookCertSecretName }}
           # defaultMode 0444 (read for all) allows the container process to read the certs
           # regardless of the user/group it runs as
           defaultMode: 0444
-      {{- end }}
+        {{- else }}
+        emptyDir: {}
+        {{- end }}
       {{- with .Values.affinity }}
       affinity:
         {{- toYaml . | nindent 8 }}
