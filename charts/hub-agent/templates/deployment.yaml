@@ -90,13 +90,21 @@ spec:
                 fieldPath: metadata.namespace
           resources:
             {{- toYaml .Values.resources | nindent 12 }}
+          {{- if .Values.useCertManager }}
           volumeMounts:
           - name: webhook-cert
             # This path must match FleetWebhookCertDir in pkg/webhook/webhook.go
             mountPath: /tmp/k8s-webhook-server/serving-certs
-            {{- if .Values.useCertManager }}
             readOnly: true
-            {{- end }}
+          {{- else }}
+          volumeMounts:
+          - name: webhook-cert
+            # This path must match FleetWebhookCertDir in pkg/webhook/webhook.go.
+            # Note that this must be mounted one level up from the hardcoded path, otherwise
+            # the read only root filesystem setup would block the agent from attempting to
+            # clear the directory.
+            mountPath: /tmp/k8s-webhook-server/
+          {{- end }}
       volumes:
       - name: webhook-cert
         {{- if .Values.useCertManager }}
