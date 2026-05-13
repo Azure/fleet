@@ -301,6 +301,47 @@ func createOverrides() {
 	}
 	Expect(k8sClient.Create(ctx, &invalidClusterResourceOverrideSnapshot)).Should(Succeed(), "Failed to create the cro-2")
 	By(fmt.Sprintf("Invalid cluster resource override snapshot %s created", invalidClusterResourceOverrideSnapshotName))
+
+	invalidResourceOverrideSnapshot = placementv1beta1.ResourceOverrideSnapshot{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      invalidResourceOverrideSnapshotName,
+			Namespace: appNamespaceName,
+			Labels: map[string]string{
+				placementv1beta1.IsLatestSnapshotLabel: "true",
+			},
+		},
+		Spec: placementv1beta1.ResourceOverrideSnapshotSpec{
+			OverrideSpec: placementv1beta1.ResourceOverrideSpec{
+				ResourceSelectors: []placementv1beta1.ResourceSelector{
+					{
+						Group:   "test.kubernetes-fleet.io",
+						Version: "v1alpha1",
+						Kind:    "TestResource",
+						Name:    "random-test-resource",
+					},
+				},
+				Policy: &placementv1beta1.OverridePolicy{
+					OverrideRules: []placementv1beta1.OverrideRule{
+						{
+							ClusterSelector: &placementv1beta1.ClusterSelector{
+								ClusterSelectorTerms: []placementv1beta1.ClusterSelectorTerm{}, // select all members
+							},
+							JSONPatchOverrides: []placementv1beta1.JSONPatchOverride{
+								{
+									Operator: placementv1beta1.JSONPatchOverrideOpAdd,
+									Path:     "/invalid/path",
+									Value:    apiextensionsv1.JSON{Raw: []byte(`"new-value"`)},
+								},
+							},
+						},
+					},
+				},
+			},
+			OverrideHash: []byte("123"),
+		},
+	}
+	Expect(k8sClient.Create(ctx, &invalidResourceOverrideSnapshot)).Should(Succeed(), "Failed to create the ro-2")
+	By(fmt.Sprintf("Invalid resource override snapshot %s created", invalidResourceOverrideSnapshotName))
 }
 
 var _ = AfterSuite(func() {
@@ -309,6 +350,7 @@ var _ = AfterSuite(func() {
 	Expect(k8sClient.Delete(ctx, &validClusterResourceOverrideSnapshot)).Should(Succeed(), "Failed to delete the cro-1")
 	Expect(k8sClient.Delete(ctx, &validResourceOverrideSnapshot)).Should(Succeed(), "Failed to delete the ro-1")
 	Expect(k8sClient.Delete(ctx, &invalidClusterResourceOverrideSnapshot)).Should(Succeed(), "Failed to delete the cro-2")
+	Expect(k8sClient.Delete(ctx, &invalidResourceOverrideSnapshot)).Should(Succeed(), "Failed to delete the ro-2")
 	Expect(k8sClient.Delete(ctx, &appNamespace)).Should(Succeed(), "Failed to delete app namespace")
 
 	cancel()

@@ -35,6 +35,10 @@ import (
 	"github.com/kubefleet-dev/kubefleet/pkg/utils/overrider"
 )
 
+// fetchClusterResourceOverrideSnapshots returns the binding's CRO snapshots keyed by the
+// ResourceIdentifier their selectors target. Order matches the binding's snapshot list so
+// callers can apply deterministically.
+//
 // TODO: combine the following two functions into one, as they are very similar.
 func (r *Reconciler) fetchClusterResourceOverrideSnapshots(ctx context.Context, resourceBinding placementv1beta1.BindingObj) (map[placementv1beta1.ResourceIdentifier][]*placementv1beta1.ClusterResourceOverrideSnapshot, error) {
 	croMap := make(map[placementv1beta1.ResourceIdentifier][]*placementv1beta1.ClusterResourceOverrideSnapshot)
@@ -70,6 +74,9 @@ func (r *Reconciler) fetchClusterResourceOverrideSnapshots(ctx context.Context, 
 	return croMap, nil
 }
 
+// fetchResourceOverrideSnapshots returns the binding's RO snapshots keyed by the
+// ResourceIdentifier their selectors target. Order matches the binding's snapshot list so
+// callers can apply deterministically.
 func (r *Reconciler) fetchResourceOverrideSnapshots(ctx context.Context, resourceBinding placementv1beta1.BindingObj) (map[placementv1beta1.ResourceIdentifier][]*placementv1beta1.ResourceOverrideSnapshot, error) {
 	roMap := make(map[placementv1beta1.ResourceIdentifier][]*placementv1beta1.ResourceOverrideSnapshot)
 
@@ -127,11 +134,11 @@ func (r *Reconciler) applyOverrides(resource *placementv1beta1.ResourceContent, 
 		Kind:    gvk.Kind,
 		Name:    uResource.GetName(),
 	}
-	isClusterScopeResource := r.InformerManager.IsClusterScopedResources(gvk)
+	isClusterScopedResource := r.InformerManager.IsClusterScopedResources(gvk)
 
 	// For the namespace scoped resource, it could be selected by the namespace itself.
-	// use the namespace as the key
-	if !isClusterScopeResource {
+	// Use the namespace as the key.
+	if !isClusterScopedResource {
 		key = placementv1beta1.ResourceIdentifier{
 			Group:   utils.NamespaceMetaGVK.Group,
 			Version: utils.NamespaceMetaGVK.Version,
@@ -149,14 +156,15 @@ func (r *Reconciler) applyOverrides(resource *placementv1beta1.ResourceContent, 
 		}
 		if err := applyOverrideRules(resource, cluster, snapshot.Spec.OverrideSpec.Policy.OverrideRules); err != nil {
 			klog.ErrorS(err, "Failed to apply the override rules", "clusterResourceOverrideSnapshot", klog.KObj(snapshot))
-			return false, err
+			return false, controller.NewUserError(fmt.Errorf("ClusterResourceOverrideSnapshot %q failed to apply on %s: %s",
+				snapshot.Name, formatOverrideTarget(&uResource), err.Error()))
 		}
 	}
 	klog.V(2).InfoS("Applied clusterResourceOverrideSnapshots", "resource", klog.KObj(&uResource), "numberOfOverrides", len(croMap[key]))
 
 	// If the resource is selected by both ClusterResourceOverride and ResourceOverride, ResourceOverride will win when resolving conflicts.
 	// Apply ResourceOverrideSnapshots.
-	if !isClusterScopeResource {
+	if !isClusterScopedResource {
 		key = placementv1beta1.ResourceIdentifier{
 			Group:     gvk.Group,
 			Version:   gvk.Version,
@@ -172,7 +180,8 @@ func (r *Reconciler) applyOverrides(resource *placementv1beta1.ResourceContent, 
 			}
 			if err := applyOverrideRules(resource, cluster, snapshot.Spec.OverrideSpec.Policy.OverrideRules); err != nil {
 				klog.ErrorS(err, "Failed to apply the override rules", "resourceOverrideSnapshot", klog.KObj(snapshot))
-				return false, err
+				return false, controller.NewUserError(fmt.Errorf("ResourceOverrideSnapshot %q failed to apply on %s: %s",
+					snapshot.Name, formatOverrideTarget(&uResource), err.Error()))
 			}
 		}
 		klog.V(2).InfoS("Applied resourceOverrideSnapshots", "resource", klog.KObj(&uResource), "numberOfOverrides", len(roMap[key]))
@@ -180,12 +189,29 @@ func (r *Reconciler) applyOverrides(resource *placementv1beta1.ResourceContent, 
 	return resource.Raw == nil, nil
 }
 
+// formatOverrideTarget renders the target as e.g. `Deployment "my-app" in namespace "default"`
+// for inclusion in a user-facing error message.
+func formatOverrideTarget(target *unstructured.Unstructured) string {
+	// Fall back to "Unknown" so a snapshot missing `kind` doesn't render as `"" "name"`.
+	kind := target.GetObjectKind().GroupVersionKind().Kind
+	if kind == "" {
+		kind = "Unknown"
+	}
+	if ns := target.GetNamespace(); ns != "" {
+		return fmt.Sprintf("%s %q in namespace %q", kind, target.GetName(), ns)
+	}
+	return fmt.Sprintf("%s %q", kind, target.GetName())
+}
+
+// applyOverrideRules applies matching rules to the resource. A DeleteOverrideType rule clears
+// the resource and stops; otherwise JSON patches apply in order. Errors are returned raw — the
+// caller (applyOverrides) tags them as user errors so we don't double-wrap the sentinel.
 func applyOverrideRules(resource *placementv1beta1.ResourceContent, cluster *clusterv1beta1.MemberCluster, rules []placementv1beta1.OverrideRule) error {
 	for _, rule := range rules {
 		matched, err := overrider.IsClusterMatched(cluster, rule)
 		if err != nil {
-			klog.ErrorS(controller.NewUnexpectedBehaviorError(err), "Found an invalid override rule")
-			return controller.NewUserError(err) // should not happen though and should be rejected by the webhook
+			klog.ErrorS(err, "Found an invalid override rule")
+			return err
 		}
 		if !matched {
 			continue
@@ -198,7 +224,7 @@ func applyOverrideRules(resource *placementv1beta1.ResourceContent, cluster *clu
 		// Apply JSONPatchOverrides by default
 		if err = applyJSONPatchOverride(resource, cluster, rule.JSONPatchOverrides); err != nil {
 			klog.ErrorS(err, "Failed to apply JSON patch override")
-			return controller.NewUserError(err)
+			return err
 		}
 	}
 	return nil
@@ -207,11 +233,11 @@ func applyOverrideRules(resource *placementv1beta1.ResourceContent, cluster *clu
 // applyJSONPatchOverride applies a JSON patch on the selected resources following [RFC 6902](https://datatracker.ietf.org/doc/html/rfc6902).
 func applyJSONPatchOverride(resourceContent *placementv1beta1.ResourceContent, cluster *clusterv1beta1.MemberCluster, overrides []placementv1beta1.JSONPatchOverride) error {
 	var err error
-	if len(overrides) == 0 { // do nothing
+	if len(overrides) == 0 {
 		return nil
 	}
-	// go through the JSON patch overrides to replace the built-in variables before json Marshal
-	// as it may contain the built-in variables that cannot be marshaled directly
+	// Go through the JSON patch overrides to replace the built-in variables before json.Marshal,
+	// as the patch values may contain built-in variables that cannot be marshaled directly.
 	for i := range overrides {
 		// Process the JSON string to replace variables
 		jsonStr := string(overrides[i].Value.Raw)
@@ -263,14 +289,14 @@ func replaceClusterLabelKeyVariables(input string, cluster *clusterv1beta1.Membe
 		// extract the key value user wants to replace
 		endIdx := strings.Index(result[startIdx+prefixLen:], "}")
 		if endIdx == -1 {
-			klog.V(2).InfoS("malformed key ${MEMBER-CLUSTER-LABEL-KEY without the closing `}`", "input", input)
+			klog.V(2).InfoS("Malformed key ${MEMBER-CLUSTER-LABEL-KEY without the closing `}`", "input", input)
 			return "", fmt.Errorf("input %s is missing the closing bracket `}`", input)
 		}
 		endIdx += startIdx + prefixLen
 		// extract the key name
 		keyName := result[startIdx+prefixLen : endIdx]
 		// check if the key exists in the cluster labels
-		labelValue, exists := cluster.ObjectMeta.Labels[keyName]
+		labelValue, exists := cluster.Labels[keyName]
 		if !exists {
 			klog.V(2).InfoS("Label key not found on cluster", "key", keyName, "cluster", cluster.Name)
 			return "", fmt.Errorf("label key %s not found on cluster %s", keyName, cluster.Name)
