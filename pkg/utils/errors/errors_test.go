@@ -94,7 +94,8 @@ func TestCommonUsePatterns(t *testing.T) {
 		"errCategory=unexpected",
 		"k1=v1",
 		"callers=",
-		"Function:github.com/kubefleet-dev/kubefleet/pkg/utils/errors.TestCommonUsePatterns",
+		"Function:",
+		"/pkg/utils/errors.TestCommonUsePatterns",
 		"k2=v2",
 	}
 	for _, subStr := range wantSubStrings {
@@ -557,7 +558,7 @@ func TestNewUnexpectedError(t *testing.T) {
 
 	// Verify the first frame (the current test code).
 	callerFunc := frames[0].Function
-	if callerFunc != "github.com/kubefleet-dev/kubefleet/pkg/utils/errors.TestNewUnexpectedError" {
+	if !strings.Contains(callerFunc, "/pkg/utils/errors.TestNewUnexpectedError") {
 		t.Errorf("NewUnexpectedError() first caller function = %s, want TestNewUnexpectedError", callerFunc)
 	}
 	callerFile := frames[0].File
