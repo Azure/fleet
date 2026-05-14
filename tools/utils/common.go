@@ -13,6 +13,7 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/client"
 
 	clusterv1beta1 "go.goms.io/fleet/apis/cluster/v1beta1"
+	placementv1beta1 "go.goms.io/fleet/apis/placement/v1beta1"
 )
 
 var (
@@ -23,6 +24,18 @@ var (
 		Effect: "NoSchedule",
 	}
 )
+
+// NewFleetScheme creates a runtime.Scheme with all Fleet API types registered.
+func NewFleetScheme() (*runtime.Scheme, error) {
+	scheme := runtime.NewScheme()
+	if err := clusterv1beta1.AddToScheme(scheme); err != nil {
+		return nil, err
+	}
+	if err := placementv1beta1.AddToScheme(scheme); err != nil {
+		return nil, err
+	}
+	return scheme, nil
+}
 
 // GetClusterClientFromClusterContext creates a new client.Client for the given cluster context and scheme.
 func GetClusterClientFromClusterContext(clusterContext string, scheme *runtime.Scheme) (client.Client, error) {

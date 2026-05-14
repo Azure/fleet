@@ -24,6 +24,7 @@ import (
 	. "github.com/onsi/gomega"
 	admissionv1 "k8s.io/api/admission/v1"
 	appsv1 "k8s.io/api/apps/v1"
+	authenticationv1 "k8s.io/api/authentication/v1"
 	corev1 "k8s.io/api/core/v1"
 	policyv1 "k8s.io/api/policy/v1"
 	rbacv1 "k8s.io/api/rbac/v1"
@@ -1605,5 +1606,90 @@ var _ = Describe("fleet deployment webhook tests for validating and mutating dep
 					"deployment should have 1 ready replica")
 			}, workloadEventuallyDuration, eventuallyInterval).Should(Succeed())
 		})
+	})
+})
+
+var _ = Describe("fleet guard rail webhook tests for service accounts in restricted namespaces", Ordered, func() {
+	svcAccountGVK := metav1.GroupVersionKind{Group: corev1.SchemeGroupVersion.Group, Version: corev1.SchemeGroupVersion.Version, Kind: "ServiceAccount"}
+	tokenReqGVK := metav1.GroupVersionKind{Group: "authentication.k8s.io", Version: "v1", Kind: "TokenRequest"}
+
+	svcAccountName := fmt.Sprintf(svcAccountNameTemplate, GinkgoParallelProcess())
+	svcAccountToAddName := "added-sa"
+	kubeSystemNamespaceName := "kube-system"
+
+	var svcAccount *corev1.ServiceAccount
+	BeforeAll(func() {
+		// Create a service account in the kube-system namespace.
+		svcAccount = &corev1.ServiceAccount{
+			ObjectMeta: metav1.ObjectMeta{
+				Name:      svcAccountName,
+				Namespace: kubeSystemNamespaceName,
+			},
+		}
+		Expect(hubClient.Create(ctx, svcAccount)).Should(Succeed(), "Failed to create service account")
+	})
+
+	AfterAll(func() {
+		// Ensure the removal of the created service account.
+		Eventually(func() error {
+			svcAccount := corev1.ServiceAccount{
+				ObjectMeta: metav1.ObjectMeta{
+					Name:      svcAccountName,
+					Namespace: kubeSystemNamespaceName,
+				},
+			}
+			if err := hubClient.Delete(ctx, &svcAccount); err != nil {
+				if k8sErrors.IsNotFound(err) {
+					return nil
+				}
+				return fmt.Errorf("failed to delete service account: %w", err)
+			}
+
+			if err := hubClient.Get(ctx, types.NamespacedName{Name: svcAccountName, Namespace: kubeSystemNamespaceName}, &corev1.ServiceAccount{}); err != nil {
+				if k8sErrors.IsNotFound(err) {
+					return nil
+				}
+				return fmt.Errorf("failed to retrieve service account: %w", err)
+			}
+			return fmt.Errorf("service account still exists")
+		}, eventuallyDuration, eventuallyInterval).Should(Succeed(), "Failed to delete service account")
+	})
+
+	It("should deny creation of service accounts in kube-system namespace for non-whitelisted users", func() {
+		newSvcAccount := &corev1.ServiceAccount{
+			ObjectMeta: metav1.ObjectMeta{
+				Name:      svcAccountToAddName,
+				Namespace: kubeSystemNamespaceName,
+			},
+		}
+		wantErrMsg := fmt.Sprintf(validation.ResourceDeniedFormat,
+			testUser,
+			utils.GenerateGroupString(testGroups),
+			admissionv1.Create,
+			svcAccountGVK, "",
+			types.NamespacedName{Name: newSvcAccount.Name, Namespace: newSvcAccount.Namespace},
+		)
+		Expect(checkIfStatusErrorWithMessage(impersonateHubClient.Create(ctx, newSvcAccount), wantErrMsg)).Should(Succeed(), "Failed to deny creation of service account in kube-system namespace")
+	})
+
+	It("should deny access to service account token subresource in restricted namespace for non-whitelisted users", func() {
+		tokenRequest := &authenticationv1.TokenRequest{
+			ObjectMeta: metav1.ObjectMeta{
+				Namespace: kubeSystemNamespaceName,
+				Name:      svcAccountName,
+			},
+			Spec: authenticationv1.TokenRequestSpec{
+				Audiences:         []string{"experimental"},
+				ExpirationSeconds: ptr.To(int64(3600)),
+			},
+		}
+		wantErrMsg := fmt.Sprintf(validation.ResourceDeniedFormat,
+			testUser,
+			utils.GenerateGroupString(testGroups),
+			admissionv1.Create,
+			tokenReqGVK, "token",
+			types.NamespacedName{Name: svcAccountName, Namespace: kubeSystemNamespaceName},
+		)
+		Expect(checkIfStatusErrorWithMessage(impersonateHubClient.SubResource("token").Create(ctx, svcAccount, tokenRequest), wantErrMsg)).Should(Succeed(), "Failed to deny access to service account token subresource in restricted namespace")
 	})
 })

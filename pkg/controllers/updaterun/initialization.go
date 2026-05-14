@@ -125,29 +125,19 @@ func (r *Reconciler) determinePolicySnapshot(
 	updateRunRef := klog.KObj(updateRun)
 
 	// Get the latest policy snapshot.
-	policySnapshotList, err := controller.FetchLatestPolicySnapshot(ctx, r.Client, placementKey)
+	latestPolicySnapshot, err := controller.LookupLatestPolicySnapshot(ctx, r.Client, placementKey)
 	if err != nil {
-		klog.ErrorS(err, "Failed to list the latest policy snapshots", "placement", placementKey, "updateRun", updateRunRef)
-		// err can be retried.
-		return nil, -1, controller.NewAPIServerError(true, err)
-	}
-
-	policySnapshotObjs := policySnapshotList.GetPolicySnapshotObjs()
-	if len(policySnapshotObjs) != 1 {
-		if len(policySnapshotObjs) > 1 {
-			err := controller.NewUnexpectedBehaviorError(fmt.Errorf("more than one (%d in actual) latest policy snapshots associated with the placement: `%s`", len(policySnapshotObjs), placementKey))
-			klog.ErrorS(err, "Failed to find the latest policy snapshot", "placement", placementKey, "updateRun", updateRunRef)
-			// no more retries for this error.
+		klog.ErrorS(err, "Failed to find the latest policy snapshot", "placement", placementKey, "updateRun", updateRunRef)
+		// Missing or duplicate-active snapshots are placement-state invariants the run cannot
+		// recover from on its own — fail validation. Anything else (e.g. List errors classified as
+		// ErrAPIServerError, or unexpected cache failures promoted to ErrUnexpectedBehavior) is
+		// propagated raw so controller-runtime retries.
+		if errors.Is(err, controller.ErrNoLatestPolicySnapshot) || errors.Is(err, controller.ErrMultipleActivePolicySnapshots) {
 			return nil, -1, fmt.Errorf("%w: %s", errValidationFailed, err.Error())
 		}
-		// no latest policy snapshot found.
-		err := fmt.Errorf("no latest policy snapshot associated with the placement: `%s`", placementKey)
-		klog.ErrorS(err, "Failed to find the latest policy snapshot", "placement", placementKey, "updateRun", updateRunRef)
-		// again, no more retries here.
-		return nil, -1, fmt.Errorf("%w: %s", errValidationFailed, err.Error())
+		return nil, -1, err
 	}
 
-	latestPolicySnapshot := policySnapshotObjs[0]
 	policySnapshotRef := klog.KObj(latestPolicySnapshot)
 	policyIndex, foundIndex := latestPolicySnapshot.GetLabels()[placementv1beta1.PolicyIndexLabel]
 	if !foundIndex || len(policyIndex) == 0 {

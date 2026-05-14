@@ -242,7 +242,9 @@ func TestCheckClusterUpdateResult(t *testing.T) {
 			wantErr:       true,
 		},
 		{
-			name: "checkClusterUpdateResult should return false and error if the binding has false workSynchronized condition",
+			// WorkNotSynchronizedYet is an in-progress reason, not a terminal failure (issue #648).
+			// checkClusterUpdateResult now treats it as "still updating" rather than an error.
+			name: "checkClusterUpdateResult should return false but no error if workSynchronized is in-progress (WorkNotSynchronizedYet)",
 			binding: &placementv1beta1.ClusterResourceBinding{
 				ObjectMeta: metav1.ObjectMeta{Generation: 1},
 				Status: placementv1beta1.ResourceBindingStatus{
@@ -252,6 +254,25 @@ func TestCheckClusterUpdateResult(t *testing.T) {
 							Status:             metav1.ConditionFalse,
 							ObservedGeneration: 1,
 							Reason:             condition.WorkNotSynchronizedYetReason,
+						},
+					},
+				},
+			},
+			clusterStatus: &placementv1beta1.ClusterUpdatingStatus{ClusterName: "test-cluster"},
+			wantSucceeded: false,
+			wantErr:       false,
+		},
+		{
+			name: "checkClusterUpdateResult should return false and error if workSynchronized failed terminally (SyncWorkFailed)",
+			binding: &placementv1beta1.ClusterResourceBinding{
+				ObjectMeta: metav1.ObjectMeta{Generation: 1},
+				Status: placementv1beta1.ResourceBindingStatus{
+					Conditions: []metav1.Condition{
+						{
+							Type:               string(placementv1beta1.ResourceBindingWorkSynchronized),
+							Status:             metav1.ConditionFalse,
+							ObservedGeneration: 1,
+							Reason:             condition.SyncWorkFailedReason,
 						},
 					},
 				},

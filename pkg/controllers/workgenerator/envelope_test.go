@@ -17,8 +17,11 @@ limitations under the License.
 package workgenerator
 
 import (
+	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
+	"strings"
 	"testing"
 
 	"github.com/google/go-cmp/cmp"
@@ -32,8 +35,11 @@ import (
 
 	fleetv1beta1 "go.goms.io/fleet/apis/placement/v1beta1"
 	"go.goms.io/fleet/pkg/utils"
+	"go.goms.io/fleet/pkg/utils/controller"
 	"go.goms.io/fleet/test/utils/informer"
 )
+
+const testWorkNamePrefix = "test-work"
 
 func TestExtractManifestsFromEnvelopeCR(t *testing.T) {
 	tests := []struct {
@@ -255,8 +261,6 @@ func TestCreateOrUpdateEnvelopeCRWorkObj(t *testing.T) {
 	ignoreWorkMeta := cmpopts.IgnoreFields(metav1.ObjectMeta{}, "Name", "OwnerReferences")
 	scheme := serviceScheme(t)
 
-	workNamePrefix := "test-work"
-
 	resourceSnapshot := &fleetv1beta1.ClusterResourceSnapshot{
 		ObjectMeta: metav1.ObjectMeta{
 			Name: "test-snapshot",
@@ -306,7 +310,7 @@ func TestCreateOrUpdateEnvelopeCRWorkObj(t *testing.T) {
 	// Create an existing work for update test
 	existingWork := &fleetv1beta1.Work{
 		ObjectMeta: metav1.ObjectMeta{
-			Name:      workNamePrefix,
+			Name:      testWorkNamePrefix,
 			Namespace: "fleet-member-test-cluster-1",
 			Labels: map[string]string{
 				fleetv1beta1.ParentBindingLabel:     resourceBinding.Name,
@@ -483,7 +487,13 @@ func TestCreateOrUpdateEnvelopeCRWorkObj(t *testing.T) {
 			wantErr:                             true,
 		},
 		{
-			name:                                "two existing works should result in error",
+			// Duplicate envelope Works indicate an environment that was stuck before
+			// deterministic naming was introduced. The controller surfaces the state
+			// (error + Event) but does NOT auto-delete, because deleting a Work the
+			// member agent has already applied would trigger resource fluctuation on
+			// the member side. Full post-conditions are verified in
+			// TestCreateOrUpdateEnvelopeCRWorkObj_DuplicateWorksSurfaceWithoutMutation.
+			name:                                "two existing works surface an UnexpectedBehaviorError without mutation",
 			envelopeReader:                      resourceEnvelope,
 			resourceOverrideSnapshotHash:        "new-resource-hash",
 			clusterResourceOverrideSnapshotHash: "new-cluster-resource-hash",
@@ -512,7 +522,7 @@ func TestCreateOrUpdateEnvelopeCRWorkObj(t *testing.T) {
 			}
 
 			// Call the function under test
-			got, err := r.createOrUpdateEnvelopeCRWorkObj(ctx, tt.envelopeReader, workNamePrefix,
+			got, err := r.createOrUpdateEnvelopeCRWorkObj(ctx, tt.envelopeReader, testWorkNamePrefix,
 				resourceBinding, resourceSnapshot, tt.resourceOverrideSnapshotHash, tt.clusterResourceOverrideSnapshotHash)
 
 			if (err != nil) != tt.wantErr {
@@ -532,7 +542,6 @@ func TestCreateOrUpdateEnvelopeCRWorkObj(t *testing.T) {
 func TestProcessOneSelectedResource(t *testing.T) {
 	scheme := serviceScheme(t)
 
-	workNamePrefix := "test-work"
 	resourceBinding := &fleetv1beta1.ClusterResourceBinding{
 		ObjectMeta: metav1.ObjectMeta{
 			Name: "test-binding",
@@ -685,7 +694,7 @@ func TestProcessOneSelectedResource(t *testing.T) {
 				tt.selectedResource,
 				resourceBinding,
 				snapshot,
-				workNamePrefix,
+				testWorkNamePrefix,
 				tt.resourceOverrideSnapshotHash,
 				tt.clusterResourceOverrideSnapshotHash,
 				activeWork,
@@ -724,4 +733,173 @@ func createResourceContent(t *testing.T, obj runtime.Object) *fleetv1beta1.Resou
 			Raw: jsonData,
 		},
 	}
+}
+
+// TestEnvelopeWorkNameSuffix verifies that the suffix is a stable, length-bounded function
+// of the envelope's identity. Determinism is what lets the API server enforce the
+// "one Work per (binding, envelope)" invariant via name uniqueness.
+func TestEnvelopeWorkNameSuffix(t *testing.T) {
+	base := &fleetv1beta1.ResourceEnvelope{
+		ObjectMeta: metav1.ObjectMeta{Name: "env-a", Namespace: "ns-1"},
+	}
+
+	tests := []struct {
+		name      string
+		other     fleetv1beta1.EnvelopeReader
+		wantEqual bool // true → suffix must match base; false → suffix must differ
+	}{
+		{
+			name:      "same identity",
+			other:     &fleetv1beta1.ResourceEnvelope{ObjectMeta: metav1.ObjectMeta{Name: "env-a", Namespace: "ns-1"}},
+			wantEqual: true,
+		},
+		{
+			name:      "different name",
+			other:     &fleetv1beta1.ResourceEnvelope{ObjectMeta: metav1.ObjectMeta{Name: "env-b", Namespace: "ns-1"}},
+			wantEqual: false,
+		},
+		{
+			name:      "different namespace",
+			other:     &fleetv1beta1.ResourceEnvelope{ObjectMeta: metav1.ObjectMeta{Name: "env-a", Namespace: "ns-2"}},
+			wantEqual: false,
+		},
+		{
+			// Same name as base, but cluster-scoped — the type field in the hash input disambiguates.
+			name:      "different type, same name",
+			other:     &fleetv1beta1.ClusterResourceEnvelope{ObjectMeta: metav1.ObjectMeta{Name: "env-a"}},
+			wantEqual: false,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			gotBase := envelopeWorkNameSuffix(base)
+			gotOther := envelopeWorkNameSuffix(tt.other)
+			if tt.wantEqual && gotBase != gotOther {
+				t.Errorf("envelopeWorkNameSuffix(%v) = %q, envelopeWorkNameSuffix(%v) = %q, want equal", base, gotBase, tt.other, gotOther)
+			}
+			if !tt.wantEqual && gotBase == gotOther {
+				t.Errorf("envelopeWorkNameSuffix(%v) = envelopeWorkNameSuffix(%v) = %q, want different", base, tt.other, gotBase)
+			}
+		})
+	}
+
+	// Suffix is bounded and DNS-1123-safe (lowercase hex).
+	suffix := envelopeWorkNameSuffix(base)
+	if len(suffix) != 16 {
+		t.Errorf("envelopeWorkNameSuffix length = %d, want 16", len(suffix))
+	}
+	if strings.ToLower(suffix) != suffix {
+		t.Errorf("envelopeWorkNameSuffix(%v) = %q, want lowercase", base, suffix)
+	}
+}
+
+// TestCreateOrUpdateEnvelopeCRWorkObj_DuplicateWorksSurfaceWithoutMutation verifies that
+// when the label query returns multiple Works for the same (binding, envelope), the
+// controller surfaces the condition (UnexpectedBehaviorError + Event) but does NOT
+// mutate cluster state. Auto-deleting duplicates is unsafe because the member agent
+// may have applied them; deleting one triggers resource cleanup that conflicts with
+// the survivor. Deterministic naming (see buildNewWorkForEnvelopeCR) prevents new
+// duplicates; pre-existing ones require operator cleanup.
+func TestCreateOrUpdateEnvelopeCRWorkObj_DuplicateWorksSurfaceWithoutMutation(t *testing.T) {
+	scheme := serviceScheme(t)
+	ctx := context.Background()
+
+	resourceSnapshot := &fleetv1beta1.ClusterResourceSnapshot{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:   "test-snapshot",
+			Labels: map[string]string{fleetv1beta1.PlacementTrackingLabel: "test-crp"},
+		},
+	}
+	resourceBinding := &fleetv1beta1.ClusterResourceBinding{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:   "test-binding",
+			Labels: map[string]string{fleetv1beta1.PlacementTrackingLabel: "test-crp"},
+		},
+		Spec: fleetv1beta1.ResourceBindingSpec{
+			TargetCluster:        "test-cluster-1",
+			ResourceSnapshotName: resourceSnapshot.Name,
+		},
+	}
+	resourceEnvelope := &fleetv1beta1.ResourceEnvelope{
+		ObjectMeta: metav1.ObjectMeta{Name: "dup-envelope", Namespace: "default"},
+		Data: map[string]runtime.RawExtension{
+			"configmap": {Raw: []byte(`{"apiVersion":"v1","kind":"ConfigMap","metadata":{"name":"cm","namespace":"default"}}`)},
+		},
+	}
+
+	workNamespace := fmt.Sprintf(utils.NamespaceNameFormat, resourceBinding.Spec.TargetCluster)
+	labelsForWork := map[string]string{
+		fleetv1beta1.ParentBindingLabel:     resourceBinding.Name,
+		fleetv1beta1.PlacementTrackingLabel: resourceBinding.Labels[fleetv1beta1.PlacementTrackingLabel],
+		fleetv1beta1.EnvelopeTypeLabel:      string(fleetv1beta1.ResourceEnvelopeType),
+		fleetv1beta1.EnvelopeNameLabel:      resourceEnvelope.Name,
+		fleetv1beta1.EnvelopeNamespaceLabel: resourceEnvelope.Namespace,
+	}
+	dupNames := []string{"dup-envelope-a", "dup-envelope-b", "dup-envelope-c"}
+	mkWork := func(name string) *fleetv1beta1.Work {
+		return &fleetv1beta1.Work{
+			ObjectMeta: metav1.ObjectMeta{
+				Name:      name,
+				Namespace: workNamespace,
+				Labels:    labelsForWork,
+			},
+		}
+	}
+	objs := make([]client.Object, 0, len(dupNames))
+	for _, n := range dupNames {
+		objs = append(objs, mkWork(n))
+	}
+	fakeClient := fake.NewClientBuilder().
+		WithScheme(scheme).
+		WithObjects(objs...).
+		Build()
+
+	recorder := record.NewFakeRecorder(10)
+	r := &Reconciler{
+		Client:          fakeClient,
+		recorder:        recorder,
+		InformerManager: &informer.FakeManager{},
+	}
+
+	got, err := r.createOrUpdateEnvelopeCRWorkObj(ctx, resourceEnvelope, testWorkNamePrefix,
+		resourceBinding, resourceSnapshot, "", "")
+
+	if got != nil {
+		t.Errorf("createOrUpdateEnvelopeCRWorkObj() = %v, want nil on duplicate-detected path", got)
+	}
+	if err == nil {
+		t.Fatalf("createOrUpdateEnvelopeCRWorkObj() error = nil, want UnexpectedBehaviorError")
+	}
+	if !errors.Is(err, controller.ErrUnexpectedBehavior) {
+		t.Errorf("createOrUpdateEnvelopeCRWorkObj() error = %v, want wrapping controller.ErrUnexpectedBehavior", err)
+	}
+
+	// Post-condition: all duplicates remain untouched — no auto-deletion.
+	remaining := &fleetv1beta1.WorkList{}
+	if err := fakeClient.List(ctx, remaining, client.InNamespace(workNamespace)); err != nil {
+		t.Fatalf("List Works in %q: %v", workNamespace, err)
+	}
+	sortStrings := cmpopts.SortSlices(func(a, b string) bool { return a < b })
+	if diff := cmp.Diff(dupNames, workNames(remaining.Items), sortStrings); diff != "" {
+		t.Errorf("Works after call mismatch (-want +got):\n%s", diff)
+	}
+
+	// Post-condition: a Warning Event was emitted so operators can see the stuck state.
+	select {
+	case ev := <-recorder.Events:
+		if !strings.Contains(ev, "DuplicateEnvelopeWorks") {
+			t.Errorf("event = %q, want reason DuplicateEnvelopeWorks", ev)
+		}
+	default:
+		t.Error("no Event emitted for duplicate envelope Works; operators would have no surface signal")
+	}
+}
+
+func workNames(items []fleetv1beta1.Work) []string {
+	out := make([]string, len(items))
+	for i := range items {
+		out[i] = items[i].Name
+	}
+	return out
 }

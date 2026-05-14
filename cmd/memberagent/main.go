@@ -91,6 +91,11 @@ func main() {
 		klog.InfoS("flag:", "name", f.Name, "value", f.Value)
 	})
 
+	if errs := opts.Validate(); len(errs) != 0 {
+		klog.ErrorS(errs.ToAggregate(), "invalid parameter")
+		klog.FlushAndExit(klog.ExitFlushTimeout, 1)
+	}
+
 	// Set up controller-runtime logger
 	ctrl.SetLogger(zap.New(zap.UseDevMode(true)))
 
@@ -213,13 +218,16 @@ func buildHubConfig(hubURL string, useCertificateAuth bool, tlsClientInsecure bo
 			return err
 		})
 		if err != nil {
-			klog.ErrorS(err, "Failed to retrieve token file from the path %s", tokenFilePath)
+			klog.ErrorS(err, "Failed to retrieve token file", "path", tokenFilePath)
 			return nil, err
 		}
 		hubConfig.BearerTokenFile = tokenFilePath
 	}
 
 	hubConfig.TLSClientConfig.Insecure = tlsClientInsecure
+	if tlsClientInsecure {
+		klog.Warning("TLS verification is disabled for hub cluster connection. This is insecure and should not be used in production.")
+	}
 	if !tlsClientInsecure {
 		caBundle, ok := os.LookupEnv("CA_BUNDLE")
 		if ok && caBundle == "" {
@@ -257,7 +265,7 @@ func buildHubConfig(hubURL string, useCertificateAuth bool, tlsClientInsecure bo
 		r := textproto.NewReader(bufio.NewReader(strings.NewReader(header)))
 		h, err := r.ReadMIMEHeader()
 		if err != nil && !errors.Is(err, io.EOF) {
-			klog.ErrorS(err, "Failed to parse HUB_KUBE_HEADER %q", header)
+			klog.ErrorS(err, "Failed to parse HUB_KUBE_HEADER", "header", header)
 			return nil, err
 		}
 		hubConfig.WrapTransport = func(rt http.RoundTripper) http.RoundTripper {

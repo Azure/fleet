@@ -18,13 +18,15 @@ package workgenerator
 
 import (
 	"context"
+	"crypto/sha256"
+	"encoding/hex"
 	"fmt"
 	"sort"
 	"strings"
 
+	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
-	"k8s.io/apimachinery/pkg/util/uuid"
 	"k8s.io/klog/v2"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 
@@ -87,18 +89,27 @@ func (r *Reconciler) createOrUpdateEnvelopeCRWorkObj(
 	var work *fleetv1beta1.Work
 	switch {
 	case len(workList.Items) > 1:
-		// Multiple matching work objects found; this should never occur under normal conditions.
-		wrappedErr := fmt.Errorf("%d work objects found for the same envelope %v, only one expected", len(workList.Items), envelopeReader.GetEnvelopeObjRef())
-		klog.ErrorS(wrappedErr, "Failed to create or update work object for envelope",
-			"resourceBinding", klog.KObj(binding),
-			"resourceSnapshot", klog.KObj(resourceSnapshot),
-			"envelope", envelopeReader.GetEnvelopeObjRef())
-		// Log the work object names to help debug.
+		// Multiple matching work objects found. This can only happen in environments that
+		// were stuck on this state *before* deterministic Work naming was introduced in
+		// buildNewWorkForEnvelopeCR; newly-raced reconciles are now prevented by the
+		// API server's name-uniqueness check. We deliberately do NOT auto-delete the
+		// extras: both Works may have been applied by the member agent, and deleting one
+		// would trigger member-side resource cleanup and user-visible fluctuation on
+		// resources the survivor still owns. Surface the state for operator cleanup
+		// (manually delete all but the oldest Work in the affected namespace).
 		workNames := make([]string, len(workList.Items))
 		for i := range workList.Items {
 			workNames[i] = workList.Items[i].Name
 		}
-		klog.ErrorS(wrappedErr, "Duplicate work objects found", "works", workNames)
+		wrappedErr := fmt.Errorf("%d work objects found for the same envelope %v, only one expected", len(workList.Items), envelopeReader.GetEnvelopeObjRef())
+		klog.ErrorS(wrappedErr, "Duplicate envelope Work objects found; manual cleanup required — delete all but the oldest Work in the namespace",
+			"works", workNames,
+			"resourceBinding", klog.KObj(binding),
+			"resourceSnapshot", klog.KObj(resourceSnapshot),
+			"envelope", envelopeReader.GetEnvelopeObjRef())
+		r.recorder.Eventf(binding, corev1.EventTypeWarning, "DuplicateEnvelopeWorks",
+			"Multiple Work objects (%v) found for envelope %v in namespace %s; delete all but the oldest to recover",
+			workNames, envelopeReader.GetEnvelopeObjRef(), fmt.Sprintf(utils.NamespaceNameFormat, binding.GetBindingSpec().TargetCluster))
 		return nil, controller.NewUnexpectedBehaviorError(wrappedErr)
 	case len(workList.Items) == 1:
 		klog.V(2).InfoS("Found existing work object for the envelope; updating it",
@@ -200,6 +211,24 @@ func refreshWorkForEnvelopeCR(
 	work.Spec.ApplyStrategy = resourceBinding.GetBindingSpec().ApplyStrategy
 }
 
+// envelopeWorkNameSuffix returns a deterministic suffix for the envelope Work's name,
+// derived from the envelope's identity. Using a deterministic suffix (instead of a random
+// UUID) means two concurrent Create attempts for the same envelope collide on name at the
+// API server, which enforces the "one Work per (binding, envelope)" invariant server-side.
+// The hash is truncated to 8 bytes of SHA-256 (rendered as 16 hex characters), keeping
+// the overall Work name well under the DNS-1123 subdomain limit; collision probability
+// at the scale of a single binding's envelope set is ~2^-64.
+func envelopeWorkNameSuffix(envelopeReader fleetv1beta1.EnvelopeReader) string {
+	// NOTE: ClusterResourceEnvelope has an empty namespace; ResourceEnvelope has a namespace.
+	// Including the type disambiguates an unlikely name collision across kinds.
+	identity := fmt.Sprintf("%s/%s/%s",
+		envelopeReader.GetEnvelopeType(),
+		envelopeReader.GetNamespace(),
+		envelopeReader.GetName())
+	sum := sha256.Sum256([]byte(identity))
+	return hex.EncodeToString(sum[:8])
+}
+
 func buildNewWorkForEnvelopeCR(
 	workNamePrefix string,
 	resourceBinding fleetv1beta1.BindingObj,
@@ -208,7 +237,7 @@ func buildNewWorkForEnvelopeCR(
 	manifests []fleetv1beta1.Manifest,
 	resourceOverrideSnapshotHash, clusterResourceOverrideSnapshotHash string,
 ) *fleetv1beta1.Work {
-	workName := fmt.Sprintf(fleetv1beta1.WorkNameWithEnvelopeCRFmt, workNamePrefix, uuid.NewUUID())
+	workName := fmt.Sprintf(fleetv1beta1.WorkNameWithEnvelopeCRFmt, workNamePrefix, envelopeWorkNameSuffix(envelopeReader))
 	workNamespace := fmt.Sprintf(utils.NamespaceNameFormat, resourceBinding.GetBindingSpec().TargetCluster)
 
 	// Create the labels map

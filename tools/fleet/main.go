@@ -17,6 +17,7 @@ limitations under the License.
 package main
 
 import (
+	"fmt"
 	"log"
 
 	"github.com/spf13/cobra"
@@ -26,12 +27,27 @@ import (
 	"go.goms.io/fleet/tools/fleet/cmd/uncordoncluster"
 )
 
+// These variables are set via ldflags at build time.
+var (
+	version = "dev"
+	commit  = "unknown"
+)
+
 func main() {
 	rootCmd := &cobra.Command{
 		Use:   "kubectl-fleet",
 		Short: "KubeFleet cluster management plugin",
 		Long:  "kubectl-fleet is a kubectl plugin for managing KubeFleet member clusters",
 	}
+
+	// Add version subcommand
+	rootCmd.AddCommand(&cobra.Command{
+		Use:   "version",
+		Short: "Print the version information",
+		Run: func(cmd *cobra.Command, args []string) {
+			fmt.Printf("kubectl-fleet %s (%s)\n", version, commit)
+		},
+	})
 
 	// Add subcommands
 	rootCmd.AddCommand(approve.NewCmdApprove())

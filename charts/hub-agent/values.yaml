@@ -32,6 +32,7 @@ enableWorkload: false
 useCertManager: false
 # webhookCertSecretName is ONLY used when useCertManager=true
 # It specifies the name of the Secret where cert-manager stores the certificate
+# Example:
 # webhookCertSecretName: fleet-webhook-server-cert
 
 forceDeleteWaitTime: 15m0s

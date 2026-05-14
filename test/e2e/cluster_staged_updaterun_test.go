@@ -2203,7 +2203,7 @@ func approveClusterApprovalRequest(stageName, updateRunName, stageTask string) {
 
 	// Use kubectl-fleet approve plugin to approve the request
 	cmd := exec.Command(fleetBinaryPath, "approve", "clusterapprovalrequest",
-		"--hubClusterContext", "kind-hub",
+		"--hub-cluster-context", "kind-hub",
 		"--name", approvalRequestName)
 	output, err := cmd.CombinedOutput()
 	Expect(err).ToNot(HaveOccurred(), "kubectl-fleet approve failed: %s", string(output))

@@ -33,6 +33,9 @@ import (
 	placementv1beta1 "go.goms.io/fleet/apis/placement/v1beta1"
 )
 
+// This test requires enableWorkload=true because it creates workloads on the hub cluster
+// and expects them to become ready. With enableWorkload=false, the pod webhook blocks
+// pod creation on the hub cluster.
 var _ = Describe("placing workloads using a CRP with PickAll policy", Label("resourceplacement"), Ordered, func() {
 	crpName := fmt.Sprintf(crpNameTemplate, GinkgoParallelProcess())
 	var testDeployment appsv1.Deployment
@@ -41,6 +44,8 @@ var _ = Describe("placing workloads using a CRP with PickAll policy", Label("res
 	var testStatefulSet appsv1.StatefulSet
 
 	BeforeAll(func() {
+		Skip("This test requires enableWorkload=true to run workloads on the hub cluster")
+
 		// Read the test manifests
 		readDeploymentTestManifest(&testDeployment)
 		readDaemonSetTestManifest(&testDaemonSet)

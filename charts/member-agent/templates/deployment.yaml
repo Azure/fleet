@@ -16,6 +16,13 @@ spec:
     spec:
       restartPolicy: Always
       serviceAccountName: {{ include "member-agent.fullname" . }}-sa
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 65532
+        runAsGroup: 65532
+        fsGroup: 65532
+        seccompProfile:
+          type: RuntimeDefault
       initContainers:
         {{- if .Values.crdInstaller.enabled }}
         - name: crd-installer
@@ -29,6 +36,12 @@ spec:
         - name: {{ include "member-agent.fullname" . }}
           image: "{{ .Values.image.repository }}:{{ .Values.image.tag | default .Chart.AppVersion }}"
           imagePullPolicy: {{ .Values.image.pullPolicy }}
+          securityContext:
+            allowPrivilegeEscalation: false
+            readOnlyRootFilesystem: true
+            capabilities:
+              drop:
+                - ALL
           ports:
             - name: http
               containerPort: 80
@@ -149,6 +162,12 @@ spec:
         - name: refresh-token
           image: "{{ .Values.refreshtoken.repository }}:{{ .Values.refreshtoken.tag | default .Chart.AppVersion }}"
           imagePullPolicy: {{ .Values.refreshtoken.pullPolicy }}
+          securityContext:
+            allowPrivilegeEscalation: false
+            readOnlyRootFilesystem: true
+            capabilities:
+              drop:
+                - ALL
           args:
             {{- $provider := .Values.config.provider }}
             - {{ $provider }}

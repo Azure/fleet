@@ -164,7 +164,8 @@ helm install hub-agent oci://ghcr.io/kubefleet-dev/kubefleet/charts/hub-agent \
   --create-namespace \
   --set useCertManager=true \
   --set enableWorkload=true \
-  --set enableWebhook=true
+  --set enableWebhook=true \
+  --set webhookCertSecretName=fleet-webhook-server-cert
 
 # Or using traditional repository
 helm install hub-agent kubefleet/hub-agent \
@@ -172,12 +173,13 @@ helm install hub-agent kubefleet/hub-agent \
   --create-namespace \
   --set useCertManager=true \
   --set enableWorkload=true \
-  --set enableWebhook=true
+  --set enableWebhook=true \
+  --set webhookCertSecretName=fleet-webhook-server-cert
 ```
 
 The `webhookCertSecretName` parameter specifies the Secret name for the certificate:
-- Default: `fleet-webhook-server-cert`
-- When using cert-manager, this is where cert-manager stores the certificate
+- Default: `unset`; there is no default in `values.yaml`
+- When using cert-manager, set this to the Secret where cert-manager stores the certificate
 - Must match the secret name referenced in the deployment volume mount
 
 Example with custom secret name:

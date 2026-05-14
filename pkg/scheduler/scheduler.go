@@ -21,12 +21,10 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"strconv"
 	"sync"
 	"time"
 
 	apiErrors "k8s.io/apimachinery/pkg/api/errors"
-	"k8s.io/apimachinery/pkg/labels"
 	"k8s.io/apimachinery/pkg/types"
 	utilruntime "k8s.io/apimachinery/pkg/util/runtime"
 	"k8s.io/client-go/tools/record"
@@ -347,57 +345,21 @@ func (s *Scheduler) cleanUpAllBindingsFor(ctx context.Context, placement fleetv1
 }
 
 // lookupLatestPolicySnapshot returns the latest (i.e., active) policy snapshot associated with a placement.
-// TODO(ryan): move this to a common lib
+//
+// It delegates to controller.LookupLatestPolicySnapshot so the same lookup can be reused outside the
+// scheduler. The scheduler lists with a cached client; this does not have any consistency concern as
+// sources will always trigger the scheduler when a new policy snapshot is created.
+//
+// The "no latest snapshot" case can happen transiently when a placement is newly created or its
+// latest snapshot is being replaced; the scheduler will be triggered again when the situation
+// corrects itself, so this is logged and surfaced as a non-unexpected error.
 func (s *Scheduler) lookupLatestPolicySnapshot(ctx context.Context, placement fleetv1beta1.PlacementObj) (fleetv1beta1.PolicySnapshotObj, error) {
-	placementRef := klog.KObj(placement)
-	// Prepare the list options to filter policy snapshots by the placement name and the latest snapshot label.
-	var listOptions []client.ListOption
-	labelSelector := labels.SelectorFromSet(labels.Set{
-		fleetv1beta1.PlacementTrackingLabel: placement.GetName(),
-		fleetv1beta1.IsLatestSnapshotLabel:  strconv.FormatBool(true),
-	})
-	listOptions = append(listOptions, &client.ListOptions{LabelSelector: labelSelector})
-	// Find out the latest policy snapshot associated with the placement.
-	var policySnapshotList fleetv1beta1.PolicySnapshotList
-	if placement.GetNamespace() == "" {
-		policySnapshotList = &fleetv1beta1.ClusterSchedulingPolicySnapshotList{}
-	} else {
-		policySnapshotList = &fleetv1beta1.SchedulingPolicySnapshotList{}
-		listOptions = append(listOptions, client.InNamespace(placement.GetNamespace()))
-	}
-
-	// The scheduler lists with a cached client; this does not have any consistency concern as sources
-	// will always trigger the scheduler when a new policy snapshot is created.
-	if err := s.client.List(ctx, policySnapshotList, listOptions...); err != nil {
-		klog.ErrorS(err, "Failed to list policy snapshots of a placement", "placement", placementRef)
-		return nil, controller.NewAPIServerError(true, err)
-	}
-	policySnapshots := policySnapshotList.GetPolicySnapshotObjs()
-	switch {
-	case len(policySnapshots) == 0:
-		// There is no latest policy snapshot associated with the placement; it could happen when
-		// * the placement is newly created; or
-		// * the new policy snapshot is in the middle of being replaced.
-		//
-		// Either way, it is out of the scheduler's scope to handle such a case; the scheduler will
-		// be triggered again if the situation is corrected.
-		err := fmt.Errorf("no latest policy snapshot associated with placement")
-		klog.ErrorS(err, "Failed to find the latest policy snapshot, will retry", "placement", placementRef)
+	snapshot, err := controller.LookupLatestPolicySnapshot(ctx, s.client, types.NamespacedName{Namespace: placement.GetNamespace(), Name: placement.GetName()})
+	if err != nil {
+		klog.ErrorS(err, "Failed to look up latest policy snapshot, will retry", "placement", klog.KObj(placement))
 		return nil, err
-	case len(policySnapshots) > 1:
-		// There are multiple active policy snapshots associated with the placement; normally this
-		// will never happen, as only one policy snapshot can be active in the sequence.
-		//
-		// Similarly, it is out of the scheduler's scope to handle such a case; the scheduler will
-		// report this unexpected occurrence but does not register it as a scheduler-side error.
-		// If (and when) the situation is corrected, the scheduler will be triggered again.
-		err := controller.NewUnexpectedBehaviorError(fmt.Errorf("too many active policy snapshots: %d, want 1", len(policySnapshots)))
-		klog.ErrorS(err, "There are multiple latest policy snapshots associated with placement", "placement", placementRef)
-		return nil, err
-	default:
-		// Found the one and only active policy snapshot.
-		return policySnapshots[0], nil
 	}
+	return snapshot, nil
 }
 
 // addSchedulerCleanupFinalizer adds the scheduler cleanup finalizer to a placement (if it does not

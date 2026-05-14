@@ -15,6 +15,8 @@ RUN go mod download
 # Copy the go source
 COPY cmd/authtoken/main.go main.go
 COPY pkg/authtoken pkg/authtoken
+# writefile is a dependency of pkg/authtoken for secure file creation (0600 permissions)
+COPY pkg/utils/writefile pkg/utils/writefile
 
 ARG TARGETARCH
 

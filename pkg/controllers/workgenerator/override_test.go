@@ -20,6 +20,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"strings"
 	"testing"
 
 	"github.com/google/go-cmp/cmp"
@@ -428,6 +429,9 @@ func TestFetchResourceOverrideSnapshot(t *testing.T) {
 }
 
 func TestApplyOverrides_clusterScopedResource(t *testing.T) {
+	// FakeManager.IsClusterScopedResources returns (APIResources[gvk] == IsClusterScopedResource).
+	// With the flag set to false and APIResources listing namespace-scoped GVKs, listed GVKs
+	// report as namespace-scoped and unlisted GVKs (ClusterRole) report as cluster-scoped.
 	fakeInformer := informer.FakeManager{
 		APIResources: map[schema.GroupVersionKind]bool{
 			{
@@ -450,7 +454,9 @@ func TestApplyOverrides_clusterScopedResource(t *testing.T) {
 		croMap          map[placementv1beta1.ResourceIdentifier][]*placementv1beta1.ClusterResourceOverrideSnapshot
 		wantClusterRole rbacv1.ClusterRole
 		wantErr         error
-		wantDeleted     bool
+		// wantErrSubstr asserts the failure message names the failing snapshot and target.
+		wantErrSubstr []string
+		wantDeleted   bool
 	}{
 		{
 			name: "empty overrides",
@@ -844,6 +850,9 @@ func TestApplyOverrides_clusterScopedResource(t *testing.T) {
 					Name:    "clusterrole-name",
 				}: {
 					{
+						ObjectMeta: metav1.ObjectMeta{
+							Name: "conflicting-rules-cro-snapshot",
+						},
 						Spec: placementv1beta1.ClusterResourceOverrideSnapshotSpec{
 							OverrideSpec: placementv1beta1.ClusterResourceOverrideSpec{
 								Policy: &placementv1beta1.OverridePolicy{
@@ -895,6 +904,10 @@ func TestApplyOverrides_clusterScopedResource(t *testing.T) {
 				},
 			},
 			wantErr: controller.ErrUserError,
+			wantErrSubstr: []string{
+				`ClusterResourceOverrideSnapshot "conflicting-rules-cro-snapshot"`,
+				`ClusterRole "clusterrole-name"`,
+			},
 		},
 		{
 			name: "invalid json patch of clusterResourceOverride",
@@ -921,6 +934,9 @@ func TestApplyOverrides_clusterScopedResource(t *testing.T) {
 					Name:    "clusterrole-name",
 				}: {
 					{
+						ObjectMeta: metav1.ObjectMeta{
+							Name: "test-cro-snapshot",
+						},
 						Spec: placementv1beta1.ClusterResourceOverrideSnapshotSpec{
 							OverrideSpec: placementv1beta1.ClusterResourceOverrideSpec{
 								Policy: &placementv1beta1.OverridePolicy{
@@ -953,6 +969,71 @@ func TestApplyOverrides_clusterScopedResource(t *testing.T) {
 				},
 			},
 			wantErr: controller.ErrUserError,
+			wantErrSubstr: []string{
+				`ClusterResourceOverrideSnapshot "test-cro-snapshot"`,
+				`ClusterRole "clusterrole-name"`,
+			},
+		},
+		{
+			// Invalid LabelSelector Operator makes IsClusterMatched fail — exercises the
+			// applyOverrideRules raw-error return that applyOverrides wraps.
+			name: "invalid cluster label selector in clusterResourceOverride",
+			clusterRole: rbacv1.ClusterRole{
+				TypeMeta: clusterRoleType,
+				ObjectMeta: metav1.ObjectMeta{
+					Name: "clusterrole-name",
+				},
+			},
+			cluster: clusterv1beta1.MemberCluster{
+				ObjectMeta: metav1.ObjectMeta{
+					Name: "cluster-1",
+				},
+			},
+			croMap: map[placementv1beta1.ResourceIdentifier][]*placementv1beta1.ClusterResourceOverrideSnapshot{
+				{
+					Group:   "rbac.authorization.k8s.io",
+					Version: "v1",
+					Kind:    "ClusterRole",
+					Name:    "clusterrole-name",
+				}: {
+					{
+						ObjectMeta: metav1.ObjectMeta{
+							Name: "bad-selector-cro-snapshot",
+						},
+						Spec: placementv1beta1.ClusterResourceOverrideSnapshotSpec{
+							OverrideSpec: placementv1beta1.ClusterResourceOverrideSpec{
+								Policy: &placementv1beta1.OverridePolicy{
+									OverrideRules: []placementv1beta1.OverrideRule{
+										{
+											ClusterSelector: &placementv1beta1.ClusterSelector{
+												ClusterSelectorTerms: []placementv1beta1.ClusterSelectorTerm{
+													{
+														LabelSelector: &metav1.LabelSelector{
+															MatchExpressions: []metav1.LabelSelectorRequirement{
+																{
+																	Key:      "key1",
+																	Operator: "InvalidOperator",
+																	Values:   []string{"value1"},
+																},
+															},
+														},
+													},
+												},
+											},
+										},
+									},
+								},
+							},
+						},
+					},
+				},
+			},
+			wantErr: controller.ErrUserError,
+			wantErrSubstr: []string{
+				`ClusterResourceOverrideSnapshot "bad-selector-cro-snapshot"`,
+				`ClusterRole "clusterrole-name"`,
+				`invalid cluster label selector`,
+			},
 		},
 		{
 			name: "delete during the clusterResourceOverride",
@@ -1118,6 +1199,11 @@ func TestApplyOverrides_clusterScopedResource(t *testing.T) {
 				t.Fatalf("applyOverrides() gotDeleted %v, want %v", gotDeleted, tc.wantDeleted)
 			}
 			if tc.wantErr != nil {
+				for _, want := range tc.wantErrSubstr {
+					if !strings.Contains(err.Error(), want) {
+						t.Errorf("applyOverrides() error = %q, want to contain %q", err.Error(), want)
+					}
+				}
 				return
 			}
 			if tc.wantDeleted {
@@ -1126,12 +1212,12 @@ func TestApplyOverrides_clusterScopedResource(t *testing.T) {
 
 			var u unstructured.Unstructured
 			if err := u.UnmarshalJSON(rc.Raw); err != nil {
-				t.Fatalf("Failed to unmarshl the result: %v, want nil", err)
+				t.Fatalf("Failed to unmarshal the result: %v, want nil", err)
 			}
 
 			var clusterRole rbacv1.ClusterRole
 			if err := runtime.DefaultUnstructuredConverter.FromUnstructured(u.Object, &clusterRole); err != nil {
-				t.Fatalf("Failed to convert the result to clusterole: %v, want nil", err)
+				t.Fatalf("Failed to convert the result to clusterRole: %v, want nil", err)
 			}
 
 			if diff := cmp.Diff(tc.wantClusterRole, clusterRole); diff != "" {
@@ -1141,7 +1227,8 @@ func TestApplyOverrides_clusterScopedResource(t *testing.T) {
 	}
 }
 
-func TestApplyOverrides_namespacedScopeResource(t *testing.T) {
+func TestApplyOverrides_namespaceScopedResource(t *testing.T) {
+	// See TestApplyOverrides_clusterScopedResource for the IsClusterScopedResource: false rationale.
 	fakeInformer := informer.FakeManager{
 		APIResources: map[schema.GroupVersionKind]bool{
 			{
@@ -1165,7 +1252,9 @@ func TestApplyOverrides_namespacedScopeResource(t *testing.T) {
 		roMap          map[placementv1beta1.ResourceIdentifier][]*placementv1beta1.ResourceOverrideSnapshot
 		wantDeployment appsv1.Deployment
 		wantErr        error
-		wantDelete     bool
+		// wantErrSubstr asserts the failure message names the failing snapshot and target.
+		wantErrSubstr []string
+		wantDeleted   bool
 	}{
 		{
 			name: "empty overrides",
@@ -1664,6 +1753,9 @@ func TestApplyOverrides_namespacedScopeResource(t *testing.T) {
 					Name:    "deployment-namespace",
 				}: {
 					{
+						ObjectMeta: metav1.ObjectMeta{
+							Name: "invalid-patch-cro-snapshot",
+						},
 						Spec: placementv1beta1.ClusterResourceOverrideSnapshotSpec{
 							OverrideSpec: placementv1beta1.ClusterResourceOverrideSpec{
 								Policy: &placementv1beta1.OverridePolicy{
@@ -1697,6 +1789,11 @@ func TestApplyOverrides_namespacedScopeResource(t *testing.T) {
 				},
 			},
 			wantErr: controller.ErrUserError,
+			wantErrSubstr: []string{
+				`ClusterResourceOverrideSnapshot "invalid-patch-cro-snapshot"`,
+				`Deployment "deployment-name"`,
+				`namespace "deployment-namespace"`,
+			},
 		},
 		{
 			name: "invalid json patch of resourceOverride",
@@ -1728,6 +1825,10 @@ func TestApplyOverrides_namespacedScopeResource(t *testing.T) {
 					Namespace: "deployment-namespace",
 				}: {
 					{
+						ObjectMeta: metav1.ObjectMeta{
+							Name:      "invalid-patch-ro-snapshot",
+							Namespace: "deployment-namespace",
+						},
 						Spec: placementv1beta1.ResourceOverrideSnapshotSpec{
 							OverrideSpec: placementv1beta1.ResourceOverrideSpec{
 								Policy: &placementv1beta1.OverridePolicy{
@@ -1751,6 +1852,11 @@ func TestApplyOverrides_namespacedScopeResource(t *testing.T) {
 				},
 			},
 			wantErr: controller.ErrUserError,
+			wantErrSubstr: []string{
+				`ResourceOverrideSnapshot "invalid-patch-ro-snapshot"`,
+				`Deployment "deployment-name"`,
+				`namespace "deployment-namespace"`,
+			},
 		},
 		{
 			name: "delete type of resourceOverride",
@@ -1797,7 +1903,7 @@ func TestApplyOverrides_namespacedScopeResource(t *testing.T) {
 					},
 				},
 			},
-			wantDelete: true,
+			wantDeleted: true,
 		},
 		{
 			name: "resourceOverride delete the cro override",
@@ -1884,7 +1990,7 @@ func TestApplyOverrides_namespacedScopeResource(t *testing.T) {
 					},
 				},
 			},
-			wantDelete: true,
+			wantDeleted: true,
 		},
 		{
 			name: "resourceOverride no-op when the cro delete",
@@ -1970,7 +2076,7 @@ func TestApplyOverrides_namespacedScopeResource(t *testing.T) {
 					},
 				},
 			},
-			wantDelete: true,
+			wantDeleted: true,
 		},
 		{
 			name: "cluster name as value in json patch of resourceOverride",
@@ -2218,6 +2324,10 @@ func TestApplyOverrides_namespacedScopeResource(t *testing.T) {
 					Namespace: "deployment-namespace",
 				}: {
 					{
+						ObjectMeta: metav1.ObjectMeta{
+							Name:      "test-ro-snapshot",
+							Namespace: "deployment-namespace",
+						},
 						Spec: placementv1beta1.ResourceOverrideSnapshotSpec{
 							OverrideSpec: placementv1beta1.ResourceOverrideSpec{
 								Policy: &placementv1beta1.OverridePolicy{
@@ -2240,6 +2350,11 @@ func TestApplyOverrides_namespacedScopeResource(t *testing.T) {
 				},
 			},
 			wantErr: controller.ErrUserError,
+			wantErrSubstr: []string{
+				`ResourceOverrideSnapshot "test-ro-snapshot"`,
+				`Deployment "deployment-name"`,
+				`namespace "deployment-namespace"`,
+			},
 		},
 	}
 	for _, tc := range tests {
@@ -2252,19 +2367,24 @@ func TestApplyOverrides_namespacedScopeResource(t *testing.T) {
 			if gotErr, wantErr := err != nil, tc.wantErr != nil; gotErr != wantErr || !errors.Is(err, tc.wantErr) {
 				t.Fatalf("applyOverrides() got error %v, want error %v", err, tc.wantErr)
 			}
-			if gotDeleted != tc.wantDelete {
-				t.Fatalf("applyOverrides() gotDeleted %v, want %v", gotDeleted, tc.wantDelete)
+			if gotDeleted != tc.wantDeleted {
+				t.Fatalf("applyOverrides() gotDeleted %v, want %v", gotDeleted, tc.wantDeleted)
 			}
 			if tc.wantErr != nil {
+				for _, want := range tc.wantErrSubstr {
+					if !strings.Contains(err.Error(), want) {
+						t.Errorf("applyOverrides() error = %q, want to contain %q", err.Error(), want)
+					}
+				}
 				return
 			}
-			if tc.wantDelete {
+			if tc.wantDeleted {
 				return
 			}
 
 			var u unstructured.Unstructured
 			if err := u.UnmarshalJSON(rc.Raw); err != nil {
-				t.Fatalf("Failed to unmarshl the result: %v, want nil", err)
+				t.Fatalf("Failed to unmarshal the result: %v, want nil", err)
 			}
 
 			var deployment appsv1.Deployment
@@ -2757,7 +2877,7 @@ func TestApplyJSONPatchOverride(t *testing.T) {
 
 			var u unstructured.Unstructured
 			if err := u.UnmarshalJSON(rc.Raw); err != nil {
-				t.Fatalf("Failed to unmarshl the result: %v, want nil", err)
+				t.Fatalf("Failed to unmarshal the result: %v, want nil", err)
 			}
 
 			var deployment appsv1.Deployment
@@ -2774,10 +2894,10 @@ func TestApplyJSONPatchOverride(t *testing.T) {
 
 func TestReplaceClusterLabelKeyVariables(t *testing.T) {
 	tests := map[string]struct {
-		cluster   *clusterv1beta1.MemberCluster
-		input     string
-		expected  string
-		expectErr bool
+		cluster *clusterv1beta1.MemberCluster
+		input   string
+		want    string
+		wantErr bool
 	}{
 		"No clusterLabelKey variables": {
 			cluster: &clusterv1beta1.MemberCluster{
@@ -2787,8 +2907,8 @@ func TestReplaceClusterLabelKeyVariables(t *testing.T) {
 					},
 				},
 			},
-			input:    "The cluster is in us-west-1",
-			expected: "The cluster is in us-west-1",
+			input: "The cluster is in us-west-1",
+			want:  "The cluster is in us-west-1",
 		},
 		"ClusterLabelKey Variable replaced": {
 			cluster: &clusterv1beta1.MemberCluster{
@@ -2798,8 +2918,8 @@ func TestReplaceClusterLabelKeyVariables(t *testing.T) {
 					},
 				},
 			},
-			input:    "The cluster is in ${MEMBER-CLUSTER-LABEL-KEY-region}",
-			expected: "The cluster is in us-west-1",
+			input: "The cluster is in ${MEMBER-CLUSTER-LABEL-KEY-region}",
+			want:  "The cluster is in us-west-1",
 		},
 		"The clusterLabelKey key is misspelled": {
 			cluster: &clusterv1beta1.MemberCluster{
@@ -2807,8 +2927,8 @@ func TestReplaceClusterLabelKeyVariables(t *testing.T) {
 					Labels: map[string]string{},
 				},
 			},
-			input:    "The cluster is in $MEMBER-CLUSTER-LABEL-KEY-region",
-			expected: "The cluster is in $MEMBER-CLUSTER-LABEL-KEY-region",
+			input: "The cluster is in $MEMBER-CLUSTER-LABEL-KEY-region",
+			want:  "The cluster is in $MEMBER-CLUSTER-LABEL-KEY-region",
 		},
 		"Multiple complex clusterLabelKey variables replaced": {
 			cluster: &clusterv1beta1.MemberCluster{
@@ -2819,8 +2939,8 @@ func TestReplaceClusterLabelKeyVariables(t *testing.T) {
 					},
 				},
 			},
-			input:    "The cluster is in ${MEMBER-CLUSTER-LABEL-KEY-fleet.azure.com/location-region_public} and environment is ${MEMBER-CLUSTER-LABEL-KEY-fleet.azure.com/env}",
-			expected: "The cluster is in us-west-1 and environment is prod",
+			input: "The cluster is in ${MEMBER-CLUSTER-LABEL-KEY-fleet.azure.com/location-region_public} and environment is ${MEMBER-CLUSTER-LABEL-KEY-fleet.azure.com/env}",
+			want:  "The cluster is in us-west-1 and environment is prod",
 		},
 		"The clusterLabelKey key is not found": {
 			cluster: &clusterv1beta1.MemberCluster{
@@ -2828,8 +2948,8 @@ func TestReplaceClusterLabelKeyVariables(t *testing.T) {
 					Labels: map[string]string{},
 				},
 			},
-			input:     "The cluster is in ${MEMBER-CLUSTER-LABEL-KEY-region}",
-			expectErr: true,
+			input:   "The cluster is in ${MEMBER-CLUSTER-LABEL-KEY-region}",
+			wantErr: true,
 		},
 		"ClusterLabelKey Variable key case not match": {
 			cluster: &clusterv1beta1.MemberCluster{
@@ -2839,10 +2959,10 @@ func TestReplaceClusterLabelKeyVariables(t *testing.T) {
 					},
 				},
 			},
-			input:     "The cluster is in ${MEMBER-CLUSTER-LABEL-KEY-REGION}",
-			expectErr: true,
+			input:   "The cluster is in ${MEMBER-CLUSTER-LABEL-KEY-REGION}",
+			wantErr: true,
 		},
-		"Invalid  clusterLabelKey variable format": {
+		"Invalid clusterLabelKey variable format": {
 			cluster: &clusterv1beta1.MemberCluster{
 				ObjectMeta: metav1.ObjectMeta{
 					Labels: map[string]string{
@@ -2850,8 +2970,8 @@ func TestReplaceClusterLabelKeyVariables(t *testing.T) {
 					},
 				},
 			},
-			input:     "The cluster is in ${MEMBER-CLUSTER-LABEL-KEY-region",
-			expectErr: true,
+			input:   "The cluster is in ${MEMBER-CLUSTER-LABEL-KEY-region",
+			wantErr: true,
 		},
 		"ClusterLabelKey variable key empty": {
 			cluster: &clusterv1beta1.MemberCluster{
@@ -2861,19 +2981,61 @@ func TestReplaceClusterLabelKeyVariables(t *testing.T) {
 					},
 				},
 			},
-			input:     "The cluster is in ${MEMBER-CLUSTER-LABEL-KEY-}",
-			expectErr: true,
+			input:   "The cluster is in ${MEMBER-CLUSTER-LABEL-KEY-}",
+			wantErr: true,
 		},
 	}
 
 	for name, tc := range tests {
 		t.Run(name, func(t *testing.T) {
 			result, err := replaceClusterLabelKeyVariables(tc.input, tc.cluster)
-			if gotErr := err != nil; gotErr != tc.expectErr {
-				t.Fatalf("applyJSONPatchOverride() = error %v, want %v", err, tc.expectErr)
+			if gotErr := err != nil; gotErr != tc.wantErr {
+				t.Fatalf("replaceClusterLabelKeyVariables() = error %v, want %v", err, tc.wantErr)
 			}
-			if result != tc.expected {
-				t.Errorf("replaceClusterLabelKeyVariables() = %v, want %v", result, tc.expected)
+			if result != tc.want {
+				t.Errorf("replaceClusterLabelKeyVariables() = %v, want %v", result, tc.want)
+			}
+		})
+	}
+}
+
+func TestFormatOverrideTarget(t *testing.T) {
+	tests := map[string]struct {
+		kind      string
+		name      string
+		namespace string
+		want      string
+	}{
+		"namespaced resource": {
+			kind:      "Deployment",
+			name:      "my-app",
+			namespace: "default",
+			want:      `Deployment "my-app" in namespace "default"`,
+		},
+		"cluster-scoped resource": {
+			kind: "Namespace",
+			name: "app",
+			want: `Namespace "app"`,
+		},
+		"empty kind falls back to Unknown": {
+			name:      "my-app",
+			namespace: "default",
+			want:      `Unknown "my-app" in namespace "default"`,
+		},
+		"empty kind, cluster-scoped": {
+			name: "app",
+			want: `Unknown "app"`,
+		},
+	}
+
+	for name, tc := range tests {
+		t.Run(name, func(t *testing.T) {
+			target := &unstructured.Unstructured{}
+			target.SetGroupVersionKind(schema.GroupVersionKind{Kind: tc.kind})
+			target.SetName(tc.name)
+			target.SetNamespace(tc.namespace)
+			if got := formatOverrideTarget(target); got != tc.want {
+				t.Errorf("formatOverrideTarget() = %q, want %q", got, tc.want)
 			}
 		})
 	}
