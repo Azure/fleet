@@ -87,14 +87,15 @@ func TestCommonUsePatterns(t *testing.T) {
 	outputStr = readFromBuffer(t, &bytesBuf)
 
 	// The full error output looks like the follows:
-	// errors_test.go:86: time=2026-04-29T02:49:04.560+10:00 level=ERROR msg="additional top/controller-level error description" err="additional high-level error description: additional low-level error description: cannot calculate resource hash" errCategory=unexpected k1=v1 callers="[{Function:go.goms.io/fleet/pkg/utils/errors.TestCommonUsePatterns File:SomeFilePath Line:74} {Function:testing.tRunner File:SomeFilePath Line:1934} {Function:runtime.goexit File:SomeFilePath Line:1268}]" k2=v2
+	// errors_test.go:86: time=2026-04-29T02:49:04.560+10:00 level=ERROR msg="additional top/controller-level error description" err="additional high-level error description: additional low-level error description: cannot calculate resource hash" errCategory=unexpected k1=v1 callers="[{Function:github.com/kubefleet-dev/kubefleet/pkg/utils/errors.TestCommonUsePatterns File:SomeFilePath Line:74} {Function:testing.tRunner File:SomeFilePath Line:1934} {Function:runtime.goexit File:SomeFilePath Line:1268}]" k2=v2
 	wantSubStrings = []string{
 		"msg=\"additional top/controller-level error description\"",
 		"err=\"additional high-level error description: additional low-level error description: cannot calculate resource hash\"",
 		"errCategory=unexpected",
 		"k1=v1",
 		"callers=",
-		"Function:github.com/kubefleet-dev/kubefleet/pkg/utils/errors.TestCommonUsePatterns",
+		"Function:",
+		"/pkg/utils/errors.TestCommonUsePatterns",
 		"k2=v2",
 	}
 	for _, subStr := range wantSubStrings {
@@ -557,7 +558,7 @@ func TestNewUnexpectedError(t *testing.T) {
 
 	// Verify the first frame (the current test code).
 	callerFunc := frames[0].Function
-	if callerFunc != "go.goms.io/fleet/pkg/utils/errors.TestNewUnexpectedError" {
+	if !strings.Contains(callerFunc, "/pkg/utils/errors.TestNewUnexpectedError") {
 		t.Errorf("NewUnexpectedError() first caller function = %s, want TestNewUnexpectedError", callerFunc)
 	}
 	callerFile := frames[0].File
