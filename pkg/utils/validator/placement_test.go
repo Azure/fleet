@@ -21,6 +21,7 @@ import (
 	"testing"
 
 	corev1 "k8s.io/api/core/v1"
+	"k8s.io/apimachinery/pkg/api/resource"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime/schema"
 	"k8s.io/apimachinery/pkg/util/intstr"
@@ -2047,5 +2048,204 @@ func TestValidateResourcePlacement(t *testing.T) {
 				t.Errorf("ValidateResourcePlacement() got %v, should contain want %s", gotErr, testCase.wantErrMsg)
 			}
 		})
+	}
+}
+
+func TestValidateOperatorAndValues(t *testing.T) {
+	tests := []struct {
+		name    string
+		op      placementv1beta1.PropertySelectorOperator
+		values  []string
+		wantErr bool
+	}{
+		{name: "Eq with one valid value", op: placementv1beta1.PropertySelectorEqualTo, values: []string{"5"}, wantErr: false},
+		{name: "Gt with one valid value", op: placementv1beta1.PropertySelectorGreaterThan, values: []string{"100Mi"}, wantErr: false},
+		{name: "Lte with one valid value", op: placementv1beta1.PropertySelectorLessThanOrEqualTo, values: []string{"2.5"}, wantErr: false},
+		{name: "unsupported operator", op: placementv1beta1.PropertySelectorOperator("In"), values: []string{"5"}, wantErr: true},
+		{name: "Eq with zero values", op: placementv1beta1.PropertySelectorEqualTo, values: nil, wantErr: true},
+		{name: "Eq with two values", op: placementv1beta1.PropertySelectorEqualTo, values: []string{"5", "10"}, wantErr: true},
+		{name: "Lt with malformed quantity", op: placementv1beta1.PropertySelectorLessThan, values: []string{"five"}, wantErr: true},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			err := validateOperatorAndValues(tt.op, tt.values)
+			if (err != nil) != tt.wantErr {
+				t.Errorf("validateOperatorAndValues(%v, %v) error = %v, wantErr %v", tt.op, tt.values, err, tt.wantErr)
+			}
+		})
+	}
+}
+
+func TestValidateRequirementsConsistency(t *testing.T) {
+	req := func(op placementv1beta1.PropertySelectorOperator, value string) placementv1beta1.PropertySelectorRequirement {
+		return placementv1beta1.PropertySelectorRequirement{Name: "p", Operator: op, Values: []string{value}}
+	}
+
+	tests := []struct {
+		name    string
+		reqs    []placementv1beta1.PropertySelectorRequirement
+		wantErr bool
+		errSub  string
+	}{
+		// Trivially-satisfied inputs.
+		{name: "empty input", reqs: nil, wantErr: false},
+		{name: "single requirement", reqs: []placementv1beta1.PropertySelectorRequirement{req(placementv1beta1.PropertySelectorEqualTo, "5")}, wantErr: false},
+		{name: "two compatible Eq with same value", reqs: []placementv1beta1.PropertySelectorRequirement{req(placementv1beta1.PropertySelectorEqualTo, "5"), req(placementv1beta1.PropertySelectorEqualTo, "5")}, wantErr: false},
+		{name: "Eq + Ne with different values", reqs: []placementv1beta1.PropertySelectorRequirement{req(placementv1beta1.PropertySelectorEqualTo, "5"), req(placementv1beta1.PropertySelectorNotEqualTo, "10")}, wantErr: false},
+		{name: "two Ne", reqs: []placementv1beta1.PropertySelectorRequirement{req(placementv1beta1.PropertySelectorNotEqualTo, "5"), req(placementv1beta1.PropertySelectorNotEqualTo, "10")}, wantErr: false},
+		{name: "Gt + Lt with non-empty interval", reqs: []placementv1beta1.PropertySelectorRequirement{req(placementv1beta1.PropertySelectorGreaterThan, "5"), req(placementv1beta1.PropertySelectorLessThan, "10")}, wantErr: false},
+		{name: "Gte x + Lte x pinpoints x", reqs: []placementv1beta1.PropertySelectorRequirement{req(placementv1beta1.PropertySelectorGreaterThanOrEqualTo, "10"), req(placementv1beta1.PropertySelectorLessThanOrEqualTo, "10")}, wantErr: false},
+		{name: "Eq inside bounds", reqs: []placementv1beta1.PropertySelectorRequirement{req(placementv1beta1.PropertySelectorGreaterThanOrEqualTo, "5"), req(placementv1beta1.PropertySelectorEqualTo, "7"), req(placementv1beta1.PropertySelectorLessThanOrEqualTo, "10")}, wantErr: false},
+		{name: "redundant lower bounds keep most restrictive (compatible)", reqs: []placementv1beta1.PropertySelectorRequirement{req(placementv1beta1.PropertySelectorGreaterThan, "5"), req(placementv1beta1.PropertySelectorGreaterThan, "10"), req(placementv1beta1.PropertySelectorLessThan, "20")}, wantErr: false},
+		{name: "value with units (memory quantity)", reqs: []placementv1beta1.PropertySelectorRequirement{req(placementv1beta1.PropertySelectorGreaterThanOrEqualTo, "100Mi"), req(placementv1beta1.PropertySelectorLessThan, "1Gi")}, wantErr: false},
+
+		// Conflicts.
+		{name: "two Eq with different values", reqs: []placementv1beta1.PropertySelectorRequirement{req(placementv1beta1.PropertySelectorEqualTo, "5"), req(placementv1beta1.PropertySelectorEqualTo, "10")}, wantErr: true, errSub: "conflicting Eq values"},
+		{name: "Eq + Ne with same value", reqs: []placementv1beta1.PropertySelectorRequirement{req(placementv1beta1.PropertySelectorEqualTo, "5"), req(placementv1beta1.PropertySelectorNotEqualTo, "5")}, wantErr: true, errSub: "conflicting Eq and Ne"},
+		{name: "Gt 10 + Lt 5", reqs: []placementv1beta1.PropertySelectorRequirement{req(placementv1beta1.PropertySelectorGreaterThan, "10"), req(placementv1beta1.PropertySelectorLessThan, "5")}, wantErr: true, errSub: "exclude all values"},
+		{name: "Gt x + Lt x boundary", reqs: []placementv1beta1.PropertySelectorRequirement{req(placementv1beta1.PropertySelectorGreaterThan, "10"), req(placementv1beta1.PropertySelectorLessThan, "10")}, wantErr: true, errSub: "exclude all values"},
+		{name: "Gt x + Lte x boundary", reqs: []placementv1beta1.PropertySelectorRequirement{req(placementv1beta1.PropertySelectorGreaterThan, "10"), req(placementv1beta1.PropertySelectorLessThanOrEqualTo, "10")}, wantErr: true, errSub: "exclude all values"},
+		{name: "Gte x + Lt x boundary", reqs: []placementv1beta1.PropertySelectorRequirement{req(placementv1beta1.PropertySelectorGreaterThanOrEqualTo, "10"), req(placementv1beta1.PropertySelectorLessThan, "10")}, wantErr: true, errSub: "exclude all values"},
+		{name: "least-restrictive lower hides contradiction (still detected via most-restrictive)",
+			reqs:    []placementv1beta1.PropertySelectorRequirement{req(placementv1beta1.PropertySelectorGreaterThan, "10"), req(placementv1beta1.PropertySelectorGreaterThan, "5"), req(placementv1beta1.PropertySelectorLessThan, "7")},
+			wantErr: true, errSub: "exclude all values"},
+		{name: "Eq below lower bound", reqs: []placementv1beta1.PropertySelectorRequirement{req(placementv1beta1.PropertySelectorGreaterThanOrEqualTo, "10"), req(placementv1beta1.PropertySelectorEqualTo, "5")}, wantErr: true, errSub: "violates lower bound"},
+		{name: "Eq above upper bound", reqs: []placementv1beta1.PropertySelectorRequirement{req(placementv1beta1.PropertySelectorLessThanOrEqualTo, "10"), req(placementv1beta1.PropertySelectorEqualTo, "20")}, wantErr: true, errSub: "violates upper bound"},
+		{name: "Eq equals strict lower bound", reqs: []placementv1beta1.PropertySelectorRequirement{req(placementv1beta1.PropertySelectorGreaterThan, "10"), req(placementv1beta1.PropertySelectorEqualTo, "10")}, wantErr: true, errSub: "violates lower bound"},
+		{name: "Eq equals strict upper bound", reqs: []placementv1beta1.PropertySelectorRequirement{req(placementv1beta1.PropertySelectorLessThan, "10"), req(placementv1beta1.PropertySelectorEqualTo, "10")}, wantErr: true, errSub: "violates upper bound"},
+
+		// Malformed inputs are skipped, not surfaced — that's validateOperatorAndValues' job.
+		{name: "malformed value is ignored for consistency check", reqs: []placementv1beta1.PropertySelectorRequirement{req(placementv1beta1.PropertySelectorEqualTo, "not-a-number"), req(placementv1beta1.PropertySelectorEqualTo, "5")}, wantErr: false},
+
+		// checkEqVsNe and checkEqInsideBounds must use Quantity.Cmp, not string equality, so
+		// canonically-equal cross-format inputs still produce the right conflict verdict.
+		{name: "Eq + Ne with same canonical value but different format", reqs: []placementv1beta1.PropertySelectorRequirement{req(placementv1beta1.PropertySelectorEqualTo, "1000m"), req(placementv1beta1.PropertySelectorNotEqualTo, "1")}, wantErr: true, errSub: "conflicting Eq and Ne"},
+		{name: "Eq + Lt bound with same canonical value but different format", reqs: []placementv1beta1.PropertySelectorRequirement{req(placementv1beta1.PropertySelectorLessThan, "1024"), req(placementv1beta1.PropertySelectorEqualTo, "1Ki")}, wantErr: true, errSub: "violates upper bound"},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			err := validateRequirementsConsistency(tt.reqs)
+			if (err != nil) != tt.wantErr {
+				t.Errorf("validateRequirementsConsistency(%v) error = %v, wantErr %v", tt.reqs, err, tt.wantErr)
+			}
+			if tt.wantErr && err != nil && !strings.Contains(err.Error(), tt.errSub) {
+				t.Errorf("validateRequirementsConsistency(%v) error = %q, want substring %q", tt.reqs, err.Error(), tt.errSub)
+			}
+		})
+	}
+}
+
+func TestRequirementBoundsTighten(t *testing.T) {
+	q := func(s string) resource.Quantity { return resource.MustParse(s) }
+
+	t.Run("lower keeps largest value", func(t *testing.T) {
+		rb := &requirementBounds{}
+		rb.tightenLower(boundary{q: q("5")})
+		rb.tightenLower(boundary{q: q("10")})
+		rb.tightenLower(boundary{q: q("3")})
+		if rb.lower.q.Cmp(q("10")) != 0 {
+			t.Errorf("lower = %s, want 10", rb.lower.q.String())
+		}
+	})
+	t.Run("lower prefers strict at tie", func(t *testing.T) {
+		rb := &requirementBounds{}
+		rb.tightenLower(boundary{q: q("10"), strict: false})
+		rb.tightenLower(boundary{q: q("10"), strict: true})
+		if !rb.lower.strict {
+			t.Errorf("lower.strict = false, want true")
+		}
+	})
+	t.Run("upper keeps smallest value", func(t *testing.T) {
+		rb := &requirementBounds{}
+		rb.tightenUpper(boundary{q: q("10")})
+		rb.tightenUpper(boundary{q: q("5")})
+		rb.tightenUpper(boundary{q: q("8")})
+		if rb.upper.q.Cmp(q("5")) != 0 {
+			t.Errorf("upper = %s, want 5", rb.upper.q.String())
+		}
+	})
+	t.Run("upper prefers strict at tie", func(t *testing.T) {
+		rb := &requirementBounds{}
+		rb.tightenUpper(boundary{q: q("10"), strict: false})
+		rb.tightenUpper(boundary{q: q("10"), strict: true})
+		if !rb.upper.strict {
+			t.Errorf("upper.strict = false, want true")
+		}
+	})
+}
+
+func TestApplyEq(t *testing.T) {
+	q := func(s string) resource.Quantity { return resource.MustParse(s) }
+
+	t.Run("first call sets eqVal", func(t *testing.T) {
+		rb := &requirementBounds{}
+		if err := rb.applyEq(q("5")); err != nil {
+			t.Fatalf("applyEq(5) error = %v, want nil", err)
+		}
+		if rb.eqVal == nil || rb.eqVal.Cmp(q("5")) != 0 {
+			t.Errorf("eqVal = %v, want 5", rb.eqVal)
+		}
+	})
+	t.Run("second call with equal value returns nil", func(t *testing.T) {
+		rb := &requirementBounds{}
+		if err := rb.applyEq(q("1")); err != nil {
+			t.Fatalf("setup applyEq(1) error = %v, want nil", err)
+		}
+		if err := rb.applyEq(q("1000m")); err != nil {
+			t.Errorf("applyEq(1000m) on rb with eqVal=1 error = %v, want nil", err)
+		}
+		if rb.eqVal == nil || rb.eqVal.Cmp(q("1")) != 0 {
+			t.Errorf("eqVal = %v, want value equal to 1", rb.eqVal)
+		}
+	})
+	t.Run("second call with different value errors", func(t *testing.T) {
+		rb := &requirementBounds{}
+		if err := rb.applyEq(q("5")); err != nil {
+			t.Fatalf("setup applyEq(5) error = %v, want nil", err)
+		}
+		err := rb.applyEq(q("10"))
+		if err == nil || !strings.Contains(err.Error(), "conflicting Eq values") {
+			t.Errorf("applyEq(10) on rb with eqVal=5 error = %v, want 'conflicting Eq values'", err)
+		}
+		// eqVal must be preserved on the error path.
+		if rb.eqVal == nil || rb.eqVal.Cmp(q("5")) != 0 {
+			t.Errorf("eqVal after failed applyEq(10) = %v, want value equal to 5", rb.eqVal)
+		}
+	})
+}
+
+// TestCollectRequirementBoundsUnhandledOperator covers the nil-applyToBounds runtime guard.
+// Mutates the package-level registry, which is safe only because no test in this package runs
+// with t.Parallel().
+func TestCollectRequirementBoundsUnhandledOperator(t *testing.T) {
+	const fakeOp placementv1beta1.PropertySelectorOperator = "FakeOpForTest"
+	supportedPropertyOperators[fakeOp] = operatorSpec{requiredValueCount: 1}
+	t.Cleanup(func() { delete(supportedPropertyOperators, fakeOp) })
+
+	reqs := []placementv1beta1.PropertySelectorRequirement{
+		{Name: "p", Operator: placementv1beta1.PropertySelectorEqualTo, Values: []string{"5"}},
+		{Name: "p", Operator: fakeOp, Values: []string{"7"}},
+	}
+	_, err := collectRequirementBounds(reqs)
+	if err == nil {
+		t.Fatalf("collectRequirementBounds(%v) error = nil, want non-nil for unhandled operator", reqs)
+	}
+	for _, wantSub := range []string{"internal:", "no bounds handler"} {
+		if !strings.Contains(err.Error(), wantSub) {
+			t.Errorf("collectRequirementBounds(%v) error = %q, want substring %q", reqs, err.Error(), wantSub)
+		}
+	}
+}
+
+// TestSupportedPropertyOperatorsRegistryComplete fails at test time if any spec has a
+// non-positive requiredValueCount or a nil applyToBounds.
+func TestSupportedPropertyOperatorsRegistryComplete(t *testing.T) {
+	for op, spec := range supportedPropertyOperators {
+		if spec.requiredValueCount <= 0 {
+			t.Errorf("supportedPropertyOperators[%s].requiredValueCount = %d, want > 0", op, spec.requiredValueCount)
+		}
+		if spec.applyToBounds == nil {
+			t.Errorf("supportedPropertyOperators[%s].applyToBounds is nil, want non-nil", op)
+		}
 	}
 }
