@@ -536,12 +536,11 @@ func TestValidateClusterResourcePlacement_PickFixedPlacementPolicy(t *testing.T)
 			},
 			wantErr: false,
 		},
-		"invalid placement policy - PickFixed with empty cluster names": {
+		"valid placement policy - PickFixed with empty cluster names": {
 			policy: &placementv1beta1.PlacementPolicy{
 				PlacementType: placementv1beta1.PickFixedPlacementType,
 			},
-			wantErr:    true,
-			wantErrMsg: "cluster names cannot be empty for policy type PickFixed",
+			wantErr: false,
 		},
 		"invalid placement policy - PickFixed with non-unique cluster names": {
 			policy: &placementv1beta1.PlacementPolicy{
@@ -1931,7 +1930,7 @@ func TestValidateResourcePlacement(t *testing.T) {
 		wantErr          bool
 		wantErrMsg       string
 	}{
-		"RP with invalid placement policy": {
+		"RP with valid PickFixed policy and empty cluster names": {
 			rp: &placementv1beta1.ResourcePlacement{
 				ObjectMeta: metav1.ObjectMeta{
 					Name: "test-rp",
@@ -1947,7 +1946,7 @@ func TestValidateResourcePlacement(t *testing.T) {
 					},
 					Policy: &placementv1beta1.PlacementPolicy{
 						PlacementType: placementv1beta1.PickFixedPlacementType,
-						ClusterNames:  []string{}, // Empty cluster names for PickFixed type
+						ClusterNames:  []string{}, // Empty cluster names for PickFixed type (scale to zero)
 					},
 				},
 			},
@@ -1955,8 +1954,7 @@ func TestValidateResourcePlacement(t *testing.T) {
 				APIResources:            map[schema.GroupVersionKind]bool{utils.DeploymentGVK: true},
 				IsClusterScopedResource: false,
 			},
-			wantErr:    true,
-			wantErrMsg: "cluster names cannot be empty for policy type PickFixed",
+			wantErr: false,
 		},
 		"RP with invalid rollout strategy": {
 			rp: &placementv1beta1.ResourcePlacement{

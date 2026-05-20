@@ -335,4 +335,78 @@ var _ = Describe("placing resources using a CRP of PickFixed placement type", fu
 			ensureCRPAndRelatedResourcesDeleted(crpName, []*framework.Cluster{memberCluster1EastProd, memberCluster2EastCanary})
 		})
 	})
+
+	Context("scale from zero to one cluster", Ordered, func() {
+		crpName := fmt.Sprintf(crpNameTemplate, GinkgoParallelProcess())
+
+		BeforeAll(func() {
+			// Create the resources.
+			createWorkResources()
+
+			// Create the CRP with PickFixed and no clusters (scale to zero).
+			crp := &placementv1beta1.ClusterResourcePlacement{
+				ObjectMeta: metav1.ObjectMeta{
+					Name: crpName,
+					// Add a custom finalizer; this would allow us to better observe
+					// the behavior of the controllers.
+					Finalizers: []string{customDeletionBlockerFinalizer},
+				},
+				Spec: placementv1beta1.PlacementSpec{
+					ResourceSelectors: workResourceSelector(),
+					Strategy: placementv1beta1.RolloutStrategy{
+						Type: placementv1beta1.RollingUpdateRolloutStrategyType,
+						RollingUpdate: &placementv1beta1.RollingUpdateConfig{
+							UnavailablePeriodSeconds: ptr.To(2),
+						},
+					},
+					Policy: &placementv1beta1.PlacementPolicy{
+						PlacementType: placementv1beta1.PickFixedPlacementType,
+						ClusterNames:  []string{},
+					},
+				},
+			}
+			Expect(hubClient.Create(ctx, crp)).To(Succeed(), "Failed to create CRP")
+		})
+
+		It("should update CRP status as expected with no clusters selected", func() {
+			// The scheduler returns early when there are no target clusters,
+			// so the scheduling condition stays at SchedulePending (Unknown).
+			statusActual := crpStatusWithCustomConditionsUpdatedActual(
+				workResourceIdentifiers(),
+				crpSchedulePendingConditions(1),
+				"0",
+			)
+			Eventually(statusActual, eventuallyDuration, eventuallyInterval).Should(Succeed(), "Failed to update CRP status as expected")
+		})
+
+		It("should not place resources on any cluster", func() {
+			checkIfRemovedWorkResourcesFromMemberClusters(allMemberClusters)
+		})
+
+		It("should scale up to one cluster", func() {
+			// Update the CRP to add a cluster.
+			Eventually(func() error {
+				crp := &placementv1beta1.ClusterResourcePlacement{}
+				if err := hubClient.Get(ctx, types.NamespacedName{Name: crpName}, crp); err != nil {
+					return err
+				}
+				crp.Spec.Policy.ClusterNames = []string{memberCluster1EastProdName}
+				return hubClient.Update(ctx, crp)
+			}, eventuallyDuration, eventuallyInterval).Should(Succeed(), "Failed to update CRP")
+		})
+
+		It("should update CRP status as expected after scale up", func() {
+			crpStatusUpdatedActual := crpStatusUpdatedActual(workResourceIdentifiers(), []string{memberCluster1EastProdName}, nil, "0")
+			Eventually(crpStatusUpdatedActual, eventuallyDuration, eventuallyInterval).Should(Succeed(), "Failed to update CRP status as expected")
+		})
+
+		It("should place resources on the newly specified cluster", func() {
+			resourcePlacedActual := workNamespaceAndConfigMapPlacedOnClusterActual(memberCluster1EastProd)
+			Eventually(resourcePlacedActual, eventuallyDuration, eventuallyInterval).Should(Succeed(), "Failed to place resources on specified clusters")
+		})
+
+		AfterAll(func() {
+			ensureCRPAndRelatedResourcesDeleted(crpName, []*framework.Cluster{memberCluster1EastProd})
+		})
+	})
 })
