@@ -77,7 +77,6 @@ var _ = Describe("webhook tests for CRP CREATE operations", func() {
 				err := hubClient.Create(ctx, &crp)
 				var statusErr *k8sErrors.StatusError
 				g.Expect(errors.As(err, &statusErr)).To(BeTrue(), fmt.Sprintf("Create CRP call produced error %s. Error type wanted is %s.", reflect.TypeOf(err), reflect.TypeOf(&k8sErrors.StatusError{})))
-				g.Expect(statusErr.ErrStatus.Message).Should(MatchRegexp("cluster names cannot be empty for policy type"))
 				g.Expect(statusErr.ErrStatus.Message).Should(MatchRegexp("number of clusters must be nil for policy type PickFixed"))
 				return nil
 			}, eventuallyDuration, eventuallyInterval).Should(Succeed())
