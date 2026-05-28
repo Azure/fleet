@@ -201,9 +201,9 @@ func generateRawContent(object *unstructured.Unstructured) ([]byte, error) {
 
 		vals, found, err := unstructured.NestedFieldNoCopy(object.Object, "spec", "ports")
 		if found && err == nil {
-			if ports, ok := vals.([]interface{}); ok {
+			if ports, ok := vals.([]any); ok {
 				for i := range ports {
-					if each, ok := ports[i].(map[string]interface{}); ok {
+					if each, ok := ports[i].(map[string]any); ok {
 						delete(each, "nodePort")
 					}
 				}
@@ -523,7 +523,8 @@ func (rs *ResourceSelectorResolver) fetchResources(selector placementv1beta1.Res
 
 	lister := rs.InformerManager.Lister(gvr)
 
-	// TODO: validator should enforce the mutual exclusiveness between the `name` and `labelSelector` fields
+	// Mutual exclusiveness between `name` and `labelSelector` is enforced by the placement
+	// validator (see pkg/utils/validator/placement.go validatePlacement).
 	if len(selector.Name) != 0 {
 		var obj runtime.Object
 		var err error
@@ -553,7 +554,9 @@ func (rs *ResourceSelectorResolver) fetchResources(selector placementv1beta1.Res
 	if selector.LabelSelector == nil {
 		labelSelector = labels.Everything()
 	} else {
-		// TODO: validator should enforce the validity of the labelSelector
+		// LabelSelector validity is enforced by the placement validator (see
+		// pkg/utils/validator/placement.go validateLabelSelector). The conversion error path
+		// remains as a defensive guard.
 		labelSelector, err = metav1.LabelSelectorAsSelector(selector.LabelSelector)
 		if err != nil {
 			return nil, NewUnexpectedBehaviorError(fmt.Errorf("cannot convert the label selector to a selector: %w", err))
