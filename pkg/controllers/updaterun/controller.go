@@ -109,17 +109,14 @@ func (r *Reconciler) Reconcile(ctx context.Context, req runtime.Request) (runtim
 		return runtime.Result{}, err
 	}
 
-	// Track errors for metrics emission. The error is used to determine the failure type
-	// (user_error vs internal_error) in the emitted metrics.
-	var reconcileErr error
 	// Emit the update run status metric based on status conditions in the updateRun.
-	// Use a closure to capture reconcileErr by reference, so it reflects any updates made during reconciliation.
-	defer func() { emitUpdateRunStatusMetric(updateRun, reconcileErr) }()
+	defer emitUpdateRunStatusMetric(updateRun)
 
 	state := updateRun.GetUpdateRunSpec().State
 
 	var updatingStageIndex int
 	var toBeUpdatedBindings, toBeDeletedBindings []placementv1beta1.BindingObj
+	var reconcileErr error
 	updateRunStatus := updateRun.GetUpdateRunStatus()
 	initCond := meta.FindStatusCondition(updateRunStatus.Conditions, string(placementv1beta1.StagedUpdateRunConditionInitialized))
 	if !condition.IsConditionStatusTrue(initCond, updateRun.GetGeneration()) {
