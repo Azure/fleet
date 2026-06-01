@@ -1,0 +1,16 @@
+{
+  "universe_usage_history": [
+    {
+      "universe": "Alien",
+      "used_at": "2026-05-22T02:48:33Z",
+      "assignment_id": "kubefleet-init-001"
+    }
+  ],
+  "assignment_cast_snapshots": {
+    "kubefleet-init-001": {
+      "universe": "Alien",
+      "timestamp": "2026-05-22T02:48:33Z",
+      "agents": ["Ripley", "Dallas", "Kane", "Lambert", "Parker"]
+    }
+  }
+}

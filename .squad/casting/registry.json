@@ -1,0 +1,44 @@
+{
+  "agents": {
+    "ripley": {
+      "persistent_name": "Ripley",
+      "universe": "Alien",
+      "role": "Lead",
+      "created_at": "2026-05-22T02:48:33Z",
+      "legacy_named": false,
+      "status": "active"
+    },
+    "dallas": {
+      "persistent_name": "Dallas",
+      "universe": "Alien",
+      "role": "Backend Dev",
+      "created_at": "2026-05-22T02:48:33Z",
+      "legacy_named": false,
+      "status": "active"
+    },
+    "kane": {
+      "persistent_name": "Kane",
+      "universe": "Alien",
+      "role": "Backend Dev",
+      "created_at": "2026-05-22T02:48:33Z",
+      "legacy_named": false,
+      "status": "active"
+    },
+    "lambert": {
+      "persistent_name": "Lambert",
+      "universe": "Alien",
+      "role": "Tester",
+      "created_at": "2026-05-22T02:48:33Z",
+      "legacy_named": false,
+      "status": "active"
+    },
+    "parker": {
+      "persistent_name": "Parker",
+      "universe": "Alien",
+      "role": "DevRel",
+      "created_at": "2026-05-22T02:48:33Z",
+      "legacy_named": false,
+      "status": "active"
+    }
+  }
+}
