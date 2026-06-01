@@ -39,6 +39,7 @@ import (
 
 	clusterv1beta1 "github.com/kubefleet-dev/kubefleet/apis/cluster/v1beta1"
 	placementv1beta1 "github.com/kubefleet-dev/kubefleet/apis/placement/v1beta1"
+	"github.com/kubefleet-dev/kubefleet/pkg/admissionpolicymanager"
 	"github.com/kubefleet-dev/kubefleet/pkg/utils"
 	"github.com/kubefleet-dev/kubefleet/pkg/webhook/validation"
 
@@ -1316,6 +1317,10 @@ var _ = Describe("fleet guard rail webhook tests for service accounts in restric
 
 	var svcAccount *corev1.ServiceAccount
 	BeforeAll(func() {
+		if EnabledVAPGenerators.Has(admissionpolicymanager.SvcAccountsAndTokenRequestsVAPGeneratorName) {
+			Skip("A VAP that serves the same purpose is enabled; skip this test as the request will be rejected by the VAP instead")
+		}
+
 		// Create a service account in the kube-system namespace.
 		svcAccount = &corev1.ServiceAccount{
 			ObjectMeta: metav1.ObjectMeta{

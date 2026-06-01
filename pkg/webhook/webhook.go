@@ -244,20 +244,20 @@ func NewWebhookConfig(
 // String-to-enum conversions (e.g., WebhookClientConnectionType) are performed without
 // additional validation, as validation happens at the Options level.
 func NewWebhookConfigFromOptions(mgr manager.Manager, opts *options.Options, webhookPort int32) (*Config, error) {
-	webhookClientConnectionType := options.WebhookClientConnectionType(opts.WebhookOpts.ClientConnectionType)
-	whiteListedUsers := strings.Split(opts.WebhookOpts.GuardRailWhitelistedUsers, ",")
+	webhookClientConnectionType := options.WebhookClientConnectionType(opts.WebhookAndAdmissionPolicyOpts.ClientConnectionType)
+	whiteListedUsers := strings.Split(opts.WebhookAndAdmissionPolicyOpts.GuardRailWhitelistedUsers, ",")
 
 	return NewWebhookConfig(
 		mgr,
-		opts.WebhookOpts.ServiceName,
+		opts.WebhookAndAdmissionPolicyOpts.ServiceName,
 		webhookPort,
 		&webhookClientConnectionType,
 		FleetWebhookCertDir,
-		opts.WebhookOpts.EnableGuardRail,
-		opts.WebhookOpts.GuardRailDenyModifyMemberClusterLabels,
-		opts.WebhookOpts.EnableWorkload,
-		opts.WebhookOpts.EnablePDBs,
-		opts.WebhookOpts.UseCertManager,
+		opts.WebhookAndAdmissionPolicyOpts.EnableGuardRail,
+		opts.WebhookAndAdmissionPolicyOpts.GuardRailDenyModifyMemberClusterLabels,
+		opts.WebhookAndAdmissionPolicyOpts.EnableWorkload,
+		opts.WebhookAndAdmissionPolicyOpts.EnablePDBs,
+		opts.WebhookAndAdmissionPolicyOpts.UseCertManager,
 		FleetWebhookCertName,
 		whiteListedUsers,
 		opts.ClusterMgmtOpts.NetworkingAgentsEnabled)

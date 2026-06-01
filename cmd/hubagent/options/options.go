@@ -28,8 +28,8 @@ type Options struct {
 	// Options that concern the setup of the controller manager instance in use by the KubeFleet hub agent.
 	CtrlMgrOpts ControllerManagerOptions
 
-	// KubeFleet webhook related options.
-	WebhookOpts WebhookOptions
+	// KubeFleet webhook and admission policy related options.
+	WebhookAndAdmissionPolicyOpts WebhookAndAdmissionPolicyOptions
 
 	// Feature flags that control the enabling of certain features in the hub agent.
 	FeatureFlags FeatureFlags
@@ -48,7 +48,7 @@ func NewOptions() *Options {
 func (o *Options) AddFlags(flags *flag.FlagSet) {
 	o.LeaderElectionOpts.AddFlags(flags)
 	o.CtrlMgrOpts.AddFlags(flags)
-	o.WebhookOpts.AddFlags(flags)
+	o.WebhookAndAdmissionPolicyOpts.AddFlags(flags)
 	o.FeatureFlags.AddFlags(flags)
 	o.ClusterMgmtOpts.AddFlags(flags)
 	o.PlacementMgmtOpts.AddFlags(flags)

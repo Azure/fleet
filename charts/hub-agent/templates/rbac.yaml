@@ -139,6 +139,14 @@ rules:
       - fleet-validating-webhook-configuration
       - fleet-guard-rail-webhook-configuration
     verbs: ["delete"]
+  
+  # Admission policies management. If the admission policy manager is enabled, the hub agent
+  # will install/uninstall validating admission policies and bindings based on user-provided configuration.
+  {{- if .Values.enableAdmissionPolicyManager }}
+  - apiGroups: ["admissionregistration.k8s.io"]
+    resources: ["validatingadmissionpolicies", "validatingadmissionpolicybindings"]
+    verbs: ["get", "list", "create", "update", "patch", "delete"]
+  {{- end }}
 
   # Leader election. Split into two rules so that only the hub-agent's own
   # election lease can be mutated; a compromised hub-agent cannot hijack

@@ -97,13 +97,13 @@ type PolicyManager struct {
 	enabledPolicyGenerators map[string]ValidatingAdmissionPolicyGenerator
 }
 
-func New(client client.Client, policyGeneratorConfigs *PolicyGeneratorConfigs, enabledPolicyNames []string) (*PolicyManager, error) {
+func New(client client.Client, policyGeneratorConfigs *PolicyGeneratorConfigs) (*PolicyManager, error) {
 	if policyGeneratorConfigs == nil {
 		klog.V(2).Info("No admission policy generator configuration provided, falling back to the default configuration")
 		policyGeneratorConfigs = DefaultPolicyGeneratorConfigs
 	}
-	// Prepare a set of generators based on the list of enabled policies.
-	enabledPolicyGenerators, err := preparePolicyGenerators(policyGeneratorConfigs, enabledPolicyNames)
+	// Prepare a set of generators based on the given configuration.
+	enabledPolicyGenerators, err := preparePolicyGenerators(policyGeneratorConfigs)
 	if err != nil {
 		return nil, errors.Wraps(err, "failed to create policy manager")
 	}
@@ -114,11 +114,7 @@ func New(client client.Client, policyGeneratorConfigs *PolicyGeneratorConfigs, e
 	}, nil
 }
 
-func preparePolicyGenerators(
-	policyGeneratorConfigs *PolicyGeneratorConfigs,
-	enabledPolicyNames []string,
-) (map[string]ValidatingAdmissionPolicyGenerator, error) {
-	enabledPolicyNameSet := sets.New(enabledPolicyNames...)
+func preparePolicyGenerators(policyGeneratorConfigs *PolicyGeneratorConfigs) (map[string]ValidatingAdmissionPolicyGenerator, error) {
 	enabledPolicyGenerators := make(map[string]ValidatingAdmissionPolicyGenerator)
 
 	v := reflect.ValueOf(policyGeneratorConfigs).Elem()
@@ -131,18 +127,11 @@ func preparePolicyGenerators(
 		if !ok {
 			continue
 		}
-		if enabledPolicyNameSet.Has(gen.Name()) {
+		if gen != nil {
 			enabledPolicyGenerators[gen.Name()] = gen
 		}
 	}
 
-	if len(enabledPolicyNameSet) != len(enabledPolicyGenerators) {
-		configuredPolicyNames := make([]string, 0, len(enabledPolicyGenerators))
-		for name := range enabledPolicyGenerators {
-			configuredPolicyNames = append(configuredPolicyNames, name)
-		}
-		return nil, errors.NewUserError(nil, "some enabled policy generators are not configured properly", "enabledPolicies", enabledPolicyNames, "configuredPolicies", configuredPolicyNames)
-	}
 	return enabledPolicyGenerators, nil
 }
 

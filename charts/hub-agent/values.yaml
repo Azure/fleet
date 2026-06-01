@@ -57,3 +57,9 @@ hubAPIBurst: 1000
 MaxConcurrentClusterPlacement: 100
 ConcurrentResourceChangeSyncs: 20
 MaxFleetSizeSupported: 100
+
+additionalConfigData: {}
+additionalConfigDataMountPath: /etc/kubefleet/additional-config
+
+enableAdmissionPolicyManager: false
+admissionPolicyManagerConfigName: ""

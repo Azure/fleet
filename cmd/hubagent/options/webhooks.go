@@ -21,9 +21,9 @@ import (
 	"fmt"
 )
 
-// WebhookOptions is a set of options the KubeFleet hub agent exposes for
-// controlling webhook behavior.
-type WebhookOptions struct {
+// WebhookAndAdmissionPolicyOptions is a set of options the KubeFleet hub agent exposes for
+// controlling webhook and admission policy behavior.
+type WebhookAndAdmissionPolicyOptions struct {
 	// Enable the KubeFleet webhooks or not.
 	EnableWebhooks bool
 
@@ -65,10 +65,29 @@ type WebhookOptions struct {
 	// If set to false, the system will use self-signed certificates.
 	// This option only applies if webhooks are enabled.
 	UseCertManager bool
+
+	// Enable the KubeFleet admission policy manager or not.
+	//
+	// KubeFleet admission policy manager manages admission policies that help enforce and validate
+	// certain behaviors, which serves as an in-process, more performant and more available alternative
+	// to some of the applicable KubeFleet validating webhooks. The manager installs and uninstalls
+	// admission policies when the hub agent starts.
+	//
+	// TO-DO (chenyu1): for upstream deployments, allow users to use the hub agent Helm chart to
+	// manage the lifecycle of the admission policies. The manager is reserved for environments
+	// where Helm based setup is not possible or not desired.
+	EnableAdmissionPolicyManager bool
+
+	// A file path to the configuration file for the KubeFleet admission policy manager. The file
+	// is a YAML file that specifies configuration for each policy generator available
+	// in the admission policy manager. See the KubeFleet source code for more information.
+	// If not specified, the default configuration will be used, which enables all available
+	// policy generators. This option only applies if the admission policy manager is enabled.
+	AdmissionPolicyManagerConfig string
 }
 
-// AddFlags adds flags for WebhookOptions to the specified FlagSet.
-func (o *WebhookOptions) AddFlags(flags *flag.FlagSet) {
+// AddFlags adds flags for WebhookAndAdmissionPolicyOptions to the specified FlagSet.
+func (o *WebhookAndAdmissionPolicyOptions) AddFlags(flags *flag.FlagSet) {
 	flags.BoolVar(
 		&o.EnableWebhooks,
 		"enable-webhook",
@@ -130,6 +149,20 @@ func (o *WebhookOptions) AddFlags(flags *flag.FlagSet) {
 		"use-cert-manager",
 		false,
 		"Use the cert-manager project for managing KubeFleet webhook server certificates or not. If set to false, the system will use self-signed certificates. If set to true, the EnableWorkload option must be set to true as well. This option only applies if webhooks are enabled.",
+	)
+
+	flags.BoolVar(
+		&o.EnableAdmissionPolicyManager,
+		"enable-admission-policy-manager",
+		false,
+		"Enable the KubeFleet admission policy manager or not. KubeFleet admission policy manager manages admission policies that help enforce and validate certain behaviors, which serves as an in-process, more performant and more available alternative to some of the applicable KubeFleet validating webhooks.",
+	)
+
+	flags.StringVar(
+		&o.AdmissionPolicyManagerConfig,
+		"admission-policy-manager-config",
+		"",
+		"A file path to the configuration file for the KubeFleet admission policy manager. The file is a JSON or YAML file that specifies configuration for each policy generator available in the admission policy manager. See the KubeFleet source code for more information. If not specified, the default configuration will be used, which enables all available policy generators. This option only applies if the admission policy manager is enabled.",
 	)
 }
 

@@ -1,0 +1,4 @@
+denyServiceAccountsAndTokenRequestsInReservedNamespaces:
+  ReservedNamespacePrefixes:
+    - fleet-
+    - kube-

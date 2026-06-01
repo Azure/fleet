@@ -18,12 +18,17 @@ package options
 
 import (
 	"flag"
+	"os"
+	"path/filepath"
 	"testing"
 	"time"
 
 	"github.com/google/go-cmp/cmp"
 	"github.com/onsi/gomega"
 	"k8s.io/apimachinery/pkg/util/validation/field"
+	"sigs.k8s.io/yaml"
+
+	"github.com/kubefleet-dev/kubefleet/pkg/admissionpolicymanager"
 )
 
 const (
@@ -44,7 +49,7 @@ func newTestOptions(modifyOptions ModifyOptions) Options {
 			LeaderElectionQPS:   250.0,
 			LeaderElectionBurst: 1000,
 		},
-		WebhookOpts: WebhookOptions{
+		WebhookAndAdmissionPolicyOpts: WebhookAndAdmissionPolicyOptions{
 			ClientConnectionType: "url",
 			ServiceName:          testWebhookServiceName,
 		},
@@ -65,7 +70,7 @@ func newTestOptions(modifyOptions ModifyOptions) Options {
 	return option
 }
 
-func TestValidateControllerManagerConfiguration(t *testing.T) {
+func TestValidation(t *testing.T) {
 	newPath := field.NewPath("Options")
 	testCases := map[string]struct {
 		opt  Options
@@ -91,26 +96,26 @@ func TestValidateControllerManagerConfiguration(t *testing.T) {
 		},
 		"WebhookServiceName is empty": {
 			opt: newTestOptions(func(option *Options) {
-				option.WebhookOpts.EnableWebhooks = true
-				option.WebhookOpts.ServiceName = ""
+				option.WebhookAndAdmissionPolicyOpts.EnableWebhooks = true
+				option.WebhookAndAdmissionPolicyOpts.ServiceName = ""
 			}),
 			want: field.ErrorList{field.Invalid(newPath.Child("WebhookServiceName"), "", "A webhook service name is required when webhooks are enabled")},
 		},
 		"UseCertManager without EnableWorkload": {
 			opt: newTestOptions(func(option *Options) {
-				option.WebhookOpts.EnableWebhooks = true
-				option.WebhookOpts.ServiceName = testWebhookServiceName
-				option.WebhookOpts.UseCertManager = true
-				option.WebhookOpts.EnableWorkload = false
+				option.WebhookAndAdmissionPolicyOpts.EnableWebhooks = true
+				option.WebhookAndAdmissionPolicyOpts.ServiceName = testWebhookServiceName
+				option.WebhookAndAdmissionPolicyOpts.UseCertManager = true
+				option.WebhookAndAdmissionPolicyOpts.EnableWorkload = false
 			}),
 			want: field.ErrorList{field.Invalid(newPath.Child("UseCertManager"), true, "If cert manager is used for securing webhook connections, the EnableWorkload option must be set to true, so that cert manager pods can run in the hub cluster.")},
 		},
 		"UseCertManager with EnableWebhook and EnableWorkload": {
 			opt: newTestOptions(func(option *Options) {
-				option.WebhookOpts.EnableWebhooks = true
-				option.WebhookOpts.ServiceName = testWebhookServiceName
-				option.WebhookOpts.UseCertManager = true
-				option.WebhookOpts.EnableWorkload = true
+				option.WebhookAndAdmissionPolicyOpts.EnableWebhooks = true
+				option.WebhookAndAdmissionPolicyOpts.ServiceName = testWebhookServiceName
+				option.WebhookAndAdmissionPolicyOpts.UseCertManager = true
+				option.WebhookAndAdmissionPolicyOpts.EnableWorkload = true
 			}),
 			want: field.ErrorList{},
 		},
@@ -146,6 +151,103 @@ func TestValidateControllerManagerConfiguration(t *testing.T) {
 	}
 }
 
+func TestValidateAdmissionPolicyManagerConfig(t *testing.T) {
+	newPath := field.NewPath("Options")
+	tmpDir := t.TempDir()
+
+	// Non-existent file: capture the OS error to mirror the exact detail string.
+	nonExistentPath := filepath.Join(tmpDir, "nonexistent.yaml")
+	_, readErr := os.ReadFile(nonExistentPath)
+
+	// Invalid YAML file.
+	invalidYAMLPath := filepath.Join(tmpDir, "invalid.yaml")
+	if err := os.WriteFile(invalidYAMLPath, []byte("[unclosed"), 0600); err != nil {
+		t.Fatalf("TestValidateAdmissionPolicyManagerConfig: failed to write invalid YAML file: %v", err)
+	}
+	var dummy admissionpolicymanager.PolicyGeneratorConfigs
+	yamlErr := yaml.Unmarshal([]byte("[unclosed"), &dummy)
+
+	// Config file that passes YAML parsing but fails Validate() (empty ReservedNamespacePrefixes).
+	invalidConfig := admissionpolicymanager.PolicyGeneratorConfigs{
+		PodsAndReplicaSetsVAPGeneratorConfig: &admissionpolicymanager.PodsAndReplicaSetsValidatingAdmissionPolicyGenerator{
+			ReservedNamespacePrefixes: []string{},
+		},
+	}
+	invalidConfigData, _ := yaml.Marshal(invalidConfig)
+	invalidConfigPath := filepath.Join(tmpDir, "invalid-config.yaml")
+	if err := os.WriteFile(invalidConfigPath, invalidConfigData, 0600); err != nil {
+		t.Fatalf("TestValidateAdmissionPolicyManagerConfig: failed to write invalid config file: %v", err)
+	}
+	configValidateErr := invalidConfig.Validate()
+
+	// Valid config file.
+	validConfig := admissionpolicymanager.PolicyGeneratorConfigs{
+		PodsAndReplicaSetsVAPGeneratorConfig: &admissionpolicymanager.PodsAndReplicaSetsValidatingAdmissionPolicyGenerator{
+			ReservedNamespacePrefixes: []string{"fleet-", "kube-"},
+		},
+	}
+	validConfigData, _ := yaml.Marshal(validConfig)
+	validConfigPath := filepath.Join(tmpDir, "valid-config.yaml")
+	if err := os.WriteFile(validConfigPath, validConfigData, 0600); err != nil {
+		t.Fatalf("TestValidateAdmissionPolicyManagerConfig: failed to write valid config file: %v", err)
+	}
+
+	testCases := map[string]struct {
+		opt  Options
+		want field.ErrorList
+	}{
+		"admission policy manager enabled, no config path specified": {
+			opt: newTestOptions(func(option *Options) {
+				option.WebhookAndAdmissionPolicyOpts.EnableAdmissionPolicyManager = true
+			}),
+			want: field.ErrorList{},
+		},
+		"admission policy manager enabled, config file does not exist": {
+			opt: newTestOptions(func(option *Options) {
+				option.WebhookAndAdmissionPolicyOpts.EnableAdmissionPolicyManager = true
+				option.WebhookAndAdmissionPolicyOpts.AdmissionPolicyManagerConfig = nonExistentPath
+			}),
+			want: field.ErrorList{
+				field.Invalid(newPath.Child("AdmissionPolicyManagerConfig"), nonExistentPath, "failed to read the admission policy manager config file: "+readErr.Error()),
+			},
+		},
+		"admission policy manager enabled, config file contains invalid YAML": {
+			opt: newTestOptions(func(option *Options) {
+				option.WebhookAndAdmissionPolicyOpts.EnableAdmissionPolicyManager = true
+				option.WebhookAndAdmissionPolicyOpts.AdmissionPolicyManagerConfig = invalidYAMLPath
+			}),
+			want: field.ErrorList{
+				field.Invalid(newPath.Child("AdmissionPolicyManagerConfig"), invalidYAMLPath, "failed to unmarshal the admission policy manager config file: "+yamlErr.Error()),
+			},
+		},
+		"admission policy manager enabled, config file fails validation": {
+			opt: newTestOptions(func(option *Options) {
+				option.WebhookAndAdmissionPolicyOpts.EnableAdmissionPolicyManager = true
+				option.WebhookAndAdmissionPolicyOpts.AdmissionPolicyManagerConfig = invalidConfigPath
+			}),
+			want: field.ErrorList{
+				field.Invalid(newPath.Child("AdmissionPolicyManagerConfig"), invalidConfigPath, "invalid admission policy manager config: "+configValidateErr.Error()),
+			},
+		},
+		"admission policy manager enabled, valid config file": {
+			opt: newTestOptions(func(option *Options) {
+				option.WebhookAndAdmissionPolicyOpts.EnableAdmissionPolicyManager = true
+				option.WebhookAndAdmissionPolicyOpts.AdmissionPolicyManagerConfig = validConfigPath
+			}),
+			want: field.ErrorList{},
+		},
+	}
+
+	for name, tc := range testCases {
+		t.Run(name, func(t *testing.T) {
+			got := tc.opt.Validate()
+			if diff := cmp.Diff(tc.want, got); diff != "" {
+				t.Errorf("Validate() errs mismatch (-want, +got):\n%s", diff)
+			}
+		})
+	}
+}
+
 func TestAddFlags(t *testing.T) {
 	g := gomega.NewWithT(t)
 	opts := NewOptions()
@@ -153,5 +255,5 @@ func TestAddFlags(t *testing.T) {
 	flags := flag.NewFlagSet("deny-modify-member-cluster-labels", flag.ExitOnError)
 	opts.AddFlags(flags)
 
-	g.Expect(opts.WebhookOpts.GuardRailDenyModifyMemberClusterLabels).To(gomega.BeFalse(), "deny-modify-member-cluster-labels should be false by default")
+	g.Expect(opts.WebhookAndAdmissionPolicyOpts.GuardRailDenyModifyMemberClusterLabels).To(gomega.BeFalse(), "deny-modify-member-cluster-labels should be false by default")
 }

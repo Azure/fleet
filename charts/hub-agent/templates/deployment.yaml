@@ -62,6 +62,13 @@ spec:
             - --cluster-unhealthy-threshold={{ .Values.clusterUnhealthyThreshold }}
             - --resource-snapshot-creation-minimum-interval={{ .Values.resourceSnapshotCreationMinimumInterval }}
             - --resource-changes-collection-duration={{ .Values.resourceChangesCollectionDuration }}
+            - --enable-admission-policy-manager={{ .Values.enableAdmissionPolicyManager }}
+            {{- if and .Values.admissionPolicyManagerConfigName (not .Values.additionalConfigData) }}
+            {{- fail "ERROR: admissionPolicyManagerConfigName is set but additionalConfigData is empty; must provide admission policy manager configuration data" }}
+            {{- end }}
+            {{- if and .Values.additionalConfigData .Values.admissionPolicyManagerConfigName }}
+            - --admission-policy-manager-config={{ .Values.additionalConfigDataMountPath }}/{{ .Values.admissionPolicyManagerConfigName }}
+            {{- end }}
           ports:
             - name: metrics
               containerPort: 8080
@@ -96,6 +103,11 @@ spec:
             # This path must match FleetWebhookCertDir in pkg/webhook/webhook.go
             mountPath: /tmp/k8s-webhook-server/serving-certs
             readOnly: true
+          {{- if .Values.additionalConfigData }}
+          - name: additional-config
+            mountPath: {{ .Values.additionalConfigDataMountPath }}
+            readOnly: true
+          {{- end }}
           {{- else }}
           volumeMounts:
           - name: webhook-cert
@@ -104,6 +116,11 @@ spec:
             # the read only root filesystem setup would block the agent from attempting to
             # clear the directory.
             mountPath: /tmp/k8s-webhook-server/
+          {{- if .Values.additionalConfigData }}
+          - name: additional-config
+            mountPath: {{ .Values.additionalConfigDataMountPath }}
+            readOnly: true
+          {{- end }}
           {{- end }}
       volumes:
       - name: webhook-cert
@@ -116,6 +133,11 @@ spec:
         {{- else }}
         emptyDir: {}
         {{- end }}
+      {{- if .Values.additionalConfigData }}
+      - name: additional-config
+        configMap:
+          name: {{ include "hub-agent.fullname" . }}-config
+      {{- end }}
       {{- with .Values.affinity }}
       affinity:
         {{- toYaml . | nindent 8 }}

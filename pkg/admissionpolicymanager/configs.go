@@ -17,7 +17,12 @@ limitations under the License.
 package admissionpolicymanager
 
 import (
+	"reflect"
+
+	"k8s.io/apimachinery/pkg/util/sets"
+
 	"github.com/kubefleet-dev/kubefleet/pkg/utils"
+	"github.com/kubefleet-dev/kubefleet/pkg/utils/errors"
 )
 
 // PolicyGeneratorConfigs holds the configurations for all available admission policy
@@ -38,4 +43,49 @@ var DefaultPolicyGeneratorConfigs = &PolicyGeneratorConfigs{
 	SvcAccountsAndTokenRequestsVAPGeneratorConfig: &ServiceAccountsAndTokenRequestsValidatingAdmissionPolicyGenerator{
 		ReservedNamespacePrefixes: []string{utils.FleetNSNamePrefix, utils.KubeNSNamePrefix},
 	},
+}
+
+// Validate validates each generator configuration in the given PolicyGeneratorConfigs.
+func (config *PolicyGeneratorConfigs) Validate() error {
+	if config == nil {
+		return nil
+	}
+
+	v := reflect.ValueOf(config).Elem()
+	for i := 0; i < v.NumField(); i++ {
+		field := v.Field(i)
+		if field.IsNil() {
+			continue
+		}
+		gen, ok := field.Interface().(ValidatingAdmissionPolicyGenerator)
+		if !ok {
+			continue
+		}
+		if err := gen.Validate(); err != nil {
+			return errors.Wraps(err, "one of the admission policy generators is invalid", "generator", gen.Name())
+		}
+	}
+	return nil
+}
+
+// EnabledGenerators returns the set of names of generators that are enabled in the configuration.
+func (config *PolicyGeneratorConfigs) EnabledGenerators() sets.Set[string] {
+	enabled := sets.New[string]()
+	if config == nil {
+		return enabled
+	}
+
+	v := reflect.ValueOf(config).Elem()
+	for i := 0; i < v.NumField(); i++ {
+		field := v.Field(i)
+		if field.IsNil() {
+			continue
+		}
+		gen, ok := field.Interface().(ValidatingAdmissionPolicyGenerator)
+		if !ok {
+			continue
+		}
+		enabled.Insert(gen.Name())
+	}
+	return enabled
 }

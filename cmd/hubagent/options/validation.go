@@ -17,7 +17,12 @@ limitations under the License.
 package options
 
 import (
+	"os"
+
 	"k8s.io/apimachinery/pkg/util/validation/field"
+	"k8s.io/apimachinery/pkg/util/yaml"
+
+	"github.com/kubefleet-dev/kubefleet/pkg/admissionpolicymanager"
 )
 
 // Validate checks Options and return a slice of found errs.
@@ -45,12 +50,12 @@ func (o *Options) Validate() field.ErrorList {
 	// but here the logic enforces that a service name must be provided. The way we handle
 	// URLs is also problematic as the code will always format a service-targeted URL using
 	// the input. We keep this logic for now for compatibility reasons.
-	if o.WebhookOpts.EnableWebhooks && o.WebhookOpts.ServiceName == "" {
-		errs = append(errs, field.Invalid(newPath.Child("WebhookServiceName"), o.WebhookOpts.ServiceName, "A webhook service name is required when webhooks are enabled"))
+	if o.WebhookAndAdmissionPolicyOpts.EnableWebhooks && o.WebhookAndAdmissionPolicyOpts.ServiceName == "" {
+		errs = append(errs, field.Invalid(newPath.Child("WebhookServiceName"), o.WebhookAndAdmissionPolicyOpts.ServiceName, "A webhook service name is required when webhooks are enabled"))
 	}
 
-	if o.WebhookOpts.UseCertManager && !o.WebhookOpts.EnableWorkload {
-		errs = append(errs, field.Invalid(newPath.Child("UseCertManager"), o.WebhookOpts.UseCertManager, "If cert manager is used for securing webhook connections, the EnableWorkload option must be set to true, so that cert manager pods can run in the hub cluster."))
+	if o.WebhookAndAdmissionPolicyOpts.UseCertManager && !o.WebhookAndAdmissionPolicyOpts.EnableWorkload {
+		errs = append(errs, field.Invalid(newPath.Child("UseCertManager"), o.WebhookAndAdmissionPolicyOpts.UseCertManager, "If cert manager is used for securing webhook connections, the EnableWorkload option must be set to true, so that cert manager pods can run in the hub cluster."))
 	}
 
 	if o.PlacementMgmtOpts.AllowedPropagatingAPIs != "" && o.PlacementMgmtOpts.SkippedPropagatingAPIs != "" {
@@ -66,5 +71,33 @@ func (o *Options) Validate() field.ErrorList {
 		errs = append(errs, field.Invalid(newPath.Child("PlacementControllerWorkQueueRateLimiterOpts").Child("RateLimiterQPS"), o.PlacementMgmtOpts.PlacementControllerWorkQueueRateLimiterOpts.RateLimiterQPS, "the QPS for the placement controller set rate limiter must be less than its bucket size"))
 	}
 
+	// Validate admission policy manager setup (if enabled).
+	if err := o.validateAdmissionPolicyManagerConfig(newPath); err != nil {
+		errs = append(errs, err)
+	}
+
 	return errs
+}
+
+func (o *Options) validateAdmissionPolicyManagerConfig(newPath *field.Path) *field.Error {
+	if o.WebhookAndAdmissionPolicyOpts.EnableAdmissionPolicyManager {
+		managerConfigPath := o.WebhookAndAdmissionPolicyOpts.AdmissionPolicyManagerConfig
+		if len(managerConfigPath) != 0 {
+			// Read the file from the path.
+			data, err := os.ReadFile(managerConfigPath)
+			if err != nil {
+				return field.Invalid(newPath.Child("AdmissionPolicyManagerConfig"), managerConfigPath, "failed to read the admission policy manager config file: "+err.Error())
+			}
+
+			policyGeneratorConfigs := &admissionpolicymanager.PolicyGeneratorConfigs{}
+			if err := yaml.Unmarshal(data, policyGeneratorConfigs); err != nil {
+				return field.Invalid(newPath.Child("AdmissionPolicyManagerConfig"), managerConfigPath, "failed to unmarshal the admission policy manager config file: "+err.Error())
+			}
+
+			if err := policyGeneratorConfigs.Validate(); err != nil {
+				return field.Invalid(newPath.Child("AdmissionPolicyManagerConfig"), managerConfigPath, "invalid admission policy manager config: "+err.Error())
+			}
+		}
+	}
+	return nil
 }

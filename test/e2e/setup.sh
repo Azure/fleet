@@ -150,6 +150,9 @@ helm install hub-agent ../../charts/hub-agent/ \
     --set clusterUnhealthyThreshold="3m0s" \
     --set logFileMaxSize=100000 \
     --set MaxConcurrentClusterPlacement=200 \
+    --set-file additionalConfigData.admissionPolicyManagerCfg=admission_policy_manager_cfg.yaml \
+    --set admissionPolicyManagerConfigName=admissionPolicyManagerCfg \
+    --set enableAdmissionPolicyManager=true \
     --set resourceSnapshotCreationMinimumInterval=$RESOURCE_SNAPSHOT_CREATION_MINIMUM_INTERVAL \
     --set resourceChangesCollectionDuration=$RESOURCE_CHANGES_COLLECTION_DURATION \
     --wait \
