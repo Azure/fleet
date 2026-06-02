@@ -89,39 +89,43 @@ _See [helm install](https://helm.sh/docs/helm/helm_install/) for command documen
 
 ## Parameters
 
-| Parameter                                 | Description                                                                                | Default                                          |
-|:------------------------------------------|:------------------------------------------------------------------------------------------|:-------------------------------------------------|
-| `replicaCount`                            | Number of hub-agent replicas to deploy                                                     | `1`                                              |
-| `image.repository`                        | Image repository                                                                           | `ghcr.io/kubefleet-dev/kubefleet/hub-agent`      |
-| `image.pullPolicy`                        | Image pull policy                                                                          | `Always`                                         |
-| `image.tag`                               | Image release tag (empty uses chart `appVersion`)                                          | `""`                                            |
-| `namespace`                               | Namespace where this chart is installed                                                    | `fleet-system`                                   |
-| `resources`                               | Resource requests/limits for the container                                                 | limits: 500m CPU, 1Gi; requests: 100m CPU, 128Mi |
-| `affinity`                                | Node affinity for hub-agent pods                                                           | `{}`                                             |
-| `tolerations`                             | Tolerations for hub-agent pods                                                             | `[]`                                             |
-| `logVerbosity`                            | Log level (klog V logs)                                                                    | `5`                                              |
-| `enableWebhook`                           | Enable webhook server                                                                      | `true`                                           |
-| `webhookServiceName`                      | Webhook service name                                                                       | `fleetwebhook`                                   |
-| `enableGuardRail`                         | Enable guard rail webhook configurations                                                   | `true`                                           |
-| `webhookClientConnectionType`             | Connection type for webhook client (service or url)                                        | `service`                                        |
-| `useCertManager`                          | Use cert-manager for webhook certificate management (requires `enableWorkload=true`)       | `false`                                          |
-| `webhookCertSecretName`                   | Name of the Secret where cert-manager stores the certificate (required when enabled)       | `unset`                                          |
-| `enableClusterInventoryAPI`               | Enable cluster inventory APIs                                                               | `true`                                           |
-| `enableStagedUpdateRunAPIs`               | Enable staged update run APIs                                                              | `true`                                           |
-| `enableEvictionAPIs`                      | Enable eviction APIs                                                                        | `true`                                           |
-| `enablePprof`                             | Enable pprof endpoint                                                                       | `true`                                           |
-| `pprofPort`                               | pprof server port                                                                           | `6065`                                           |
-| `hubAPIQPS`                               | QPS for fleet-apiserver (not including events/node heartbeat)                              | `250`                                            |
-| `hubAPIBurst`                             | Burst for fleet-apiserver (not including events/node heartbeat)                            | `1000`                                           |
-| `MaxConcurrentClusterPlacement`           | Max concurrent ClusterResourcePlacement operations                                         | `100`                                            |
-| `ConcurrentResourceChangeSyncs`           | Max concurrent resourceChange reconcilers                                                  | `20`                                             |
-| `logFileMaxSize`                          | Max log file size before rotation (optional)                                               | `unset`                                          |
-| `MaxFleetSizeSupported`                   | Max number of member clusters supported                                                    | `100`                                            |
-| `forceDeleteWaitTime`                     | Grace period before force-deleting resources                                                | `15m0s`                                          |
-| `clusterUnhealthyThreshold`               | Threshold duration for marking a cluster unhealthy                                          | `3m0s`                                           |
-| `resourceSnapshotCreationMinimumInterval` | The minimum interval at which resource snapshots could be created.                         | `30s`                                            |
-| `resourceChangesCollectionDuration`       | The duration for collecting resource changes into one snapshot.                            | `15s`                                            |
-| `enableWorkload`                          | Enable kubernetes builtin workload to run in hub cluster.                                  | `false`                                          |
+| Parameter | Description | Default |
+|:----------|:------------|:--------|
+| `replicaCount` | Number of hub-agent replicas to deploy | `1` |
+| `image.repository` | Image repository | `ghcr.io/kubefleet-dev/kubefleet/hub-agent` |
+| `image.pullPolicy` | Image pull policy | `Always` |
+| `image.tag` | Image release tag (empty uses chart `appVersion`) | `""` |
+| `namespace` | Namespace where this chart is installed | `fleet-system` |
+| `resources` | Resource requests/limits for the container | limits: 500m CPU, 1Gi; requests: 100m CPU, 128Mi |
+| `affinity` | Node affinity for hub-agent pods | `{}` |
+| `tolerations` | Tolerations for hub-agent pods | `[]` |
+| `logVerbosity` | Log level (klog V logs) | `5` |
+| `enableWebhook` | Enable webhook server | `true` |
+| `webhookServiceName` | Webhook service name | `fleetwebhook` |
+| `enableGuardRail` | Enable guard rail webhook configurations | `true` |
+| `webhookClientConnectionType` | Connection type for webhook client (service or url) | `service` |
+| `useCertManager` | Use cert-manager for webhook certificate management (requires `enableWorkload=true`) | `false` |
+| `webhookCertSecretName` | Name of the Secret where cert-manager stores the certificate (required when enabled) | `unset` |
+| `enableClusterInventoryAPI` | Enable cluster inventory APIs | `true` |
+| `enableStagedUpdateRunAPIs` | Enable staged update run APIs | `true` |
+| `enableEvictionAPIs` | Enable eviction APIs | `true` |
+| `enablePprof` | Enable pprof endpoint | `true` |
+| `pprofPort` | pprof server port | `6065` |
+| `hubAPIQPS` | QPS for fleet-apiserver (not including events/node heartbeat) | `250` |
+| `hubAPIBurst` | Burst for fleet-apiserver (not including events/node heartbeat) | `1000` |
+| `MaxConcurrentClusterPlacement` | Max concurrent ClusterResourcePlacement operations | `100` |
+| `ConcurrentResourceChangeSyncs` | Max concurrent resourceChange reconcilers | `20` |
+| `logFileMaxSize` | Max log file size before rotation (optional) | `unset` |
+| `MaxFleetSizeSupported` | Max number of member clusters supported | `100` |
+| `forceDeleteWaitTime` | Grace period before force-deleting resources | `15m0s` |
+| `clusterUnhealthyThreshold` | Threshold duration for marking a cluster unhealthy | `3m0s` |
+| `resourceSnapshotCreationMinimumInterval` | The minimum interval at which resource snapshots could be created | `30s` |
+| `resourceChangesCollectionDuration` | The duration for collecting resource changes into one snapshot | `15s` |
+| `enableWorkload` | Enable kubernetes builtin workload to run in hub cluster | `false` |
+| `additionalConfigData` | Additional key-value data to include in the hub agent config map | `{}` |
+| `additionalConfigDataMountPath` | Mount path for the additional config data volume | `/etc/kubefleet/additional-config` |
+| `enableAdmissionPolicyManager` | Enable the admission policy manager to enforce VAP-based policies on the hub cluster | `false` |
+| `admissionPolicyManagerConfigName` | Name of the key that contains the admission policy manager configuration in the hub agent config map | `""` |
 
 ## Certificate Management
 

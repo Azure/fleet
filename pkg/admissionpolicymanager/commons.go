@@ -32,6 +32,10 @@ const (
 	illegalCELStringChars = `'"\`
 )
 
+const (
+	aksSupportUser = "aks-support"
+)
+
 var (
 	// reservedNamespacePrefixRegexp matches valid namespace prefix characters (DNS label subset).
 	reservedNamespacePrefixRegexp = regexp.MustCompile(`^[a-z0-9-]+$`)

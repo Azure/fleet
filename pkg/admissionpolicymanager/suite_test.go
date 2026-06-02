@@ -94,11 +94,7 @@ var _ = BeforeSuite(func() {
 	Expect(hubUncachedClient).ToNot(BeNil())
 
 	By("Setting up the policy manager")
-	enabledGeneratorNames := []string{}
-	for name := range allGenerators {
-		enabledGeneratorNames = append(enabledGeneratorNames, name)
-	}
-	policyManager, err := New(hubUncachedClient, DefaultPolicyGeneratorConfigs, enabledGeneratorNames)
+	policyManager, err := New(hubUncachedClient, DefaultPolicyGeneratorConfigs)
 	Expect(err).ToNot(HaveOccurred())
 	Expect(policyManager).ToNot(BeNil())
 	Expect(policyManager.Start(ctx)).To(Succeed())

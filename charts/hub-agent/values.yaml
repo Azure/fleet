@@ -66,3 +66,16 @@ hubAPIBurst: 1000
 MaxConcurrentClusterPlacement: 100
 ConcurrentResourceChangeSyncs: 20
 MaxFleetSizeSupported: 100
+
+additionalConfigData: {}
+additionalConfigDataMountPath: /etc/kubefleet/additional-config
+
+# Local chart specific changes:
+# Admission policy manager is enabled by default in the managed solution; the
+# chart default value is overridden here to verify this behavior.
+enableAdmissionPolicyManager: true
+
+# Local chart specific changes:
+# Due to release complications, the admission policy manager in the managed solution
+# always use the default configuration as defined in the code.
+admissionPolicyManagerConfigName: ""
