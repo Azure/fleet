@@ -1,0 +1,11 @@
+# Note: for the internal fork repo, this file is only used to signal the test
+# setup which VAPs are enabled or not. The specific configurations for each
+# VAP are not in use.
+denyPodsAndReplicaSetsOutsideReservedNamespaces:
+  ReservedNamespacePrefixes:
+    - fleet-
+    - kube-
+denyServiceAccountsAndTokenRequestsInReservedNamespaces:
+  ReservedNamespacePrefixes:
+    - fleet-
+    - kube-

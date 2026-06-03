@@ -707,13 +707,14 @@ func TestPlacementManagementOptions(t *testing.T) {
 	}
 }
 
-// TestWebhookOptions tests the parsing and validation logic of the webhook options defined in WebhookOptions.
+// TestWebhookAndAdmissionPolicyOptions tests the parsing and validation logic of the webhook
+// options defined in WebhookAndAdmissionPolicyOptions.
 func TestWebhookOptions(t *testing.T) {
 	testCases := []struct {
 		name             string
 		flagSetName      string
 		args             []string
-		wantWebhookOpts  WebhookOptions
+		wantWebhookOpts  WebhookAndAdmissionPolicyOptions
 		wantErred        bool
 		wantErrMsgSubStr string
 	}{
@@ -721,7 +722,7 @@ func TestWebhookOptions(t *testing.T) {
 			name:        "all default",
 			flagSetName: "allDefault",
 			args:        []string{},
-			wantWebhookOpts: WebhookOptions{
+			wantWebhookOpts: WebhookAndAdmissionPolicyOptions{
 				EnableWebhooks:                         true,
 				ClientConnectionType:                   "url",
 				ServiceName:                            "fleetwebhook",
@@ -731,6 +732,8 @@ func TestWebhookOptions(t *testing.T) {
 				EnableWorkload:                         false,
 				EnablePDBs:                             true,
 				UseCertManager:                         false,
+				EnableAdmissionPolicyManager:           false,
+				AdmissionPolicyManagerConfig:           "",
 			},
 		},
 		{
@@ -745,8 +748,10 @@ func TestWebhookOptions(t *testing.T) {
 				"--deny-modify-member-cluster-labels=true",
 				"--enable-workload=true",
 				"--use-cert-manager=true",
+				"--enable-admission-policy-manager=true",
+				"--admission-policy-manager-config=/etc/fleet/policy-config.json",
 			},
-			wantWebhookOpts: WebhookOptions{
+			wantWebhookOpts: WebhookAndAdmissionPolicyOptions{
 				EnableWebhooks:                         false,
 				ClientConnectionType:                   "service",
 				ServiceName:                            "customwebhook",
@@ -756,13 +761,15 @@ func TestWebhookOptions(t *testing.T) {
 				EnableWorkload:                         true,
 				EnablePDBs:                             true,
 				UseCertManager:                         true,
+				EnableAdmissionPolicyManager:           true,
+				AdmissionPolicyManagerConfig:           "/etc/fleet/policy-config.json",
 			},
 		},
 		{
 			name:        "webhook client connection type URL (case-insensitive)",
 			flagSetName: "webhookClientConnTypeURL",
 			args:        []string{"--webhook-client-connection-type=URL"},
-			wantWebhookOpts: WebhookOptions{
+			wantWebhookOpts: WebhookAndAdmissionPolicyOptions{
 				EnableWebhooks:                         true,
 				ClientConnectionType:                   "url",
 				ServiceName:                            "fleetwebhook",
@@ -772,13 +779,15 @@ func TestWebhookOptions(t *testing.T) {
 				EnableWorkload:                         false,
 				EnablePDBs:                             true,
 				UseCertManager:                         false,
+				EnableAdmissionPolicyManager:           false,
+				AdmissionPolicyManagerConfig:           "",
 			},
 		},
 		{
 			name:        "webhook client connection type service (case-insensitive)",
 			flagSetName: "webhookClientConnTypeService",
 			args:        []string{"--webhook-client-connection-type=Service"},
-			wantWebhookOpts: WebhookOptions{
+			wantWebhookOpts: WebhookAndAdmissionPolicyOptions{
 				EnableWebhooks:                         true,
 				ClientConnectionType:                   "service",
 				ServiceName:                            "fleetwebhook",
@@ -788,6 +797,8 @@ func TestWebhookOptions(t *testing.T) {
 				EnableWorkload:                         false,
 				EnablePDBs:                             true,
 				UseCertManager:                         false,
+				EnableAdmissionPolicyManager:           false,
+				AdmissionPolicyManagerConfig:           "",
 			},
 		},
 		{
@@ -802,8 +813,8 @@ func TestWebhookOptions(t *testing.T) {
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
 			flags := flag.NewFlagSet(tc.flagSetName, flag.ContinueOnError)
-			webhookOpts := WebhookOptions{}
-			webhookOpts.AddFlags(flags)
+			webhookAndAdmissionPolicyOpts := WebhookAndAdmissionPolicyOptions{}
+			webhookAndAdmissionPolicyOpts.AddFlags(flags)
 
 			err := flags.Parse(tc.args)
 			if tc.wantErred {
@@ -821,7 +832,7 @@ func TestWebhookOptions(t *testing.T) {
 				t.Fatalf("flag Parse() = %v, want nil", err)
 			}
 
-			if diff := cmp.Diff(webhookOpts, tc.wantWebhookOpts); diff != "" {
+			if diff := cmp.Diff(webhookAndAdmissionPolicyOpts, tc.wantWebhookOpts); diff != "" {
 				t.Errorf("webhook options diff (-got, +want):\n%s", diff)
 			}
 		})

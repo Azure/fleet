@@ -254,7 +254,7 @@ func TestNewWebhookConfigFromOptions(t *testing.T) {
 	}{
 		"valid options with cert-manager": {
 			opts: &options.Options{
-				WebhookOpts: options.WebhookOptions{
+				WebhookAndAdmissionPolicyOpts: options.WebhookAndAdmissionPolicyOptions{
 					ServiceName:                            "test-webhook",
 					ClientConnectionType:                   "service",
 					EnableGuardRail:                        true,
@@ -285,7 +285,7 @@ func TestNewWebhookConfigFromOptions(t *testing.T) {
 		},
 		"valid options without cert-manager": {
 			opts: &options.Options{
-				WebhookOpts: options.WebhookOptions{
+				WebhookAndAdmissionPolicyOpts: options.WebhookAndAdmissionPolicyOptions{
 					ServiceName:                            "test-webhook",
 					ClientConnectionType:                   "url",
 					EnableGuardRail:                        false,

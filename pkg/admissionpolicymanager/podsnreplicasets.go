@@ -39,6 +39,14 @@ const (
 	podsAndReplicaSetsVAPPolicyBindingName = "deny-pods-and-replicasets-outside-reserved-namespaces-binding"
 )
 
+const (
+	reconcileIfManagedLabelKey   = "fleet.azure.com/reconcile"
+	reconcileIfManagedLabelValue = "managed"
+
+	deploymentControllerUserName = "system:serviceaccount:kube-system:deployment-controller"
+	replicaSetControllerUserName = "system:serviceaccount:kube-system:replicaset-controller"
+)
+
 // Verify that PodsAndReplicaSetsValidatingAdmissionPolicyGenerator implements
 // the ValidatingAdmissionPolicyGenerator interface.
 var _ ValidatingAdmissionPolicyGenerator = &PodsAndReplicaSetsValidatingAdmissionPolicyGenerator{}
@@ -78,6 +86,14 @@ func (g *PodsAndReplicaSetsValidatingAdmissionPolicyGenerator) PoliciesWithBindi
 	for _, prefix := range g.ReservedNamespacePrefixes {
 		celExprSegs = append(celExprSegs, fmt.Sprintf(`request.namespace.startsWith("%s")`, prefix))
 	}
+
+	// Custom (Azure-specific) logic: allow pods and replica sets to be created if they
+	// have the fleet.azure.com/reconcile=managed label and they are created by the deployment or replica set
+	// controllers (or the controller manager, just in case per controller service account is not enabled).
+	hasReconcileIfManagedLabel := fmt.Sprintf(`object.metadata.labels["%s"] == "%s"`, reconcileIfManagedLabelKey, reconcileIfManagedLabelValue)
+	createdByControllerManager := fmt.Sprintf(`request.userInfo.username == "%s" || request.userInfo.username == "%s" || request.userInfo.username == "%s"`, deploymentControllerUserName, replicaSetControllerUserName, kubeControllerManagerUserName)
+	celExprSegs = append(celExprSegs, fmt.Sprintf("(%s && (%s))", hasReconcileIfManagedLabel, createdByControllerManager))
+
 	celExpr := strings.Join(celExprSegs, " || ")
 
 	policy := &admissionregistrationv1.ValidatingAdmissionPolicy{
