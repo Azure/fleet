@@ -1,5 +1,5 @@
 # Build the crdinstaller binary
-FROM mcr.microsoft.com/oss/go/microsoft/golang:1.25.10 AS builder
+FROM mcr.microsoft.com/oss/go/microsoft/golang:1.25.11 AS builder
 
 ARG GOOS=linux
 ARG GOARCH=amd64
