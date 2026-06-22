@@ -88,7 +88,7 @@ type PolicyWithBindings struct {
 type ValidatingAdmissionPolicyGenerator interface {
 	Name() string
 	Validate() error
-	PoliciesWithBindings() []PolicyWithBindings
+	PoliciesWithBindings() ([]PolicyWithBindings, error)
 }
 
 type PolicyManager struct {
@@ -165,7 +165,10 @@ func (m *PolicyManager) createOrUpdatePoliciesAndBindingsForEnabledGenerators(ct
 			return nil, nil, errors.Wraps(err, "policy generator is invalid", "generator", gen.Name())
 		}
 
-		policiesWithBindings := gen.PoliciesWithBindings()
+		policiesWithBindings, err := gen.PoliciesWithBindings()
+		if err != nil {
+			return nil, nil, errors.Wraps(err, "failed to build policies with bindings", "generator", gen.Name())
+		}
 
 		for _, pb := range policiesWithBindings {
 			policy := pb.Policy

@@ -20,9 +20,6 @@ limitations under the License.
 package admissionpolicymanager
 
 import (
-	"fmt"
-	"strings"
-
 	admissionregistrationv1 "k8s.io/api/admissionregistration/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/utils/ptr"
@@ -100,17 +97,7 @@ func (g *ServiceAccountsAndTokenRequestsValidatingAdmissionPolicyGenerator) Vali
 // except for requests from certain whitelisted users and user groups.
 //
 // For simplicity reasons, the code here assumes that the generator has been validated before PoliciesWithBindings() is called.
-func (g *ServiceAccountsAndTokenRequestsValidatingAdmissionPolicyGenerator) PoliciesWithBindings() []PolicyWithBindings {
-	celExprAccSegs := []string{}
-
-	// Exempt whitelisted users from this admission policy.
-	for _, username := range g.WhitelistedUsernames {
-		celExprAccSegs = append(celExprAccSegs, fmt.Sprintf(`request.userInfo.username == "%s"`, username))
-	}
-	// Exempt whitelisted user groups from this admission policy.
-	for _, userGroup := range g.WhitelistedUserGroups {
-		celExprAccSegs = append(celExprAccSegs, fmt.Sprintf(`"%s" in request.userInfo.groups`, userGroup))
-	}
+func (g *ServiceAccountsAndTokenRequestsValidatingAdmissionPolicyGenerator) PoliciesWithBindings() ([]PolicyWithBindings, error) {
 	// Exempt requests from the Kubernetes scheduler, any of the nodes, and (esp.) the
 	// Kubernetes controller manager from this admission policy.
 	//
@@ -118,29 +105,58 @@ func (g *ServiceAccountsAndTokenRequestsValidatingAdmissionPolicyGenerator) Poli
 	// --use-service-account-credentials=true, creates a service account token for many of its controllers
 	// and uses those tokens to authenticate to the Kubernetes API server. It retrieves a token
 	// via the TokenRequest API; failure to exempt this scenario may lead to critical errors.
-	celExprAccSegs = append(celExprAccSegs, fmt.Sprintf(`request.userInfo.username == "%s"`, kubeSchedulerUserName))
-	celExprAccSegs = append(celExprAccSegs, fmt.Sprintf(`request.userInfo.username == "%s"`, kubeControllerManagerUserName))
-	celExprAccSegs = append(celExprAccSegs, fmt.Sprintf(`"%s" in request.userInfo.groups`, kubeNodeUserGroup))
+	isFromKubeScheduler := isFromUsername(kubeSchedulerUserName)
+	isFromKubeControllerManager := isFromUsername(kubeControllerManagerUserName)
+	isFromNodeUserGroup := isFromUserGroup(kubeNodeUserGroup)
+
 	// Exempt requests from cluster admin users from this admission policy.
-	celExprAccSegs = append(celExprAccSegs, fmt.Sprintf(`"%s" in request.userInfo.groups`, adminUserGroup))
+	isFromClusterAdmins := isFromUserGroup(adminUserGroup)
+
 	// Exempt kubeadm cluster admins from this policy as well, so that bootstrapping a hub cluster with
 	// kubeadm credentials can proceed without being blocked.
-	celExprAccSegs = append(celExprAccSegs, fmt.Sprintf(`"%s" in request.userInfo.groups`, kubeadmAdminUserGroup))
+	isFromKubeadmClusterAdmins := isFromUserGroup(kubeadmAdminUserGroup)
+
 	// Exempt service accounts from this admission policy. Note that VAP check happens after authentication and
 	// authorization have been performed. This is added to keep things consistent with the original webhook behavior,
 	// and also for the reason that some controller manager components (e.g., the service account controller)
 	// need to create service accounts as part of their normal operations.
-	celExprAccSegs = append(celExprAccSegs, fmt.Sprintf(`"%s" in request.userInfo.groups`, svcAccountUserGroup))
+	isFromSvcAccounts := isFromUserGroup(svcAccountUserGroup)
 
-	celExprAcc := strings.Join(celExprAccSegs, " || ")
+	isFromAllowedRequesters := LogicalOr(
+		isFromKubeScheduler,
+		isFromKubeControllerManager,
+		isFromNodeUserGroup,
+		isFromClusterAdmins,
+		isFromKubeadmClusterAdmins,
+		isFromSvcAccounts,
+	)
 
-	celExprNSSegs := []string{}
-	for _, prefix := range g.ReservedNamespacePrefixes {
-		celExprNSSegs = append(celExprNSSegs, fmt.Sprintf(`request.namespace.startsWith("%s")`, prefix))
+	// Exempt additionally configured users from this admission policy.
+	for _, username := range g.WhitelistedUsernames {
+		isFromAllowedRequesters.Add(isFromUsername(username))
 	}
-	celExprNS := strings.Join(celExprNSSegs, " || ")
 
-	celExpr := fmt.Sprintf("!(%s) || (%s)", celExprNS, celExprAcc)
+	// Exempt additionally configured user groups from this admission policy.
+	for _, userGroup := range g.WhitelistedUserGroups {
+		isFromAllowedRequesters.Add(isFromUserGroup(userGroup))
+	}
+
+	// Allow the request if it is not targeting reserved namespaces.
+	isInReservedNamespaces := LogicalOr()
+	for _, prefix := range g.ReservedNamespacePrefixes {
+		isInReservedNamespaces.Add(isInNamespaceWithPrefix(prefix))
+	}
+
+	celExprTree := LogicalOr(
+		LogicalNot(
+			isInReservedNamespaces,
+		),
+		isFromAllowedRequesters,
+	)
+	celExpr, err := celExprTree.Build()
+	if err != nil {
+		return nil, errors.Wraps(err, "failed to build CEL expression")
+	}
 
 	policy := &admissionregistrationv1.ValidatingAdmissionPolicy{
 		ObjectMeta: metav1.ObjectMeta{
@@ -209,5 +225,5 @@ func (g *ServiceAccountsAndTokenRequestsValidatingAdmissionPolicyGenerator) Poli
 			Policy:   policy,
 			Bindings: []*admissionregistrationv1.ValidatingAdmissionPolicyBinding{binding},
 		},
-	}
+	}, nil
 }

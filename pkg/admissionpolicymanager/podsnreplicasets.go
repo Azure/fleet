@@ -20,9 +20,6 @@ limitations under the License.
 package admissionpolicymanager
 
 import (
-	"fmt"
-	"strings"
-
 	admissionregistrationv1 "k8s.io/api/admissionregistration/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/utils/ptr"
@@ -73,12 +70,16 @@ func (g *PodsAndReplicaSetsValidatingAdmissionPolicyGenerator) Validate() error 
 // replicasets in non-reserved namespaces.
 //
 // For simplicity reasons, the code here assumes that the generator has been validated before PoliciesWithBindings() is called.
-func (g *PodsAndReplicaSetsValidatingAdmissionPolicyGenerator) PoliciesWithBindings() []PolicyWithBindings {
-	celExprSegs := []string{}
+func (g *PodsAndReplicaSetsValidatingAdmissionPolicyGenerator) PoliciesWithBindings() ([]PolicyWithBindings, error) {
+	isInReservedNamespaces := LogicalOr()
 	for _, prefix := range g.ReservedNamespacePrefixes {
-		celExprSegs = append(celExprSegs, fmt.Sprintf(`request.namespace.startsWith("%s")`, prefix))
+		isInReservedNamespaces.Add(isInNamespaceWithPrefix(prefix))
 	}
-	celExpr := strings.Join(celExprSegs, " || ")
+
+	celExpr, err := isInReservedNamespaces.Build()
+	if err != nil {
+		return nil, errors.Wraps(err, "failed to build CEL expression")
+	}
 
 	policy := &admissionregistrationv1.ValidatingAdmissionPolicy{
 		ObjectMeta: metav1.ObjectMeta{
@@ -142,5 +143,5 @@ func (g *PodsAndReplicaSetsValidatingAdmissionPolicyGenerator) PoliciesWithBindi
 			Policy:   policy,
 			Bindings: []*admissionregistrationv1.ValidatingAdmissionPolicyBinding{binding},
 		},
-	}
+	}, nil
 }

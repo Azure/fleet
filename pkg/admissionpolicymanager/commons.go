@@ -18,6 +18,7 @@ package admissionpolicymanager
 
 import (
 	"context"
+	"fmt"
 	"regexp"
 	"strings"
 
@@ -80,4 +81,16 @@ func validateCELStringLiterals(strs ...string) error {
 		}
 	}
 	return nil
+}
+
+func isInNamespaceWithPrefix(p string) CELExprTreeNode {
+	return RawCELExpr(fmt.Sprintf(`request.namespace.startsWith("%s")`, p))
+}
+
+func isFromUsername(u string) CELExprTreeNode {
+	return RawCELExpr(fmt.Sprintf(`request.userInfo.username == "%s"`, u))
+}
+
+func isFromUserGroup(g string) CELExprTreeNode {
+	return RawCELExpr(fmt.Sprintf(`"%s" in request.userInfo.groups`, g))
 }
