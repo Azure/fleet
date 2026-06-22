@@ -21,9 +21,9 @@ import (
 	"fmt"
 )
 
-// WebhookOptions is a set of options the KubeFleet hub agent exposes for
-// controlling webhook behavior.
-type WebhookOptions struct {
+// WebhookAndAdmissionPolicyOptions is a set of options the KubeFleet hub agent exposes for
+// controlling webhook and admission policy behavior.
+type WebhookAndAdmissionPolicyOptions struct {
 	// Enable the KubeFleet webhooks or not.
 	EnableWebhooks bool
 
@@ -52,18 +52,42 @@ type WebhookOptions struct {
 
 	// Enable workload resources (pods and replicaSets) to be created in the hub cluster or not.
 	// If set to false, the KubeFleet pod and replicaset validating webhooks, which blocks the creation
-	// of pods and replicaSets outside KubeFleet reserved namespaces for most users, will be disabled.
+	// of pods and replicaSets outside KubeFleet reserved namespaces for most users, will be enabled.
 	// This option only applies if webhooks are enabled.
 	EnableWorkload bool
+
+	// Enable PodDisruptionBudgets to be created in the hub cluster or not. If set to false, the KubeFleet
+	// PodDisruptionBudget validating webhook, which blocks the creation of PodDisruptionBudgets outside KubeFleet
+	// reserved namespaces, will be enabled. This option only applies if webhooks are enabled.
+	EnablePDBs bool
 
 	// Use the cert-manager project for managing KubeFleet webhook server certificates or not.
 	// If set to false, the system will use self-signed certificates.
 	// This option only applies if webhooks are enabled.
 	UseCertManager bool
+
+	// Enable the KubeFleet admission policy manager or not.
+	//
+	// KubeFleet admission policy manager manages admission policies that help enforce and validate
+	// certain behaviors, which serves as an in-process, more performant and more available alternative
+	// to some of the applicable KubeFleet validating webhooks. The manager installs and uninstalls
+	// admission policies when the hub agent starts.
+	//
+	// TO-DO (chenyu1): for upstream deployments, allow users to use the hub agent Helm chart to
+	// manage the lifecycle of the admission policies. The manager is reserved for environments
+	// where Helm based setup is not possible or not desired.
+	EnableAdmissionPolicyManager bool
+
+	// A file path to the configuration file for the KubeFleet admission policy manager. The file
+	// is a YAML file that specifies configuration for each policy generator available
+	// in the admission policy manager. See the KubeFleet source code for more information.
+	// If not specified, the default configuration will be used, which enables all available
+	// policy generators. This option only applies if the admission policy manager is enabled.
+	AdmissionPolicyManagerConfig string
 }
 
-// AddFlags adds flags for WebhookOptions to the specified FlagSet.
-func (o *WebhookOptions) AddFlags(flags *flag.FlagSet) {
+// AddFlags adds flags for WebhookAndAdmissionPolicyOptions to the specified FlagSet.
+func (o *WebhookAndAdmissionPolicyOptions) AddFlags(flags *flag.FlagSet) {
 	flags.BoolVar(
 		&o.EnableWebhooks,
 		"enable-webhook",
@@ -71,22 +95,10 @@ func (o *WebhookOptions) AddFlags(flags *flag.FlagSet) {
 		"Enable the KubeFleet webhooks or not.",
 	)
 
-	flags.Func(
+	flags.Var(
+		newWebhookClientConnTypeValueWithValidation(string(URL), &o.ClientConnectionType),
 		"webhook-client-connection-type",
 		"The connection type used by the webhook client. Valid values are `url` and `service`. Defaults to `url`. This option only applies if webhooks are enabled.",
-		func(s string) error {
-			if len(s) == 0 {
-				o.ClientConnectionType = "url"
-				return nil
-			}
-
-			parsedStr, err := parseWebhookClientConnectionString(s)
-			if err != nil {
-				return fmt.Errorf("invalid webhook client connection type: %w", err)
-			}
-			o.ClientConnectionType = string(parsedStr)
-			return nil
-		},
 	)
 
 	flags.StringVar(
@@ -121,7 +133,15 @@ func (o *WebhookOptions) AddFlags(flags *flag.FlagSet) {
 		&o.EnableWorkload,
 		"enable-workload",
 		false,
-		"Enable workload resources (pods and replicaSets) to be created in the hub cluster or not. If set to false, the KubeFleet pod and replicaset validating webhooks, which blocks the creation of pods and replicaSets outside KubeFleet reserved namespaces for most users, will be disabled. This option only applies if webhooks are enabled.",
+		"Enable workload resources (pods and replicaSets) to be created directly in the hub cluster or not. If set to true, the KubeFleet pod and replicaset validating webhooks, which blocks the creation of pods and replicaSets outside KubeFleet reserved namespaces for most users, will be disabled. This option only applies if webhooks are enabled.",
+	)
+
+	flags.BoolVar(
+		&o.EnablePDBs,
+		"enable-pdbs",
+		// TO-DO (chenyu1): use the true value for compatibility reasons; this will be set to false in a later release.
+		true,
+		"Enable PodDisruptionBudgets to be created directly in the hub cluster or not. If set to true, the KubeFleet PodDisruptionBudget validating webhook, which blocks the creation of PodDisruptionBudgets outside KubeFleet reserved namespaces, will be disabled. This option only applies if webhooks are enabled.",
 	)
 
 	flags.BoolVar(
@@ -130,4 +150,45 @@ func (o *WebhookOptions) AddFlags(flags *flag.FlagSet) {
 		false,
 		"Use the cert-manager project for managing KubeFleet webhook server certificates or not. If set to false, the system will use self-signed certificates. If set to true, the EnableWorkload option must be set to true as well. This option only applies if webhooks are enabled.",
 	)
+
+	flags.BoolVar(
+		&o.EnableAdmissionPolicyManager,
+		"enable-admission-policy-manager",
+		// Enable the admission policy manage by default in the managed solution; this is set here
+		// to avoid release complications.
+		true,
+		"Enable the KubeFleet admission policy manager or not. KubeFleet admission policy manager manages admission policies that help enforce and validate certain behaviors, which serves as an in-process, more performant and more available alternative to some of the applicable KubeFleet validating webhooks.",
+	)
+
+	flags.StringVar(
+		&o.AdmissionPolicyManagerConfig,
+		"admission-policy-manager-config",
+		"",
+		"A file path to the configuration file for the KubeFleet admission policy manager. The file is a JSON or YAML file that specifies configuration for each policy generator available in the admission policy manager. See the KubeFleet source code for more information. If not specified, the default configuration will be used, which enables all available policy generators. This option only applies if the admission policy manager is enabled.",
+	)
+}
+
+type WebhookClientConnTypeValueWithValidation string
+
+func (v *WebhookClientConnTypeValueWithValidation) String() string {
+	return string(*v)
+}
+
+func (v *WebhookClientConnTypeValueWithValidation) Set(s string) error {
+	if len(s) == 0 {
+		*v = "url"
+		return nil
+	}
+
+	parsedStr, err := parseWebhookClientConnectionString(s)
+	if err != nil {
+		return fmt.Errorf("invalid webhook client connection type: %w", err)
+	}
+	*v = WebhookClientConnTypeValueWithValidation(parsedStr)
+	return nil
+}
+
+func newWebhookClientConnTypeValueWithValidation(defaultVal string, p *string) *WebhookClientConnTypeValueWithValidation {
+	*p = defaultVal
+	return (*WebhookClientConnTypeValueWithValidation)(p)
 }

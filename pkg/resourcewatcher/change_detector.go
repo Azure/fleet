@@ -152,9 +152,8 @@ func (d *ChangeDetector) discoverResources(dynamicResourceEventHandler cache.Res
 	klog.V(2).InfoS("Change detector: discovered resources", "count", len(resourcesToWatch))
 }
 
-// dynamicResourceFilter filters out resources that we don't want to watch
-// TODO: add UTs for this
-func (d *ChangeDetector) dynamicResourceFilter(obj interface{}) bool {
+// dynamicResourceFilter filters out resources that we don't want to watch.
+func (d *ChangeDetector) dynamicResourceFilter(obj any) bool {
 	key, err := controller.ClusterWideKeyFunc(obj)
 	if err != nil {
 		return false
@@ -191,8 +190,8 @@ func (d *ChangeDetector) NeedLeaderElection() bool {
 // Note: An object that starts passing the filter after an update is considered an add, and
 // an object that stops passing the filter after an update is considered a delete.
 // Like the handlers, the filter MUST NOT modify the objects it is given.
-func newFilteringHandlerOnAllEvents(filterFunc func(obj interface{}) bool, addFunc func(obj interface{}),
-	updateFunc func(oldObj, newObj interface{}), deleteFunc func(obj interface{})) cache.ResourceEventHandler {
+func newFilteringHandlerOnAllEvents(filterFunc func(obj any) bool, addFunc func(obj any),
+	updateFunc func(oldObj, newObj any), deleteFunc func(obj any)) cache.ResourceEventHandler {
 	return &cache.FilteringResourceEventHandler{
 		FilterFunc: filterFunc,
 		Handler: cache.ResourceEventHandlerFuncs{

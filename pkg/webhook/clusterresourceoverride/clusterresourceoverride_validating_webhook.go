@@ -46,7 +46,7 @@ type clusterResourceOverrideValidator struct {
 	decoder webhook.AdmissionDecoder
 }
 
-// Add registers the webhook for K8s bulit-in object types.
+// Add registers the webhook for K8s built-in object types.
 func Add(mgr manager.Manager) error {
 	hookServer := mgr.GetWebhookServer()
 	hookServer.Register(ValidationPath, &webhook.Admission{Handler: &clusterResourceOverrideValidator{mgr.GetAPIReader(), admission.NewDecoder(mgr.GetScheme())}})

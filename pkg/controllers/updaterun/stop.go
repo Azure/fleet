@@ -48,7 +48,8 @@ func (r *Reconciler) stop(
 	markUpdateRunStopping(updateRun)
 
 	if updatingStageIndex < len(updateRunStatus.StagesStatus) {
-		return r.stopUpdatingStage(updateRun, updatingStageIndex, toBeUpdatedBindings)
+		updatingStageStatus = &updateRunStatus.StagesStatus[updatingStageIndex]
+		return r.stopUpdatingStage(updateRun, updatingStageStatus, toBeUpdatedBindings)
 	}
 	// All the stages have finished, stop the delete stage.
 	finished, stopErr = r.stopDeleteStage(updateRun, toBeDeletedBindings)
@@ -58,11 +59,9 @@ func (r *Reconciler) stop(
 // stopUpdatingStage stops the updating stage by letting the updating bindings finish and not starting new updates.
 func (r *Reconciler) stopUpdatingStage(
 	updateRun placementv1beta1.UpdateRunObj,
-	updatingStageIndex int,
+	updatingStageStatus *placementv1beta1.StageUpdatingStatus,
 	toBeUpdatedBindings []placementv1beta1.BindingObj,
 ) (bool, time.Duration, error) {
-	updateRunStatus := updateRun.GetUpdateRunStatus()
-	updatingStageStatus := &updateRunStatus.StagesStatus[updatingStageIndex]
 	updateRunRef := klog.KObj(updateRun)
 	// Create the map of the toBeUpdatedBindings.
 	toBeUpdatedBindingsMap := make(map[string]placementv1beta1.BindingObj, len(toBeUpdatedBindings))
@@ -92,7 +91,13 @@ func (r *Reconciler) stopUpdatingStage(
 
 		clusterUpdatingCount++
 
-		binding := toBeUpdatedBindingsMap[clusterStatus.ClusterName]
+		binding, exists := toBeUpdatedBindingsMap[clusterStatus.ClusterName]
+		if !exists || binding == nil {
+			missingBindingErr := controller.NewUnexpectedBehaviorError(fmt.Errorf("the binding for cluster `%s` in stage `%s` is not found in the toBeUpdatedBindings map during stopping", clusterStatus.ClusterName, updatingStageStatus.StageName))
+			klog.ErrorS(missingBindingErr, "Cannot find the binding for the cluster in the updating stage during stopping", "cluster", clusterStatus.ClusterName, "stage", updatingStageStatus.StageName, "updateRun", updateRunRef)
+			clusterUpdateErrors = append(clusterUpdateErrors, fmt.Errorf("%w: %s", errStagedUpdatedAborted, missingBindingErr.Error()))
+			continue
+		}
 		finished, updateErr := checkClusterUpdateResult(binding, clusterStatus, updatingStageStatus, updateRun)
 		if updateErr != nil {
 			clusterUpdateErrors = append(clusterUpdateErrors, updateErr)

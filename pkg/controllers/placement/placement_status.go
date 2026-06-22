@@ -466,6 +466,16 @@ func getPlacementRolloutStartedConditionType(placementObj fleetv1beta1.Placement
 	return string(fleetv1beta1.ResourcePlacementRolloutStartedConditionType)
 }
 
+// getStagedUpdateRunResourceName returns the appropriate StagedUpdateRun resource name based on the placement type.
+// For ClusterResourcePlacement, it returns "ClusterStagedUpdateRun".
+// For ResourcePlacement, it returns "StagedUpdateRun".
+func getStagedUpdateRunResourceName(placementObj fleetv1beta1.PlacementObj) string {
+	if isClusterScopedPlacement(placementObj) {
+		return "ClusterStagedUpdateRun"
+	}
+	return "StagedUpdateRun"
+}
+
 // getPlacementConditionType returns the appropriate placement condition type based on whether the placement is cluster-scoped or namespace-scoped.
 // If the placement namespace is empty (cluster-scoped), it returns the ClusterResourcePlacement condition type.
 // Otherwise (namespace-scoped), it returns the ResourcePlacement condition type.

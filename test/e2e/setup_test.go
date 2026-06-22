@@ -35,12 +35,14 @@ import (
 	apiextensionsv1 "k8s.io/apiextensions-apiserver/pkg/apis/apiextensions/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
+	"k8s.io/apimachinery/pkg/util/sets"
 	k8sscheme "k8s.io/client-go/kubernetes/scheme"
 	"k8s.io/klog/v2"
 	clusterinventory "sigs.k8s.io/cluster-inventory-api/apis/v1alpha1"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	ctrllog "sigs.k8s.io/controller-runtime/pkg/log"
 	"sigs.k8s.io/controller-runtime/pkg/log/zap"
+	"sigs.k8s.io/yaml"
 
 	fleetnetworkingv1alpha1 "go.goms.io/fleet-networking/api/v1alpha1"
 
@@ -48,6 +50,7 @@ import (
 	placementv1 "go.goms.io/fleet/apis/placement/v1"
 	placementv1alpha1 "go.goms.io/fleet/apis/placement/v1alpha1"
 	placementv1beta1 "go.goms.io/fleet/apis/placement/v1beta1"
+	"go.goms.io/fleet/pkg/admissionpolicymanager"
 	"go.goms.io/fleet/pkg/propertyprovider/azure/trackers"
 	"go.goms.io/fleet/pkg/utils"
 	testv1alpha1 "go.goms.io/fleet/test/apis/v1alpha1"
@@ -102,6 +105,7 @@ var (
 	once   = sync.Once{}
 
 	hubCluster               *framework.Cluster
+	impersonateHubClient     client.Client
 	memberCluster1EastProd   *framework.Cluster
 	memberCluster2EastCanary *framework.Cluster
 	memberCluster3WestProd   *framework.Cluster
@@ -187,6 +191,15 @@ var (
 	memberCluster3AKSRegion = "eastasia"
 )
 
+const (
+	VAPConfigFileName = "admission_policy_manager_cfg.yaml"
+)
+
+var (
+	// The set will be populated when the test suite is initialized.
+	EnabledVAPGenerators = sets.Set[string]{}
+)
+
 var (
 	lessFuncCondition = func(a, b metav1.Condition) bool {
 		return a.Type < b.Type
@@ -194,7 +207,7 @@ var (
 	lessFuncPlacementStatus = func(a, b placementv1beta1.PerClusterPlacementStatus) bool {
 		return a.ClusterName < b.ClusterName
 	}
-	lessFuncPlacementStatusV1 = func(a, b placementv1.ResourcePlacementStatus) bool {
+	lessFuncPlacementStatusV1 = func(a, b placementv1.PerClusterPlacementStatus) bool {
 		return a.ClusterName < b.ClusterName
 	}
 	lessFuncPlacementStatusByConditions = func(a, b placementv1beta1.PerClusterPlacementStatus) bool {
@@ -303,6 +316,20 @@ func TestMain(m *testing.M) {
 		log.Fatalf("failed to add cluster inventory APIs to the runtime scheme: %v", err)
 	}
 
+	// Read the VAP generator configuration.
+	//
+	// The configuration file is required for the hub agent to start up in the current test environment
+	// setup; see setup.sh for more information.
+	data, err := os.ReadFile(VAPConfigFileName)
+	if err != nil {
+		log.Fatalf("failed to read VAP generator configuration from %s: %v", VAPConfigFileName, err)
+	}
+	configs := &admissionpolicymanager.PolicyGeneratorConfigs{}
+	if err := yaml.Unmarshal(data, configs); err != nil {
+		log.Fatalf("failed to unmarshal VAP generator configuration from %s: %v", VAPConfigFileName, err)
+	}
+	EnabledVAPGenerators = configs.EnabledGenerators()
+
 	os.Exit(m.Run())
 }
 
@@ -348,6 +375,8 @@ func beforeSuiteForAllProcesses() {
 	framework.GetClusterClient(hubCluster)
 	hubClient = hubCluster.KubeClient
 	Expect(hubClient).NotTo(BeNil(), "Failed to initialize client for accessing Kubernetes cluster")
+	impersonateHubClient = hubCluster.ImpersonateKubeClient
+	Expect(impersonateHubClient).NotTo(BeNil(), "Failed to initialize impersonate client for accessing Kubernetes cluster")
 	notMasterUser = hubCluster.ImpersonateKubeClient
 	Expect(notMasterUser).NotTo(BeNil(), "Failed to initialize impersonate client for accessing Kubernetes cluster")
 	sysMastersClient = hubCluster.SystemMastersClient

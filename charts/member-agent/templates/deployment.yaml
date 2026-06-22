@@ -16,8 +16,15 @@ spec:
     spec:
       restartPolicy: Always
       serviceAccountName: {{ include "member-agent.fullname" . }}-sa
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 65532
+        runAsGroup: 65532
+        fsGroup: 65532
+        seccompProfile:
+          type: RuntimeDefault
       initContainers:
-        {{- if and .Values.crdInstaller.enabled .Values.enableV1Beta1APIs }}
+        {{- if .Values.crdInstaller.enabled }}
         - name: crd-installer
           image: "{{ .Values.crdInstaller.image.repository }}:{{ .Values.crdInstaller.image.tag }}"
           imagePullPolicy: {{ .Values.crdInstaller.image.pullPolicy }}
@@ -29,6 +36,12 @@ spec:
         - name: {{ include "member-agent.fullname" . }}
           image: "{{ .Values.image.repository }}:{{ .Values.image.tag | default .Chart.AppVersion }}"
           imagePullPolicy: {{ .Values.image.pullPolicy }}
+          securityContext:
+            allowPrivilegeEscalation: false
+            readOnlyRootFilesystem: true
+            capabilities:
+              drop:
+                - ALL
           ports:
             - name: http
               containerPort: 80
@@ -41,7 +54,6 @@ spec:
             {{- end }}
             - --v={{ .Values.logVerbosity }}
             - -add_dir_header
-            - --enable-v1beta1-apis={{ .Values.enableV1Beta1APIs }}
             - --enable-pprof={{ .Values.enablePprof }}
             - --pprof-port={{ .Values.pprofPort }}
             - --hub-pprof-port={{ .Values.hubPprofPort }}
@@ -82,6 +94,9 @@ spec:
             - --enable-work-applier-priority-queue=true
             - --work-applier-priority-linear-equation-coeff-a={{ .Values.priorityQueue.priorityLinearEquationCoeffA }}
             - --work-applier-priority-linear-equation-coeff-b={{ .Values.priorityQueue.priorityLinearEquationCoeffB }}
+            {{- end }}
+            {{- if .Values.enableNamespaceCollectionInPropertyProvider }}
+            - --enable-namespace-collection-in-property-provider={{ .Values.enableNamespaceCollectionInPropertyProvider }}
             {{- end }}
           env:
           - name: HUB_SERVER_URL
@@ -147,6 +162,12 @@ spec:
         - name: refresh-token
           image: "{{ .Values.refreshtoken.repository }}:{{ .Values.refreshtoken.tag | default .Chart.AppVersion }}"
           imagePullPolicy: {{ .Values.refreshtoken.pullPolicy }}
+          securityContext:
+            allowPrivilegeEscalation: false
+            readOnlyRootFilesystem: true
+            capabilities:
+              drop:
+                - ALL
           args:
             {{- $provider := .Values.config.provider }}
             - {{ $provider }}

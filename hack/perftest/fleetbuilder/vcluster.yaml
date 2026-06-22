@@ -1,0 +1,18 @@
+controlPlane:  
+  # For security and simplicity reasons, do NOT expose the API server.
+  ingress:
+    enabled: false
+    host: ""
+
+# Resource synchronization settings when using host cluster's worker nodes.
+sync:
+  # Resources that sync from virtual cluster to host.
+  toHost:
+    serviceAccounts:
+      enabled: true  # Sync ServiceAccounts for operators/controllers.
+  
+  # Resources that sync from host to virtual cluster.
+  fromHost:
+    nodes:
+      enabled: true  # Sync real nodes instead of fake nodes.
+      clearImageStatus: true  # Remove image data to save resources.

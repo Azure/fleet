@@ -54,7 +54,7 @@ func (r *Reconciler) validate(
 	if !reflect.DeepEqual(updateRunStatus.ApplyStrategy, updateRunCopyStatus.ApplyStrategy) {
 		mismatchErr := controller.NewUserError(fmt.Errorf("the applyStrategy in the updateRun is outdated, latest: %v, recorded: %v", updateRunCopyStatus.ApplyStrategy, updateRunStatus.ApplyStrategy))
 		klog.ErrorS(mismatchErr, "the applyStrategy in the placement has changed", "placement", placementNamespacedName, "updateRun", updateRunRef)
-		return -1, nil, nil, fmt.Errorf("%w: %s", errStagedUpdatedAborted, mismatchErr.Error())
+		return -1, nil, nil, fmt.Errorf("%w: %w", errStagedUpdatedAborted, mismatchErr)
 	}
 
 	// Retrieve the latest policy snapshot.

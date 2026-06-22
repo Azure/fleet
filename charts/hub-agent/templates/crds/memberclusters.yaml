@@ -1,4 +1,2 @@
 {{- $files := .Files }}
-{{- if .Values.enableV1Beta1APIs }}
 {{ $files.Get "crdbases/cluster.kubernetes-fleet.io_memberclusters.yaml" }}
-{{- end }}

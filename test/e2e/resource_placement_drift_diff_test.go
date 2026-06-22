@@ -106,6 +106,10 @@ var _ = Describe("take over existing resources using RP", Label("resourceplaceme
 	Context("always take over", Ordered, func() {
 		rpName := fmt.Sprintf(rpNameTemplate, GinkgoParallelProcess())
 
+		It("should wait for namespace collection to sync on all member clusters", func() {
+			waitForNamespaceCollectionOnClusters(nsName, allMemberClusterNames)
+		})
+
 		BeforeAll(func() {
 			// Create the RP in the same namespace selecting namespaced resources
 			// with apply strategy.
@@ -202,6 +206,10 @@ var _ = Describe("take over existing resources using RP", Label("resourceplaceme
 
 	Context("take over if no diff, partial comparison", Ordered, func() {
 		rpName := fmt.Sprintf(rpNameTemplate, GinkgoParallelProcess())
+
+		It("should wait for namespace collection to sync on all member clusters", func() {
+			waitForNamespaceCollectionOnClusters(nsName, allMemberClusterNames)
+		})
 
 		BeforeAll(func() {
 			// Create the RP in the same namespace selecting namespaced resources
@@ -374,6 +382,10 @@ var _ = Describe("take over existing resources using RP", Label("resourceplaceme
 
 	Context("take over if no diff, full comparison", Ordered, func() {
 		rpName := fmt.Sprintf(rpNameTemplate, GinkgoParallelProcess())
+
+		It("should wait for namespace collection to sync on all member clusters", func() {
+			waitForNamespaceCollectionOnClusters(nsName, allMemberClusterNames)
+		})
 
 		BeforeAll(func() {
 			// Create the RP in the same namespace selecting namespaced resources
@@ -623,6 +635,10 @@ var _ = Describe("detect drifts on placed resources using RP", Ordered, Label("r
 	Context("always apply, full comparison", Ordered, func() {
 		rpName := fmt.Sprintf(rpNameTemplate, GinkgoParallelProcess())
 
+		It("should wait for namespace collection to sync on all member clusters", func() {
+			waitForNamespaceCollectionOnClusters(nsName, allMemberClusterNames)
+		})
+
 		BeforeAll(func() {
 			// Create the RP in the same namespace selecting namespaced resources
 			// with apply strategy.
@@ -731,6 +747,10 @@ var _ = Describe("detect drifts on placed resources using RP", Ordered, Label("r
 
 	Context("apply if no drift, partial comparison", Ordered, func() {
 		rpName := fmt.Sprintf(rpNameTemplate, GinkgoParallelProcess())
+
+		It("should wait for namespace collection to sync on all member clusters", func() {
+			waitForNamespaceCollectionOnClusters(nsName, allMemberClusterNames)
+		})
 
 		BeforeAll(func() {
 			// Create the RP in the same namespace selecting namespaced resources
@@ -930,6 +950,10 @@ var _ = Describe("detect drifts on placed resources using RP", Ordered, Label("r
 
 	Context("apply if no drift, full comparison", Ordered, func() {
 		rpName := fmt.Sprintf(rpNameTemplate, GinkgoParallelProcess())
+
+		It("should wait for namespace collection to sync on all member clusters", func() {
+			waitForNamespaceCollectionOnClusters(nsName, allMemberClusterNames)
+		})
 
 		BeforeAll(func() {
 			// Create the RP in the same namespace selecting namespaced resources
@@ -1167,6 +1191,10 @@ var _ = Describe("report diff mode using RP", Label("resourceplacement"), func()
 		cm1Name := fmt.Sprintf(appConfigMapNameTemplate, GinkgoParallelProcess())
 		cm2Name := fmt.Sprintf(appConfigMapNameTemplate+"-%d", GinkgoParallelProcess(), 2)
 
+		It("should wait for namespace collection to sync on all member clusters", func() {
+			waitForNamespaceCollectionOnClusters(nsName, allMemberClusterNames)
+		})
+
 		BeforeAll(func() {
 			// Create the resources on the hub cluster.
 			createWorkResources()
@@ -1250,6 +1278,10 @@ var _ = Describe("report diff mode using RP", Label("resourceplacement"), func()
 		It("should update CRP status as expected", func() {
 			crpStatusUpdatedActual := crpStatusUpdatedActual(workNamespaceIdentifiers(), allMemberClusterNames, nil, "0")
 			Eventually(crpStatusUpdatedActual, eventuallyDuration, eventuallyInterval).Should(Succeed(), "Failed to update CRP status as expected")
+		})
+
+		It("should wait for CRP to propagate namespace and namespace collection to sync", func() {
+			waitForNamespaceCollectionOnClusters(nsName, allMemberClusterNames)
 		})
 
 		It("should update RP status as expected", func() {
@@ -1600,6 +1632,10 @@ var _ = Describe("mixed diff and drift reportings using RP", Ordered, Label("res
 	var lastDeployDriftObservedTimeOnCluster2 metav1.Time
 	var firstDeployDriftObservedTimeOnCluster2 metav1.Time
 
+	It("should wait for namespace collection to sync on all member clusters", func() {
+		waitForNamespaceCollectionOnClusters(nsName, allMemberClusterNames)
+	})
+
 	BeforeAll(func() {
 		// Create the resources on the hub cluster.
 		//
@@ -1688,6 +1724,10 @@ var _ = Describe("mixed diff and drift reportings using RP", Ordered, Label("res
 	It("should update CRP status as expected", func() {
 		crpStatusUpdatedActual := crpStatusUpdatedActual(workNamespaceIdentifiers(), allMemberClusterNames, nil, "0")
 		Eventually(crpStatusUpdatedActual, eventuallyDuration, eventuallyInterval).Should(Succeed(), "Failed to update CRP status as expected")
+	})
+
+	It("should wait for namespace collection to sync on all member clusters", func() {
+		waitForNamespaceCollectionOnClusters(appNamespace().Name, allMemberClusterNames)
 	})
 
 	It("can introduce drifts", func() {

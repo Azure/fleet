@@ -20,6 +20,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"strings"
 	"testing"
 	"time"
 
@@ -62,6 +63,157 @@ const (
 	propertyProviderConditionReason2  = "ProviderConditionReason2"
 	propertyProviderConditionMessage2 = "property provider condition 2 message"
 )
+
+func TestEnsureMemberNameLabel(t *testing.T) {
+	tests := map[string]struct {
+		r             *Reconciler
+		memberCluster *clusterv1beta1.MemberCluster
+		wantLabels    map[string]string
+		wantErr       string
+	}{
+		"label already present with correct value": {
+			r: &Reconciler{
+				Client: &test.MockClient{
+					MockUpdate: test.NewMockUpdateFn(fmt.Errorf("update should not be called when label is already correct")),
+				},
+			},
+			memberCluster: &clusterv1beta1.MemberCluster{
+				ObjectMeta: metav1.ObjectMeta{
+					Name: "mc1",
+					Labels: map[string]string{
+						placementv1beta1.MemberNameLabel: "mc1",
+					},
+				},
+			},
+			wantLabels: map[string]string{
+				placementv1beta1.MemberNameLabel: "mc1",
+			},
+		},
+		"no labels at all": {
+			r: &Reconciler{
+				Client: &test.MockClient{
+					MockUpdate: func(ctx context.Context, obj client.Object, opts ...client.UpdateOption) error {
+						return nil
+					},
+				},
+			},
+			memberCluster: &clusterv1beta1.MemberCluster{
+				ObjectMeta: metav1.ObjectMeta{
+					Name: "mc1",
+				},
+			},
+			wantLabels: map[string]string{
+				placementv1beta1.MemberNameLabel: "mc1",
+			},
+		},
+		"labels exist but name label is missing": {
+			r: &Reconciler{
+				Client: &test.MockClient{
+					MockUpdate: func(ctx context.Context, obj client.Object, opts ...client.UpdateOption) error {
+						return nil
+					},
+				},
+			},
+			memberCluster: &clusterv1beta1.MemberCluster{
+				ObjectMeta: metav1.ObjectMeta{
+					Name: "mc1",
+					Labels: map[string]string{
+						"existing-label": "value",
+					},
+				},
+			},
+			wantLabels: map[string]string{
+				"existing-label":                 "value",
+				placementv1beta1.MemberNameLabel: "mc1",
+			},
+		},
+		"label present with wrong value": {
+			r: &Reconciler{
+				Client: &test.MockClient{
+					MockUpdate: func(ctx context.Context, obj client.Object, opts ...client.UpdateOption) error {
+						return nil
+					},
+				},
+			},
+			memberCluster: &clusterv1beta1.MemberCluster{
+				ObjectMeta: metav1.ObjectMeta{
+					Name: "mc1",
+					Labels: map[string]string{
+						placementv1beta1.MemberNameLabel: "wrong-name",
+					},
+				},
+			},
+			wantLabels: map[string]string{
+				placementv1beta1.MemberNameLabel: "mc1",
+			},
+		},
+		"update error": {
+			r: &Reconciler{
+				Client: &test.MockClient{
+					MockUpdate: func(ctx context.Context, obj client.Object, opts ...client.UpdateOption) error {
+						return errors.New("update failed")
+					},
+				},
+			},
+			memberCluster: &clusterv1beta1.MemberCluster{
+				ObjectMeta: metav1.ObjectMeta{
+					Name: "mc1",
+				},
+			},
+			wantErr: "update failed",
+		},
+	}
+
+	for testName, tt := range tests {
+		t.Run(testName, func(t *testing.T) {
+			err := tt.r.ensureMemberNameLabel(context.Background(), tt.memberCluster)
+			if tt.wantErr == "" {
+				if err != nil {
+					t.Errorf("ensureMemberNameLabel() = %v, want nil", err)
+				}
+				if diff := cmp.Diff(tt.wantLabels, tt.memberCluster.Labels); diff != "" {
+					t.Errorf("ensureMemberNameLabel() labels mismatch (-want +got):\n%s", diff)
+				}
+			} else {
+				if err == nil {
+					t.Errorf("ensureMemberNameLabel() = nil, want error containing %q", tt.wantErr)
+				} else if !strings.Contains(err.Error(), tt.wantErr) {
+					t.Errorf("ensureMemberNameLabel() = %v, want error containing %q", err, tt.wantErr)
+				}
+			}
+		})
+	}
+}
+
+func TestReconcileEnsureMemberNameLabelError(t *testing.T) {
+	// This test verifies that Reconcile returns an error when ensureMemberNameLabel fails.
+	// The MC already has the finalizer (so ensureFinalizer is a no-op) but no label.
+	updateErr := errors.New("update failed")
+	r := &Reconciler{
+		Client: &test.MockClient{
+			MockGet: func(ctx context.Context, key client.ObjectKey, obj client.Object) error {
+				mc := obj.(*clusterv1beta1.MemberCluster)
+				mc.Name = "mc1"
+				mc.Finalizers = []string{placementv1beta1.MemberClusterFinalizer}
+				// No labels, so ensureMemberNameLabel will attempt an update.
+				return nil
+			},
+			MockUpdate: func(ctx context.Context, obj client.Object, opts ...client.UpdateOption) error {
+				return updateErr
+			},
+		},
+		recorder: record.NewFakeRecorder(10),
+	}
+	result, err := r.Reconcile(context.Background(), ctrl.Request{
+		NamespacedName: client.ObjectKey{Name: "mc1"},
+	})
+	if result != (ctrl.Result{}) {
+		t.Errorf("Reconcile() result = %v, want %v", result, ctrl.Result{})
+	}
+	if err == nil || !strings.Contains(err.Error(), updateErr.Error()) {
+		t.Errorf("Reconcile() error = %v, want error containing %q", err, updateErr.Error())
+	}
+}
 
 func TestSyncNamespace(t *testing.T) {
 	tests := map[string]struct {

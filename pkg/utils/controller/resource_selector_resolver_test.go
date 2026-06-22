@@ -1494,56 +1494,6 @@ func TestGatherSelectedResource(t *testing.T) {
 			want: []*unstructured.Unstructured{testNamespace},
 		},
 		{
-			name:          "should error when selecting multiple namespaces with NamespaceWithResourceSelectors mode using label selector",
-			placementName: types.NamespacedName{Name: "test-placement"},
-			selectors: []fleetv1beta1.ResourceSelectorTerm{
-				{
-					Group:   "",
-					Version: "v1",
-					Kind:    "Namespace",
-					LabelSelector: &metav1.LabelSelector{
-						MatchLabels: map[string]string{
-							"environment": "test",
-						},
-					},
-					SelectionScope: fleetv1beta1.NamespaceWithResourceSelectors,
-				},
-				{
-					Group:   "apps",
-					Version: "v1",
-					Kind:    "Deployment",
-					Name:    "test-deployment",
-				},
-			},
-			resourceConfig: utils.NewResourceConfig(false), // default deny list
-			informerManager: func() *testinformer.FakeManager {
-				// Create a second test namespace with the same label
-				testNamespace2 := &unstructured.Unstructured{
-					Object: map[string]interface{}{
-						"apiVersion": "v1",
-						"kind":       "Namespace",
-						"metadata": map[string]interface{}{
-							"name": "test-ns-2",
-							"labels": map[string]interface{}{
-								"environment": "test",
-							},
-						},
-					},
-				}
-				testNamespace2.SetGroupVersionKind(utils.NamespaceGVK)
-
-				return &testinformer.FakeManager{
-					Listers: map[schema.GroupVersionResource]*testinformer.FakeLister{
-						utils.NamespaceGVR:  {Objects: []runtime.Object{testNamespace, testNamespace2}},
-						utils.DeploymentGVR: {Objects: []runtime.Object{testDeployment}},
-					},
-					NamespaceScopedResources: []schema.GroupVersionResource{utils.DeploymentGVR},
-				}
-			}(),
-			// Should error because multiple namespaces match the label selector
-			wantError: ErrUserError,
-		},
-		{
 			name:          "should error when selecting zero namespaces with NamespaceWithResourceSelectors mode",
 			placementName: types.NamespacedName{Name: "test-placement"},
 			selectors: []fleetv1beta1.ResourceSelectorTerm{
@@ -2201,7 +2151,7 @@ func TestSortResources(t *testing.T) {
 	}
 }
 
-func TestFetchSelectedNamespaces(t *testing.T) {
+func TestFetchSelectedNamespace(t *testing.T) {
 	testNs1 := &unstructured.Unstructured{
 		Object: map[string]interface{}{
 			"apiVersion": "v1",
@@ -2246,7 +2196,8 @@ func TestFetchSelectedNamespaces(t *testing.T) {
 		selector          fleetv1beta1.ResourceSelectorTerm
 		skippedNamespaces map[string]bool
 		informerManager   *testinformer.FakeManager
-		want              []string
+		want              string
+		wantFound         bool
 		wantErr           bool
 	}{
 		{
@@ -2263,25 +2214,8 @@ func TestFetchSelectedNamespaces(t *testing.T) {
 					utils.NamespaceGVR: {Objects: []runtime.Object{testNs1, testNs2}},
 				},
 			},
-			want: []string{"test-ns-1"},
-		},
-		{
-			name: "select namespaces by label selector",
-			selector: fleetv1beta1.ResourceSelectorTerm{
-				Group:   "",
-				Version: "v1",
-				Kind:    "Namespace",
-				LabelSelector: &metav1.LabelSelector{
-					MatchLabels: map[string]string{"env": "prod"},
-				},
-			},
-			skippedNamespaces: nil,
-			informerManager: &testinformer.FakeManager{
-				Listers: map[schema.GroupVersionResource]*testinformer.FakeLister{
-					utils.NamespaceGVR: {Objects: []runtime.Object{testNs1, testNs2}},
-				},
-			},
-			want: []string{"test-ns-1"},
+			want:      "test-ns-1",
+			wantFound: true,
 		},
 		{
 			name: "filter out skipped namespaces",
@@ -2289,17 +2223,16 @@ func TestFetchSelectedNamespaces(t *testing.T) {
 				Group:   "",
 				Version: "v1",
 				Kind:    "Namespace",
-				LabelSelector: &metav1.LabelSelector{
-					MatchLabels: map[string]string{},
-				},
+				Name:    "kube-system", // Use name-based selection instead of label selector
 			},
 			skippedNamespaces: map[string]bool{"kube-system": true},
 			informerManager: &testinformer.FakeManager{
 				Listers: map[schema.GroupVersionResource]*testinformer.FakeLister{
-					utils.NamespaceGVR: {Objects: []runtime.Object{testNs1, skippedNs}},
+					utils.NamespaceGVR: {Objects: []runtime.Object{testNs1, testNs2, skippedNs}},
 				},
 			},
-			want: []string{"test-ns-1"},
+			want:      "", // Empty because kube-system is skipped
+			wantFound: false,
 		},
 		{
 			name: "no namespaces match selector",
@@ -2315,7 +2248,8 @@ func TestFetchSelectedNamespaces(t *testing.T) {
 					utils.NamespaceGVR: {Objects: []runtime.Object{testNs1, testNs2}},
 				},
 			},
-			want: []string{},
+			want:      "",
+			wantFound: false,
 		},
 	}
 
@@ -2328,13 +2262,16 @@ func TestFetchSelectedNamespaces(t *testing.T) {
 				RestMapper:        newFakeRESTMapper(),
 			}
 
-			got, err := rsr.fetchSelectedNamespaces(tt.selector, "test-placement")
+			gotNamespace, gotFound, err := rsr.fetchSelectedNamespace(tt.selector, "test-placement")
 			if (err != nil) != tt.wantErr {
-				t.Errorf("fetchSelectedNamespaces() error = %v, wantErr %v", err, tt.wantErr)
+				t.Errorf("fetchSelectedNamespace() error = %v, wantErr %v", err, tt.wantErr)
 				return
 			}
-			if diff := cmp.Diff(tt.want, got); diff != "" {
-				t.Errorf("fetchSelectedNamespaces() mismatch (-want +got):\n%s", diff)
+			if gotNamespace != tt.want {
+				t.Errorf("fetchSelectedNamespace() namespace = %v, want %v", gotNamespace, tt.want)
+			}
+			if gotFound != tt.wantFound {
+				t.Errorf("fetchSelectedNamespace() found = %v, wantFound %v", gotFound, tt.wantFound)
 			}
 		})
 	}

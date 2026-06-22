@@ -20,7 +20,7 @@ import metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 
 const (
 
-	// OverrideIndexLabel is the label that indicate the policy snapshot index of a cluster policy.
+	// OverrideIndexLabel is the label that indicates the override snapshot index of an override.
 	OverrideIndexLabel = FleetPrefix + "override-index"
 
 	// OverrideSnapshotNameFmt is clusterResourceOverrideSnapshot name format: {CROName}-{OverrideSnapshotIndex}.

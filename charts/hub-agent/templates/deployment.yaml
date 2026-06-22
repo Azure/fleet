@@ -19,8 +19,15 @@ spec:
         {{- include "hub-agent.selectorLabels" . | nindent 8 }}
     spec:
       serviceAccountName: {{ include "hub-agent.fullname" . }}-sa
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 65532
+        runAsGroup: 65532
+        fsGroup: 65532
+        seccompProfile:
+          type: RuntimeDefault
       initContainers:
-        {{- if and .Values.crdInstaller.enabled .Values.enableV1Beta1APIs }}
+        {{- if .Values.crdInstaller.enabled }}
         - name: crd-installer
           image: "{{ .Values.crdInstaller.image.repository }}:{{ .Values.crdInstaller.image.tag }}"
           imagePullPolicy: {{ .Values.crdInstaller.image.pullPolicy }}
@@ -32,6 +39,12 @@ spec:
         - name: {{ .Chart.Name }}
           image: "{{ .Values.image.repository }}:{{ .Values.image.tag | default .Chart.AppVersion }}"
           imagePullPolicy: {{ .Values.image.pullPolicy }}
+          securityContext:
+            allowPrivilegeEscalation: false
+            readOnlyRootFilesystem: true
+            capabilities:
+              drop:
+                - ALL
           args:
             - --leader-elect=true
             - --enable-webhook={{ .Values.enableWebhook }}
@@ -43,7 +56,6 @@ spec:
             - --webhook-client-connection-type={{.Values.webhookClientConnectionType}}
             - --v={{ .Values.logVerbosity }}
             - -add_dir_header
-            - --enable-v1beta1-apis={{ .Values.enableV1Beta1APIs }}
             - --enable-cluster-inventory-apis={{ .Values.enableClusterInventoryAPI }}
             - --enable-staged-update-run-apis={{ .Values.enableStagedUpdateRunAPIs }}
             - --enable-eviction-apis={{ .Values.enableEvictionAPIs}}
@@ -59,6 +71,13 @@ spec:
             - --cluster-unhealthy-threshold={{ .Values.clusterUnhealthyThreshold }}
             - --resource-snapshot-creation-minimum-interval={{ .Values.resourceSnapshotCreationMinimumInterval }}
             - --resource-changes-collection-duration={{ .Values.resourceChangesCollectionDuration }}
+            - --enable-admission-policy-manager={{ .Values.enableAdmissionPolicyManager }}
+            {{- if and .Values.admissionPolicyManagerConfigName (not .Values.additionalConfigData) }}
+            {{- fail "ERROR: admissionPolicyManagerConfigName is set but additionalConfigData is empty; must provide admission policy manager configuration data" }}
+            {{- end }}
+            {{- if and .Values.additionalConfigData .Values.admissionPolicyManagerConfigName }}
+            - --admission-policy-manager-config={{ .Values.additionalConfigDataMountPath }}/{{ .Values.admissionPolicyManagerConfigName }}
+            {{- end }}
           ports:
             - name: metrics
               containerPort: 8080
@@ -93,15 +112,40 @@ spec:
             # This path must match FleetWebhookCertDir in pkg/webhook/webhook.go
             mountPath: /tmp/k8s-webhook-server/serving-certs
             readOnly: true
+          {{- if .Values.additionalConfigData }}
+          - name: additional-config
+            mountPath: {{ .Values.additionalConfigDataMountPath }}
+            readOnly: true
           {{- end }}
-      {{- if .Values.useCertManager }}
+          {{- else }}
+          volumeMounts:
+          - name: webhook-cert
+            # This path must match FleetWebhookCertDir in pkg/webhook/webhook.go.
+            # Note that this must be mounted one level up from the hardcoded path, otherwise
+            # the read only root filesystem setup would block the agent from attempting to
+            # clear the directory.
+            mountPath: /tmp/k8s-webhook-server/
+          {{- if .Values.additionalConfigData }}
+          - name: additional-config
+            mountPath: {{ .Values.additionalConfigDataMountPath }}
+            readOnly: true
+          {{- end }}
+          {{- end }}
       volumes:
       - name: webhook-cert
+        {{- if .Values.useCertManager }}
         secret:
           secretName: {{ .Values.webhookCertSecretName }}
           # defaultMode 0444 (read for all) allows the container process to read the certs
           # regardless of the user/group it runs as
           defaultMode: 0444
+        {{- else }}
+        emptyDir: {}
+        {{- end }}
+      {{- if .Values.additionalConfigData }}
+      - name: additional-config
+        configMap:
+          name: {{ include "hub-agent.fullname" . }}-config
       {{- end }}
       {{- with .Values.affinity }}
       affinity:

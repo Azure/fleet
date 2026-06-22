@@ -551,6 +551,10 @@ var _ = Describe("Test NamespaceOnly placement through CRP then resource placeme
 		}
 	})
 
+	It("should wait for namespace collection to sync on all member clusters", func() {
+		waitForNamespaceCollectionOnClusters(appNamespace().Name, allMemberClusterNames)
+	})
+
 	It("Create the ResourcePlacement that selects the ResourceEnvelope", func() {
 		rp := &placementv1beta1.ResourcePlacement{
 			ObjectMeta: metav1.ObjectMeta{

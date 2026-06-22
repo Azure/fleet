@@ -137,6 +137,8 @@ helm install cert-manager jetstack/cert-manager \
 
 # Install the hub agent to the hub cluster
 helm install hub-agent ../../charts/hub-agent/ \
+    --namespace fleet-system \
+    --create-namespace \
     --set image.pullPolicy=Never \
     --set image.repository=$REGISTRY/$HUB_AGENT_IMAGE \
     --set image.tag=$TAG \
@@ -146,18 +148,20 @@ helm install hub-agent ../../charts/hub-agent/ \
     --set crdInstaller.image.pullPolicy=Never \
     --set namespace=fleet-system \
     --set logVerbosity=5 \
-    --set replicaCount=3 \
-    --set useCertManager=true \
+    --set replicaCount=1 \
+    --set useCertManager=false \
     --set webhookCertSecretName=fleet-webhook-server-cert \
     --set enableWebhook=true \
-    --set enableWorkload=true \
+    --set enableWorkload=false \
     --set webhookClientConnectionType=service \
     --set forceDeleteWaitTime="1m0s" \
     --set clusterUnhealthyThreshold="3m0s" \
     --set logFileMaxSize=100000 \
     --set MaxConcurrentClusterPlacement=200 \
     --set resourceSnapshotCreationMinimumInterval=$RESOURCE_SNAPSHOT_CREATION_MINIMUM_INTERVAL \
-    --set resourceChangesCollectionDuration=$RESOURCE_CHANGES_COLLECTION_DURATION
+    --set resourceChangesCollectionDuration=$RESOURCE_CHANGES_COLLECTION_DURATION \
+    --wait \
+    --timeout=2m
 
 # Download CRDs from Fleet networking repo
 export ENDPOINT_SLICE_EXPORT_CRD_URL=https://raw.githubusercontent.com/Azure/fleet-networking/v0.2.7/config/crd/bases/networking.fleet.azure.com_endpointsliceexports.yaml
@@ -201,6 +205,9 @@ done
 kind export kubeconfig --name $HUB_CLUSTER
 HUB_SERVER_URL="https://$(docker inspect $HUB_CLUSTER-control-plane --format='{{range .NetworkSettings.Networks}}{{.IPAddress}}{{end}}'):6443"
 
+# Extract the hub cluster CA for secure TLS verification
+HUB_CA=$(kubectl config view --raw -o jsonpath='{.clusters[?(@.name=="kind-'$HUB_CLUSTER'")].cluster.certificate-authority-data}')
+
 # Install the member agents and related components
 # Note that the work applier in the member agent are set to requeue at max. every 5 seconds instead of using the default 
 # exponential backoff behavior; this is to accommodate some of the timeout settings in the E2E test specs.
@@ -209,7 +216,10 @@ do
     kind export kubeconfig --name "${MEMBER_CLUSTERS[$i]}"
     if [ "$i" -lt $RESERVED_CLUSTER_COUNT ]; then
         helm install member-agent ../../charts/member-agent/ \
+            --namespace fleet-system \
+            --create-namespace \
             --set config.hubURL=$HUB_SERVER_URL \
+            --set config.hubCA=$HUB_CA \
             --set image.repository=$REGISTRY/$MEMBER_AGENT_IMAGE \
             --set image.tag=$TAG \
             --set refreshtoken.repository=$REGISTRY/$REFRESH_TOKEN_IMAGE \
@@ -223,16 +233,19 @@ do
             --set config.memberClusterName="kind-${MEMBER_CLUSTERS[$i]}" \
             --set logVerbosity=5 \
             --set namespace=fleet-system \
-            --set enableV1Beta1APIs=true \
             --set priorityQueue.enabled=true \
             --set workApplierRequeueRateLimiterMaxSlowBackoffDelaySeconds=5 \
             --set workApplierRequeueRateLimiterMaxFastBackoffDelaySeconds=5 \
             --set propertyProvider=$PROPERTY_PROVIDER \
             --set region=${REGIONS[$i]} \
+            --set enableNamespaceCollectionInPropertyProvider=true \
             $( [ "$PROPERTY_PROVIDER" = "azure" ] && echo "-f azure_valid_config.yaml" )
     else
         helm install member-agent ../../charts/member-agent/ \
+            --namespace fleet-system \
+            --create-namespace \
             --set config.hubURL=$HUB_SERVER_URL \
+            --set config.hubCA=$HUB_CA \
             --set image.repository=$REGISTRY/$MEMBER_AGENT_IMAGE \
             --set image.tag=$TAG \
             --set refreshtoken.repository=$REGISTRY/$REFRESH_TOKEN_IMAGE \
@@ -246,11 +259,11 @@ do
             --set config.memberClusterName="kind-${MEMBER_CLUSTERS[$i]}" \
             --set logVerbosity=5 \
             --set namespace=fleet-system \
-            --set enableV1Beta1APIs=true \
             --set priorityQueue.enabled=true \
             --set workApplierRequeueRateLimiterMaxSlowBackoffDelaySeconds=5 \
             --set workApplierRequeueRateLimiterMaxFastBackoffDelaySeconds=5 \
             --set propertyProvider=$PROPERTY_PROVIDER \
+            --set enableNamespaceCollectionInPropertyProvider=true \
             $( [ "$PROPERTY_PROVIDER" = "azure" ] && echo "-f azure_valid_config.yaml" )
     fi
 done

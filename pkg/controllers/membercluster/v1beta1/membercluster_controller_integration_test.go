@@ -117,6 +117,28 @@ var _ = Describe("Test MemberCluster Controller", func() {
 			Expect(joinCondition.Reason).To(Equal(reasonMemberClusterJoined))
 		})
 
+		It("should add the member cluster name label", func() {
+			Expect(k8sClient.Get(ctx, memberClusterNamespacedName, &mc)).Should(Succeed())
+			Expect(mc.Labels).NotTo(BeNil())
+			Expect(mc.Labels[placementv1beta1.MemberNameLabel]).To(Equal(memberClusterName))
+		})
+
+		It("should restore the member cluster name label if removed", func() {
+			Expect(k8sClient.Get(ctx, memberClusterNamespacedName, &mc)).Should(Succeed())
+			delete(mc.Labels, placementv1beta1.MemberNameLabel)
+			Expect(k8sClient.Update(ctx, &mc)).Should(Succeed())
+
+			By("trigger reconcile to restore the name label")
+			result, err := r.Reconcile(ctx, ctrl.Request{
+				NamespacedName: memberClusterNamespacedName,
+			})
+			Expect(result).Should(Equal(ctrl.Result{}))
+			Expect(err).Should(Succeed())
+
+			Expect(k8sClient.Get(ctx, memberClusterNamespacedName, &mc)).Should(Succeed())
+			Expect(mc.Labels[placementv1beta1.MemberNameLabel]).To(Equal(memberClusterName))
+		})
+
 		It("should relay cluster resource usage + properties, and property provider conditions", func() {
 			Expect(k8sClient.Get(ctx, memberClusterNamespacedName, &mc)).Should(Succeed())
 

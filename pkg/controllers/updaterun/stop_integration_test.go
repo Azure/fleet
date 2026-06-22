@@ -173,7 +173,7 @@ var _ = Describe("UpdateRun stop tests", func() {
 			Expect(k8sClient.Create(ctx, updateRun)).To(Succeed())
 
 			By("Validating the initialization succeeded and the execution has not started")
-			initialized := generateSucceededInitializationStatusForSmallClusters(crp, updateRun, testResourceSnapshotIndex, policySnapshot, updateStrategy, 3)
+			initialized := generateInitializedStatus(crp, updateRun, testResourceSnapshotIndex, policySnapshot, updateStrategy, 3, generateThreeClusterStagesStatus(), generateDeletionStageStatus(3))
 			wantStatus = generateExecutionNotStartedStatus(updateRun, initialized)
 			validateClusterStagedUpdateRunStatus(ctx, updateRun, wantStatus, "")
 
@@ -251,7 +251,7 @@ var _ = Describe("UpdateRun stop tests", func() {
 		It("Should mark the 1st cluster in the 1st stage as succeeded after marking the binding available", func() {
 			By("Validating the 1st clusterResourceBinding is updated to Bound")
 			binding := resourceBindings[0] // cluster-0
-			validateBindingState(ctx, binding, resourceSnapshot.Name, updateRun, 0)
+			validateBindingState(ctx, binding, resourceSnapshot.Name, updateRun, &updateRun.Status.StagesStatus[0].Clusters[0])
 
 			By("Updating the 1st clusterResourceBinding to Available")
 			meta.SetStatusCondition(&binding.Status.Conditions, generateTrueCondition(binding, placementv1beta1.ResourceBindingAvailable))
@@ -301,7 +301,7 @@ var _ = Describe("UpdateRun stop tests", func() {
 		It("Should have completely stopped after the in-progress cluster has finished updating", func() {
 			By("Validating the 2nd clusterResourceBinding is updated to Bound")
 			binding := resourceBindings[1] // cluster-1
-			validateBindingState(ctx, binding, resourceSnapshot.Name, updateRun, 0)
+			validateBindingState(ctx, binding, resourceSnapshot.Name, updateRun, &updateRun.Status.StagesStatus[0].Clusters[1])
 
 			By("Updating the 2nd clusterResourceBinding to Available")
 			meta.SetStatusCondition(&binding.Status.Conditions, generateTrueCondition(binding, placementv1beta1.ResourceBindingAvailable))
@@ -311,9 +311,9 @@ var _ = Describe("UpdateRun stop tests", func() {
 			// Mark 2nd cluster succeeded.
 			meta.SetStatusCondition(&wantStatus.StagesStatus[0].Clusters[1].Conditions, generateTrueCondition(updateRun, placementv1beta1.ClusterUpdatingConditionSucceeded))
 			// Mark stage progressing condition as false with stopped reason.
-			meta.SetStatusCondition(&wantStatus.StagesStatus[0].Conditions, generateFalseProgressingCondition(updateRun, placementv1beta1.StageUpdatingConditionProgressing, condition.StageUpdatingStoppedReason))
+			meta.SetStatusCondition(&wantStatus.StagesStatus[0].Conditions, generateFalseConditionWithReason(updateRun, placementv1beta1.StageUpdatingConditionProgressing, condition.StageUpdatingStoppedReason))
 			// Mark updateRun progressing condition as false with stopped reason.
-			meta.SetStatusCondition(&wantStatus.Conditions, generateFalseProgressingCondition(updateRun, placementv1beta1.StagedUpdateRunConditionProgressing, condition.UpdateRunStoppedReason))
+			meta.SetStatusCondition(&wantStatus.Conditions, generateFalseConditionWithReason(updateRun, placementv1beta1.StagedUpdateRunConditionProgressing, condition.UpdateRunStoppedReason))
 			validateClusterStagedUpdateRunStatus(ctx, updateRun, wantStatus, "")
 
 			By("Checking update run metrics are emitted")
@@ -351,7 +351,7 @@ var _ = Describe("UpdateRun stop tests", func() {
 		It("Should mark the 3rd cluster in the 1st stage as succeeded after marking the binding available", func() {
 			By("Validating the 3rd clusterResourceBinding is updated to Bound")
 			binding := resourceBindings[2] // cluster-2
-			validateBindingState(ctx, binding, resourceSnapshot.Name, updateRun, 0)
+			validateBindingState(ctx, binding, resourceSnapshot.Name, updateRun, &updateRun.Status.StagesStatus[0].Clusters[2])
 
 			By("Updating the 3rd clusterResourceBinding to Available")
 			meta.SetStatusCondition(&binding.Status.Conditions, generateTrueCondition(binding, placementv1beta1.ResourceBindingAvailable))
@@ -462,7 +462,7 @@ var _ = Describe("UpdateRun stop tests", func() {
 			wantStatus.StagesStatus[0].AfterStageTaskStatus[1].Conditions = append(wantStatus.StagesStatus[0].AfterStageTaskStatus[1].Conditions,
 				generateTrueCondition(updateRun, placementv1beta1.StageTaskConditionWaitTimeElapsed))
 			// 1st stage completed, mark progressing condition reason as succeeded and add succeeded condition.
-			wantStatus.StagesStatus[0].Conditions[0] = generateFalseProgressingCondition(updateRun, placementv1beta1.StageUpdatingConditionProgressing, condition.StageUpdatingSucceededReason)
+			wantStatus.StagesStatus[0].Conditions[0] = generateFalseConditionWithReason(updateRun, placementv1beta1.StageUpdatingConditionProgressing, condition.StageUpdatingSucceededReason)
 			wantStatus.StagesStatus[0].Conditions = append(wantStatus.StagesStatus[0].Conditions, generateTrueCondition(updateRun, placementv1beta1.StageUpdatingConditionSucceeded))
 			// Deletion stage started. Mark deletion stage progressing condition as true with progressing reason.
 			meta.SetStatusCondition(&wantStatus.DeletionStageStatus.Conditions, generateTrueCondition(updateRun, placementv1beta1.StageUpdatingConditionProgressing))
@@ -612,10 +612,10 @@ var _ = Describe("UpdateRun stop tests", func() {
 				meta.SetStatusCondition(&wantStatus.DeletionStageStatus.Clusters[i].Conditions, generateTrueCondition(updateRun, placementv1beta1.ClusterUpdatingConditionSucceeded))
 			}
 			// Mark the stage progressing condition as false with succeeded reason and add succeeded condition.
-			wantStatus.DeletionStageStatus.Conditions[0] = generateFalseProgressingCondition(updateRun, placementv1beta1.StageUpdatingConditionProgressing, condition.StageUpdatingSucceededReason)
+			wantStatus.DeletionStageStatus.Conditions[0] = generateFalseConditionWithReason(updateRun, placementv1beta1.StageUpdatingConditionProgressing, condition.StageUpdatingSucceededReason)
 			wantStatus.DeletionStageStatus.Conditions = append(wantStatus.DeletionStageStatus.Conditions, generateTrueCondition(updateRun, placementv1beta1.StageUpdatingConditionSucceeded))
 			// Mark updateRun progressing condition as false with succeeded reason and add succeeded condition.
-			meta.SetStatusCondition(&wantStatus.Conditions, generateFalseProgressingCondition(updateRun, placementv1beta1.StagedUpdateRunConditionProgressing, condition.UpdateRunSucceededReason))
+			meta.SetStatusCondition(&wantStatus.Conditions, generateFalseConditionWithReason(updateRun, placementv1beta1.StagedUpdateRunConditionProgressing, condition.UpdateRunSucceededReason))
 			wantStatus.Conditions = append(wantStatus.Conditions, generateTrueCondition(updateRun, placementv1beta1.StagedUpdateRunConditionSucceeded))
 			validateClusterStagedUpdateRunStatus(ctx, updateRun, wantStatus, "")
 

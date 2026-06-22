@@ -2,7 +2,7 @@
 
 ## Chart Versioning
 
-Chart versions match the KubeFleet release versions. For example, to install KubeFleet v0.2.1, use chart version `0.2.1`.
+Chart versions match the KubeFleet release versions. For example, to install KubeFleet v0.3.0, use chart version `0.3.0`.
 
 ## Install Chart
 
@@ -34,8 +34,7 @@ helm install hub-agent kubefleet/hub-agent --namespace fleet-system --create-nam
 ### Local Installation from Source
 
 ```console
-# Helm install with fleet-system namespace already created
-helm install hub-agent ./charts/hub-agent/
+helm install hub-agent ./charts/hub-agent/ --namespace fleet-system --create-namespace
 ```
 
 ### Installation with cert-manager
@@ -55,12 +54,16 @@ helm install cert-manager jetstack/cert-manager \
 # Then install hub-agent with cert-manager enabled (OCI, specify VERSION)
 helm install hub-agent oci://ghcr.io/kubefleet-dev/kubefleet/charts/hub-agent \
   --version VERSION \
+  --namespace fleet-system \
+  --create-namespace \
   --set useCertManager=true \
   --set enableWorkload=true \
   --set enableWebhook=true
 
 # Or using traditional repository
 helm install hub-agent kubefleet/hub-agent \
+  --namespace fleet-system \
+  --create-namespace \
   --set useCertManager=true \
   --set enableWorkload=true \
   --set enableWebhook=true
@@ -86,40 +89,43 @@ _See [helm install](https://helm.sh/docs/helm/helm_install/) for command documen
 
 ## Parameters
 
-| Parameter                                 | Description                                                                                | Default                                          |
-|:------------------------------------------|:------------------------------------------------------------------------------------------|:-------------------------------------------------|
-| `replicaCount`                            | Number of hub-agent replicas to deploy                                                     | `1`                                              |
-| `image.repository`                        | Image repository                                                                           | `ghcr.io/kubefleet-dev/kubefleet/hub-agent`      |
-| `image.pullPolicy`                        | Image pull policy                                                                          | `Always`                                         |
-| `image.tag`                               | Image release tag (empty uses chart `appVersion`)                                          | `""`                                            |
-| `namespace`                               | Namespace where this chart is installed                                                    | `fleet-system`                                   |
-| `resources`                               | Resource requests/limits for the container                                                 | limits: 500m CPU, 1Gi; requests: 100m CPU, 128Mi |
-| `affinity`                                | Node affinity for hub-agent pods                                                           | `{}`                                             |
-| `tolerations`                             | Tolerations for hub-agent pods                                                             | `[]`                                             |
-| `logVerbosity`                            | Log level (klog V logs)                                                                    | `5`                                              |
-| `enableWebhook`                           | Enable webhook server                                                                      | `true`                                           |
-| `webhookServiceName`                      | Webhook service name                                                                       | `fleetwebhook`                                   |
-| `enableGuardRail`                         | Enable guard rail webhook configurations                                                   | `true`                                           |
-| `webhookClientConnectionType`             | Connection type for webhook client (service or url)                                        | `service`                                        |
-| `useCertManager`                          | Use cert-manager for webhook certificate management (requires `enableWorkload=true`)       | `false`                                          |
-| `webhookCertSecretName`                   | Name of the Secret where cert-manager stores the certificate (required when enabled)       | `unset`                                          |
-| `enableV1Beta1APIs`                       | Watch for v1beta1 APIs                                                                     | `true`                                           |
-| `enableClusterInventoryAPI`               | Enable cluster inventory APIs                                                               | `true`                                           |
-| `enableStagedUpdateRunAPIs`               | Enable staged update run APIs                                                              | `true`                                           |
-| `enableEvictionAPIs`                      | Enable eviction APIs                                                                        | `true`                                           |
-| `enablePprof`                             | Enable pprof endpoint                                                                       | `true`                                           |
-| `pprofPort`                               | pprof server port                                                                           | `6065`                                           |
-| `hubAPIQPS`                               | QPS for fleet-apiserver (not including events/node heartbeat)                              | `250`                                            |
-| `hubAPIBurst`                             | Burst for fleet-apiserver (not including events/node heartbeat)                            | `1000`                                           |
-| `MaxConcurrentClusterPlacement`           | Max concurrent ClusterResourcePlacement operations                                         | `100`                                            |
-| `ConcurrentResourceChangeSyncs`           | Max concurrent resourceChange reconcilers                                                  | `20`                                             |
-| `logFileMaxSize`                          | Max log file size before rotation (optional)                                               | `unset`                                          |
-| `MaxFleetSizeSupported`                   | Max number of member clusters supported                                                    | `100`                                            |
-| `forceDeleteWaitTime`                     | Grace period before force-deleting resources                                                | `15m0s`                                          |
-| `clusterUnhealthyThreshold`               | Threshold duration for marking a cluster unhealthy                                          | `3m0s`                                           |
-| `resourceSnapshotCreationMinimumInterval` | The minimum interval at which resource snapshots could be created.                         | `30s`                                            |
-| `resourceChangesCollectionDuration`       | The duration for collecting resource changes into one snapshot.                            | `15s`                                            |
-| `enableWorkload`                          | Enable kubernetes builtin workload to run in hub cluster.                                  | `false`                                          |
+| Parameter | Description | Default |
+|:----------|:------------|:--------|
+| `replicaCount` | Number of hub-agent replicas to deploy | `1` |
+| `image.repository` | Image repository | `ghcr.io/kubefleet-dev/kubefleet/hub-agent` |
+| `image.pullPolicy` | Image pull policy | `Always` |
+| `image.tag` | Image release tag (empty uses chart `appVersion`) | `""` |
+| `namespace` | Namespace where this chart is installed | `fleet-system` |
+| `resources` | Resource requests/limits for the container | limits: 500m CPU, 1Gi; requests: 100m CPU, 128Mi |
+| `affinity` | Node affinity for hub-agent pods | `{}` |
+| `tolerations` | Tolerations for hub-agent pods | `[]` |
+| `logVerbosity` | Log level (klog V logs) | `5` |
+| `enableWebhook` | Enable webhook server | `true` |
+| `webhookServiceName` | Webhook service name | `fleetwebhook` |
+| `enableGuardRail` | Enable guard rail webhook configurations | `true` |
+| `webhookClientConnectionType` | Connection type for webhook client (service or url) | `service` |
+| `useCertManager` | Use cert-manager for webhook certificate management (requires `enableWorkload=true`) | `false` |
+| `webhookCertSecretName` | Name of the Secret where cert-manager stores the certificate (required when enabled) | `unset` |
+| `enableClusterInventoryAPI` | Enable cluster inventory APIs | `true` |
+| `enableStagedUpdateRunAPIs` | Enable staged update run APIs | `true` |
+| `enableEvictionAPIs` | Enable eviction APIs | `true` |
+| `enablePprof` | Enable pprof endpoint | `true` |
+| `pprofPort` | pprof server port | `6065` |
+| `hubAPIQPS` | QPS for fleet-apiserver (not including events/node heartbeat) | `250` |
+| `hubAPIBurst` | Burst for fleet-apiserver (not including events/node heartbeat) | `1000` |
+| `MaxConcurrentClusterPlacement` | Max concurrent ClusterResourcePlacement operations | `100` |
+| `ConcurrentResourceChangeSyncs` | Max concurrent resourceChange reconcilers | `20` |
+| `logFileMaxSize` | Max log file size before rotation (optional) | `unset` |
+| `MaxFleetSizeSupported` | Max number of member clusters supported | `100` |
+| `forceDeleteWaitTime` | Grace period before force-deleting resources | `15m0s` |
+| `clusterUnhealthyThreshold` | Threshold duration for marking a cluster unhealthy | `3m0s` |
+| `resourceSnapshotCreationMinimumInterval` | The minimum interval at which resource snapshots could be created | `30s` |
+| `resourceChangesCollectionDuration` | The duration for collecting resource changes into one snapshot | `15s` |
+| `enableWorkload` | Enable kubernetes builtin workload to run in hub cluster | `false` |
+| `additionalConfigData` | Additional key-value data to include in the hub agent config map | `{}` |
+| `additionalConfigDataMountPath` | Mount path for the additional config data volume | `/etc/kubefleet/additional-config` |
+| `enableAdmissionPolicyManager` | Enable the admission policy manager to enforce VAP-based policies on the hub cluster | `false` |
+| `admissionPolicyManagerConfigName` | Name of the key that contains the admission policy manager configuration in the hub agent config map | `""` |
 
 ## Certificate Management
 
@@ -158,20 +164,26 @@ helm install cert-manager jetstack/cert-manager \
 # Then install hub-agent with cert-manager enabled (OCI, specify VERSION)
 helm install hub-agent oci://ghcr.io/kubefleet-dev/kubefleet/charts/hub-agent \
   --version VERSION \
+  --namespace fleet-system \
+  --create-namespace \
   --set useCertManager=true \
   --set enableWorkload=true \
-  --set enableWebhook=true
+  --set enableWebhook=true \
+  --set webhookCertSecretName=fleet-webhook-server-cert
 
 # Or using traditional repository
 helm install hub-agent kubefleet/hub-agent \
+  --namespace fleet-system \
+  --create-namespace \
   --set useCertManager=true \
   --set enableWorkload=true \
-  --set enableWebhook=true
+  --set enableWebhook=true \
+  --set webhookCertSecretName=fleet-webhook-server-cert
 ```
 
 The `webhookCertSecretName` parameter specifies the Secret name for the certificate:
-- Default: `fleet-webhook-server-cert`
-- When using cert-manager, this is where cert-manager stores the certificate
+- Default: `unset`; there is no default in `values.yaml`
+- When using cert-manager, set this to the Secret where cert-manager stores the certificate
 - Must match the secret name referenced in the deployment volume mount
 
 Example with custom secret name:
@@ -179,12 +191,16 @@ Example with custom secret name:
 # Using OCI registry (specify VERSION)
 helm install hub-agent oci://ghcr.io/kubefleet-dev/kubefleet/charts/hub-agent \
   --version VERSION \
+  --namespace fleet-system \
+  --create-namespace \
   --set useCertManager=true \
   --set enableWorkload=true \
   --set webhookCertSecretName=my-webhook-secret
 
 # Using traditional repository
 helm install hub-agent kubefleet/hub-agent \
+  --namespace fleet-system \
+  --create-namespace \
   --set useCertManager=true \
   --set enableWorkload=true \
   --set webhookCertSecretName=my-webhook-secret

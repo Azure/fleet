@@ -1,0 +1,24 @@
+apiVersion: placement.kubernetes-fleet.io/v1beta1
+kind: ClusterResourcePlacement
+metadata:
+  name: crp-0
+spec:
+  policy:
+    placementType: PickAll
+    affinity:
+      clusterAffinity:
+        requiredDuringSchedulingIgnoredDuringExecution:
+          clusterSelectorTerms:
+            - labelSelector:
+                matchLabels:
+                  placement-group: "0"
+  resourceSelectors:
+    - group: ""
+      kind: Namespace
+      version: v1
+      name: work-0
+  strategy:
+    type: RollingUpdate
+    rollingUpdate:
+      maxUnavailable: 100%
+      unavailablePeriodSeconds: 1

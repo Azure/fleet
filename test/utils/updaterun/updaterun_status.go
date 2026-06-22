@@ -191,7 +191,10 @@ func buildStageUpdatingStatuses(
 			if task.Type == placementv1beta1.StageTaskTypeApproval {
 				stagesStatus[i].BeforeStageTaskStatus[j].ApprovalRequestName = fmt.Sprintf(placementv1beta1.BeforeStageApprovalTaskNameFmt, updateRun.GetName(), stage.Name)
 			}
-			stagesStatus[i].BeforeStageTaskStatus[j].Conditions = updateRunStageTaskSucceedConditions(updateRun.GetGeneration(), task.Type)
+			// Skip populating task conditions if the stage has 0 clusters (stage is skipped).
+			if len(wantSelectedClusters[i]) > 0 {
+				stagesStatus[i].BeforeStageTaskStatus[j].Conditions = updateRunStageTaskSucceedConditions(updateRun.GetGeneration(), task.Type)
+			}
 		}
 		stagesStatus[i].AfterStageTaskStatus = make([]placementv1beta1.StageTaskStatus, len(stage.AfterStageTasks))
 		for j, task := range stage.AfterStageTasks {
@@ -199,9 +202,17 @@ func buildStageUpdatingStatuses(
 			if task.Type == placementv1beta1.StageTaskTypeApproval {
 				stagesStatus[i].AfterStageTaskStatus[j].ApprovalRequestName = fmt.Sprintf(placementv1beta1.AfterStageApprovalTaskNameFmt, updateRun.GetName(), stage.Name)
 			}
-			stagesStatus[i].AfterStageTaskStatus[j].Conditions = updateRunStageTaskSucceedConditions(updateRun.GetGeneration(), task.Type)
+			// Skip populating task conditions if the stage has 0 clusters (stage is skipped).
+			if len(wantSelectedClusters[i]) > 0 {
+				stagesStatus[i].AfterStageTaskStatus[j].Conditions = updateRunStageTaskSucceedConditions(updateRun.GetGeneration(), task.Type)
+			}
 		}
-		stagesStatus[i].Conditions = updateRunStageRolloutSucceedConditions(updateRun.GetGeneration())
+		// Use skipped conditions if the stage has 0 clusters.
+		if len(wantSelectedClusters[i]) == 0 {
+			stagesStatus[i].Conditions = updateRunStageSkippedNoClustersConditions(updateRun.GetGeneration())
+		} else {
+			stagesStatus[i].Conditions = updateRunStageRolloutSucceedConditions(updateRun.GetGeneration())
+		}
 	}
 	return stagesStatus
 }
@@ -259,6 +270,23 @@ func updateRunStageRolloutSucceedConditions(generation int64) []metav1.Condition
 			Type:               string(placementv1beta1.StageUpdatingConditionSucceeded),
 			Status:             metav1.ConditionTrue,
 			Reason:             condition.StageUpdatingSucceededReason,
+			ObservedGeneration: generation,
+		},
+	}
+}
+
+func updateRunStageSkippedNoClustersConditions(generation int64) []metav1.Condition {
+	return []metav1.Condition{
+		{
+			Type:               string(placementv1beta1.StageUpdatingConditionProgressing),
+			Status:             metav1.ConditionFalse,
+			Reason:             condition.StageUpdatingSkippedNoClustersReason,
+			ObservedGeneration: generation,
+		},
+		{
+			Type:               string(placementv1beta1.StageUpdatingConditionSucceeded),
+			Status:             metav1.ConditionTrue,
+			Reason:             condition.StageUpdatingSkippedNoClustersReason,
 			ObservedGeneration: generation,
 		},
 	}

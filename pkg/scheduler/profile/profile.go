@@ -21,6 +21,7 @@ import (
 	"go.goms.io/fleet/pkg/scheduler/framework"
 	"go.goms.io/fleet/pkg/scheduler/framework/plugins/clusteraffinity"
 	"go.goms.io/fleet/pkg/scheduler/framework/plugins/clustereligibility"
+	"go.goms.io/fleet/pkg/scheduler/framework/plugins/namespaceaffinity"
 	"go.goms.io/fleet/pkg/scheduler/framework/plugins/sameplacementaffinity"
 	"go.goms.io/fleet/pkg/scheduler/framework/plugins/tainttoleration"
 	"go.goms.io/fleet/pkg/scheduler/framework/plugins/topologyspreadconstraints"
@@ -51,13 +52,14 @@ func NewProfile(opts Options) *framework.Profile {
 		clusterAffinityPlugin = *opts.ClusterAffinityPlugin
 	}
 	clusterEligibilityPlugin := clustereligibility.New()
+	namespaceAffinityPlugin := namespaceaffinity.New()
 	samePlacementAffinityPlugin := sameplacementaffinity.New()
 	topologySpreadConstraintsPlugin := topologyspreadconstraints.New()
 	taintTolerationPlugin := tainttoleration.New()
 
 	p.WithPostBatchPlugin(&topologySpreadConstraintsPlugin).
-		WithPreFilterPlugin(&clusterAffinityPlugin).WithPreFilterPlugin(&topologySpreadConstraintsPlugin).
-		WithFilterPlugin(&clusterAffinityPlugin).WithFilterPlugin(&clusterEligibilityPlugin).WithFilterPlugin(&taintTolerationPlugin).WithFilterPlugin(&samePlacementAffinityPlugin).WithFilterPlugin(&topologySpreadConstraintsPlugin).
+		WithPreFilterPlugin(&clusterAffinityPlugin).WithPreFilterPlugin(&namespaceAffinityPlugin).WithPreFilterPlugin(&topologySpreadConstraintsPlugin).
+		WithFilterPlugin(&clusterAffinityPlugin).WithFilterPlugin(&clusterEligibilityPlugin).WithFilterPlugin(&namespaceAffinityPlugin).WithFilterPlugin(&taintTolerationPlugin).WithFilterPlugin(&samePlacementAffinityPlugin).WithFilterPlugin(&topologySpreadConstraintsPlugin).
 		WithPreScorePlugin(&clusterAffinityPlugin).WithPreScorePlugin(&topologySpreadConstraintsPlugin).
 		WithScorePlugin(&clusterAffinityPlugin).WithScorePlugin(&samePlacementAffinityPlugin).WithScorePlugin(&topologySpreadConstraintsPlugin)
 	return p

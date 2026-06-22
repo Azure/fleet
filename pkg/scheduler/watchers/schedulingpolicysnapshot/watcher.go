@@ -74,32 +74,15 @@ func (r *Reconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.Resu
 		return ctrl.Result{}, nil
 	}
 
-	// Verify if the policy snapshot is currently active.
-	// TODO: create a lib to check if the policy snapshot is latest.
-	isLatestVal, ok := policySnapshot.GetLabels()[fleetv1beta1.IsLatestSnapshotLabel]
-	if !ok {
-		// The IsLatestSnapshot label is not present; normally this should never occur.
-		klog.ErrorS(controller.NewUnexpectedBehaviorError(fmt.Errorf("IsLatestSnapshotLabel is missing")),
-			"IsLatestSnapshot label is not present",
-			"policySnapshot", policySnapshotRef)
-		// This is not a situation that the controller can recover by itself. Should the label
-		// value be corrected, the controller will be triggered again.
-		return ctrl.Result{}, nil
-	}
-	isLatest, err := strconv.ParseBool(isLatestVal)
+	// Verify if the policy snapshot is currently active. A missing or malformed IsLatestSnapshot
+	// label is treated as "not latest" — the controller cannot recover from those states by
+	// itself; the placement controller will repair the label and re-trigger reconciliation.
+	isLatest, err := controller.IsLatestPolicySnapshot(policySnapshot)
 	if err != nil {
-		// The label value is not a correctly formatted boolean value; normally this should never
-		// occur.
-		klog.ErrorS(controller.NewUnexpectedBehaviorError(err),
-			"Failed to parse IsLatestSnapshot value",
-			"policySnapshot", policySnapshotRef)
-		// This is not an error that the controller can recover by itself; ignore the error.
-		// Should the label value be corrected, the controller will be triggered again.
+		klog.ErrorS(err, "Failed to determine whether policy snapshot is latest", "policySnapshot", policySnapshotRef)
 		return ctrl.Result{}, nil
 	}
 	if !isLatest {
-		// The policy snapshot is not currently active, i.e., it is not the latest policy snapshot;
-		// ignore it.
 		return ctrl.Result{}, nil
 	}
 

@@ -166,7 +166,7 @@ func SetupControllers(ctx context.Context, wg *sync.WaitGroup, mgr ctrl.Manager,
 		InformerManager:   dynamicInformerManager,
 		ResourceConfig:    resourceConfig,
 		SkippedNamespaces: skippedNamespaces,
-		EnableWorkload:    opts.WebhookOpts.EnableWorkload,
+		EnableWorkload:    opts.WebhookAndAdmissionPolicyOpts.EnableWorkload,
 	}
 	resourceSnapshotResolver := controller.NewResourceSnapshotResolver(mgr.GetClient(), mgr.GetScheme())
 	resourceSnapshotResolver.Config = controller.NewResourceSnapshotConfig(opts.PlacementMgmtOpts.ResourceSnapshotCreationMinimumInterval, opts.PlacementMgmtOpts.ResourceChangesCollectionDuration)
@@ -550,7 +550,7 @@ func SetupControllers(ctx context.Context, wg *sync.WaitGroup, mgr ctrl.Manager,
 		SkippedNamespaces:                         skippedNamespaces,
 		ConcurrentPlacementWorker:                 int(math.Ceil(float64(opts.PlacementMgmtOpts.MaxConcurrentClusterPlacement) / 10)),
 		ConcurrentResourceChangeWorker:            opts.PlacementMgmtOpts.ConcurrentResourceChangeSyncs,
-		EnableWorkload:                            opts.WebhookOpts.EnableWorkload,
+		EnableWorkload:                            opts.WebhookAndAdmissionPolicyOpts.EnableWorkload,
 	}
 
 	if err := mgr.Add(resourceChangeDetector); err != nil {

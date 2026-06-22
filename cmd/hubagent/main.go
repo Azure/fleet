@@ -27,12 +27,14 @@ import (
 	apiextensionsv1 "k8s.io/apiextensions-apiserver/pkg/apis/apiextensions/v1"
 	"k8s.io/apimachinery/pkg/runtime"
 	utilruntime "k8s.io/apimachinery/pkg/util/runtime"
+	"k8s.io/apimachinery/pkg/util/yaml"
 	clientgoscheme "k8s.io/client-go/kubernetes/scheme"
 	"k8s.io/client-go/rest"
 	"k8s.io/klog/v2"
 	clusterinventory "sigs.k8s.io/cluster-inventory-api/apis/v1alpha1"
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/cache"
+	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/healthz"
 	"sigs.k8s.io/controller-runtime/pkg/log/zap"
 	"sigs.k8s.io/controller-runtime/pkg/manager"
@@ -40,17 +42,18 @@ import (
 	ctrlwebhook "sigs.k8s.io/controller-runtime/pkg/webhook"
 
 	fleetnetworkingv1alpha1 "go.goms.io/fleet-networking/api/v1alpha1"
+	"go.goms.io/fleet/pkg/webhook/managedresource"
 
 	clusterv1beta1 "go.goms.io/fleet/apis/cluster/v1beta1"
 	placementv1alpha1 "go.goms.io/fleet/apis/placement/v1alpha1"
 	placementv1beta1 "go.goms.io/fleet/apis/placement/v1beta1"
 	"go.goms.io/fleet/cmd/hubagent/options"
 	"go.goms.io/fleet/cmd/hubagent/workload"
+	"go.goms.io/fleet/pkg/admissionpolicymanager"
 	mcv1beta1 "go.goms.io/fleet/pkg/controllers/membercluster/v1beta1"
 	readiness "go.goms.io/fleet/pkg/utils/informer/readiness"
 	"go.goms.io/fleet/pkg/utils/validator"
 	"go.goms.io/fleet/pkg/webhook"
-	"go.goms.io/fleet/pkg/webhook/managedresource"
 	// +kubebuilder:scaffold:imports
 )
 
@@ -161,7 +164,7 @@ func main() {
 		exitWithErrorFunc()
 	}
 
-	klog.V(2).InfoS("starting hubagent")
+	klog.V(2).InfoS("starting hub agent")
 	if opts.FeatureFlags.EnableV1Beta1APIs {
 		klog.Info("Setting up memberCluster v1beta1 controller")
 		if err = (&mcv1beta1.Reconciler{
@@ -184,7 +187,7 @@ func main() {
 		exitWithErrorFunc()
 	}
 
-	if opts.WebhookOpts.EnableWebhooks {
+	if opts.WebhookAndAdmissionPolicyOpts.EnableWebhooks {
 		// Generate webhook configuration with certificates
 		webhookConfig, err := webhook.NewWebhookConfigFromOptions(mgr, opts, FleetWebhookPort)
 		if err != nil {
@@ -198,10 +201,18 @@ func main() {
 			exitWithErrorFunc()
 		}
 
+		// Add webhook server readiness check to ensure the pod is not marked ready until
+		// the webhook HTTPS listener is actually serving. This uses controller-runtime's
+		// built-in StartedChecker which verifies the server is listening on the port.
+		if err := mgr.AddReadyzCheck("webhook-server", mgr.GetWebhookServer().StartedChecker()); err != nil {
+			klog.ErrorS(err, "unable to set up webhook server readiness check")
+			exitWithErrorFunc()
+		}
+
 		// When using cert-manager, add a readiness check to ensure CA bundles are injected before marking ready.
 		// This prevents the pod from accepting traffic before cert-manager has populated the webhook CA bundles,
 		// which would cause webhook calls to fail.
-		if opts.WebhookOpts.UseCertManager {
+		if opts.WebhookAndAdmissionPolicyOpts.UseCertManager {
 			if err := mgr.AddReadyzCheck("cert-manager-ca-injection", func(req *http.Request) error {
 				return webhookConfig.CheckCAInjection(req.Context())
 			}); err != nil {
@@ -213,6 +224,45 @@ func main() {
 	}
 
 	ctx := ctrl.SetupSignalHandler()
+
+	if opts.WebhookAndAdmissionPolicyOpts.EnableAdmissionPolicyManager {
+		policyManagerCfgs := admissionpolicymanager.DefaultPolicyGeneratorConfigs
+		if len(opts.WebhookAndAdmissionPolicyOpts.AdmissionPolicyManagerConfig) != 0 {
+			// Read user-provided admission policy manager config from given path.
+			cfgData, err := os.ReadFile(opts.WebhookAndAdmissionPolicyOpts.AdmissionPolicyManagerConfig)
+			if err != nil {
+				klog.ErrorS(err, "failed to read the admission policy manager config file")
+				exitWithErrorFunc()
+			}
+
+			policyManagerCfgs = &admissionpolicymanager.PolicyGeneratorConfigs{}
+			if err := yaml.Unmarshal(cfgData, policyManagerCfgs); err != nil {
+				klog.ErrorS(err, "failed to unmarshal the admission policy manager config file")
+				exitWithErrorFunc()
+			}
+
+			// Note that validation has been performed when the flags are parsed.
+		}
+
+		// Create a separate client for the admission policy manager to use, as the cached client from
+		// the controller manager side is not initialized yet at this point.
+		hubUncachedClient, err := client.New(defaultCfg, client.Options{Scheme: scheme})
+		if err != nil {
+			klog.ErrorS(err, "failed to create uncached client for the admission policy manager")
+			exitWithErrorFunc()
+		}
+		policyMgr, err := admissionpolicymanager.New(hubUncachedClient, policyManagerCfgs)
+		if err != nil {
+			klog.ErrorS(err, "failed to create the admission policy manager")
+			exitWithErrorFunc()
+		}
+
+		if err := policyMgr.Start(ctx); err != nil {
+			klog.ErrorS(err, "failed to start the admission policy manager")
+			exitWithErrorFunc()
+		}
+	}
+
 	if err := workload.SetupControllers(ctx, &wg, mgr, defaultCfg, opts); err != nil {
 		klog.ErrorS(err, "unable to set up controllers")
 		exitWithErrorFunc()

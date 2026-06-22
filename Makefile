@@ -49,6 +49,7 @@ HUB_SERVER_URL ?= https://172.19.0.2:6443
 HUB_KIND_CLUSTER_NAME = hub-testing
 MEMBER_KIND_CLUSTER_NAME = member-testing
 MEMBER_CLUSTER_COUNT ?= 3
+JOIN_MEMBERS ?= false
 
 # Directories
 ROOT_DIR := $(shell dirname $(realpath $(firstword $(MAKEFILE_LIST))))
@@ -58,7 +59,7 @@ TOOLS_BIN_DIR := $(abspath $(TOOLS_DIR)/bin)
 # Binaries
 # Note: Need to use abspath so we can invoke these from subdirectories
 
-CONTROLLER_GEN_VER := v0.16.0
+CONTROLLER_GEN_VER := v0.20.0
 CONTROLLER_GEN_BIN := controller-gen
 CONTROLLER_GEN := $(abspath $(TOOLS_BIN_DIR)/$(CONTROLLER_GEN_BIN)-$(CONTROLLER_GEN_VER))
 
@@ -66,7 +67,7 @@ STATICCHECK_VER := v0.6.1
 STATICCHECK_BIN := staticcheck
 STATICCHECK := $(abspath $(TOOLS_BIN_DIR)/$(STATICCHECK_BIN)-$(STATICCHECK_VER))
 
-GOIMPORTS_VER := latest
+GOIMPORTS_VER := v0.42.0
 GOIMPORTS_BIN := goimports
 GOIMPORTS := $(abspath $(TOOLS_BIN_DIR)/$(GOIMPORTS_BIN)-$(GOIMPORTS_VER))
 
@@ -217,6 +218,18 @@ e2e-tests-custom: setup-clusters ## Run custom E2E tests with labels
 .PHONY: setup-clusters
 setup-clusters: ## Set up Kind clusters for E2E testing
 	cd ./test/e2e && chmod +x ./setup.sh && ./setup.sh $(MEMBER_CLUSTER_COUNT)
+ifeq ($(JOIN_MEMBERS),true)
+	$(MAKE) join-members
+else
+	@echo ""
+	@echo "Clusters are ready but member clusters have not been joined to the hub."
+	@echo "To join them, run: make join-members"
+	@echo "Or re-run with: JOIN_MEMBERS=true make setup-clusters"
+endif
+
+.PHONY: join-members
+join-members: ## Join member clusters to the hub cluster (run after setup-clusters)
+	cd ./test/e2e && chmod +x ./join.sh && ./join.sh $(MEMBER_CLUSTER_COUNT)
 
 .PHONY: collect-e2e-logs
 collect-e2e-logs: ## Collect logs from hub and member agent pods after e2e tests
@@ -262,6 +275,7 @@ build: generate fmt vet ## Build agent binaries
 	go build -o bin/hubagent cmd/hubagent/main.go
 	go build -o bin/memberagent cmd/memberagent/main.go
 	go build -o bin/crdinstaller cmd/crdinstaller/main.go
+	go build -o bin/kubectl-fleet ./tools/fleet/
 
 .PHONY: run-hubagent
 run-hubagent: manifests generate fmt vet ## Run hub-agent from your host
@@ -290,10 +304,10 @@ push: ## Build and push all Docker images
 
 .PHONY: helm-push
 helm-push: ## Package and push Helm charts to OCI registry
-	helm package charts/hub-agent --version $(TAG) --app-version $(TAG) --destination .helm-packages
-	helm package charts/member-agent --version $(TAG) --app-version $(TAG) --destination .helm-packages
-	helm push .helm-packages/hub-agent-$(TAG).tgz oci://$(REGISTRY)
-	helm push .helm-packages/member-agent-$(TAG).tgz oci://$(REGISTRY)
+	helm package charts/hub-agent --version $(CHART_VERSION) --app-version $(TAG) --destination .helm-packages
+	helm package charts/member-agent --version $(CHART_VERSION) --app-version $(TAG) --destination .helm-packages
+	helm push .helm-packages/hub-agent-$(CHART_VERSION).tgz oci://$(REGISTRY)
+	helm push .helm-packages/member-agent-$(CHART_VERSION).tgz oci://$(REGISTRY)
 	rm -rf .helm-packages
 
 # By default, docker buildx create will pull image moby/buildkit:buildx-stable-1 and hit the too many requests error

@@ -78,58 +78,13 @@ var _ = Describe("mixed ClusterResourcePlacement and ResourcePlacement negative 
 			ensureCRPAndRelatedResourcesDeleted(crpName, allMemberClusters)
 		})
 
-		It("should update RP status as expected", func() {
-			rpStatusUpdatedActual := func() error {
-				rp := &placementv1beta1.ResourcePlacement{}
-				if err := hubClient.Get(ctx, types.NamespacedName{Name: rpName, Namespace: workNamespaceName}, rp); err != nil {
-					return err
-				}
+		It("should wait for namespace collection to sync on clusters where CRP placed it", func() {
+			waitForNamespaceCollectionOnClusters(workNamespaceName, []string{memberCluster2EastCanaryName, memberCluster3WestProdName})
+		})
 
-				appConfigMapName := fmt.Sprintf(appConfigMapNameTemplate, GinkgoParallelProcess())
-				wantStatus := placementv1beta1.PlacementStatus{
-					Conditions: rpAppliedFailedConditions(rp.Generation),
-					PerClusterPlacementStatuses: []placementv1beta1.PerClusterPlacementStatus{
-						{
-							ClusterName:           memberCluster1EastProdName,
-							ObservedResourceIndex: "0",
-							FailedPlacements: []placementv1beta1.FailedResourcePlacement{
-								{
-									ResourceIdentifier: placementv1beta1.ResourceIdentifier{
-										Kind:      "ConfigMap",
-										Name:      appConfigMapName,
-										Version:   "v1",
-										Namespace: workNamespaceName,
-									},
-									Condition: metav1.Condition{
-										Type:               placementv1beta1.WorkConditionTypeApplied,
-										Status:             metav1.ConditionFalse,
-										Reason:             string(workapplier.ApplyOrReportDiffResTypeFailedToApply),
-										ObservedGeneration: 0,
-									},
-								},
-							},
-							Conditions: perClusterApplyFailedConditions(rp.Generation),
-						},
-						{
-							ClusterName:           memberCluster2EastCanaryName,
-							ObservedResourceIndex: "0",
-							Conditions:            perClusterRolloutCompletedConditions(rp.Generation, true, false),
-						},
-						{
-							ClusterName:           memberCluster3WestProdName,
-							ObservedResourceIndex: "0",
-							Conditions:            perClusterRolloutCompletedConditions(rp.Generation, true, false),
-						},
-					},
-					SelectedResources:     appConfigMapIdentifiers(),
-					ObservedResourceIndex: "0",
-				}
-				if diff := cmp.Diff(rp.Status, wantStatus, placementStatusCmpOptions...); diff != "" {
-					return fmt.Errorf("RP status diff (-got, +want): %s", diff)
-				}
-				return nil
-			}
-			Eventually(rpStatusUpdatedActual, eventuallyDuration, eventuallyInterval).Should(Succeed(), "Failed to update RP %s status as expected", rpName)
+		It("should update RP status as expected", func() {
+			rpStatusUpdatedActual := rpStatusUpdatedActual(appConfigMapIdentifiers(), []string{memberCluster2EastCanaryName, memberCluster3WestProdName}, nil, "0")
+			Eventually(rpStatusUpdatedActual, eventuallyDuration, eventuallyInterval).Should(Succeed(), "Failed to update RP status as expected")
 		})
 
 		It("should place resources on the specified clusters", func() {
@@ -148,6 +103,10 @@ var _ = Describe("mixed ClusterResourcePlacement and ResourcePlacement negative 
 				return hubClient.Update(ctx, crp)
 			}
 			Eventually(updateFunc, eventuallyDuration, eventuallyInterval).Should(Succeed(), "Failed to update the crp %s", crpName)
+		})
+
+		It("should wait for namespace collection to sync on the newly added member cluster", func() {
+			waitForNamespaceCollectionOnClusters(workNamespaceName, []string{memberCluster1EastProdName})
 		})
 
 		It("should update RP status as expected", func() {
@@ -173,6 +132,10 @@ var _ = Describe("mixed ClusterResourcePlacement and ResourcePlacement negative 
 
 		AfterAll(func() {
 			ensureCRPAndRelatedResourcesDeleted(crpName, allMemberClusters)
+		})
+
+		It("should wait for namespace collection to sync on all member clusters", func() {
+			waitForNamespaceCollectionOnClusters(workNamespaceName, allMemberClusterNames)
 		})
 
 		It("creating an RP that uses PickAll strategy on the same namespace", func() {
@@ -270,6 +233,9 @@ var _ = Describe("mixed ClusterResourcePlacement and ResourcePlacement negative 
 				ns := appNamespace()
 				Expect(memberCluster.KubeClient.Create(ctx, &ns)).To(Succeed())
 			}
+
+			By("waiting for namespace to be collected on all member clusters")
+			waitForNamespaceCollectionOnClusters(workNamespaceName, allMemberClusterNames)
 
 			By("creating an RP")
 			createRP(workNamespaceName, rpName)
@@ -440,6 +406,10 @@ var _ = Describe("mixed ClusterResourcePlacement and ResourcePlacement positive 
 		It("should update CRP status as expected", func() {
 			crpStatusUpdatedActual := crpStatusUpdatedActual(workNamespaceIdentifiers(), wantSelectedClusters, nil, "0")
 			Eventually(crpStatusUpdatedActual, eventuallyDuration, eventuallyInterval).Should(Succeed(), "Failed to update CRP status as expected")
+		})
+
+		It("should wait for namespace collection to sync on selected member clusters", func() {
+			waitForNamespaceCollectionOnClusters(workNamespaceName, wantSelectedClusters)
 		})
 
 		It("add labels to member clusters based on CRP placement decisions", func() {

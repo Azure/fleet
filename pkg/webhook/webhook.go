@@ -55,12 +55,15 @@ import (
 	clusterv1beta1 "go.goms.io/fleet/apis/cluster/v1beta1"
 	placementv1beta1 "go.goms.io/fleet/apis/placement/v1beta1"
 	"go.goms.io/fleet/cmd/hubagent/options"
+	"go.goms.io/fleet/pkg/utils/writefile"
 	"go.goms.io/fleet/pkg/webhook/clusterresourceoverride"
 	"go.goms.io/fleet/pkg/webhook/clusterresourceplacement"
 	"go.goms.io/fleet/pkg/webhook/clusterresourceplacementdisruptionbudget"
 	"go.goms.io/fleet/pkg/webhook/clusterresourceplacementeviction"
+	"go.goms.io/fleet/pkg/webhook/deployment"
 	"go.goms.io/fleet/pkg/webhook/fleetresourcehandler"
 	"go.goms.io/fleet/pkg/webhook/membercluster"
+	"go.goms.io/fleet/pkg/webhook/pdb"
 	"go.goms.io/fleet/pkg/webhook/pod"
 	"go.goms.io/fleet/pkg/webhook/replicaset"
 	"go.goms.io/fleet/pkg/webhook/resourceoverride"
@@ -170,6 +173,7 @@ type Config struct {
 
 	denyModifyMemberClusterLabels bool
 	enableWorkload                bool
+	enablePDBs                    bool
 	// useCertManager indicates whether cert-manager is used for certificate management
 	useCertManager bool
 	// webhookCertName is the name of the Certificate resource created by cert-manager.
@@ -181,7 +185,21 @@ type Config struct {
 	networkingAgentsEnabled bool
 }
 
-func NewWebhookConfig(mgr manager.Manager, webhookServiceName string, port int32, clientConnectionType *options.WebhookClientConnectionType, certDir string, enableGuardRail bool, denyModifyMemberClusterLabels bool, enableWorkload bool, useCertManager bool, webhookCertName string, whiteListedUsers []string, networkingAgentsEnabled bool) (*Config, error) {
+func NewWebhookConfig(
+	mgr manager.Manager,
+	webhookServiceName string,
+	port int32,
+	clientConnectionType *options.WebhookClientConnectionType,
+	certDir string,
+	enableGuardRail bool,
+	denyModifyMemberClusterLabels bool,
+	enableWorkload bool,
+	enablePDBs bool,
+	useCertManager bool,
+	webhookCertName string,
+	whiteListedUsers []string,
+	networkingAgentsEnabled bool,
+) (*Config, error) {
 	// We assume the Pod namespace should be passed to env through downward API in the Pod spec.
 	namespace := os.Getenv("POD_NAMESPACE")
 	if namespace == "" {
@@ -197,6 +215,7 @@ func NewWebhookConfig(mgr manager.Manager, webhookServiceName string, port int32
 		enableGuardRail:               enableGuardRail,
 		denyModifyMemberClusterLabels: denyModifyMemberClusterLabels,
 		enableWorkload:                enableWorkload,
+		enablePDBs:                    enablePDBs,
 		useCertManager:                useCertManager,
 		webhookCertName:               webhookCertName,
 		whiteListedUsers:              whiteListedUsers,
@@ -226,13 +245,23 @@ func NewWebhookConfig(mgr manager.Manager, webhookServiceName string, port int32
 // String-to-enum conversions (e.g., WebhookClientConnectionType) are performed without
 // additional validation, as validation happens at the Options level.
 func NewWebhookConfigFromOptions(mgr manager.Manager, opts *options.Options, webhookPort int32) (*Config, error) {
-	webhookClientConnectionType := options.WebhookClientConnectionType(opts.WebhookOpts.ClientConnectionType)
-	whiteListedUsers := strings.Split(opts.WebhookOpts.GuardRailWhitelistedUsers, ",")
+	webhookClientConnectionType := options.WebhookClientConnectionType(opts.WebhookAndAdmissionPolicyOpts.ClientConnectionType)
+	whiteListedUsers := strings.Split(opts.WebhookAndAdmissionPolicyOpts.GuardRailWhitelistedUsers, ",")
 
-	return NewWebhookConfig(mgr, opts.WebhookOpts.ServiceName, webhookPort,
-		&webhookClientConnectionType, FleetWebhookCertDir, opts.WebhookOpts.EnableGuardRail,
-		opts.WebhookOpts.GuardRailDenyModifyMemberClusterLabels, opts.WebhookOpts.EnableWorkload, opts.WebhookOpts.UseCertManager,
-		FleetWebhookCertName, whiteListedUsers, opts.ClusterMgmtOpts.NetworkingAgentsEnabled)
+	return NewWebhookConfig(
+		mgr,
+		opts.WebhookAndAdmissionPolicyOpts.ServiceName,
+		webhookPort,
+		&webhookClientConnectionType,
+		FleetWebhookCertDir,
+		opts.WebhookAndAdmissionPolicyOpts.EnableGuardRail,
+		opts.WebhookAndAdmissionPolicyOpts.GuardRailDenyModifyMemberClusterLabels,
+		opts.WebhookAndAdmissionPolicyOpts.EnableWorkload,
+		opts.WebhookAndAdmissionPolicyOpts.EnablePDBs,
+		opts.WebhookAndAdmissionPolicyOpts.UseCertManager,
+		FleetWebhookCertName,
+		whiteListedUsers,
+		opts.ClusterMgmtOpts.NetworkingAgentsEnabled)
 }
 
 func (w *Config) Start(ctx context.Context) error {
@@ -241,6 +270,7 @@ func (w *Config) Start(ctx context.Context) error {
 		klog.ErrorS(err, "unable to setup webhook configurations in apiserver")
 		return err
 	}
+	klog.V(2).InfoS("webhook configurations created successfully")
 	return nil
 }
 
@@ -385,6 +415,23 @@ func (w *Config) buildFleetMutatingWebhooks() []admv1.MutatingWebhook {
 			},
 			TimeoutSeconds: longWebhookTimeout,
 		},
+		{
+			Name:                    "fleet.deployment.mutating",
+			ClientConfig:            w.createClientConfig(deployment.MutatingPath),
+			FailurePolicy:           &ignoreFailurePolicy,
+			SideEffects:             &sideEffortsNone,
+			AdmissionReviewVersions: admissionReviewVersions,
+			Rules: []admv1.RuleWithOperations{
+				{
+					Operations: []admv1.OperationType{
+						admv1.Create,
+						admv1.Update,
+					},
+					Rule: createRule([]string{appsv1.SchemeGroupVersion.Group}, []string{appsv1.SchemeGroupVersion.Version}, []string{deploymentResourceName}, &namespacedScope),
+				},
+			},
+			TimeoutSeconds: longWebhookTimeout,
+		},
 	}
 	return webHooks
 }
@@ -459,6 +506,23 @@ func (w *Config) buildFleetValidatingWebhooks() []admv1.ValidatingWebhook {
 				{
 					Operations: []admv1.OperationType{admv1.Create},
 					Rule:       createRule([]string{appsv1.SchemeGroupVersion.Group}, []string{appsv1.SchemeGroupVersion.Version}, []string{replicaSetResourceName}, &namespacedScope),
+				},
+			},
+			TimeoutSeconds: longWebhookTimeout,
+		})
+	}
+
+	if !w.enablePDBs {
+		webHooks = append(webHooks, admv1.ValidatingWebhook{
+			Name:                    "fleet.poddisruptionbudget.validating",
+			ClientConfig:            w.createClientConfig(pdb.ValidationPath),
+			FailurePolicy:           &failFailurePolicy,
+			SideEffects:             &sideEffortsNone,
+			AdmissionReviewVersions: admissionReviewVersions,
+			Rules: []admv1.RuleWithOperations{
+				{
+					Operations: []admv1.OperationType{admv1.Create},
+					Rule:       createRule([]string{policyv1.SchemeGroupVersion.Group}, []string{policyv1.SchemeGroupVersion.Version}, []string{podDisruptionBudgetsResourceName}, &namespacedScope),
 				},
 			},
 			TimeoutSeconds: longWebhookTimeout,
@@ -543,6 +607,19 @@ func (w *Config) buildFleetValidatingWebhooks() []admv1.ValidatingWebhook {
 		},
 	)
 
+	webHooks = append(webHooks, admv1.ValidatingWebhook{
+		Name:                    "fleet.deployment.validating",
+		ClientConfig:            w.createClientConfig(deployment.ValidationPath),
+		FailurePolicy:           &failFailurePolicy,
+		SideEffects:             &sideEffortsNone,
+		AdmissionReviewVersions: admissionReviewVersions,
+		Rules: []admv1.RuleWithOperations{{
+			Operations: []admv1.OperationType{admv1.Create, admv1.Update},
+			Rule:       createRule([]string{appsv1.SchemeGroupVersion.Group}, []string{appsv1.SchemeGroupVersion.Version}, []string{deploymentResourceName}, &namespacedScope),
+		}},
+		TimeoutSeconds: longWebhookTimeout,
+	})
+
 	return webHooks
 }
 
@@ -595,12 +672,19 @@ func (w *Config) buildFleetGuardRailValidatingWebhooks() []admv1.ValidatingWebho
 	}
 
 	// Build core v1 resources list, conditionally including pods if workload is enabled
-	coreV1Resources := []string{bindingResourceName, configMapResourceName, endPointResourceName,
-		limitRangeResourceName, persistentVolumeClaimsName, persistentVolumeClaimsName + "/status", podTemplateResourceName,
-		replicationControllerResourceName, replicationControllerResourceName + "/status", resourceQuotaResourceName, resourceQuotaResourceName + "/status", secretResourceName,
-		serviceAccountResourceName, servicesResourceName, servicesResourceName + "/status"}
-	if w.enableWorkload {
-		coreV1Resources = append(coreV1Resources, podResourceName, podResourceName+"/status")
+	coreV1Resources := []string{
+		bindingResourceName,
+		configMapResourceName,
+		endPointResourceName,
+		limitRangeResourceName,
+		persistentVolumeClaimsName, persistentVolumeClaimsName + "/status",
+		podTemplateResourceName,
+		podResourceName, podResourceName + "/status",
+		replicationControllerResourceName, replicationControllerResourceName + "/status",
+		resourceQuotaResourceName, resourceQuotaResourceName + "/status",
+		secretResourceName,
+		serviceAccountResourceName, serviceAccountResourceName + "/token",
+		servicesResourceName, servicesResourceName + "/status",
 	}
 
 	namespacedResourcesRules = append(namespacedResourcesRules, admv1.RuleWithOperations{
@@ -609,11 +693,8 @@ func (w *Config) buildFleetGuardRailValidatingWebhooks() []admv1.ValidatingWebho
 	})
 
 	// Build apps/v1 resources list, conditionally including replicasets if workload is enabled
-	appsV1Resources := []string{controllerRevisionResourceName, daemonSetResourceName, daemonSetResourceName + "/status",
+	appsV1Resources := []string{controllerRevisionResourceName, daemonSetResourceName, daemonSetResourceName + "/status", replicaSetResourceName, replicaSetResourceName + "/status",
 		deploymentResourceName, deploymentResourceName + "/status", statefulSetResourceName, statefulSetResourceName + "/status"}
-	if w.enableWorkload {
-		appsV1Resources = append(appsV1Resources, replicaSetResourceName, replicaSetResourceName+"/status")
-	}
 
 	namespacedResourcesRules = append(namespacedResourcesRules, admv1.RuleWithOperations{
 		Operations: cuOperations,
@@ -897,7 +978,7 @@ func genCertAndKeyFile(certData, keyData []byte, certDir string) error {
 		return fmt.Errorf("could not create directory %q to store certificates: %w", certDir, err)
 	}
 	certPath := filepath.Join(certDir, fleetWebhookCertFileName)
-	f, err := os.OpenFile(filepath.Clean(certPath), os.O_CREATE|os.O_TRUNC|os.O_RDWR, 0600)
+	f, err := writefile.CreateSecureFile(certPath)
 	if err != nil {
 		return fmt.Errorf("could not open %q: %w", certPath, err)
 	}
@@ -911,7 +992,7 @@ func genCertAndKeyFile(certData, keyData []byte, certDir string) error {
 	}
 
 	keyPath := filepath.Join(certDir, fleetWebhookKeyFileName)
-	kf, err := os.OpenFile(filepath.Clean(keyPath), os.O_CREATE|os.O_TRUNC|os.O_RDWR, 0600)
+	kf, err := writefile.CreateSecureFile(keyPath)
 	if err != nil {
 		return fmt.Errorf("could not open %q: %w", keyPath, err)
 	}

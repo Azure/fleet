@@ -110,34 +110,69 @@ func BuildPolicySnapshot(placementObj fleetv1beta1.PlacementObj, policySnapshotI
 	return snapshot
 }
 
-// FetchLatestPolicySnapshot fetches the latest policy snapshot for a given placement.
-// For cluster-scoped placements, it fetches ClusterSchedulingPolicySnapshot.
-// For namespaced placements, it fetches SchedulingPolicySnapshot.
-func FetchLatestPolicySnapshot(ctx context.Context, k8Client client.Reader, placementKey types.NamespacedName) (fleetv1beta1.PolicySnapshotList, error) {
-	namespace := placementKey.Namespace
-	name := placementKey.Name
+// IsLatestPolicySnapshot reports whether the given policy snapshot carries the IsLatestSnapshot
+// label set to "true". A non-nil error is returned if the label is missing or its value cannot be
+// parsed as a bool; in those cases the boolean result is false.
+//
+// Callers typically log the error and treat the snapshot as non-latest, since the controller cannot
+// recover from a malformed label by itself — the placement controller will repair it and re-trigger
+// reconciliation.
+func IsLatestPolicySnapshot(snapshot fleetv1beta1.PolicySnapshotObj) (bool, error) {
+	val, ok := snapshot.GetLabels()[fleetv1beta1.IsLatestSnapshotLabel]
+	if !ok {
+		return false, NewUnexpectedBehaviorError(fmt.Errorf("%s label is missing", fleetv1beta1.IsLatestSnapshotLabel))
+	}
+	isLatest, err := strconv.ParseBool(val)
+	if err != nil {
+		return false, NewUnexpectedBehaviorError(fmt.Errorf("failed to parse %s label value %q: %w", fleetv1beta1.IsLatestSnapshotLabel, val, err))
+	}
+	return isLatest, nil
+}
 
+// LookupLatestPolicySnapshot returns the single active (latest) policy snapshot associated with the
+// placement identified by placementKey, enforcing the "exactly one latest snapshot" invariant.
+// A namespaced placementKey selects SchedulingPolicySnapshot; a cluster-scoped key (empty
+// namespace) selects ClusterSchedulingPolicySnapshot.
+//
+// Returns:
+//   - (snapshot, nil) when exactly one latest snapshot exists.
+//   - (nil, ErrNoLatestPolicySnapshot-wrapped error) when none exist. This is a transient state for
+//     newly-created placements or in-progress rotations; callers branch on it via errors.Is.
+//   - (nil, ErrMultipleActivePolicySnapshots-wrapped error) when more than one exists.
+//   - (nil, ErrAPIServerError-wrapped error) when the List call fails. The List error is also
+//     promoted to ErrUnexpectedBehavior for unexpected cache failures; callers must NOT collapse
+//     ErrUnexpectedBehavior with the dedicated invariant sentinels above when classifying retries.
+func LookupLatestPolicySnapshot(ctx context.Context, k8Client client.Reader, placementKey types.NamespacedName) (fleetv1beta1.PolicySnapshotObj, error) {
 	var policySnapshotList fleetv1beta1.PolicySnapshotList
-	var listOptions []client.ListOption
-	listOptions = append(listOptions, client.MatchingLabels{
-		fleetv1beta1.PlacementTrackingLabel: name,
-		fleetv1beta1.IsLatestSnapshotLabel:  strconv.FormatBool(true),
-	})
-
-	if namespace != "" {
-		// This is a namespaced SchedulingPolicySnapshotList
+	listOptions := []client.ListOption{
+		client.MatchingLabels{
+			fleetv1beta1.PlacementTrackingLabel: placementKey.Name,
+			fleetv1beta1.IsLatestSnapshotLabel:  strconv.FormatBool(true),
+		},
+	}
+	if placementKey.Namespace != "" {
 		policySnapshotList = &fleetv1beta1.SchedulingPolicySnapshotList{}
-		listOptions = append(listOptions, client.InNamespace(namespace))
+		listOptions = append(listOptions, client.InNamespace(placementKey.Namespace))
 	} else {
-		// This is a cluster-scoped ClusterSchedulingPolicySnapshotList
 		policySnapshotList = &fleetv1beta1.ClusterSchedulingPolicySnapshotList{}
 	}
-
 	if err := k8Client.List(ctx, policySnapshotList, listOptions...); err != nil {
 		klog.ErrorS(err, "Failed to list the policySnapshots associated with the placement", "placement", placementKey)
-		return nil, err
+		return nil, NewAPIServerError(true, err)
 	}
-	return policySnapshotList, nil
+
+	policySnapshots := policySnapshotList.GetPolicySnapshotObjs()
+	switch len(policySnapshots) {
+	case 0:
+		return nil, fmt.Errorf("%w for placement %s", ErrNoLatestPolicySnapshot, placementKey)
+	case 1:
+		return policySnapshots[0], nil
+	default:
+		// Wrap both the specific invariant sentinel and the categorical ErrUnexpectedBehavior so
+		// callers that branch on either continue to work; the specific sentinel lets retry-gate
+		// callers distinguish this invariant violation from transient ErrUnexpectedBehavior errors.
+		return nil, fmt.Errorf("%w: %w for placement %s: got %d, want 1", ErrUnexpectedBehavior, ErrMultipleActivePolicySnapshots, placementKey, len(policySnapshots))
+	}
 }
 
 // ListPolicySnapshots lists all policy snapshots associated with a placement key.

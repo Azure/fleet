@@ -60,17 +60,37 @@ CURRENT   NAME               CLUSTER            AUTHINFO                        
 
 Here you can see that the context of the hub cluster is called `hub` under the `NAME` column.
 
-### Approve a ClusterApprovalRequest
+### Approve an Approval Request
 
-Use the `approve` subcommand to approve ClusterApprovalRequest resources for staged update runs. This allows staged updates to proceed to the next stage by patching an "Approved" condition to the resource status.
+Use the `approve` subcommand to approve approval request resources for staged update runs. This allows staged updates to proceed to the next stage by patching an "Approved" condition to the resource status.
 
+**Supported kinds:**
+| Kind | Alias | Scope | Namespace Flag |
+|------|-------|-------|----------------|
+| `clusterapprovalrequest` | `careq` | Cluster | Not allowed |
+| `approvalrequest` | `areq` | Namespace | Required |
+
+**Cluster-scoped (ClusterApprovalRequest):**
 ```bash
-kubectl fleet approve clusterapprovalrequest --hubClusterContext <hub-cluster-context> --name <approval-request-name>
+kubectl fleet approve clusterapprovalrequest --hub-cluster-context <hub-cluster-context> --name <approval-request-name>
+# Or using alias:
+kubectl fleet approve careq --hub-cluster-context <hub-cluster-context> --name <approval-request-name>
+```
+
+**Namespace-scoped (ApprovalRequest):**
+```bash
+kubectl fleet approve approvalrequest --hub-cluster-context <hub-cluster-context> --name <approval-request-name> --namespace <namespace>
+# Or using alias:
+kubectl fleet approve areq --hub-cluster-context <hub-cluster-context> --name <approval-request-name> -n <namespace>
 ```
 
 Example:
 ```bash
-kubectl fleet approve clusterapprovalrequest --hubClusterContext hub --name my-approval-request
+# Approve a ClusterApprovalRequest
+kubectl fleet approve clusterapprovalrequest --hub-cluster-context hub --name my-approval-request
+
+# Approve an ApprovalRequest in a specific namespace
+kubectl fleet approve approvalrequest --hub-cluster-context hub --name my-approval-request --namespace my-namespace
 ```
 
 ### Drain a Member Cluster
@@ -78,12 +98,12 @@ kubectl fleet approve clusterapprovalrequest --hubClusterContext hub --name my-a
 Use the `draincluster` subcommand to remove all resources propagated to a member cluster from the hub cluster by any `Placement` resource. This is useful when you want to temporarily move all workloads off a member cluster in preparation for an event like upgrade or reconfiguration.
 
 ```bash
-kubectl fleet draincluster --hubClusterContext <hub-cluster-context> --clusterName <memberClusterName>
+kubectl fleet draincluster --hub-cluster-context <hub-cluster-context> --cluster-name <memberClusterName>
 ```
 
 Example:
 ```bash
-kubectl fleet draincluster --hubClusterContext hub --clusterName member-cluster-1
+kubectl fleet draincluster --hub-cluster-context hub --cluster-name member-cluster-1
 ```
 
 ### Uncordon a Member Cluster
@@ -91,25 +111,29 @@ kubectl fleet draincluster --hubClusterContext hub --clusterName member-cluster-
 Use the `uncordoncluster` subcommand to uncordon a member cluster that has been previously drained, allowing resources to be propagated to the cluster again.
 
 ```bash
-kubectl fleet uncordoncluster --hubClusterContext <hub-cluster-context> --clusterName <memberClusterName>
+kubectl fleet uncordoncluster --hub-cluster-context <hub-cluster-context> --cluster-name <memberClusterName>
 ```
 
 Example:
 ```bash
-kubectl fleet uncordoncluster --hubClusterContext hub --clusterName member-cluster-1
+kubectl fleet uncordoncluster --hub-cluster-context hub --cluster-name member-cluster-1
 ```
 
 ## Subcommands
 
 ### approve
 
-Approves ClusterApprovalRequest resources for staged update runs by:
+Approves approval request resources for staged update runs by:
 
-1. **Status Update**: Patches the ClusterApprovalRequest resource with an "Approved" condition
+1. **Status Update**: Patches the approval request resource with an "Approved" condition
 2. **Stage Progression**: Allows staged updates to proceed to the next stage automatically
 
-The approve command currently supports the following resource kinds:
-- `clusterapprovalrequest`: Approve a ClusterApprovalRequest for staged updates
+The approve command supports the following resource kinds:
+
+| Kind | Alias | Scope | Description |
+|------|-------|-------|-------------|
+| `clusterapprovalrequest` | `careq` | Cluster | Approve a ClusterApprovalRequest (no namespace) |
+| `approvalrequest` | `areq` | Namespace | Approve an ApprovalRequest (requires `--namespace`) |
 
 ### draincluster
 
@@ -132,12 +156,13 @@ If the `cordon` taint is not present on the member cluster, the command will hav
 ## Flags
 
 The `approve` subcommand uses the following flags:
-- `--hubClusterContext`: kubectl context for the hub cluster (required)
+- `--hub-cluster-context`: kubectl context for the hub cluster (required)
 - `--name`: name of the resource to approve (required)
+- `--namespace`, `-n`: namespace of the resource to approve (required for `approvalrequest`, not allowed for `clusterapprovalrequest`)
 
 Both `draincluster` and `uncordoncluster` subcommands use the following flags:
-- `--hubClusterContext`: kubectl context for the hub cluster (required)
-- `--clusterName`: name of the member cluster to operate on (required)
+- `--hub-cluster-context`: kubectl context for the hub cluster (required)
+- `--cluster-name`: name of the member cluster to operate on (required)
 
 ## Examples
 
@@ -148,39 +173,54 @@ Both `draincluster` and `uncordoncluster` subcommands use the following flags:
 kubectl config get-contexts
 
 # 2. Drain a cluster for maintenance
-kubectl fleet draincluster --hubClusterContext production-hub --clusterName worker-node-1
+kubectl fleet draincluster --hub-cluster-context production-hub --cluster-name worker-node-1
 
 # 3. Perform maintenance on the worker-node-1 cluster
 # ... maintenance operations ...
 
 # 4. After maintenance, uncordon the cluster to allow workloads back
-kubectl fleet uncordoncluster --hubClusterContext production-hub --clusterName worker-node-1
+kubectl fleet uncordoncluster --hub-cluster-context production-hub --cluster-name worker-node-1
 ```
 
 ### Additional Examples
 
 ```bash
 # Approve a ClusterApprovalRequest for staged updates
-kubectl fleet approve clusterapprovalrequest --hubClusterContext hub --name update-approval-stage-1
+kubectl fleet approve clusterapprovalrequest --hub-cluster-context hub --name update-approval-stage-1
+
+# Approve a ApprovalRequest for staged updates
+kubectl fleet approve approvalrequest --hub-cluster-context hub --name update-approval-stage-1 --namespace test-namespace
 
 # Drain multiple clusters (run separately for each cluster)
-kubectl fleet draincluster --hubClusterContext hub --clusterName east-cluster
-kubectl fleet draincluster --hubClusterContext hub --clusterName west-cluster
+kubectl fleet draincluster --hub-cluster-context hub --cluster-name east-cluster
+kubectl fleet draincluster --hub-cluster-context hub --cluster-name west-cluster
 
 # Uncordon clusters after maintenance
-kubectl fleet uncordoncluster --hubClusterContext hub --clusterName east-cluster
-kubectl fleet uncordoncluster --hubClusterContext hub --clusterName west-cluster
+kubectl fleet uncordoncluster --hub-cluster-context hub --cluster-name east-cluster
+kubectl fleet uncordoncluster --hub-cluster-context hub --cluster-name west-cluster
 ```
 
 ## Troubleshooting
 
 ### Verifying Approval Operation
 
+#### ClusterApprovalRequest (cluster-scope)
 After running the approval command, verify that the corresponding clusterApprovalRequest has been approved:
 
 1. Check that the clusterApprovalRequest has `APPROVED` set to true
    ```
    kubectl get clusterapprovalrequest example-run-staging
+   NAME                  UPDATE-RUN    STAGE     APPROVED   AGE
+   example-run-staging   example-run   staging   True       2m46s
+   ```
+2. Verify the updateRun is not blocked by the approval after-stage task
+
+#### ApprovalRequest (namespace-scope)
+After running the approval command, verify that the corresponding approvalRequest has been approved:
+
+1. Check that the clusterApprovalRequest has `APPROVED` set to true
+   ```
+   kubectl get approvalrequest example-run-staging -n test-namspace
    NAME                  UPDATE-RUN    STAGE     APPROVED   AGE
    example-run-staging   example-run   staging   True       2m46s
    ```
