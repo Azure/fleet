@@ -7,6 +7,8 @@ Licensed under the MIT license.
 package httputil
 
 import (
+	"errors"
+	"fmt"
 	"net/http"
 	"time"
 
@@ -41,3 +43,50 @@ var (
 	// DefaultClientForAzure is the default HTTP client to access Azure services.
 	DefaultClientForAzure = &http.Client{Timeout: HTTPTimeoutAzure}
 )
+
+// transientHTTPStatusCodes defines HTTP status codes that indicate transient errors
+// which may succeed on retry.
+var transientHTTPStatusCodes = map[int]bool{
+	http.StatusTooManyRequests:     true, // 429 - Rate limiting
+	http.StatusInternalServerError: true, // 500 - Server error
+	http.StatusBadGateway:          true, // 502 - Bad gateway
+	http.StatusServiceUnavailable:  true, // 503 - Service unavailable
+	http.StatusGatewayTimeout:      true, // 504 - Gateway timeout
+}
+
+// HTTPError represents an HTTP error with a status code that can be checked
+// for transient error conditions.
+type HTTPError struct {
+	StatusCode int
+	Method     string
+	URL        string
+}
+
+// Error implements the error interface for HTTPError.
+func (e *HTTPError) Error() string {
+	return fmt.Sprintf("request failed with status %d: %s %s", e.StatusCode, e.Method, e.URL)
+}
+
+// IsTransient returns true if this error represents a transient HTTP error
+// that may succeed on retry.
+func (e *HTTPError) IsTransient() bool {
+	return transientHTTPStatusCodes[e.StatusCode]
+}
+
+// NewHTTPError creates a new HTTPError from an HTTP response.
+func NewHTTPError(resp *http.Response) *HTTPError {
+	return &HTTPError{
+		StatusCode: resp.StatusCode,
+		Method:     resp.Request.Method,
+		URL:        resp.Request.URL.String(),
+	}
+}
+
+// IsTransientHTTPError checks if the given error is or wraps a transient HTTP error.
+func IsTransientHTTPError(err error) bool {
+	var httpErr *HTTPError
+	if errors.As(err, &httpErr) {
+		return httpErr.IsTransient()
+	}
+	return false
+}

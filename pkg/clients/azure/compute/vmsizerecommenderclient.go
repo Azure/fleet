@@ -16,7 +16,6 @@ import (
 	"os"
 	"time"
 
-	"github.com/Azure/azure-sdk-for-go/sdk/azcore/runtime"
 	"github.com/gofrs/uuid"
 	"google.golang.org/protobuf/encoding/protojson"
 	"k8s.io/klog/v2"
@@ -69,10 +68,12 @@ func NewAttributeBasedVMSizeRecommenderClient(
 }
 
 // GenerateAttributeBasedRecommendations generates VM size recommendations based on attributes.
+// Transient HTTP errors (429, 500, 502, 503, 504) are wrapped with ErrExpectedBehavior so that
+// the scheduler can requeue the placement for later retry.
 func (c *AttributeBasedVMSizeRecommenderClient) GenerateAttributeBasedRecommendations(
 	ctx context.Context,
 	req *computev1.GenerateAttributeBasedRecommendationsRequest,
-) (response *computev1.GenerateAttributeBasedRecommendationsResponse, err error) {
+) (*computev1.GenerateAttributeBasedRecommendationsResponse, error) {
 	if req == nil {
 		return nil, controller.NewUnexpectedBehaviorError(errors.New("request cannot be nil"))
 	}
@@ -116,17 +117,11 @@ func (c *AttributeBasedVMSizeRecommenderClient) GenerateAttributeBasedRecommenda
 	// Execute the request
 	startTime := time.Now()
 	klog.V(2).InfoS("Generating VM size recommendations", "subscriptionID", req.SubscriptionId, "location", req.Location, "clientRequestID", clientRequestID)
-	defer func() {
-		latency := time.Since(startTime).Milliseconds()
-		if err != nil {
-			klog.ErrorS(err, "Failed to generate VM size recommendations", "subscriptionID", req.SubscriptionId, "location", req.Location, "clientRequestID", clientRequestID, "latency", latency)
-		} else {
-			klog.V(2).InfoS("Generated VM size recommendations", "subscriptionID", req.SubscriptionId, "location", req.Location, "clientRequestID", clientRequestID, "latency", latency)
-		}
-	}()
 
 	resp, err := c.httpClient.Do(httpReq)
+	latency := time.Since(startTime).Milliseconds()
 	if err != nil {
+		klog.ErrorS(err, "Failed to generate VM size recommendations", "subscriptionID", req.SubscriptionId, "location", req.Location, "clientRequestID", clientRequestID, "latencyMs", latency)
 		return nil, fmt.Errorf("failed to execute request: %w", err)
 	}
 	defer resp.Body.Close()
@@ -134,22 +129,27 @@ func (c *AttributeBasedVMSizeRecommenderClient) GenerateAttributeBasedRecommenda
 	// Read response body
 	respBody, err := io.ReadAll(resp.Body)
 	if err != nil {
+		klog.ErrorS(err, "Failed to generate VM size recommendations", "subscriptionID", req.SubscriptionId, "location", req.Location, "clientRequestID", clientRequestID, "latencyMs", latency)
 		return nil, fmt.Errorf("failed to read response body: %w", err)
 	}
 
 	// Check status code
 	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
-		return nil, fmt.Errorf("request failed with status %d: %w", resp.StatusCode, runtime.NewResponseError(resp))
+		httpErr := httputil.NewHTTPError(resp)
+		klog.ErrorS(httpErr, "Failed to generate VM size recommendations", "subscriptionID", req.SubscriptionId, "location", req.Location, "clientRequestID", clientRequestID, "latencyMs", latency)
+		return nil, httpErr
 	}
 
 	// Unmarshal response using protojson for proper proto3 support
-	response = &computev1.GenerateAttributeBasedRecommendationsResponse{}
+	response := &computev1.GenerateAttributeBasedRecommendationsResponse{}
 	unmarshaler := protojson.UnmarshalOptions{
 		DiscardUnknown: true,
 	}
 	if err := unmarshaler.Unmarshal(respBody, response); err != nil {
+		klog.ErrorS(err, "Failed to generate VM size recommendations", "subscriptionID", req.SubscriptionId, "location", req.Location, "clientRequestID", clientRequestID, "latencyMs", latency)
 		return nil, fmt.Errorf("failed to unmarshal response: %w", err)
 	}
 
+	klog.V(2).InfoS("Generated VM size recommendations", "subscriptionID", req.SubscriptionId, "location", req.Location, "clientRequestID", clientRequestID, "latencyMs", latency)
 	return response, nil
 }

@@ -40,6 +40,7 @@ import (
 
 	clusterv1beta1 "go.goms.io/fleet/apis/cluster/v1beta1"
 	placementv1beta1 "go.goms.io/fleet/apis/placement/v1beta1"
+	"go.goms.io/fleet/pkg/clients/httputil"
 	"go.goms.io/fleet/pkg/scheduler/clustereligibilitychecker"
 	"go.goms.io/fleet/pkg/scheduler/queue"
 	"go.goms.io/fleet/pkg/utils/annotations"
@@ -539,6 +540,11 @@ func (f *framework) runAllPluginsForPickAllPlacementType(
 	passed, filtered, err := f.runFilterPlugins(ctx, state, policy, clusters)
 	if err != nil {
 		klog.ErrorS(err, "Failed to run filter plugins", "policySnapshot", policyRef)
+		// If the error is a transient HTTP error (e.g., 503 from external service),
+		// return it as-is so the scheduler can requeue. Otherwise, wrap it as unexpected behavior.
+		if httputil.IsTransientHTTPError(err) {
+			return nil, nil, err
+		}
 		return nil, nil, controller.NewUnexpectedBehaviorError(err)
 	}
 
@@ -1159,6 +1165,11 @@ func (f *framework) runAllPluginsForPickNPlacementType(
 	passed, filtered, err := f.runFilterPlugins(ctx, state, policy, clusters)
 	if err != nil {
 		klog.ErrorS(err, "Failed to run filter plugins", "policySnapshot", policyRef)
+		// If the error is a transient HTTP error (e.g., 503 from external service),
+		// return it as-is so the scheduler can requeue. Otherwise, wrap it as unexpected behavior.
+		if httputil.IsTransientHTTPError(err) {
+			return nil, nil, err
+		}
 		return nil, nil, controller.NewUnexpectedBehaviorError(err)
 	}
 
