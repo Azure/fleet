@@ -118,9 +118,9 @@ func (c *AttributeBasedVMSizeRecommenderClient) GenerateAttributeBasedRecommenda
 	defer func() {
 		latency := time.Since(startTime).Milliseconds()
 		if err != nil {
-			klog.ErrorS(err, "Failed to generate VM size recommendations", "subscriptionID", req.SubscriptionId, "location", req.Location, "clientRequestID", clientRequestID, "latencyMs", latency)
+			klog.ErrorS(err, "Failed to generate VM size recommendations", "subscriptionID", req.SubscriptionId, "location", req.Location, "clientRequestID", clientRequestID, "latency", latency)
 		} else {
-			klog.V(2).InfoS("Generated VM size recommendations", "subscriptionID", req.SubscriptionId, "location", req.Location, "clientRequestID", clientRequestID, "latencyMs", latency)
+			klog.V(2).InfoS("Generated VM size recommendations", "subscriptionID", req.SubscriptionId, "location", req.Location, "clientRequestID", clientRequestID, "latency", latency)
 		}
 	}()
 
