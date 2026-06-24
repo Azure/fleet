@@ -170,10 +170,10 @@ func (e *customError) Error() string {
 
 func TestAsError(t *testing.T) {
 	testCases := []struct {
-		name        string
-		status      *Status
-		wantNil     bool
-		originalErr error
+		name     string
+		status   *Status
+		wantNil  bool
+		wantCode int
 	}{
 		{
 			name:    "nil status returns nil",
@@ -191,16 +191,16 @@ func TestAsError(t *testing.T) {
 			wantNil: true,
 		},
 		{
-			name:        "internal error preserves error chain",
-			status:      FromError(&customError{code: 503}, dummyPlugin, "reason1", "reason2"),
-			wantNil:     false,
-			originalErr: &customError{code: 503},
+			name:     "internal error preserves error chain",
+			status:   FromError(&customError{code: 503}, dummyPlugin, "reason1", "reason2"),
+			wantNil:  false,
+			wantCode: 503,
 		},
 		{
-			name:        "internal error with wrapped error preserves full chain",
-			status:      FromError(fmt.Errorf("outer error: %w", &customError{code: 429}), dummyPlugin, "rate limited"),
-			wantNil:     false,
-			originalErr: &customError{code: 429},
+			name:     "internal error with wrapped error preserves full chain",
+			status:   FromError(fmt.Errorf("outer error: %w", &customError{code: 429}), dummyPlugin, "rate limited"),
+			wantNil:  false,
+			wantCode: 429,
 		},
 	}
 
@@ -228,8 +228,8 @@ func TestAsError(t *testing.T) {
 			var customErr *customError
 			if !errors.As(err, &customErr) {
 				t.Errorf("AsError() error chain broken: errors.As() could not find *customError in chain")
-			} else if customErr.code != tc.originalErr.(*customError).code {
-				t.Errorf("AsError() error chain: customError.code = %d, want %d", customErr.code, tc.originalErr.(*customError).code)
+			} else if customErr.code != tc.wantCode {
+				t.Errorf("AsError() error chain: customError.code = %d, want %d", customErr.code, tc.wantCode)
 			}
 		})
 	}
