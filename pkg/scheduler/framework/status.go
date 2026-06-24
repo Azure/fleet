@@ -140,13 +140,13 @@ func (s *Status) String() string {
 	return strings.Join(desc, ", ")
 }
 
-// AsError returns a status as an error; it returns nil if the status is of the internalError code.
+// AsError returns a status as an error; it returns nil if the status is not of the internalError code.
 func (s *Status) AsError() error {
 	if !s.IsInteralError() {
 		return nil
 	}
 
-	return fmt.Errorf("plugin %s returned an error %s", s.sourcePlugin, s.String())
+	return fmt.Errorf("plugin %s returned an error %w", s.sourcePlugin, s.err)
 }
 
 // NewNonErrorStatus returns a Status with a non-error status code.
