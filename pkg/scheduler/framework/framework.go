@@ -27,6 +27,7 @@ import (
 	"time"
 
 	"golang.org/x/sync/errgroup"
+	corev1 "k8s.io/api/core/v1"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	"k8s.io/apimachinery/pkg/api/meta"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -57,6 +58,10 @@ const (
 	FullyScheduledReason = "SchedulingPolicyFulfilled"
 	// NotFullyScheduledReason is the reason string of placement condition when the placement policy cannot be fully satisfied.
 	NotFullyScheduledReason = "SchedulingPolicyUnfulfilled"
+
+	// Event reasons for scheduling errors.
+	// SchedulingErrorReason is used when the scheduler encounters an error during scheduling.
+	SchedulingErrorReason = "SchedulingError"
 
 	fullyScheduledMessage    = "found all cluster needed as specified by the scheduling policy, found %d cluster(s)"
 	notFullyScheduledMessage = "could not find all clusters needed as specified by the scheduling policy, found %d cluster(s) instead"
@@ -540,6 +545,9 @@ func (f *framework) runAllPluginsForPickAllPlacementType(
 	passed, filtered, err := f.runFilterPlugins(ctx, state, policy, clusters)
 	if err != nil {
 		klog.ErrorS(err, "Failed to run filter plugins", "policySnapshot", policyRef)
+		// Emit an event to inform the user about the scheduling error.
+		f.eventRecorder.Event(policy, corev1.EventTypeWarning, SchedulingErrorReason,
+			fmt.Sprintf("Failed to run filter plugins: %v", err))
 		// Check if the error is retryable using structured error semantics.
 		// If the error (or any error in its chain) implements RetryableError and indicates
 		// it's retryable, return it as-is so the scheduler can requeue.
@@ -1167,6 +1175,9 @@ func (f *framework) runAllPluginsForPickNPlacementType(
 	passed, filtered, err := f.runFilterPlugins(ctx, state, policy, clusters)
 	if err != nil {
 		klog.ErrorS(err, "Failed to run filter plugins", "policySnapshot", policyRef)
+		// Emit an event to inform the user about the scheduling error.
+		f.eventRecorder.Event(policy, corev1.EventTypeWarning, SchedulingErrorReason,
+			fmt.Sprintf("Failed to run filter plugins: %v", err))
 		// Check if the error is retryable using structured error semantics.
 		// If the error (or any error in its chain) implements RetryableError and indicates
 		// it's retryable, return it as-is so the scheduler can requeue.
