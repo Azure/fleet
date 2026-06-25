@@ -579,16 +579,16 @@ func readFromBuffer(t *testing.T, buf *bytes.Buffer) string {
 	return outputStr
 }
 
-// mockRetryableError is a test helper that implements the RetryableError interface.
-type mockRetryableError struct {
+// mockErrorWithRetryPolicy is a test helper that implements the ErrorWithRetryPolicy interface.
+type mockErrorWithRetryPolicy struct {
 	retryable bool
 }
 
-func (e *mockRetryableError) Error() string {
-	return "mock retryable error"
+func (e *mockErrorWithRetryPolicy) Error() string {
+	return "mock error with retry policy"
 }
 
-func (e *mockRetryableError) IsRetryable() bool {
+func (e *mockErrorWithRetryPolicy) IsRetryable() bool {
 	return e.retryable
 }
 
@@ -606,26 +606,26 @@ func TestIsRetryableFunction(t *testing.T) {
 			wantFound:     false,
 		},
 		{
-			name:          "plain error (no RetryableError in chain)",
+			name:          "plain error (no retry policy in chain)",
 			err:           fmt.Errorf("plain error"),
 			wantRetryable: false,
 			wantFound:     false,
 		},
 		{
-			name:          "mock retryable error (retryable=true)",
-			err:           &mockRetryableError{retryable: true},
+			name:          "error with retry policy (retryable=true)",
+			err:           &mockErrorWithRetryPolicy{retryable: true},
 			wantRetryable: true,
 			wantFound:     true,
 		},
 		{
-			name:          "mock retryable error (retryable=false)",
-			err:           &mockRetryableError{retryable: false},
+			name:          "error with retry policy (retryable=false)",
+			err:           &mockErrorWithRetryPolicy{retryable: false},
 			wantRetryable: false,
 			wantFound:     true,
 		},
 		{
-			name:          "wrapped mock retryable error",
-			err:           fmt.Errorf("wrapped: %w", &mockRetryableError{retryable: true}),
+			name:          "wrapped error with retry policy",
+			err:           fmt.Errorf("wrapped: %w", &mockErrorWithRetryPolicy{retryable: true}),
 			wantRetryable: true,
 			wantFound:     true,
 		},

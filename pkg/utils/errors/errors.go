@@ -54,38 +54,38 @@ const (
 	ErrCategoryUncategorized ErrCategory = "uncategorized"
 )
 
-// RetryableError is an interface that errors can implement to indicate whether the
+// ErrorWithRetryPolicy is an interface that errors can implement to indicate whether the
 // operation that caused the error can be retried. This allows the control loop to
 // make retry decisions based on error semantics rather than inspecting error formats.
-type RetryableError interface {
+type ErrorWithRetryPolicy interface {
 	error
 	// IsRetryable returns true if the error is transient and the operation may succeed
 	// on retry. Returns false if the error is permanent and retrying would not help.
 	IsRetryable() bool
 }
 
-// IsRetryable checks if the given error (or any error in its chain) indicates that the
-// operation can be retried. It traverses the error chain using errors.As to find any
-// error that implements RetryableError interface.
+// IsRetryable checks if the given error (or any error in its chain) has a retry policy
+// configured. It traverses the error chain using errors.As to find any error that
+// implements ErrorWithRetryPolicy interface.
 //
 // Returns:
-//   - (true, true) if a RetryableError is found and IsRetryable() returns true
-//   - (false, true) if a RetryableError is found and IsRetryable() returns false
-//   - (false, false) if no RetryableError is found in the chain
-func IsRetryable(err error) (retryable bool, found bool) {
+//   - (true, true) if an ErrorWithRetryPolicy is found and IsRetryable() returns true
+//   - (false, true) if an ErrorWithRetryPolicy is found and IsRetryable() returns false
+//   - (false, false) if no ErrorWithRetryPolicy is found in the chain (no retry policy configured)
+func IsRetryable(err error) (isRetryable bool, hasRetryPolicy bool) {
 	if err == nil {
 		return false, false
 	}
 
-	var retryableErr RetryableError
-	if errors.As(err, &retryableErr) {
-		return retryableErr.IsRetryable(), true
+	var errWithPolicy ErrorWithRetryPolicy
+	if errors.As(err, &errWithPolicy) {
+		return errWithPolicy.IsRetryable(), true
 	}
 	return false, false
 }
 
 var _ error = &Error{}
-var _ RetryableError = &Error{}
+var _ ErrorWithRetryPolicy = &Error{}
 
 type Error struct {
 	// category is the category of the error.
@@ -108,7 +108,7 @@ func (e *Error) categoryWithDefault() ErrCategory {
 	return e.category
 }
 
-// IsRetryable implements the RetryableError interface.
+// IsRetryable implements the ErrorWithRetryPolicy interface.
 // It determines retryability based on the error category:
 //   - ErrCategoryTransient: retryable (will self-resolve)
 //   - ErrCategoryAPIServer: retryable (API server issues are often transient)
