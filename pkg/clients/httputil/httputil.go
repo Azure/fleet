@@ -7,7 +7,6 @@ Licensed under the MIT license.
 package httputil
 
 import (
-	"fmt"
 	"net/http"
 	"time"
 
@@ -53,32 +52,8 @@ var transientHTTPStatusCodes = map[int]bool{
 	http.StatusGatewayTimeout:      true, // 504 - Gateway timeout
 }
 
-// HTTPError represents an HTTP error with a status code that can be checked
-// for transient error conditions. HTTPError implements the RetryableError interface
-// from pkg/utils/errors, allowing control loops to make retry decisions based on
-// HTTP status codes without format-specific inspection.
-type HTTPError struct {
-	StatusCode int
-	Method     string
-	URL        string
-}
-
-// Error implements the error interface for HTTPError.
-func (e *HTTPError) Error() string {
-	return fmt.Sprintf("request failed with status %d: %s %s", e.StatusCode, e.Method, e.URL)
-}
-
-// IsRetryable implements the RetryableError interface.
-// It returns true for transient HTTP errors (429, 5xx) that may succeed on retry.
-func (e *HTTPError) IsRetryable() bool {
-	return transientHTTPStatusCodes[e.StatusCode]
-}
-
-// NewHTTPError creates a new HTTPError from an HTTP response.
-func NewHTTPError(resp *http.Response) *HTTPError {
-	return &HTTPError{
-		StatusCode: resp.StatusCode,
-		Method:     resp.Request.Method,
-		URL:        resp.Request.URL.String(),
-	}
+// IsTransientStatusCode returns true if the HTTP status code indicates a transient
+// error that may succeed on retry (429, 5xx).
+func IsTransientStatusCode(statusCode int) bool {
+	return transientHTTPStatusCodes[statusCode]
 }

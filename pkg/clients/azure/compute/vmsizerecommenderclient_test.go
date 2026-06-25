@@ -7,7 +7,6 @@ package compute
 
 import (
 	"context"
-	"errors"
 	"net/http"
 	"strings"
 	"testing"
@@ -16,7 +15,7 @@ import (
 	"google.golang.org/protobuf/proto"
 
 	computev1 "go.goms.io/fleet/apis/protos/azure/compute/v1"
-	"go.goms.io/fleet/pkg/clients/httputil"
+	fleetErrors "go.goms.io/fleet/pkg/utils/errors"
 	"go.goms.io/fleet/test/utils/azure/compute"
 )
 
@@ -275,17 +274,17 @@ func TestClient_GenerateAttributeBasedRecommendations(t *testing.T) {
 				return
 			}
 
-			// Check if error is a transient HTTPError by checking IsRetryable.
+			// Check if error is retryable using fleetErrors.IsRetryable.
 			if tt.wantErr && tt.wantIsTransient {
-				var httpErr *httputil.HTTPError
-				if !errors.As(err, &httpErr) || !httpErr.IsRetryable() {
-					t.Errorf("GenerateAttributeBasedRecommendations() error = %v, want retryable HTTPError", err)
+				retryable, found := fleetErrors.IsRetryable(err)
+				if !found || !retryable {
+					t.Errorf("GenerateAttributeBasedRecommendations() error = %v, want retryable error", err)
 				}
 			}
 			if tt.wantErr && !tt.wantIsTransient && tt.mockStatusCode >= 400 && tt.mockStatusCode < 500 {
-				var httpErr *httputil.HTTPError
-				if errors.As(err, &httpErr) && httpErr.IsRetryable() {
-					t.Errorf("GenerateAttributeBasedRecommendations() error = %v, should NOT be retryable HTTPError for 4xx errors", err)
+				retryable, found := fleetErrors.IsRetryable(err)
+				if found && retryable {
+					t.Errorf("GenerateAttributeBasedRecommendations() error = %v, should NOT be retryable for 4xx errors", err)
 				}
 			}
 

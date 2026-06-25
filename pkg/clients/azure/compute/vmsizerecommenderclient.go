@@ -23,6 +23,7 @@ import (
 	computev1 "go.goms.io/fleet/apis/protos/azure/compute/v1"
 	"go.goms.io/fleet/pkg/clients/httputil"
 	"go.goms.io/fleet/pkg/utils/controller"
+	fleetErrors "go.goms.io/fleet/pkg/utils/errors"
 )
 
 const (
@@ -136,9 +137,14 @@ func (c *AttributeBasedVMSizeRecommenderClient) GenerateAttributeBasedRecommenda
 		return nil, fmt.Errorf("failed to read response body: %w", err)
 	}
 
-	// Check status code
+	// Check status code - categorize based on transient vs non-transient errors
 	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
-		return nil, httputil.NewHTTPError(resp)
+		desc := fmt.Sprintf("request failed with status %d: %s %s", resp.StatusCode, httpReq.Method, url)
+		if httputil.IsTransientStatusCode(resp.StatusCode) {
+			return nil, fleetErrors.NewTransientError(nil, desc)
+		}
+		// Non-transient errors (4xx client errors) should not be retried.
+		return nil, fleetErrors.NewUnexpectedError(nil, desc)
 	}
 
 	// Unmarshal response using protojson for proper proto3 support

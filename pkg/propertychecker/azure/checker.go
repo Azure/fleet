@@ -112,8 +112,9 @@ func (s *PropertyChecker) CheckIfMeetSKUCapacityRequirement(
 
 	respObj, err := s.vmSizeRecommenderClient.GenerateAttributeBasedRecommendations(context.Background(), request)
 	if err != nil {
-		// Wrap the error with context. The underlying HTTPError (if present) implements
-		// RetryableError, so fleetErrors.IsRetryable() will detect it in the error chain.
+		// Wrap the error with context. The underlying error already has the appropriate
+		// category set (transient for 429/5xx, API server error for other failures),
+		// so fleetErrors.IsRetryable() will detect it in the error chain.
 		return false, fleetErrors.Wraps(err,
 			fmt.Sprintf("failed to generate VM size recommendations from Azure for SKU %s in cluster %s", sku, cluster.Name))
 	}
