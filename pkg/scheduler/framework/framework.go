@@ -548,11 +548,11 @@ func (f *framework) runAllPluginsForPickAllPlacementType(
 		// Emit an event to inform the user about the scheduling error.
 		f.eventRecorder.Event(policy, corev1.EventTypeWarning, SchedulingErrorReason,
 			fmt.Sprintf("Failed to run filter plugins: %v", err))
-		// Check if the error is retryable using structured error semantics.
-		// If the error (or any error in its chain) implements RetryableError and indicates
+		// Check if the error has a retry policy configured.
+		// If the error (or any error in its chain) implements ErrorWithRetryPolicy and indicates
 		// it's retryable, return it as-is so the scheduler can requeue.
 		// Otherwise, wrap it as unexpected behavior.
-		if retryable, found := fleetErrors.IsRetryable(err); found && retryable {
+		if isRetryable, hasRetryPolicy := fleetErrors.IsRetryable(err); hasRetryPolicy && isRetryable {
 			return nil, nil, err
 		}
 		return nil, nil, controller.NewUnexpectedBehaviorError(err)
@@ -1178,11 +1178,11 @@ func (f *framework) runAllPluginsForPickNPlacementType(
 		// Emit an event to inform the user about the scheduling error.
 		f.eventRecorder.Event(policy, corev1.EventTypeWarning, SchedulingErrorReason,
 			fmt.Sprintf("Failed to run filter plugins: %v", err))
-		// Check if the error is retryable using structured error semantics.
-		// If the error (or any error in its chain) implements RetryableError and indicates
+		// Check if the error has a retry policy configured.
+		// If the error (or any error in its chain) implements ErrorWithRetryPolicy and indicates
 		// it's retryable, return it as-is so the scheduler can requeue.
 		// Otherwise, wrap it as unexpected behavior.
-		if retryable, found := fleetErrors.IsRetryable(err); found && retryable {
+		if isRetryable, hasRetryPolicy := fleetErrors.IsRetryable(err); hasRetryPolicy && isRetryable {
 			return nil, nil, err
 		}
 		return nil, nil, controller.NewUnexpectedBehaviorError(err)

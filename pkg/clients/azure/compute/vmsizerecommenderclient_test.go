@@ -274,16 +274,16 @@ func TestClient_GenerateAttributeBasedRecommendations(t *testing.T) {
 				return
 			}
 
-			// Check if error is retryable using fleetErrors.IsRetryable.
+			// Check if error has retry policy using fleetErrors.IsRetryable.
 			if tt.wantErr && tt.wantIsTransient {
-				retryable, found := fleetErrors.IsRetryable(err)
-				if !found || !retryable {
+				isRetryable, hasRetryPolicy := fleetErrors.IsRetryable(err)
+				if !hasRetryPolicy || !isRetryable {
 					t.Errorf("GenerateAttributeBasedRecommendations() error = %v, want retryable error", err)
 				}
 			}
 			if tt.wantErr && !tt.wantIsTransient && tt.mockStatusCode >= 400 && tt.mockStatusCode < 500 {
-				retryable, found := fleetErrors.IsRetryable(err)
-				if found && retryable {
+				isRetryable, hasRetryPolicy := fleetErrors.IsRetryable(err)
+				if hasRetryPolicy && isRetryable {
 					t.Errorf("GenerateAttributeBasedRecommendations() error = %v, should NOT be retryable for 4xx errors", err)
 				}
 			}
