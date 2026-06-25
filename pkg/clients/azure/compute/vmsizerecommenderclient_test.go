@@ -7,6 +7,7 @@ package compute
 
 import (
 	"context"
+	"errors"
 	"net/http"
 	"strings"
 	"testing"
@@ -274,15 +275,17 @@ func TestClient_GenerateAttributeBasedRecommendations(t *testing.T) {
 				return
 			}
 
-			// Check if error is a transient HTTPError.
+			// Check if error is a transient HTTPError by checking IsRetryable.
 			if tt.wantErr && tt.wantIsTransient {
-				if !httputil.IsTransientHTTPError(err) {
-					t.Errorf("GenerateAttributeBasedRecommendations() error = %v, want transient HTTPError", err)
+				var httpErr *httputil.HTTPError
+				if !errors.As(err, &httpErr) || !httpErr.IsRetryable() {
+					t.Errorf("GenerateAttributeBasedRecommendations() error = %v, want retryable HTTPError", err)
 				}
 			}
 			if tt.wantErr && !tt.wantIsTransient && tt.mockStatusCode >= 400 && tt.mockStatusCode < 500 {
-				if httputil.IsTransientHTTPError(err) {
-					t.Errorf("GenerateAttributeBasedRecommendations() error = %v, should NOT be transient HTTPError for 4xx errors", err)
+				var httpErr *httputil.HTTPError
+				if errors.As(err, &httpErr) && httpErr.IsRetryable() {
+					t.Errorf("GenerateAttributeBasedRecommendations() error = %v, should NOT be retryable HTTPError for 4xx errors", err)
 				}
 			}
 

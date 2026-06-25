@@ -578,3 +578,154 @@ func readFromBuffer(t *testing.T, buf *bytes.Buffer) string {
 	outputStr := string(output)
 	return outputStr
 }
+
+// mockRetryableError is a test helper that implements the RetryableError interface.
+type mockRetryableError struct {
+	retryable bool
+}
+
+func (e *mockRetryableError) Error() string {
+	return "mock retryable error"
+}
+
+func (e *mockRetryableError) IsRetryable() bool {
+	return e.retryable
+}
+
+func TestIsRetryableFunction(t *testing.T) {
+	testCases := []struct {
+		name          string
+		err           error
+		wantRetryable bool
+		wantFound     bool
+	}{
+		{
+			name:          "nil error",
+			err:           nil,
+			wantRetryable: false,
+			wantFound:     false,
+		},
+		{
+			name:          "plain error (no RetryableError in chain)",
+			err:           fmt.Errorf("plain error"),
+			wantRetryable: false,
+			wantFound:     false,
+		},
+		{
+			name:          "mock retryable error (retryable=true)",
+			err:           &mockRetryableError{retryable: true},
+			wantRetryable: true,
+			wantFound:     true,
+		},
+		{
+			name:          "mock retryable error (retryable=false)",
+			err:           &mockRetryableError{retryable: false},
+			wantRetryable: false,
+			wantFound:     true,
+		},
+		{
+			name:          "wrapped mock retryable error",
+			err:           fmt.Errorf("wrapped: %w", &mockRetryableError{retryable: true}),
+			wantRetryable: true,
+			wantFound:     true,
+		},
+		{
+			name:          "Error with ErrCategoryTransient (retryable)",
+			err:           &Error{category: ErrCategoryTransient},
+			wantRetryable: true,
+			wantFound:     true,
+		},
+		{
+			name:          "Error with ErrCategoryUser (not retryable)",
+			err:           &Error{category: ErrCategoryUser},
+			wantRetryable: false,
+			wantFound:     true,
+		},
+		{
+			name:          "Error with ErrCategoryUnexpected (not retryable)",
+			err:           &Error{category: ErrCategoryUnexpected},
+			wantRetryable: false,
+			wantFound:     true,
+		},
+		{
+			name:          "Error with ErrCategoryAPIServer (retryable)",
+			err:           &Error{category: ErrCategoryAPIServer},
+			wantRetryable: true,
+			wantFound:     true,
+		},
+		{
+			name:          "Error with ErrCategoryUncategorized (retryable by default)",
+			err:           &Error{category: ErrCategoryUncategorized},
+			wantRetryable: true,
+			wantFound:     true,
+		},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			gotRetryable, gotFound := IsRetryable(tc.err)
+			if gotRetryable != tc.wantRetryable {
+				t.Errorf("IsRetryable() retryable = %v, want %v", gotRetryable, tc.wantRetryable)
+			}
+			if gotFound != tc.wantFound {
+				t.Errorf("IsRetryable() found = %v, want %v", gotFound, tc.wantFound)
+			}
+		})
+	}
+}
+
+func TestErrorIsRetryable(t *testing.T) {
+	testCases := []struct {
+		name          string
+		err           *Error
+		wantRetryable bool
+	}{
+		{
+			name:          "ErrCategoryTransient is retryable",
+			err:           &Error{category: ErrCategoryTransient},
+			wantRetryable: true,
+		},
+		{
+			name:          "ErrCategoryAPIServer is retryable",
+			err:           &Error{category: ErrCategoryAPIServer},
+			wantRetryable: true,
+		},
+		{
+			name:          "ErrCategoryUnexpected is not retryable",
+			err:           &Error{category: ErrCategoryUnexpected},
+			wantRetryable: false,
+		},
+		{
+			name:          "ErrCategoryUser is not retryable",
+			err:           &Error{category: ErrCategoryUser},
+			wantRetryable: false,
+		},
+		{
+			name:          "ErrCategoryUncategorized is retryable by default",
+			err:           &Error{category: ErrCategoryUncategorized},
+			wantRetryable: true,
+		},
+		{
+			name:          "empty category defaults to retryable",
+			err:           &Error{},
+			wantRetryable: true,
+		},
+		{
+			name: "Error with wrapped error uses its own category",
+			err: &Error{
+				category: ErrCategoryUser,
+				wrapped:  fmt.Errorf("plain error"),
+			},
+			wantRetryable: false,
+		},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			gotRetryable := tc.err.IsRetryable()
+			if gotRetryable != tc.wantRetryable {
+				t.Errorf("IsRetryable() = %v, want %v", gotRetryable, tc.wantRetryable)
+			}
+		})
+	}
+}

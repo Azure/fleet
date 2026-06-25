@@ -40,12 +40,12 @@ import (
 
 	clusterv1beta1 "go.goms.io/fleet/apis/cluster/v1beta1"
 	placementv1beta1 "go.goms.io/fleet/apis/placement/v1beta1"
-	"go.goms.io/fleet/pkg/clients/httputil"
 	"go.goms.io/fleet/pkg/scheduler/clustereligibilitychecker"
 	"go.goms.io/fleet/pkg/scheduler/queue"
 	"go.goms.io/fleet/pkg/utils/annotations"
 	"go.goms.io/fleet/pkg/utils/condition"
 	"go.goms.io/fleet/pkg/utils/controller"
+	fleetErrors "go.goms.io/fleet/pkg/utils/errors"
 	"go.goms.io/fleet/pkg/utils/parallelizer"
 )
 
@@ -540,9 +540,11 @@ func (f *framework) runAllPluginsForPickAllPlacementType(
 	passed, filtered, err := f.runFilterPlugins(ctx, state, policy, clusters)
 	if err != nil {
 		klog.ErrorS(err, "Failed to run filter plugins", "policySnapshot", policyRef)
-		// If the error is a transient HTTP error (e.g., 503 from external service),
-		// return it as-is so the scheduler can requeue. Otherwise, wrap it as unexpected behavior.
-		if httputil.IsTransientHTTPError(err) {
+		// Check if the error is retryable using structured error semantics.
+		// If the error (or any error in its chain) implements RetryableError and indicates
+		// it's retryable, return it as-is so the scheduler can requeue.
+		// Otherwise, wrap it as unexpected behavior.
+		if retryable, found := fleetErrors.IsRetryable(err); found && retryable {
 			return nil, nil, err
 		}
 		return nil, nil, controller.NewUnexpectedBehaviorError(err)
@@ -1165,9 +1167,11 @@ func (f *framework) runAllPluginsForPickNPlacementType(
 	passed, filtered, err := f.runFilterPlugins(ctx, state, policy, clusters)
 	if err != nil {
 		klog.ErrorS(err, "Failed to run filter plugins", "policySnapshot", policyRef)
-		// If the error is a transient HTTP error (e.g., 503 from external service),
-		// return it as-is so the scheduler can requeue. Otherwise, wrap it as unexpected behavior.
-		if httputil.IsTransientHTTPError(err) {
+		// Check if the error is retryable using structured error semantics.
+		// If the error (or any error in its chain) implements RetryableError and indicates
+		// it's retryable, return it as-is so the scheduler can requeue.
+		// Otherwise, wrap it as unexpected behavior.
+		if retryable, found := fleetErrors.IsRetryable(err); found && retryable {
 			return nil, nil, err
 		}
 		return nil, nil, controller.NewUnexpectedBehaviorError(err)

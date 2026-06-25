@@ -54,7 +54,38 @@ const (
 	ErrCategoryUncategorized ErrCategory = "uncategorized"
 )
 
+// RetryableError is an interface that errors can implement to indicate whether the
+// operation that caused the error can be retried. This allows the control loop to
+// make retry decisions based on error semantics rather than inspecting error formats.
+type RetryableError interface {
+	error
+	// IsRetryable returns true if the error is transient and the operation may succeed
+	// on retry. Returns false if the error is permanent and retrying would not help.
+	IsRetryable() bool
+}
+
+// IsRetryable checks if the given error (or any error in its chain) indicates that the
+// operation can be retried. It traverses the error chain using errors.As to find any
+// error that implements RetryableError interface.
+//
+// Returns:
+//   - (true, true) if a RetryableError is found and IsRetryable() returns true
+//   - (false, true) if a RetryableError is found and IsRetryable() returns false
+//   - (false, false) if no RetryableError is found in the chain
+func IsRetryable(err error) (retryable bool, found bool) {
+	if err == nil {
+		return false, false
+	}
+
+	var retryableErr RetryableError
+	if errors.As(err, &retryableErr) {
+		return retryableErr.IsRetryable(), true
+	}
+	return false, false
+}
+
 var _ error = &Error{}
+var _ RetryableError = &Error{}
 
 type Error struct {
 	// category is the category of the error.
@@ -75,6 +106,29 @@ func (e *Error) categoryWithDefault() ErrCategory {
 		return ErrCategoryUncategorized
 	}
 	return e.category
+}
+
+// IsRetryable implements the RetryableError interface.
+// It determines retryability based on the error category:
+//   - ErrCategoryTransient: retryable (will self-resolve)
+//   - ErrCategoryAPIServer: retryable (API server issues are often transient)
+//   - ErrCategoryUnexpected: not retryable (unknown state, cannot recover)
+//   - ErrCategoryUser: not retryable (requires user action to fix)
+//   - ErrCategoryUncategorized: retryable (default to retry when unknown)
+func (e *Error) IsRetryable() bool {
+	switch e.category {
+	case ErrCategoryTransient:
+		return true
+	case ErrCategoryAPIServer:
+		return true
+	case ErrCategoryUnexpected:
+		return false
+	case ErrCategoryUser:
+		return false
+	default:
+		// ErrCategoryUncategorized or unknown: default to retryable.
+		return true
+	}
 }
 
 // Error implements the error interface.

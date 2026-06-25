@@ -8,8 +8,8 @@ require (
 	github.com/Azure/karpenter-provider-azure v1.5.1
 	github.com/crossplane/crossplane-runtime/v2 v2.1.0
 	github.com/evanphx/json-patch/v5 v5.9.11
-	github.com/gofrs/uuid v4.4.0+incompatible
 	github.com/go-logr/logr v1.4.3
+	github.com/gofrs/uuid v4.4.0+incompatible
 	github.com/google/go-cmp v0.7.0
 	github.com/grpc-ecosystem/grpc-gateway/v2 v2.26.3
 	github.com/onsi/ginkgo/v2 v2.23.4

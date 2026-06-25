@@ -7,7 +7,6 @@ Licensed under the MIT license.
 package httputil
 
 import (
-	"errors"
 	"fmt"
 	"net/http"
 	"time"
@@ -55,7 +54,9 @@ var transientHTTPStatusCodes = map[int]bool{
 }
 
 // HTTPError represents an HTTP error with a status code that can be checked
-// for transient error conditions.
+// for transient error conditions. HTTPError implements the RetryableError interface
+// from pkg/utils/errors, allowing control loops to make retry decisions based on
+// HTTP status codes without format-specific inspection.
 type HTTPError struct {
 	StatusCode int
 	Method     string
@@ -67,9 +68,9 @@ func (e *HTTPError) Error() string {
 	return fmt.Sprintf("request failed with status %d: %s %s", e.StatusCode, e.Method, e.URL)
 }
 
-// IsTransient returns true if this error represents a transient HTTP error
-// that may succeed on retry.
-func (e *HTTPError) IsTransient() bool {
+// IsRetryable implements the RetryableError interface.
+// It returns true for transient HTTP errors (429, 5xx) that may succeed on retry.
+func (e *HTTPError) IsRetryable() bool {
 	return transientHTTPStatusCodes[e.StatusCode]
 }
 
@@ -80,13 +81,4 @@ func NewHTTPError(resp *http.Response) *HTTPError {
 		Method:     resp.Request.Method,
 		URL:        resp.Request.URL.String(),
 	}
-}
-
-// IsTransientHTTPError checks if the given error is or wraps a transient HTTP error.
-func IsTransientHTTPError(err error) bool {
-	var httpErr *HTTPError
-	if errors.As(err, &httpErr) {
-		return httpErr.IsTransient()
-	}
-	return false
 }
