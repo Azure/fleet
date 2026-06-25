@@ -36,6 +36,7 @@ import (
 	"k8s.io/apimachinery/pkg/runtime/schema"
 	"k8s.io/apimachinery/pkg/types"
 	"k8s.io/client-go/kubernetes/scheme"
+	"k8s.io/client-go/tools/record"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/client/fake"
 
@@ -1323,8 +1324,9 @@ func TestRunAllPluginsForPickAllPlacementType(t *testing.T) {
 				profile.WithFilterPlugin(p)
 			}
 			f := &framework{
-				profile:      profile,
-				parallelizer: parallelizer.NewParallelizer(parallelizer.DefaultNumOfWorkers),
+				profile:       profile,
+				parallelizer:  parallelizer.NewParallelizer(parallelizer.DefaultNumOfWorkers),
+				eventRecorder: record.NewFakeRecorder(10),
 			}
 
 			ctx := context.Background()
@@ -6253,8 +6255,9 @@ func TestRunAllPluginsForPickNPlacementType(t *testing.T) {
 			}
 
 			f := &framework{
-				profile:      profile,
-				parallelizer: parallelizer.NewParallelizer(parallelizer.DefaultNumOfWorkers),
+				profile:       profile,
+				parallelizer:  parallelizer.NewParallelizer(parallelizer.DefaultNumOfWorkers),
+				eventRecorder: record.NewFakeRecorder(10),
 			}
 
 			ctx := context.Background()
