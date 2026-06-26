@@ -69,7 +69,7 @@ jobs:
               echo "Fetch all tags..."
 
               git fetch --all
-              GIT_TAG=$(git describe --tags $(git rev-list --tags --max-count=1))
+              GIT_TAG=$(git describe --tags --exclude='*-rc.*' $(git rev-list --tags --exclude='*-rc.*' --max-count=1))
           else
               echo "A tag is specified; go back to the state tracked by the specified tag."
               echo "Fetch all tags..."
@@ -152,7 +152,7 @@ jobs:
               echo "Fetch all tags..."
 
               git fetch --all
-              GIT_TAG=$(git describe --tags $(git rev-list --tags --max-count=1)) 
+              GIT_TAG=$(git describe --tags --exclude='*-rc.*' $(git rev-list --tags --exclude='*-rc.*' --max-count=1)) 
           else
               echo "A tag is specified; go back to the state tracked by the specified tag."
               echo "Fetch all tags..."
@@ -235,7 +235,7 @@ jobs:
               echo "Fetch all tags..."
 
               git fetch --all
-              GIT_TAG=$(git describe --tags $(git rev-list --tags --max-count=1)) 
+              GIT_TAG=$(git describe --tags --exclude='*-rc.*' $(git rev-list --tags --exclude='*-rc.*' --max-count=1)) 
           else
               echo "A tag is specified; go back to the state tracked by the specified tag."
               echo "Fetch all tags..."
