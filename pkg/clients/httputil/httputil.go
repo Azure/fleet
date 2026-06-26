@@ -41,3 +41,19 @@ var (
 	// DefaultClientForAzure is the default HTTP client to access Azure services.
 	DefaultClientForAzure = &http.Client{Timeout: HTTPTimeoutAzure}
 )
+
+// transientHTTPStatusCodes defines HTTP status codes that indicate transient errors
+// which may succeed on retry.
+var transientHTTPStatusCodes = map[int]bool{
+	http.StatusTooManyRequests:     true, // 429 - Rate limiting
+	http.StatusInternalServerError: true, // 500 - Server error
+	http.StatusBadGateway:          true, // 502 - Bad gateway
+	http.StatusServiceUnavailable:  true, // 503 - Service unavailable
+	http.StatusGatewayTimeout:      true, // 504 - Gateway timeout
+}
+
+// IsTransientStatusCode returns true if the HTTP status code indicates a transient
+// error that may succeed on retry (429, 5xx).
+func IsTransientStatusCode(statusCode int) bool {
+	return transientHTTPStatusCodes[statusCode]
+}

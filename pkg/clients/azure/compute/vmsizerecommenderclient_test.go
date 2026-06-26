@@ -15,6 +15,7 @@ import (
 	"google.golang.org/protobuf/proto"
 
 	computev1 "go.goms.io/fleet/apis/protos/azure/compute/v1"
+	fleetErrors "go.goms.io/fleet/pkg/utils/errors"
 	"go.goms.io/fleet/test/utils/azure/compute"
 )
 
@@ -81,13 +82,14 @@ func TestNewAttributeBasedVMSizeRecommenderClient(t *testing.T) {
 
 func TestClient_GenerateAttributeBasedRecommendations(t *testing.T) {
 	tests := []struct {
-		name           string
-		request        *computev1.GenerateAttributeBasedRecommendationsRequest
-		mockStatusCode int
-		mockResponse   string
-		wantResponse   *computev1.GenerateAttributeBasedRecommendationsResponse
-		wantErr        bool
-		wantErrMsg     string
+		name            string
+		request         *computev1.GenerateAttributeBasedRecommendationsRequest
+		mockStatusCode  int
+		mockResponse    string
+		wantResponse    *computev1.GenerateAttributeBasedRecommendationsResponse
+		wantErr         bool
+		wantErrMsg      string
+		wantIsTransient bool // true if error should be a transient HTTPError
 	}{
 		{
 			name: "successful request with regular priority profile",
@@ -169,7 +171,7 @@ func TestClient_GenerateAttributeBasedRecommendations(t *testing.T) {
 			wantErrMsg: "either regular priority profile or spot priority profile must be provided",
 		},
 		{
-			name: "HTTP 400 error",
+			name: "HTTP 400 error is not transient",
 			request: &computev1.GenerateAttributeBasedRecommendationsRequest{
 				SubscriptionId: "sub-123",
 				Location:       "eastus",
@@ -177,13 +179,14 @@ func TestClient_GenerateAttributeBasedRecommendations(t *testing.T) {
 					TargetCapacity: 5,
 				},
 			},
-			mockStatusCode: http.StatusBadRequest,
-			mockResponse:   `{"error":"invalid request"}`,
-			wantErr:        true,
-			wantErrMsg:     "request failed with status 400",
+			mockStatusCode:  http.StatusBadRequest,
+			mockResponse:    `{"error":"invalid request"}`,
+			wantErr:         true,
+			wantErrMsg:      "request failed with status 400: POST",
+			wantIsTransient: false, // 400 is NOT transient
 		},
 		{
-			name: "HTTP 500 error",
+			name: "HTTP 500 error is transient",
 			request: &computev1.GenerateAttributeBasedRecommendationsRequest{
 				SubscriptionId: "sub-123",
 				Location:       "eastus",
@@ -191,10 +194,41 @@ func TestClient_GenerateAttributeBasedRecommendations(t *testing.T) {
 					TargetCapacity: 5,
 				},
 			},
-			mockStatusCode: http.StatusInternalServerError,
-			mockResponse:   `{"error":"internal server error"}`,
-			wantErr:        true,
-			wantErrMsg:     "request failed with status 500",
+			mockStatusCode:  http.StatusInternalServerError,
+			mockResponse:    `{"error":"internal server error"}`,
+			wantErr:         true,
+			wantErrMsg:      "request failed with status 500: POST",
+			wantIsTransient: true, // 500 IS transient
+		},
+		{
+			name: "HTTP 503 error is transient",
+			request: &computev1.GenerateAttributeBasedRecommendationsRequest{
+				SubscriptionId: "sub-123",
+				Location:       "eastus",
+				RegularPriorityProfile: &computev1.RegularPriorityProfile{
+					TargetCapacity: 5,
+				},
+			},
+			mockStatusCode:  http.StatusServiceUnavailable,
+			mockResponse:    `{"error":"service unavailable"}`,
+			wantErr:         true,
+			wantErrMsg:      "request failed with status 503: POST",
+			wantIsTransient: true, // 503 IS transient
+		},
+		{
+			name: "HTTP 429 error is transient",
+			request: &computev1.GenerateAttributeBasedRecommendationsRequest{
+				SubscriptionId: "sub-123",
+				Location:       "eastus",
+				RegularPriorityProfile: &computev1.RegularPriorityProfile{
+					TargetCapacity: 5,
+				},
+			},
+			mockStatusCode:  http.StatusTooManyRequests,
+			mockResponse:    `{"error":"too many requests"}`,
+			wantErr:         true,
+			wantErrMsg:      "request failed with status 429: POST",
+			wantIsTransient: true, // 429 IS transient
 		},
 		{
 			name: "invalid JSON response",
@@ -238,6 +272,20 @@ func TestClient_GenerateAttributeBasedRecommendations(t *testing.T) {
 			if tt.wantErr && !strings.Contains(err.Error(), tt.wantErrMsg) {
 				t.Errorf("GenerateAttributeBasedRecommendations() error = %v, want error containing %q", err, tt.wantErrMsg)
 				return
+			}
+
+			// Check if error has retry policy using fleetErrors.IsRetryable.
+			if tt.wantErr && tt.wantIsTransient {
+				isRetryable, hasRetryPolicy := fleetErrors.IsRetryable(err)
+				if !hasRetryPolicy || !isRetryable {
+					t.Errorf("GenerateAttributeBasedRecommendations() error = %v, want retryable error", err)
+				}
+			}
+			if tt.wantErr && !tt.wantIsTransient && tt.mockStatusCode >= 400 && tt.mockStatusCode < 500 {
+				isRetryable, hasRetryPolicy := fleetErrors.IsRetryable(err)
+				if hasRetryPolicy && isRetryable {
+					t.Errorf("GenerateAttributeBasedRecommendations() error = %v, should NOT be retryable for 4xx errors", err)
+				}
 			}
 
 			// Compare response.

@@ -578,3 +578,154 @@ func readFromBuffer(t *testing.T, buf *bytes.Buffer) string {
 	outputStr := string(output)
 	return outputStr
 }
+
+// mockErrorWithRetryPolicy is a test helper that implements the ErrorWithRetryPolicy interface.
+type mockErrorWithRetryPolicy struct {
+	retryable bool
+}
+
+func (e *mockErrorWithRetryPolicy) Error() string {
+	return "mock error with retry policy"
+}
+
+func (e *mockErrorWithRetryPolicy) IsRetryable() bool {
+	return e.retryable
+}
+
+func TestIsRetryableFunction(t *testing.T) {
+	testCases := []struct {
+		name          string
+		err           error
+		wantRetryable bool
+		wantFound     bool
+	}{
+		{
+			name:          "nil error",
+			err:           nil,
+			wantRetryable: false,
+			wantFound:     false,
+		},
+		{
+			name:          "plain error (no retry policy in chain)",
+			err:           fmt.Errorf("plain error"),
+			wantRetryable: false,
+			wantFound:     false,
+		},
+		{
+			name:          "error with retry policy (retryable=true)",
+			err:           &mockErrorWithRetryPolicy{retryable: true},
+			wantRetryable: true,
+			wantFound:     true,
+		},
+		{
+			name:          "error with retry policy (retryable=false)",
+			err:           &mockErrorWithRetryPolicy{retryable: false},
+			wantRetryable: false,
+			wantFound:     true,
+		},
+		{
+			name:          "wrapped error with retry policy",
+			err:           fmt.Errorf("wrapped: %w", &mockErrorWithRetryPolicy{retryable: true}),
+			wantRetryable: true,
+			wantFound:     true,
+		},
+		{
+			name:          "Error with ErrCategoryTransient (retryable)",
+			err:           &Error{category: ErrCategoryTransient},
+			wantRetryable: true,
+			wantFound:     true,
+		},
+		{
+			name:          "Error with ErrCategoryUser (not retryable)",
+			err:           &Error{category: ErrCategoryUser},
+			wantRetryable: false,
+			wantFound:     true,
+		},
+		{
+			name:          "Error with ErrCategoryUnexpected (not retryable)",
+			err:           &Error{category: ErrCategoryUnexpected},
+			wantRetryable: false,
+			wantFound:     true,
+		},
+		{
+			name:          "Error with ErrCategoryAPIServer (retryable)",
+			err:           &Error{category: ErrCategoryAPIServer},
+			wantRetryable: true,
+			wantFound:     true,
+		},
+		{
+			name:          "Error with ErrCategoryUncategorized (retryable by default)",
+			err:           &Error{category: ErrCategoryUncategorized},
+			wantRetryable: true,
+			wantFound:     true,
+		},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			gotRetryable, gotFound := IsRetryable(tc.err)
+			if gotRetryable != tc.wantRetryable {
+				t.Errorf("IsRetryable() retryable = %v, want %v", gotRetryable, tc.wantRetryable)
+			}
+			if gotFound != tc.wantFound {
+				t.Errorf("IsRetryable() found = %v, want %v", gotFound, tc.wantFound)
+			}
+		})
+	}
+}
+
+func TestErrorIsRetryable(t *testing.T) {
+	testCases := []struct {
+		name          string
+		err           *Error
+		wantRetryable bool
+	}{
+		{
+			name:          "ErrCategoryTransient is retryable",
+			err:           &Error{category: ErrCategoryTransient},
+			wantRetryable: true,
+		},
+		{
+			name:          "ErrCategoryAPIServer is retryable",
+			err:           &Error{category: ErrCategoryAPIServer},
+			wantRetryable: true,
+		},
+		{
+			name:          "ErrCategoryUnexpected is not retryable",
+			err:           &Error{category: ErrCategoryUnexpected},
+			wantRetryable: false,
+		},
+		{
+			name:          "ErrCategoryUser is not retryable",
+			err:           &Error{category: ErrCategoryUser},
+			wantRetryable: false,
+		},
+		{
+			name:          "ErrCategoryUncategorized is retryable by default",
+			err:           &Error{category: ErrCategoryUncategorized},
+			wantRetryable: true,
+		},
+		{
+			name:          "empty category defaults to retryable",
+			err:           &Error{},
+			wantRetryable: true,
+		},
+		{
+			name: "Error with wrapped error uses its own category",
+			err: &Error{
+				category: ErrCategoryUser,
+				wrapped:  fmt.Errorf("plain error"),
+			},
+			wantRetryable: false,
+		},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			gotRetryable := tc.err.IsRetryable()
+			if gotRetryable != tc.wantRetryable {
+				t.Errorf("IsRetryable() = %v, want %v", gotRetryable, tc.wantRetryable)
+			}
+		})
+	}
+}

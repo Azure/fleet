@@ -18,6 +18,7 @@ import (
 	placementv1beta1 "go.goms.io/fleet/apis/placement/v1beta1"
 	computev1 "go.goms.io/fleet/apis/protos/azure/compute/v1"
 	"go.goms.io/fleet/pkg/clients/azure/compute"
+	fleetErrors "go.goms.io/fleet/pkg/utils/errors"
 	"go.goms.io/fleet/pkg/utils/labels"
 )
 
@@ -58,6 +59,10 @@ func NewPropertyChecker(vmSizeRecommenderClient compute.AttributeBasedVMSizeReco
 //
 // The cluster must have both Azure location and subscription ID labels configured.
 // Returns true if the SKU capacity requirement can be met, false otherwise.
+//
+// Errors returned implement the RetryableError interface to indicate whether the operation
+// can be retried. Configuration errors (missing labels, invalid capacity) are non-retryable,
+// while Azure API errors preserve the retryability of the underlying HTTP error.
 func (s *PropertyChecker) CheckIfMeetSKUCapacityRequirement(
 	cluster *clusterv1beta1.MemberCluster,
 	req placementv1beta1.PropertySelectorRequirement,
@@ -65,18 +70,24 @@ func (s *PropertyChecker) CheckIfMeetSKUCapacityRequirement(
 ) (bool, error) {
 	location, err := labels.ExtractLabelFromMemberCluster(cluster, labels.AzureLocationLabel)
 	if err != nil {
-		return false, fmt.Errorf("failed to extract Azure location label from cluster %s: %w", cluster.Name, err)
+		// Missing label is a configuration error; not retryable.
+		return false, fleetErrors.NewUserError(err,
+			fmt.Sprintf("failed to extract Azure location label from cluster %s", cluster.Name))
 	}
 
 	subID, err := labels.ExtractLabelFromMemberCluster(cluster, labels.AzureSubscriptionIDLabel)
 	if err != nil {
-		return false, fmt.Errorf("failed to extract Azure subscription ID label from cluster %s: %w", cluster.Name, err)
+		// Missing label is a configuration error; not retryable.
+		return false, fleetErrors.NewUserError(err,
+			fmt.Sprintf("failed to extract Azure subscription ID label from cluster %s", cluster.Name))
 	}
 
 	// Extract capacity requirements from the property selector requirement.
 	capacity, err := extractCapacityRequirements(req)
 	if err != nil {
-		return false, fmt.Errorf("failed to extract capacity requirements from property selector requirement: %w", err)
+		// Invalid capacity specification is a user error; not retryable.
+		return false, fleetErrors.NewUserError(err,
+			"failed to extract capacity requirements from property selector requirement")
 	}
 
 	// Request VM size recommendations to validate SKU availability and capacity.
@@ -101,7 +112,11 @@ func (s *PropertyChecker) CheckIfMeetSKUCapacityRequirement(
 
 	respObj, err := s.vmSizeRecommenderClient.GenerateAttributeBasedRecommendations(context.Background(), request)
 	if err != nil {
-		return false, fmt.Errorf("failed to generate VM size recommendations from Azure: %w", err)
+		// Wrap the error with context. The underlying error already has the appropriate
+		// category set (transient for 429/5xx, API server error for other failures),
+		// so fleetErrors.IsRetryable() will detect it in the error chain.
+		return false, fleetErrors.Wraps(err,
+			fmt.Sprintf("failed to generate VM size recommendations from Azure for SKU %s in cluster %s", sku, cluster.Name))
 	}
 
 	// This check is a defense mechanism; vmSizeRecommenderClient should return a VM size recommendation
