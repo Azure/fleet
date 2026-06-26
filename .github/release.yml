@@ -1,0 +1,41 @@
+# Configures GitHub auto-generated release notes.
+# https://docs.github.com/repositories/releasing-projects-on-github/automatically-generated-release-notes
+#
+# Categorization is label-based. Contributors should add a single release-note/*
+# label to each PR; the label should match the PR title prefix
+# (e.g. feat: -> release-note/feature, fix: -> release-note/fix).
+# PRs with no release-note label fall into "Other Changes".
+changelog:
+  exclude:
+    labels:
+      - ignore-for-release
+      - release-note/none
+  categories:
+    - title: Breaking Changes
+      labels:
+        - release-note/breaking
+    - title: Security
+      labels:
+        - release-note/security
+    - title: New Features
+      labels:
+        - release-note/feature
+    - title: Bug Fixes
+      labels:
+        - release-note/fix
+    - title: Documentation
+      labels:
+        - release-note/docs
+    - title: Tests
+      labels:
+        - release-note/test
+    - title: Refactors
+      labels:
+        - release-note/refactor
+    - title: Maintenance and Dependencies
+      labels:
+        - release-note/chore
+        - dependencies
+    - title: Other Changes
+      labels:
+        - "*"

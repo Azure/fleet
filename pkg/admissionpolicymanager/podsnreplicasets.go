@@ -81,7 +81,7 @@ func (g *PodsAndReplicaSetsValidatingAdmissionPolicyGenerator) Validate() error 
 // replicasets in non-reserved namespaces.
 //
 // For simplicity reasons, the code here assumes that the generator has been validated before PoliciesWithBindings() is called.
-func (g *PodsAndReplicaSetsValidatingAdmissionPolicyGenerator) PoliciesWithBindings() []PolicyWithBindings {
+func (g *PodsAndReplicaSetsValidatingAdmissionPolicyGenerator) PoliciesWithBindings() ([]PolicyWithBindings, error) {
 	celExprSegs := []string{}
 	for _, prefix := range g.ReservedNamespacePrefixes {
 		celExprSegs = append(celExprSegs, fmt.Sprintf(`request.namespace.startsWith("%s")`, prefix))
@@ -158,5 +158,5 @@ func (g *PodsAndReplicaSetsValidatingAdmissionPolicyGenerator) PoliciesWithBindi
 			Policy:   policy,
 			Bindings: []*admissionregistrationv1.ValidatingAdmissionPolicyBinding{binding},
 		},
-	}
+	}, nil
 }
