@@ -111,7 +111,7 @@ var _ = Describe("Policies, Policy Bindings and their Effects", Ordered, func() 
 					},
 					Validations: []admissionregistrationv1.Validation{
 						{
-							Expression: `request.namespace.startsWith("fleet-") || request.namespace.startsWith("kube-") || (object.metadata.labels["fleet.azure.com/reconcile"] == "managed" && (request.userInfo.username == "system:serviceaccount:kube-system:deployment-controller" || request.userInfo.username == "system:serviceaccount:kube-system:replicaset-controller" || request.userInfo.username == "system:kube-controller-manager"))`,
+							Expression: `((request.namespace.startsWith("fleet-")) || (request.namespace.startsWith("kube-"))) || ((object.metadata.labels["fleet.azure.com/reconcile"] == "managed") && ((request.userInfo.username == "system:serviceaccount:kube-system:deployment-controller") || (request.userInfo.username == "system:serviceaccount:kube-system:replicaset-controller") || (request.userInfo.username == "system:kube-controller-manager")))`,
 							Message:    "creating pods and replicas is disallowed in the fleet hub cluster",
 							Reason:     ptr.To(metav1.StatusReasonForbidden),
 						},
@@ -166,7 +166,7 @@ var _ = Describe("Policies, Policy Bindings and their Effects", Ordered, func() 
 					},
 					Validations: []admissionregistrationv1.Validation{
 						{
-							Expression: `!(request.namespace.startsWith("fleet-") || request.namespace.startsWith("kube-")) || (request.userInfo.username == "aks-support" || request.userInfo.username == "system:kube-scheduler" || request.userInfo.username == "system:kube-controller-manager" || "system:nodes" in request.userInfo.groups || "system:masters" in request.userInfo.groups || "kubeadm:cluster-admins" in request.userInfo.groups || "system:serviceaccounts" in request.userInfo.groups)`,
+							Expression: `(!((request.namespace.startsWith("fleet-")) || (request.namespace.startsWith("kube-")))) || ((request.userInfo.username == "system:kube-scheduler") || (request.userInfo.username == "system:kube-controller-manager") || ("system:nodes" in request.userInfo.groups) || ("system:masters" in request.userInfo.groups) || ("kubeadm:cluster-admins" in request.userInfo.groups) || ("system:serviceaccounts" in request.userInfo.groups) || (request.userInfo.username == "aks-support"))`,
 							Message:    "writing service accounts in reserved namespaces or requesting tokens from such service accounts is disallowed",
 							Reason:     ptr.To(metav1.StatusReasonForbidden),
 						},
