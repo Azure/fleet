@@ -15,6 +15,14 @@ permissions:
   contents: read
   packages: write
 
+# Serialize releases per ref so concurrent tag pushes can't race on image
+# pushes to the same ${REGISTRY}/${IMAGE}:${TAG}. Different tags can still
+# run in parallel. We never want cancel-in-progress here: aborting a
+# half-pushed image is worse than letting it finish.
+concurrency:
+  group: release-images-${{ github.ref }}
+  cancel-in-progress: false
+
 env:
   REGISTRY: ghcr.io
   HUB_AGENT_IMAGE_NAME: hub-agent
@@ -41,7 +49,7 @@ jobs:
           go-version: ${{ env.GO_VERSION }}
 
       - name: Checkout code
-        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+        uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10 # v6.0.3
         with:
           ref: ${{ needs.export-registry.outputs.tag }}
 
@@ -56,10 +64,18 @@ jobs:
         run: |
           make push
 
+      # The short-tag (e.g. ":0.4.0") aliases the long form for stable releases
+      # only. RC images are published under the long form (":v0.4.0-rc.1") for
+      # testers, but we deliberately do NOT alias them to a short tag - the
+      # short-tag namespace is reserved for stable releases that consumers can
+      # safely pin to (and "imagetools create" with an RC alias would publish
+      # "0.4.0-rc.1" into that namespace, muddying it).
       - name: Tag and push images without v prefix
+        if: ${{ !contains(needs.export-registry.outputs.tag, '-rc.') }}
         env:
           VERSION: ${{ needs.export-registry.outputs.version }}
         run: |
+          set -euo pipefail
           for IMAGE in ${{ env.HUB_AGENT_IMAGE_NAME }} ${{ env.MEMBER_AGENT_IMAGE_NAME }} ${{ env.REFRESH_TOKEN_IMAGE_NAME }}; do
             docker buildx imagetools create \
               --tag "${{ env.REGISTRY }}/${IMAGE}:${VERSION}" \
@@ -70,10 +86,11 @@ jobs:
         env:
           VERSION: ${{ needs.export-registry.outputs.version }}
         run: |
+          set -euo pipefail
           echo "✅ Published images:"
-          echo "  - ${{ env.REGISTRY }}/${{ env.HUB_AGENT_IMAGE_NAME }}:${{ env.TAG }}"
-          echo "  - ${{ env.REGISTRY }}/${{ env.HUB_AGENT_IMAGE_NAME }}:${VERSION}"
-          echo "  - ${{ env.REGISTRY }}/${{ env.MEMBER_AGENT_IMAGE_NAME }}:${{ env.TAG }}"
-          echo "  - ${{ env.REGISTRY }}/${{ env.MEMBER_AGENT_IMAGE_NAME }}:${VERSION}"
-          echo "  - ${{ env.REGISTRY }}/${{ env.REFRESH_TOKEN_IMAGE_NAME }}:${{ env.TAG }}"
-          echo "  - ${{ env.REGISTRY }}/${{ env.REFRESH_TOKEN_IMAGE_NAME }}:${VERSION}"
+          for IMAGE in ${{ env.HUB_AGENT_IMAGE_NAME }} ${{ env.MEMBER_AGENT_IMAGE_NAME }} ${{ env.REFRESH_TOKEN_IMAGE_NAME }}; do
+            echo "  - ${{ env.REGISTRY }}/${IMAGE}:${{ env.TAG }}"
+            if [[ "${{ env.TAG }}" != *-rc.* ]]; then
+              echo "  - ${{ env.REGISTRY }}/${IMAGE}:${VERSION}"
+            fi
+          done

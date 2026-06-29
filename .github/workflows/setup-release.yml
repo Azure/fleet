@@ -32,8 +32,8 @@ jobs:
             - id: setup
               run: |
                   TAG="${{ inputs.tag }}"
-                  if [[ ! "${TAG}" =~ ^v[0-9]+\.[0-9]+\.[0-9]+ ]]; then
-                    echo "Error: Invalid release tag '${TAG}'. Expected format: v*.*.*"
+                  if [[ ! "${TAG}" =~ ^v[0-9]+\.[0-9]+\.[0-9]+(-rc\.[0-9]+)?$ ]]; then
+                    echo "Error: Invalid release tag '${TAG}'. Expected format: vMAJOR.MINOR.PATCH or vMAJOR.MINOR.PATCH-rc.N"
                     exit 1
                   fi
 

@@ -21,7 +21,6 @@ package admissionpolicymanager
 
 import (
 	"fmt"
-	"strings"
 
 	admissionregistrationv1 "k8s.io/api/admissionregistration/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -81,20 +80,36 @@ func (g *PodsAndReplicaSetsValidatingAdmissionPolicyGenerator) Validate() error 
 // replicasets in non-reserved namespaces.
 //
 // For simplicity reasons, the code here assumes that the generator has been validated before PoliciesWithBindings() is called.
-func (g *PodsAndReplicaSetsValidatingAdmissionPolicyGenerator) PoliciesWithBindings() []PolicyWithBindings {
-	celExprSegs := []string{}
+func (g *PodsAndReplicaSetsValidatingAdmissionPolicyGenerator) PoliciesWithBindings() ([]PolicyWithBindings, error) {
+	isInReservedNamespaces := LogicalOr()
 	for _, prefix := range g.ReservedNamespacePrefixes {
-		celExprSegs = append(celExprSegs, fmt.Sprintf(`request.namespace.startsWith("%s")`, prefix))
+		isInReservedNamespaces.Add(isInNamespaceWithPrefix(prefix))
 	}
 
 	// Custom (Azure-specific) logic: allow pods and replica sets to be created if they
 	// have the fleet.azure.com/reconcile=managed label and they are created by the deployment or replica set
 	// controllers (or the controller manager, just in case per controller service account is not enabled).
-	hasReconcileIfManagedLabel := fmt.Sprintf(`object.metadata.labels["%s"] == "%s"`, reconcileIfManagedLabelKey, reconcileIfManagedLabelValue)
-	createdByControllerManager := fmt.Sprintf(`request.userInfo.username == "%s" || request.userInfo.username == "%s" || request.userInfo.username == "%s"`, deploymentControllerUserName, replicaSetControllerUserName, kubeControllerManagerUserName)
-	celExprSegs = append(celExprSegs, fmt.Sprintf("(%s && (%s))", hasReconcileIfManagedLabel, createdByControllerManager))
+	hasReconcileIfManagedLabel := RawCELExpr(fmt.Sprintf(`object.metadata.labels["%s"] == "%s"`, reconcileIfManagedLabelKey, reconcileIfManagedLabelValue))
+	isCreatedByDeploymentController := isFromUsername(deploymentControllerUserName)
+	isCreatedByReplicaSetController := isFromUsername(replicaSetControllerUserName)
+	isCreatedByControllerManager := isFromUsername(kubeControllerManagerUserName)
+	allowIfManagedByAzure := LogicalAnd(
+		hasReconcileIfManagedLabel,
+		LogicalOr(
+			isCreatedByDeploymentController,
+			isCreatedByReplicaSetController,
+			isCreatedByControllerManager,
+		),
+	)
 
-	celExpr := strings.Join(celExprSegs, " || ")
+	celExprTree := LogicalOr(
+		isInReservedNamespaces,
+		allowIfManagedByAzure,
+	)
+	celExpr, err := celExprTree.Build()
+	if err != nil {
+		return nil, errors.Wraps(err, "failed to build CEL expression")
+	}
 
 	policy := &admissionregistrationv1.ValidatingAdmissionPolicy{
 		ObjectMeta: metav1.ObjectMeta{
@@ -158,5 +173,5 @@ func (g *PodsAndReplicaSetsValidatingAdmissionPolicyGenerator) PoliciesWithBindi
 			Policy:   policy,
 			Bindings: []*admissionregistrationv1.ValidatingAdmissionPolicyBinding{binding},
 		},
-	}
+	}, nil
 }

@@ -2,8 +2,13 @@ name: Helm Chart Publisher
 
 on:
   push:
+    # Pre-release tags (e.g. v0.4.0-rc.1) build images via release.yml but
+    # must not land in the public Helm index. The negative pattern below
+    # filters them out; workflow_dispatch can still publish a specific
+    # tag manually if ever needed.
     tags:
       - "v*.*.*"
+      - "!v*-rc.*"
   workflow_dispatch:
     inputs:
       tag:
@@ -26,8 +31,15 @@ jobs:
   publish-github-pages:
     needs: export-registry
     runs-on: ubuntu-latest
+    # Only the gh-pages publish needs serialization: helm-gh-pages always
+    # rewrites the gh-pages branch, so concurrent runs for different tags
+    # would race. The OCI publish below pushes immutable per-tag blobs and
+    # is safe to run in parallel across tags, so it stays unguarded.
+    concurrency:
+      group: helm-chart-publish-gh-pages
+      cancel-in-progress: false
     steps:
-      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+      - uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10 # v6.0.3
         with:
           submodules: true
           fetch-depth: 0
@@ -44,7 +56,7 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - name: Checkout code
-        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+        uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10 # v6.0.3
 
       - name: Login to GitHub Container Registry
         uses: docker/login-action@4907a6ddec9925e35a0a9e82d7399ccc52663121 # v4.1.0
