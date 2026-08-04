@@ -23,6 +23,8 @@ For any issues, please open an issue in the [KubeFleet](https://github.com/Azure
 
 To learn more about KubeFleet go to the [KubeFleet documentation](https://kubefleet-dev.github.io/website/).
 
+For release versioning, supported agent version skew, and upgrade ordering, see [VERSIONING.md](VERSIONING.md).
+
 ## Community
 
 You can reach the KubeFleet community and developers via the following channels:
