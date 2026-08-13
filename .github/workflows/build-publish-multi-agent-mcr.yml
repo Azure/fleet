@@ -1,0 +1,187 @@
+# This Github Action will build and publish images to Azure Container Registry (ACR), from where the published images will be
+# automatically pushed to the trusted registry, Microsoft Container Registry (MCR).
+
+# TO-DO (chenyu1): evaluate if we need to hide arch-specific images in ACR.
+
+name: Building and Pushing Multi-Agent Image to MCR
+on:
+  workflow_dispatch:
+    inputs:
+      fleetReleaseTag:
+        description: 'Release tag for the fleet agents, defaults to the latest one'
+        type: string
+      fleetNetworkingReleaseTag:
+        description: 'Release tag for the fleet networking agents, defaults to the latest one'
+        type: string
+
+permissions:
+  id-token: write
+  contents: read
+
+env:
+  # `public` indicates images to MCR will be publicly available, and will be removed in the final MCR images
+  REGISTRY_REPO: public/aks/fleet
+
+jobs:
+  prepare-variables:
+    runs-on: ubuntu-latest
+    outputs:
+      fleet_release_tag: ${{ steps.vars.outputs.fleet_release_tag }}
+      fleet_networking_release_tag: ${{ steps.vars.outputs.fleet_networking_release_tag }}
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          fetch-depth: 0
+      - name: 'Set output variables (fleet-related)'
+        id: vars
+        run: |
+          # Set the Fleet release tag.
+          FLEET_RELEASE_TAG=${{ inputs.fleetReleaseTag }}
+          if [ -z "$FLEET_RELEASE_TAG" ]; then
+            FLEET_RELEASE_TAG=$(git describe --tags "$(git rev-list --tags --max-count=1)")
+            echo "No user input exists for the fleet release tag; fall back to the latest tag ($FLEET_RELEASE_TAG)."
+          fi
+          echo "fleet_release_tag=$FLEET_RELEASE_TAG" >> "$GITHUB_OUTPUT"
+          echo "Using Fleet release tag: $FLEET_RELEASE_TAG"
+
+          # Set the Fleet networking release tag.
+          FLEET_NETWORKING_RELEASE_TAG=${{ inputs.fleetNetworkingReleaseTag }}
+          if [ -z "$FLEET_NETWORKING_RELEASE_TAG" ]; then
+            FLEET_NETWORKING_RELEASE_TAG=$(curl "https://api.github.com/repos/Azure/fleet-networking/tags" | jq -r '.[0].name')
+            echo "No user input exists for the fleet networking release tag; fall back to the latest tag ($FLEET_NETWORKING_RELEASE_TAG)."
+          fi
+          echo "fleet_networking_release_tag=$FLEET_NETWORKING_RELEASE_TAG" >> "$GITHUB_OUTPUT"
+          echo "Using Fleet Networking release tag: $FLEET_NETWORKING_RELEASE_TAG"
+
+          # NOTE: As exporting a variable from a secret is not possible, the shared variable registry obtained
+          # from AZURE_REGISTRY secret is not exported from here.
+
+  publish-images-amd64:
+    runs-on:
+      labels: [self-hosted, "1ES.Pool=1es-aks-fleet-pool-ubuntu"]
+    needs: prepare-variables
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          ref: ${{ needs.prepare-variables.outputs.fleet_release_tag }}
+          path: fleet
+      - uses: actions/checkout@v6
+        with:
+          repository: Azure/fleet-networking
+          ref: ${{ needs.prepare-variables.outputs.fleet_networking_release_tag }}
+          path: fleet-networking
+      - name: 'Copy the multi-agent Makefile and .dockerignore to the workspace root'
+        run: |
+          cp fleet/.github/helpers/multi-agent/Makefile .
+          cp fleet/.github/helpers/multi-agent/.dockerignore .
+      - name: 'Login the ACR'
+        run: |
+          az login --identity 
+          az acr login -n ${{ secrets.AZURE_REGISTRY }}
+      - name: Build and publish multi-agent
+        run: |
+          make docker-build-multi-agent
+        env:
+          TAG: ${{ needs.prepare-variables.outputs.fleet_release_tag }}-amd64
+          REGISTRY: ${{ secrets.AZURE_REGISTRY }}/${{ env.REGISTRY_REPO}}
+
+  publish-images-arm64:
+    runs-on:
+      labels: [self-hosted, "1ES.Pool=1es-aks-fleet-pool-ubuntu-arm64"]
+    needs: prepare-variables
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          ref: ${{ needs.prepare-variables.outputs.fleet_release_tag }}
+          path: fleet
+      - uses: actions/checkout@v6
+        with:
+          repository: Azure/fleet-networking
+          ref: ${{ needs.prepare-variables.outputs.fleet_networking_release_tag }}
+          path: fleet-networking
+      - name: 'Copy the multi-agent Makefile and .dockerignore to the workspace root'
+        run: |
+          cp fleet/.github/helpers/multi-agent/Makefile .
+          cp fleet/.github/helpers/multi-agent/.dockerignore .
+      - name: 'Install the Azure CLI'
+        # Note (chenyu1): the self-hosted 1ES ARM64 pool, for some reason, does not have Azure CLI installed by default;
+        # install it manually here.
+        run:
+          curl -sL https://aka.ms/InstallAzureCLIDeb | sudo bash
+      - name: 'Set up build dependencies'
+        # Note (chenyu1): the self-hosted 1ES ARM64 pool, for some reason, does not have the common build
+        # tools (e.g., make) installed by default; install them manually.
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y build-essential acl
+      - name: 'Set up Docker'
+        # Note (chenyu1): the self-hosted 1ES ARM64 pool, for some reason, does not have Docker installed by default,
+        # and cannot have Docker installed via the docker/setup-docker-action Github Action, hence the manual setup
+        # steps here.
+        run: |
+          sudo apt-get update
+          sudo apt-get -y install ca-certificates curl
+          sudo install -m 0755 -d /etc/apt/keyrings
+          sudo curl -fsSL https://download.docker.com/linux/ubuntu/gpg -o /etc/apt/keyrings/docker.asc
+          sudo chmod a+r /etc/apt/keyrings/docker.asc
+          echo \
+            "deb [arch=$(dpkg --print-architecture) signed-by=/etc/apt/keyrings/docker.asc] https://download.docker.com/linux/ubuntu \
+            $(. /etc/os-release && echo "${UBUNTU_CODENAME:-$VERSION_CODENAME}") stable" | \
+            sudo tee /etc/apt/sources.list.d/docker.list > /dev/null
+          sudo apt-get update
+          sudo apt-get install -y docker-ce docker-ce-cli containerd.io docker-buildx-plugin docker-compose-plugin
+      - name: 'Enable Docker access'
+        # Note (chenyu1): there are situations where the newgrp command will not take effect; set access
+        # to the docker daemon directly just in case.
+        run: |
+          sudo groupadd docker || true
+          echo "Adding $USER to the docker group"
+          sudo usermod -aG docker "$USER"
+          newgrp docker
+          sudo setfacl --modify "user:$USER:rw" /var/run/docker.sock
+      - name: 'Login the ACR'
+        # Note (chenyu1): must not use root privileges; the system seems to have some trouble
+        # retrieving credentials when sudo is used.
+        run: |
+          az login --identity
+          az acr login -n ${{ secrets.AZURE_REGISTRY }}
+      - name: 'Verify Docker CLI'
+        run: |
+          docker version
+          docker info
+      - name: Build and publish multi-agent
+        run: |
+          make docker-build-multi-agent
+        env:
+          TAG: ${{ needs.prepare-variables.outputs.fleet_release_tag }}-arm64
+          REGISTRY: ${{ secrets.AZURE_REGISTRY }}/${{ env.REGISTRY_REPO}}
+          TARGET_ARCH: arm64
+
+  create-image-manifest-bundle:
+    runs-on:
+      # Use the x86_64 1ES pool to run this job; in theory it can be run on the ARM64 1ES pool as well.
+      labels: [self-hosted, "1ES.Pool=1es-aks-fleet-pool-ubuntu"]
+    needs: [prepare-variables, publish-images-amd64, publish-images-arm64]
+    steps:
+    - name: 'Wait until images are processed'
+      # Note (chenyu1): as we are pulling from ACR rather than MCR, the images should be available almost
+      # immediately after the push is done; the delay is added here as a precaution.
+      run: |
+        echo "Waiting for 3 minutes to ensure that images are fully processed"
+        sleep 180
+    - name: 'Login the ACR'
+      run: |
+        az login --identity 
+        az acr login -n ${{ secrets.AZURE_REGISTRY }}
+    - name: 'Pull the multi-agent images from ACR'
+      # Note (chenyu1): must set the target platform explictly.
+      run: |
+        docker pull --platform linux/amd64 ${{ secrets.AZURE_REGISTRY }}/${{ env.REGISTRY_REPO}}/multi-agent:${{ needs.prepare-variables.outputs.fleet_release_tag }}-amd64
+        docker pull --platform linux/arm64 ${{ secrets.AZURE_REGISTRY }}/${{ env.REGISTRY_REPO}}/multi-agent:${{ needs.prepare-variables.outputs.fleet_release_tag }}-arm64
+    - name: 'Create and push multi-arch image manifests for the multi-agent image'
+      # Note (chenyu1): use `docker buildx imagetools create`, otherwise attestations cannot be perserved.
+      run: |
+        docker buildx imagetools create \
+          -t ${{ secrets.AZURE_REGISTRY }}/${{ env.REGISTRY_REPO}}/multi-agent:${{ needs.prepare-variables.outputs.fleet_release_tag }} \
+          ${{ secrets.AZURE_REGISTRY }}/${{ env.REGISTRY_REPO}}/multi-agent:${{ needs.prepare-variables.outputs.fleet_release_tag }}-amd64 \
+          ${{ secrets.AZURE_REGISTRY }}/${{ env.REGISTRY_REPO}}/multi-agent:${{ needs.prepare-variables.outputs.fleet_release_tag }}-arm64
