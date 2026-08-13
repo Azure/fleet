@@ -163,25 +163,25 @@ jobs:
       labels: [self-hosted, "1ES.Pool=1es-aks-fleet-pool-ubuntu"]
     needs: [prepare-variables, publish-images-amd64, publish-images-arm64]
     steps:
-    - name: 'Wait until images are processed'
-      # Note (chenyu1): as we are pulling from ACR rather than MCR, the images should be available almost
-      # immediately after the push is done; the delay is added here as a precaution.
-      run: |
-        echo "Waiting for 3 minutes to ensure that images are fully processed"
-        sleep 180
-    - name: 'Login the ACR'
-      run: |
-        az login --identity 
-        az acr login -n ${{ secrets.AZURE_REGISTRY }}
-    - name: 'Pull the multi-agent images from ACR'
-      # Note (chenyu1): must set the target platform explictly.
-      run: |
-        docker pull --platform linux/amd64 ${{ secrets.AZURE_REGISTRY }}/${{ env.REGISTRY_REPO}}/multi-agent:${{ needs.prepare-variables.outputs.fleet_release_tag }}-amd64
-        docker pull --platform linux/arm64 ${{ secrets.AZURE_REGISTRY }}/${{ env.REGISTRY_REPO}}/multi-agent:${{ needs.prepare-variables.outputs.fleet_release_tag }}-arm64
-    - name: 'Create and push multi-arch image manifests for the multi-agent image'
-      # Note (chenyu1): use `docker buildx imagetools create`, otherwise attestations cannot be perserved.
-      run: |
-        docker buildx imagetools create \
-          -t ${{ secrets.AZURE_REGISTRY }}/${{ env.REGISTRY_REPO}}/multi-agent:${{ needs.prepare-variables.outputs.fleet_release_tag }} \
-          ${{ secrets.AZURE_REGISTRY }}/${{ env.REGISTRY_REPO}}/multi-agent:${{ needs.prepare-variables.outputs.fleet_release_tag }}-amd64 \
-          ${{ secrets.AZURE_REGISTRY }}/${{ env.REGISTRY_REPO}}/multi-agent:${{ needs.prepare-variables.outputs.fleet_release_tag }}-arm64
+      - name: 'Wait until images are processed'
+        # Note (chenyu1): as we are pulling from ACR rather than MCR, the images should be available almost
+        # immediately after the push is done; the delay is added here as a precaution.
+        run: |
+          echo "Waiting for 3 minutes to ensure that images are fully processed"
+          sleep 180
+      - name: 'Login the ACR'
+        run: |
+          az login --identity 
+          az acr login -n ${{ secrets.AZURE_REGISTRY }}
+      - name: 'Pull the multi-agent images from ACR'
+        # Note (chenyu1): must set the target platform explicitly.
+        run: |
+          docker pull --platform linux/amd64 ${{ secrets.AZURE_REGISTRY }}/${{ env.REGISTRY_REPO}}/multi-agent:${{ needs.prepare-variables.outputs.fleet_release_tag }}-amd64
+          docker pull --platform linux/arm64 ${{ secrets.AZURE_REGISTRY }}/${{ env.REGISTRY_REPO}}/multi-agent:${{ needs.prepare-variables.outputs.fleet_release_tag }}-arm64
+      - name: 'Create and push multi-arch image manifests for the multi-agent image'
+        # Note (chenyu1): use `docker buildx imagetools create`, otherwise attestations cannot be preserved.
+        run: |
+          docker buildx imagetools create \
+            -t ${{ secrets.AZURE_REGISTRY }}/${{ env.REGISTRY_REPO}}/multi-agent:${{ needs.prepare-variables.outputs.fleet_release_tag }} \
+            ${{ secrets.AZURE_REGISTRY }}/${{ env.REGISTRY_REPO}}/multi-agent:${{ needs.prepare-variables.outputs.fleet_release_tag }}-amd64 \
+            ${{ secrets.AZURE_REGISTRY }}/${{ env.REGISTRY_REPO}}/multi-agent:${{ needs.prepare-variables.outputs.fleet_release_tag }}-arm64
