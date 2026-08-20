@@ -11,6 +11,9 @@
     "ignorePatterns": [
         {
             "pattern": "^mailto:"
+        },
+        {
+            "pattern": "^https://cloud-native\\.slack\\.com/archives/"
         }
     ]
 }
