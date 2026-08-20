@@ -29,10 +29,13 @@ import (
 	"github.com/google/go-cmp/cmp"
 	"github.com/google/go-cmp/cmp/cmpopts"
 	corev1 "k8s.io/api/core/v1"
+	apiextensionsv1 "k8s.io/apiextensions-apiserver/pkg/apis/apiextensions/v1"
 	"k8s.io/apimachinery/pkg/api/errors"
 	"k8s.io/apimachinery/pkg/api/meta"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
 	"k8s.io/apimachinery/pkg/runtime"
+	"k8s.io/apimachinery/pkg/runtime/schema"
 	"k8s.io/apimachinery/pkg/types"
 	"k8s.io/utils/ptr"
 	"sigs.k8s.io/controller-runtime/pkg/client"
@@ -42,6 +45,8 @@ import (
 	"go.goms.io/fleet/pkg/controllers/workapplier"
 	"go.goms.io/fleet/pkg/utils"
 	"go.goms.io/fleet/pkg/utils/condition"
+	"go.goms.io/fleet/pkg/utils/overrider"
+	testutilsinformer "go.goms.io/fleet/test/utils/informer"
 )
 
 var (
@@ -111,6 +116,8 @@ const (
 	timeout  = time.Second * 20
 	duration = time.Second * 10
 	interval = time.Millisecond * 250
+
+	insideDeploymentName = "inside-deployment"
 )
 
 var _ = Describe("Test Work Generator Controller for clusterResourcePlacement", func() {
@@ -980,6 +987,277 @@ var _ = Describe("Test Work Generator Controller for clusterResourcePlacement", 
 					}
 					return nil
 				}, timeout, interval).Should(Succeed(), "Failed to delete the expected enveloped work in hub cluster")
+			})
+		})
+
+		Context("Test Bound ClusterResourceBinding with envelope override snapshots", func() {
+			var objectsToDelete []client.Object
+
+			createObject := func(obj client.Object) {
+				Expect(k8sClient.Create(ctx, obj)).Should(Succeed())
+				objectsToDelete = append(objectsToDelete, obj)
+			}
+
+			AfterEach(func() {
+				for i := len(objectsToDelete) - 1; i >= 0; i-- {
+					Expect(k8sClient.Delete(ctx, objectsToDelete[i])).Should(SatisfyAny(Succeed(), utils.NotFoundMatcher{}))
+				}
+				objectsToDelete = nil
+			})
+
+			It("Should patch a ResourceEnvelope inner Deployment with a matching ResourceOverride", func() {
+				envelopeNamespace := "envelope-ns-" + utils.RandStr()
+				envelopeName := "resource-envelope-" + utils.RandStr()
+				deploymentName := insideDeploymentName
+				createObject(&corev1.Namespace{ObjectMeta: metav1.ObjectMeta{Name: envelopeNamespace}})
+
+				masterSnapshot := generateClusterResourceSnapshot(1, 1, 0, [][]byte{
+					resourceEnvelopeRaw(envelopeName, envelopeNamespace, map[string][]byte{
+						"deployment.json": deploymentManifestRaw(envelopeNamespace, deploymentName, map[string]string{"app": "demo"}),
+					}),
+				})
+				createObject(masterSnapshot)
+				createObject(envelopeResourceOverrideSnapshot("ro-"+utils.RandStr(), envelopeNamespace, []placementv1beta1.ResourceSelector{
+					{
+						Group:   "apps",
+						Version: "v1",
+						Kind:    "Deployment",
+						Name:    deploymentName,
+					},
+				}, []placementv1beta1.JSONPatchOverride{
+					{
+						Operator: placementv1beta1.JSONPatchOverrideOpAdd,
+						Path:     "/metadata/labels/patched",
+						Value:    apiextensionsv1.JSON{Raw: []byte(`"true"`)},
+					},
+				}))
+				croNames, roNames := matchingOverrideSnapshotRefs(masterSnapshot)
+				spec := placementv1beta1.ResourceBindingSpec{
+					State:                     placementv1beta1.BindingStateBound,
+					ResourceSnapshotName:      masterSnapshot.Name,
+					TargetCluster:             memberClusterName,
+					ResourceOverrideSnapshots: roNames,
+				}
+				createClusterResourceBinding(&binding, spec)
+
+				var workList placementv1beta1.WorkList
+				fetchEnvelopedWork(&workList, binding, string(placementv1beta1.ResourceEnvelopeType), envelopeName, envelopeNamespace)
+				got := findManifestObject(workList.Items[0].Spec.Workload.Manifests, "apps", "v1", "Deployment", envelopeNamespace, deploymentName)
+				want := manifestObject(deploymentManifestRaw(envelopeNamespace, deploymentName, map[string]string{"app": "demo", "patched": "true"}))
+				diff := cmp.Diff(want.Object, got.Object)
+				Expect(diff).Should(BeEmpty(), fmt.Sprintf("inner deployment mismatch (-want +got):\n%s", diff))
+				Expect(croNames).Should(BeEmpty(), "ResourceOverride test should not select ClusterResourceOverrideSnapshots")
+				verifyBindingStatusSyncedNotApplied(binding, true, true)
+			})
+
+			It("Should patch a ClusterResourceEnvelope inner ClusterRole with a matching ClusterResourceOverride", func() {
+				envelopeName := "cluster-resource-envelope-" + utils.RandStr()
+				clusterRoleName := "inside-clusterrole"
+				masterSnapshot := generateClusterResourceSnapshot(1, 1, 0, [][]byte{
+					clusterResourceEnvelopeRaw(envelopeName, map[string][]byte{
+						"clusterrole.json": clusterRoleManifestRaw(clusterRoleName, nil),
+					}),
+				})
+				createObject(masterSnapshot)
+				createObject(envelopeClusterResourceOverrideSnapshot("cro-"+utils.RandStr(), []placementv1beta1.ResourceSelectorTerm{
+					{
+						Group:   "rbac.authorization.k8s.io",
+						Version: "v1",
+						Kind:    "ClusterRole",
+						Name:    clusterRoleName,
+					},
+				}, []placementv1beta1.JSONPatchOverride{
+					{
+						Operator: placementv1beta1.JSONPatchOverrideOpAdd,
+						Path:     "/metadata/labels",
+						Value:    apiextensionsv1.JSON{Raw: []byte(`{"patched":"true"}`)},
+					},
+				}))
+				croNames, roNames := matchingOverrideSnapshotRefs(masterSnapshot)
+				spec := placementv1beta1.ResourceBindingSpec{
+					State:                            placementv1beta1.BindingStateBound,
+					ResourceSnapshotName:             masterSnapshot.Name,
+					TargetCluster:                    memberClusterName,
+					ClusterResourceOverrideSnapshots: croNames,
+				}
+				createClusterResourceBinding(&binding, spec)
+
+				var workList placementv1beta1.WorkList
+				fetchEnvelopedWork(&workList, binding, string(placementv1beta1.ClusterResourceEnvelopeType), envelopeName, "")
+				got := findManifestObject(workList.Items[0].Spec.Workload.Manifests, "rbac.authorization.k8s.io", "v1", "ClusterRole", "", clusterRoleName)
+				want := manifestObject(clusterRoleManifestRaw(clusterRoleName, map[string]string{"patched": "true"}))
+				diff := cmp.Diff(want.Object, got.Object)
+				Expect(diff).Should(BeEmpty(), fmt.Sprintf("inner clusterRole mismatch (-want +got):\n%s", diff))
+				Expect(roNames).Should(BeEmpty(), "ClusterResourceOverride test should not select ResourceOverrideSnapshots")
+				verifyBindingStatusSyncedNotApplied(binding, true, true)
+			})
+
+			It("Should not apply a ResourceOverride targeting the ResourceEnvelope wrapper", func() {
+				envelopeNamespace := "envelope-ns-" + utils.RandStr()
+				envelopeName := "resource-envelope-" + utils.RandStr()
+				deploymentName := insideDeploymentName
+				createObject(&corev1.Namespace{ObjectMeta: metav1.ObjectMeta{Name: envelopeNamespace}})
+
+				masterSnapshot := generateClusterResourceSnapshot(1, 1, 0, [][]byte{
+					resourceEnvelopeRaw(envelopeName, envelopeNamespace, map[string][]byte{
+						"deployment.json": deploymentManifestRaw(envelopeNamespace, deploymentName, map[string]string{"app": "demo"}),
+					}),
+				})
+				createObject(masterSnapshot)
+				createObject(envelopeResourceOverrideSnapshot("ro-"+utils.RandStr(), envelopeNamespace, []placementv1beta1.ResourceSelector{
+					{
+						Group:   placementv1beta1.GroupVersion.Group,
+						Version: placementv1beta1.GroupVersion.Version,
+						Kind:    string(placementv1beta1.ResourceEnvelopeType),
+						Name:    envelopeName,
+					},
+				}, []placementv1beta1.JSONPatchOverride{
+					{
+						Operator: placementv1beta1.JSONPatchOverrideOpReplace,
+						Path:     "/metadata/name",
+						Value:    apiextensionsv1.JSON{Raw: []byte(`"unexpected-envelope-name"`)},
+					},
+				}))
+				croNames, roNames := matchingOverrideSnapshotRefs(masterSnapshot)
+				spec := placementv1beta1.ResourceBindingSpec{
+					State:                            placementv1beta1.BindingStateBound,
+					ResourceSnapshotName:             masterSnapshot.Name,
+					TargetCluster:                    memberClusterName,
+					ClusterResourceOverrideSnapshots: croNames,
+					ResourceOverrideSnapshots:        roNames,
+				}
+				createClusterResourceBinding(&binding, spec)
+
+				var workList placementv1beta1.WorkList
+				fetchEnvelopedWork(&workList, binding, string(placementv1beta1.ResourceEnvelopeType), envelopeName, envelopeNamespace)
+				got := findManifestObject(workList.Items[0].Spec.Workload.Manifests, "apps", "v1", "Deployment", envelopeNamespace, deploymentName)
+				want := manifestObject(deploymentManifestRaw(envelopeNamespace, deploymentName, map[string]string{"app": "demo"}))
+				diff := cmp.Diff(want.Object, got.Object)
+				Expect(diff).Should(BeEmpty(), fmt.Sprintf("inner deployment mismatch (-want +got):\n%s", diff))
+				Expect(croNames).Should(BeEmpty(), "wrapper-targeting ResourceOverride should not select ClusterResourceOverrideSnapshots")
+				Expect(roNames).Should(BeEmpty(), "wrapper-targeting ResourceOverride should not be selected")
+				verifyBindingStatusSyncedNotApplied(binding, false, true)
+			})
+
+			It("Should patch only the selected inner resource from a ResourceEnvelope", func() {
+				envelopeNamespace := "envelope-ns-" + utils.RandStr()
+				envelopeName := "resource-envelope-" + utils.RandStr()
+				deploymentName := insideDeploymentName
+				configMapName := "inside-configmap"
+				createObject(&corev1.Namespace{ObjectMeta: metav1.ObjectMeta{Name: envelopeNamespace}})
+
+				masterSnapshot := generateClusterResourceSnapshot(1, 1, 0, [][]byte{
+					resourceEnvelopeRaw(envelopeName, envelopeNamespace, map[string][]byte{
+						"configmap.json":  configMapManifestRaw(envelopeNamespace, configMapName),
+						"deployment.json": deploymentManifestRaw(envelopeNamespace, deploymentName, map[string]string{"app": "demo"}),
+					}),
+				})
+				createObject(masterSnapshot)
+				createObject(envelopeResourceOverrideSnapshot("ro-"+utils.RandStr(), envelopeNamespace, []placementv1beta1.ResourceSelector{
+					{
+						Group:   "apps",
+						Version: "v1",
+						Kind:    "Deployment",
+						Name:    deploymentName,
+					},
+				}, []placementv1beta1.JSONPatchOverride{
+					{
+						Operator: placementv1beta1.JSONPatchOverrideOpAdd,
+						Path:     "/metadata/labels/patched",
+						Value:    apiextensionsv1.JSON{Raw: []byte(`"true"`)},
+					},
+				}))
+				croNames, roNames := matchingOverrideSnapshotRefs(masterSnapshot)
+				spec := placementv1beta1.ResourceBindingSpec{
+					State:                     placementv1beta1.BindingStateBound,
+					ResourceSnapshotName:      masterSnapshot.Name,
+					TargetCluster:             memberClusterName,
+					ResourceOverrideSnapshots: roNames,
+				}
+				createClusterResourceBinding(&binding, spec)
+
+				var workList placementv1beta1.WorkList
+				fetchEnvelopedWork(&workList, binding, string(placementv1beta1.ResourceEnvelopeType), envelopeName, envelopeNamespace)
+				gotDeployment := findManifestObject(workList.Items[0].Spec.Workload.Manifests, "apps", "v1", "Deployment", envelopeNamespace, deploymentName)
+				wantDeployment := manifestObject(deploymentManifestRaw(envelopeNamespace, deploymentName, map[string]string{"app": "demo", "patched": "true"}))
+				diff := cmp.Diff(wantDeployment.Object, gotDeployment.Object)
+				Expect(diff).Should(BeEmpty(), fmt.Sprintf("inner deployment mismatch (-want +got):\n%s", diff))
+				gotConfigMap := findManifestObject(workList.Items[0].Spec.Workload.Manifests, "", "v1", "ConfigMap", envelopeNamespace, configMapName)
+				wantConfigMap := manifestObject(configMapManifestRaw(envelopeNamespace, configMapName))
+				diff = cmp.Diff(wantConfigMap.Object, gotConfigMap.Object)
+				Expect(diff).Should(BeEmpty(), fmt.Sprintf("inner configMap mismatch (-want +got):\n%s", diff))
+				Expect(croNames).Should(BeEmpty(), "ResourceOverride test should not select ClusterResourceOverrideSnapshots")
+				verifyBindingStatusSyncedNotApplied(binding, true, true)
+			})
+
+			It("Should report ResourceOverride failures inside a ResourceEnvelope on the Overridden condition", func() {
+				envelopeNamespace := "envelope-ns-" + utils.RandStr()
+				envelopeName := "resource-envelope-" + utils.RandStr()
+				deploymentName := insideDeploymentName
+				createObject(&corev1.Namespace{ObjectMeta: metav1.ObjectMeta{Name: envelopeNamespace}})
+
+				masterSnapshot := generateClusterResourceSnapshot(1, 1, 0, [][]byte{
+					resourceEnvelopeRaw(envelopeName, envelopeNamespace, map[string][]byte{
+						"deployment.json": deploymentManifestRaw(envelopeNamespace, deploymentName, map[string]string{"app": "demo"}),
+					}),
+				})
+				createObject(masterSnapshot)
+				invalidRO := envelopeResourceOverrideSnapshot("ro-"+utils.RandStr(), envelopeNamespace, []placementv1beta1.ResourceSelector{
+					{
+						Group:   "apps",
+						Version: "v1",
+						Kind:    "Deployment",
+						Name:    deploymentName,
+					},
+				}, []placementv1beta1.JSONPatchOverride{
+					{
+						Operator: placementv1beta1.JSONPatchOverrideOpAdd,
+						Path:     "/spec/template/spec/containers/0/resources/limits/cpu",
+						Value:    apiextensionsv1.JSON{Raw: []byte(`"100m"`)},
+					},
+				})
+				createObject(invalidRO)
+				croNames, roNames := matchingOverrideSnapshotRefs(masterSnapshot)
+				spec := placementv1beta1.ResourceBindingSpec{
+					State:                     placementv1beta1.BindingStateBound,
+					ResourceSnapshotName:      masterSnapshot.Name,
+					TargetCluster:             memberClusterName,
+					ResourceOverrideSnapshots: roNames,
+				}
+				createClusterResourceBinding(&binding, spec)
+
+				Consistently(func() int {
+					workList := placementv1beta1.WorkList{}
+					Expect(k8sClient.List(ctx, &workList, client.MatchingLabels{
+						placementv1beta1.ParentBindingLabel:     binding.Name,
+						placementv1beta1.PlacementTrackingLabel: testCRPName,
+					})).Should(Succeed())
+					return len(workList.Items)
+				}, duration, interval).Should(Equal(0), "controller should not create work when an inner envelope override fails")
+
+				Eventually(func() string {
+					Expect(k8sClient.Get(ctx, types.NamespacedName{Name: binding.Name}, binding)).Should(Succeed())
+					wantStatus := placementv1beta1.ResourceBindingStatus{
+						Conditions: []metav1.Condition{
+							{
+								Type:               string(placementv1beta1.ResourceBindingRolloutStarted),
+								Status:             metav1.ConditionTrue,
+								Reason:             condition.RolloutStartedReason,
+								ObservedGeneration: binding.GetGeneration(),
+							},
+							{
+								Type:               string(placementv1beta1.ResourceBindingOverridden),
+								Status:             metav1.ConditionFalse,
+								Reason:             condition.OverriddenFailedReason,
+								ObservedGeneration: binding.GetGeneration(),
+							},
+						},
+					}
+					return cmp.Diff(wantStatus, binding.Status, cmpConditionOption)
+				}, timeout, interval).Should(BeEmpty(), fmt.Sprintf("binding(%s) mismatch (-want +got)", binding.Name))
+				message := binding.GetCondition(string(placementv1beta1.ResourceBindingOverridden)).Message
+				Expect(message).Should(ContainSubstring("add operation does not apply"))
+				Expect(croNames).Should(BeEmpty(), "ResourceOverride failure test should not select ClusterResourceOverrideSnapshots")
 			})
 		})
 
@@ -4259,6 +4537,240 @@ func fetchEnvelopedWork(workList *placementv1beta1.WorkList, binding *placementv
 		}
 		return nil
 	}, timeout, interval).Should(Succeed(), "Failed to get the expected enveloped work in hub cluster")
+}
+
+func matchingOverrideSnapshotRefs(masterSnapshot *placementv1beta1.ClusterResourceSnapshot) ([]string, []placementv1beta1.NamespacedName) {
+	fakeInformer := envelopeOverrideInformerManager()
+	directClient, err := client.New(cfg, client.Options{Scheme: mgr.GetScheme()})
+	Expect(err).Should(Succeed())
+	croSnapshots, roSnapshots, err := overrider.FetchAllMatchingOverridesForResourceSnapshot(ctx, directClient, fakeInformer, testCRPName, masterSnapshot)
+	Expect(err).Should(Succeed())
+
+	croNames := make([]string, 0, len(croSnapshots))
+	for _, snapshot := range croSnapshots {
+		croNames = append(croNames, snapshot.Name)
+	}
+	roNames := make([]placementv1beta1.NamespacedName, 0, len(roSnapshots))
+	for _, snapshot := range roSnapshots {
+		roNames = append(roNames, placementv1beta1.NamespacedName{
+			Name:      snapshot.Name,
+			Namespace: snapshot.Namespace,
+		})
+	}
+	return croNames, roNames
+}
+
+func envelopeOverrideInformerManager() *testutilsinformer.FakeManager {
+	return &testutilsinformer.FakeManager{
+		APIResources: map[schema.GroupVersionKind]bool{
+			utils.NamespaceGVK: true,
+			placementv1beta1.GroupVersion.WithKind(string(placementv1beta1.ClusterResourceEnvelopeType)): true,
+			{
+				Group:   "admissionregistration.k8s.io",
+				Version: "v1",
+				Kind:    "ValidatingWebhookConfiguration",
+			}: true,
+			{
+				Group:   "apiextensions.k8s.io",
+				Version: "v1",
+				Kind:    "CustomResourceDefinition",
+			}: true,
+			{
+				Group:   "rbac.authorization.k8s.io",
+				Version: "v1",
+				Kind:    "ClusterRole",
+			}: true,
+		},
+		IsClusterScopedResource: true,
+	}
+}
+
+func envelopeResourceOverrideSnapshot(name, namespace string, selectors []placementv1beta1.ResourceSelector, patches []placementv1beta1.JSONPatchOverride) *placementv1beta1.ResourceOverrideSnapshot {
+	return &placementv1beta1.ResourceOverrideSnapshot{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      name,
+			Namespace: namespace,
+			Labels: map[string]string{
+				placementv1beta1.IsLatestSnapshotLabel: "true",
+			},
+		},
+		Spec: placementv1beta1.ResourceOverrideSnapshotSpec{
+			OverrideSpec: placementv1beta1.ResourceOverrideSpec{
+				Placement: &placementv1beta1.PlacementRef{
+					Name:  testCRPName,
+					Scope: placementv1beta1.ClusterScoped,
+				},
+				ResourceSelectors: selectors,
+				Policy: &placementv1beta1.OverridePolicy{
+					OverrideRules: []placementv1beta1.OverrideRule{
+						{
+							ClusterSelector: &placementv1beta1.ClusterSelector{
+								ClusterSelectorTerms: []placementv1beta1.ClusterSelectorTerm{},
+							},
+							OverrideType:       placementv1beta1.JSONPatchOverrideType,
+							JSONPatchOverrides: patches,
+						},
+					},
+				},
+			},
+			OverrideHash: []byte(name),
+		},
+	}
+}
+
+func envelopeClusterResourceOverrideSnapshot(name string, selectors []placementv1beta1.ResourceSelectorTerm, patches []placementv1beta1.JSONPatchOverride) *placementv1beta1.ClusterResourceOverrideSnapshot {
+	return &placementv1beta1.ClusterResourceOverrideSnapshot{
+		ObjectMeta: metav1.ObjectMeta{
+			Name: name,
+			Labels: map[string]string{
+				placementv1beta1.IsLatestSnapshotLabel: "true",
+			},
+		},
+		Spec: placementv1beta1.ClusterResourceOverrideSnapshotSpec{
+			OverrideSpec: placementv1beta1.ClusterResourceOverrideSpec{
+				Placement: &placementv1beta1.PlacementRef{
+					Name:  testCRPName,
+					Scope: placementv1beta1.ClusterScoped,
+				},
+				ClusterResourceSelectors: selectors,
+				Policy: &placementv1beta1.OverridePolicy{
+					OverrideRules: []placementv1beta1.OverrideRule{
+						{
+							ClusterSelector: &placementv1beta1.ClusterSelector{
+								ClusterSelectorTerms: []placementv1beta1.ClusterSelectorTerm{},
+							},
+							OverrideType:       placementv1beta1.JSONPatchOverrideType,
+							JSONPatchOverrides: patches,
+						},
+					},
+				},
+			},
+			OverrideHash: []byte(name),
+		},
+	}
+}
+
+func resourceEnvelopeRaw(name, namespace string, data map[string][]byte) []byte {
+	rawData := make(map[string]runtime.RawExtension, len(data))
+	for key, raw := range data {
+		rawData[key] = runtime.RawExtension{Raw: raw}
+	}
+	return mustMarshalJSON(&placementv1beta1.ResourceEnvelope{
+		TypeMeta: metav1.TypeMeta{
+			APIVersion: placementv1beta1.GroupVersion.String(),
+			Kind:       string(placementv1beta1.ResourceEnvelopeType),
+		},
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      name,
+			Namespace: namespace,
+		},
+		Data: rawData,
+	})
+}
+
+func clusterResourceEnvelopeRaw(name string, data map[string][]byte) []byte {
+	rawData := make(map[string]runtime.RawExtension, len(data))
+	for key, raw := range data {
+		rawData[key] = runtime.RawExtension{Raw: raw}
+	}
+	return mustMarshalJSON(&placementv1beta1.ClusterResourceEnvelope{
+		TypeMeta: metav1.TypeMeta{
+			APIVersion: placementv1beta1.GroupVersion.String(),
+			Kind:       string(placementv1beta1.ClusterResourceEnvelopeType),
+		},
+		ObjectMeta: metav1.ObjectMeta{Name: name},
+		Data:       rawData,
+	})
+}
+
+func deploymentManifestRaw(namespace, name string, labels map[string]string) []byte {
+	return mustMarshalJSON(map[string]interface{}{
+		"apiVersion": "apps/v1",
+		"kind":       "Deployment",
+		"metadata": map[string]interface{}{
+			"name":      name,
+			"namespace": namespace,
+			"labels":    labels,
+		},
+		"spec": map[string]interface{}{
+			"replicas": int64(1),
+			"selector": map[string]interface{}{
+				"matchLabels": map[string]string{"app": "demo"},
+			},
+			"template": map[string]interface{}{
+				"metadata": map[string]interface{}{
+					"labels": map[string]string{"app": "demo"},
+				},
+				"spec": map[string]interface{}{
+					"containers": []map[string]string{
+						{
+							"name":  "nginx",
+							"image": "nginx:1.14.2",
+						},
+					},
+				},
+			},
+		},
+	})
+}
+
+func configMapManifestRaw(namespace, name string) []byte {
+	return mustMarshalJSON(map[string]interface{}{
+		"apiVersion": "v1",
+		"kind":       "ConfigMap",
+		"metadata": map[string]interface{}{
+			"name":      name,
+			"namespace": namespace,
+		},
+		"data": map[string]string{
+			"field": "untouched",
+		},
+	})
+}
+
+func clusterRoleManifestRaw(name string, labels map[string]string) []byte {
+	metadata := map[string]interface{}{
+		"name": name,
+	}
+	if labels != nil {
+		metadata["labels"] = labels
+	}
+	return mustMarshalJSON(map[string]interface{}{
+		"apiVersion": "rbac.authorization.k8s.io/v1",
+		"kind":       "ClusterRole",
+		"metadata":   metadata,
+		"rules": []map[string]interface{}{
+			{
+				"apiGroups": []string{""},
+				"resources": []string{"pods"},
+				"verbs":     []string{"get", "list", "watch"},
+			},
+		},
+	})
+}
+
+func findManifestObject(manifests []placementv1beta1.Manifest, group, version, kind, namespace, name string) unstructured.Unstructured {
+	for _, manifest := range manifests {
+		got := manifestObject(manifest.Raw)
+		gvk := got.GroupVersionKind()
+		if gvk.Group == group && gvk.Version == version && gvk.Kind == kind && got.GetNamespace() == namespace && got.GetName() == name {
+			return got
+		}
+	}
+	Fail(fmt.Sprintf("manifest %s/%s, Kind=%s, namespace=%s, name=%s not found", group, version, kind, namespace, name))
+	return unstructured.Unstructured{}
+}
+
+func manifestObject(raw []byte) unstructured.Unstructured {
+	var obj unstructured.Unstructured
+	Expect(obj.UnmarshalJSON(raw)).Should(Succeed())
+	return obj
+}
+
+func mustMarshalJSON(obj interface{}) []byte {
+	raw, err := json.Marshal(obj)
+	Expect(err).Should(Succeed())
+	return raw
 }
 
 func generateClusterResourceBinding(spec placementv1beta1.ResourceBindingSpec) *placementv1beta1.ClusterResourceBinding {

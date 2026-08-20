@@ -55,7 +55,7 @@ being finalized:
   practice (typically 1–7 days for downstream coordination).
 - **Vendor advance notification: TBD.** Projects with downstream consumers commonly operate
   a distributors mailing list for embargo coordination with packagers and downstream forks
-  (see the [CNCF TAG-Security `SECURITY.md` template](https://github.com/cncf/tag-security/blob/main/project-resources/templates/SECURITY.md)
+  (see the [CNCF TAG-Security `SECURITY.md` template](https://github.com/cncf/tag-security)
   for the conventional `cncf-<project>-distributors-announce@lists.cncf.io` form). Whether
   KubeFleet stands one up depends on demonstrated downstream demand.
 - **GitHub private vulnerability reporting:** to be enabled on this repository as the
@@ -67,7 +67,7 @@ This section will be updated as each item is decided.
 ## Reporting Security Issues
 
 **Please do not report security vulnerabilities through public GitHub issues.** Instead, 
-report them to the [KubeFleet maintainers](mailto:kubefleet-maintainers@googlegroups.com).
+report them to the [KubeFleet maintainers](mailto:kubefleet@microsoft.com).
 We prefer all communications to be in English.
 
 You should receive a response as soon as possible. If for some reason you do not, please

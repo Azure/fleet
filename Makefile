@@ -311,6 +311,41 @@ helm-push: ## Package and push Helm charts to OCI registry
 	rm -rf .helm-packages
 
 
+# Directory and artifact names for the standalone CRD release tarball.
+CRD_PACKAGE_DIR ?= _crd-package
+CRD_PACKAGE_NAME ?= kubefleet-crds-$(TAG)
+# Use sha256sum when available (Linux/CI), fall back to shasum (macOS).
+SHA256SUM ?= $(shell command -v sha256sum >/dev/null 2>&1 && echo "sha256sum" || echo "shasum -a 256")
+
+.PHONY: crd-package
+crd-package: ## Package the raw CRDs into a release tarball with a SHA-256 checksum
+	rm -rf $(CRD_PACKAGE_DIR)
+	mkdir -p $(CRD_PACKAGE_DIR)/crds/hub $(CRD_PACKAGE_DIR)/crds/member
+	# Source from the charts' CRD sets (symlinks into config/crd/bases) so the
+	# bundle mirrors exactly what each agent installs: hub-cluster CRDs under
+	# crds/hub, member-cluster CRDs under crds/member. cp -L dereferences the
+	# symlinks so the archive holds the raw CRD YAML, not dangling links.
+	cp -L charts/hub-agent/templates/crds/*.yaml $(CRD_PACKAGE_DIR)/crds/hub/
+	cp -L charts/member-agent/templates/crds/*.yaml $(CRD_PACKAGE_DIR)/crds/member/
+	tar -czf $(CRD_PACKAGE_DIR)/$(CRD_PACKAGE_NAME).tgz -C $(CRD_PACKAGE_DIR) crds
+	cd $(CRD_PACKAGE_DIR) && $(SHA256SUM) $(CRD_PACKAGE_NAME).tgz > $(CRD_PACKAGE_NAME).tgz.sha256
+	@echo "Packaged CRDs into $(CRD_PACKAGE_DIR)/$(CRD_PACKAGE_NAME).tgz"
+
+.PHONY: crd-verify
+crd-verify: ## Verify the chart CRD directories cover every CRD in config/crd/bases; note (chenyu1): kubefleet.dev CRDs are ignored for now until the implementation is completed.
+	@bases="$$(mktemp)"; charts="$$(mktemp)"; \
+	ls config/crd/bases/ | grep -v '^placement\.kubefleet\.dev' | sort > "$$bases"; \
+	{ ls charts/hub-agent/templates/crds/; ls charts/member-agent/templates/crds/; } | sort > "$$charts"; \
+	missing="$$(comm -3 "$$bases" "$$charts")"; \
+	rm -f "$$bases" "$$charts"; \
+	if [ -n "$$missing" ]; then \
+		echo "ERROR: chart CRD directories are out of sync with config/crd/bases."; \
+		echo "Left column = only in config/crd/bases; right column = only in the charts:"; \
+		echo "$$missing"; \
+		echo "If you added a CRD, symlink it into charts/hub-agent/templates/crds/ or charts/member-agent/templates/crds/."; \
+		exit 1; \
+	fi; \
+	echo "crd-verify: chart CRD directories cover all CRDs in config/crd/bases"
 
 # By default, docker buildx create will pull image moby/buildkit:buildx-stable-1 and hit the too many requests error
 #

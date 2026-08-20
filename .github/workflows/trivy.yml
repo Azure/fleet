@@ -21,7 +21,7 @@ env:
   MEMBER_AGENT_IMAGE_NAME: member-agent
   REFRESH_TOKEN_IMAGE_NAME: refresh-token
 
-  GO_VERSION: '1.25.12'
+  GO_VERSION: '1.26.6'
 
 jobs:
   export-registry:
@@ -42,15 +42,15 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - name: Set up Go ${{ env.GO_VERSION }}
-        uses: actions/setup-go@4a3601121dd01d1626a1e23e37211e3254c1c06c # v6
+        uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7
         with:
           go-version: ${{ env.GO_VERSION }}
 
       - name: Checkout code
-        uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
 
       - name: Login to ${{ env.REGISTRY }}
-        uses: docker/login-action@650006c6eb7dba73a995cc03b0b2d7f5ca915bee
+        uses: docker/login-action@dbcb813823bdd20940b903addbd779551569679f
         with:
           registry: ${{ env.REGISTRY }}
           username: ${{ github.actor }}
@@ -81,7 +81,7 @@ jobs:
         env:
           TRIVY_USERNAME: ${{ github.actor }}
           TRIVY_PASSWORD: ${{ secrets.GITHUB_TOKEN }}
-          TRIVY_DB_REPOSITORY: mcr.microsoft.com/mirror/ghcr/aquasecurity/trivy-db
+          TRIVY_DB_REPOSITORY: mcr.microsoft.com/oss/v2/aquasecurity/trivy-db
 
       - name: Scan ${{ env.REGISTRY }}/${{ env.MEMBER_AGENT_IMAGE_NAME }}:${{ env.IMAGE_VERSION }}
         uses: aquasecurity/trivy-action@ed142fd0673e97e23eac54620cfb913e5ce36c25 # v0.36.0
@@ -96,7 +96,7 @@ jobs:
         env:
           TRIVY_USERNAME: ${{ github.actor }}
           TRIVY_PASSWORD: ${{ secrets.GITHUB_TOKEN }}
-          TRIVY_DB_REPOSITORY: mcr.microsoft.com/mirror/ghcr/aquasecurity/trivy-db
+          TRIVY_DB_REPOSITORY: mcr.microsoft.com/oss/v2/aquasecurity/trivy-db
 
       - name: Scan ${{ env.REGISTRY }}/${{ env.REFRESH_TOKEN_IMAGE_NAME }}:${{ env.IMAGE_VERSION }}
         uses: aquasecurity/trivy-action@ed142fd0673e97e23eac54620cfb913e5ce36c25 # v0.36.0
@@ -111,7 +111,7 @@ jobs:
         env:
           TRIVY_USERNAME: ${{ github.actor }}
           TRIVY_PASSWORD: ${{ secrets.GITHUB_TOKEN }}
-          TRIVY_DB_REPOSITORY: mcr.microsoft.com/mirror/ghcr/aquasecurity/trivy-db
+          TRIVY_DB_REPOSITORY: mcr.microsoft.com/oss/v2/aquasecurity/trivy-db
 
       - name: Check for vulnerabilities
         id: check-vulns
@@ -175,13 +175,15 @@ jobs:
             echo 'EOF'
           } >> "$GITHUB_OUTPUT"
 
-      - name: Create issue for Copilot
+      - name: Create or update security issue
         if: steps.check-vulns.outputs.has_vulns == 'true' && github.event_name == 'schedule'
-        uses: actions/github-script@v7
+        uses: actions/github-script@v9
         with:
           script: |
             const today = new Date().toISOString().split('T')[0];
             const title = `fix: address trivy CVEs found on ${today}`;
+            const securityTeam = '@kubefleet-dev/kubefleet-secops';
+            const body = `${process.env.ISSUE_BODY}\n\n### Security owners\n${securityTeam}`;
 
             // Check if an open issue already exists for today
             const existing = await github.rest.issues.listForRepo({
@@ -191,22 +193,23 @@ jobs:
               labels: 'security,trivy',
               per_page: 100
             });
-            const alreadyExists = existing.data.some(i => i.title === title);
-            if (alreadyExists) {
-              console.log('Issue already exists for today, skipping.');
-              return;
+            const issue = existing.data.find(i => i.title === title);
+            if (issue) {
+              await github.rest.issues.update({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                issue_number: issue.number,
+                body: body
+              });
+              console.log('Updated the existing issue with the current scan and security team mention.');
+            } else {
+              await github.rest.issues.create({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                title: title,
+                body: body,
+                labels: ['security', 'trivy']
+              });
             }
-
-            const body = process.env.ISSUE_BODY;
-            const issue = await github.rest.issues.create({
-              owner: context.repo.owner,
-              repo: context.repo.repo,
-              title: title,
-              body: body + '\n\n/cc @kubefleet-dev/kubefleet-secops',
-              labels: ['security', 'trivy'],
-              assignees: ['copilot'],
-            });
-            console.log(`Created issue #${issue.data.number}`);
         env:
           ISSUE_BODY: ${{ steps.vuln-summary.outputs.body }}
-

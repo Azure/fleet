@@ -150,13 +150,16 @@ func (r *Reconciler) Reconcile(ctx context.Context, req controllerruntime.Reques
 		}
 	}
 
-	workUpdated := false
-	overrideSucceeded := false
+	// result must be allocated before listing the works so that if listing fails (and syncAllWork
+	// is never called), the existing status outcome is preserved: the list failure is reported on
+	// the Overridden condition and no Work is reported as changed.
+	result := &syncResult{overrideFailed: true}
 	// list all the corresponding works
 	works, syncErr := r.listAllWorksAssociated(ctx, resourceBinding)
 	if syncErr == nil {
-		// generate and apply the workUpdated works if we have all the works
-		overrideSucceeded, workUpdated, syncErr = r.syncAllWork(ctx, resourceBinding, works, &cluster)
+		// generate and apply the works if we have all the works.
+		// syncAllWork always returns a non-nil result, even on error.
+		result, syncErr = r.syncAllWork(ctx, resourceBinding, works, &cluster)
 	}
 	// Reset the conditions and failed/drifted/diffed placements.
 	for i := condition.OverriddenCondition; i < condition.TotalCondition; i++ {
@@ -165,7 +168,7 @@ func (r *Reconciler) Reconcile(ctx context.Context, req controllerruntime.Reques
 	resourceBinding.GetBindingStatus().FailedPlacements = nil
 	resourceBinding.GetBindingStatus().DriftedPlacements = nil
 	resourceBinding.GetBindingStatus().DiffedPlacements = nil
-	if overrideSucceeded {
+	if !result.overrideFailed {
 		overrideReason := condition.OverriddenSucceededReason
 		overrideMessage := "Successfully applied the override rules on the resources"
 		if len(resourceBinding.GetBindingSpec().ClusterResourceOverrideSnapshots) == 0 &&
@@ -191,7 +194,7 @@ func (r *Reconciler) Reconcile(ctx context.Context, req controllerruntime.Reques
 		if err := errors.Unwrap(syncErr); err != nil && len(err.Error()) > 2 {
 			errorMessage = errorMessage[len(err.Error())+2:]
 		}
-		if !overrideSucceeded {
+		if result.overrideFailed {
 			resourceBinding.SetConditions(metav1.Condition{
 				Status:             metav1.ConditionFalse,
 				Type:               string(fleetv1beta1.ResourceBindingOverridden),
@@ -217,7 +220,7 @@ func (r *Reconciler) Reconcile(ctx context.Context, req controllerruntime.Reques
 			Message:            "All of the works are synchronized to the latest",
 		})
 		switch {
-		case !workUpdated:
+		case !result.workUpdated:
 			// The Work object itself is unchanged; refresh the cluster resource binding status
 			// based on the status information reported on the Work object(s).
 			setBindingStatus(works, resourceBinding)
@@ -411,11 +414,20 @@ func (r *Reconciler) listAllWorksAssociated(ctx context.Context, resourceBinding
 	return currentWork, nil
 }
 
-// syncAllWork generates all the work for the resourceSnapshot and apply them to the corresponding target cluster.
-// it returns
-// 1: if we apply the overrides successfully
-// 2: if we actually made any changes on the hub cluster
-func (r *Reconciler) syncAllWork(ctx context.Context, resourceBinding fleetv1beta1.BindingObj, existingWorks map[string]*fleetv1beta1.Work, cluster *clusterv1beta1.MemberCluster) (bool, bool, error) {
+// syncResult captures the outcome of a syncAllWork call.
+type syncResult struct {
+	// overrideFailed reports whether a sync error should fail the binding's Overridden condition.
+	// It is false when syncAllWork succeeds.
+	overrideFailed bool
+	// workUpdated reports whether any Work object was actually changed on the hub cluster.
+	workUpdated bool
+}
+
+// syncAllWork generates all the work for the resourceSnapshot and applies them to the corresponding target cluster.
+//
+// The returned syncResult is always non-nil, including on error paths, so the caller can safely
+// inspect its fields regardless of the returned error. See syncResult for the meaning of each field.
+func (r *Reconciler) syncAllWork(ctx context.Context, resourceBinding fleetv1beta1.BindingObj, existingWorks map[string]*fleetv1beta1.Work, cluster *clusterv1beta1.MemberCluster) (*syncResult, error) {
 	updateAny := atomic.NewBool(false)
 	resourceBindingRef := klog.KObj(resourceBinding)
 
@@ -441,17 +453,17 @@ func (r *Reconciler) syncAllWork(ctx context.Context, resourceBinding fleetv1bet
 		})
 	}
 	if updateErr := errs.Wait(); updateErr != nil {
-		return false, false, updateErr
+		return &syncResult{overrideFailed: true}, updateErr
 	}
 
 	// the hash256 function can handle empty list https://go.dev/play/p/_4HW17fooXM
 	resourceOverrideSnapshotHash, err := resource.HashOf(resourceBinding.GetBindingSpec().ResourceOverrideSnapshots)
 	if err != nil {
-		return false, false, controller.NewUnexpectedBehaviorError(err)
+		return &syncResult{overrideFailed: true}, controller.NewUnexpectedBehaviorError(err)
 	}
 	clusterResourceOverrideSnapshotHash, err := resource.HashOf(resourceBinding.GetBindingSpec().ClusterResourceOverrideSnapshots)
 	if err != nil {
-		return false, false, controller.NewUnexpectedBehaviorError(err)
+		return &syncResult{overrideFailed: true}, controller.NewUnexpectedBehaviorError(err)
 	}
 	// TODO: check all work synced first before fetching the snapshots after we put ParentResourceOverrideSnapshotHashAnnotation and ParentClusterResourceOverrideSnapshotHashAnnotation in all the work objects
 
@@ -462,22 +474,30 @@ func (r *Reconciler) syncAllWork(ctx context.Context, resourceBinding fleetv1bet
 			// the resourceIndex is deleted but the works might still be up to date with the binding.
 			if areAllWorkSynced(existingWorks, resourceBinding, resourceOverrideSnapshotHash, clusterResourceOverrideSnapshotHash) {
 				klog.V(2).InfoS("All the works are synced with the resourceBinding even if the resource snapshot index is removed", "resourceBinding", resourceBindingRef)
-				return true, updateAny.Load(), nil
+				return &syncResult{workUpdated: updateAny.Load()}, nil
 			}
-			return false, false, controller.NewUserError(err)
+			return &syncResult{overrideFailed: true}, controller.NewUserError(err)
 		}
 		// TODO(RZ): handle errResourceNotFullyCreated error so we don't need to wait for all the snapshots to be created
-		return false, false, err
+		return &syncResult{overrideFailed: true}, err
 	}
 
 	croMap, err := r.fetchClusterResourceOverrideSnapshots(ctx, resourceBinding)
 	if err != nil {
-		return false, false, err
+		return &syncResult{overrideFailed: true}, err
 	}
 
 	roMap, err := r.fetchResourceOverrideSnapshots(ctx, resourceBinding)
 	if err != nil {
-		return false, false, err
+		return &syncResult{overrideFailed: true}, err
+	}
+
+	// Assemble the override inputs once so the snapshots are fetched a single time per sync
+	// and threaded down as one value rather than as three separate parameters.
+	overrideCtx := &overrideContext{
+		cluster: cluster,
+		croMap:  croMap,
+		roMap:   roMap,
 	}
 
 	// issue all the create/update requests for the corresponding works for each snapshot in parallel
@@ -489,39 +509,31 @@ func (r *Reconciler) syncAllWork(ctx context.Context, resourceBinding fleetv1bet
 		workNamePrefix, err := getWorkNamePrefixFromSnapshotName(snapshot)
 		if err != nil {
 			klog.ErrorS(err, "Encountered a mal-formatted resource snapshot", "resourceSnapshot", klog.KObj(snapshot))
-			return false, false, err
+			return &syncResult{overrideFailed: true}, err
 		}
 		var simpleManifests []fleetv1beta1.Manifest
 		var newWork []*fleetv1beta1.Work
 		selectedRes := snapshot.GetResourceSnapshotSpec().SelectedResources
 		for j := range selectedRes {
 			selectedResource := selectedRes[j].DeepCopy()
-			// TODO: apply the override rules on the envelope resources by applying them on the work instead of the selected resource
-			resourceDeleted, overrideErr := r.applyOverrides(selectedResource, cluster, croMap, roMap)
-			if overrideErr != nil {
-				return false, false, overrideErr
-			}
-			if resourceDeleted {
-				klog.V(2).InfoS("The resource is deleted by the override rules", "snapshot", klog.KObj(snapshot), "selectedResource", selectedRes[j])
-				continue
-			}
 
 			// Process the selected resource.
 			//
 			// Specifically,
-			// a) if the selected resource is an envelope (configMap-based or envelope-based; the former will soon
-			//    become obsolete), we will create a work object dedicated for the envelope;
-			// b) otherwise (the selected resource is a regular resource), the resource will be appended to the list of
-			//    simple manifests.
+			// a) if the selected resource is an envelope CR, we will create a work object dedicated for the
+			//    envelope and apply overrides to its extracted manifests;
+			// b) otherwise (the selected resource is a regular resource), overrides are applied directly and the
+			//    resource will be appended to the list of simple manifests unless deleted by override.
 			//
 			// Note (chenyu1): this method is added to reduce the cyclomatic complexity of the syncAllWork method.
-			newWork, simpleManifests, err = r.processOneSelectedResource(
-				ctx, selectedResource, resourceBinding, snapshot,
+			var overrideFailed bool
+			newWork, simpleManifests, overrideFailed, err = r.processOneSelectedResource(
+				ctx, selectedResource, overrideCtx, resourceBinding, snapshot,
 				workNamePrefix, resourceOverrideSnapshotHash, clusterResourceOverrideSnapshotHash,
 				activeWork, newWork, simpleManifests)
 			if err != nil {
 				klog.ErrorS(err, "Failed to process the selected resource", "snapshot", klog.KObj(snapshot), "selectedResourceIdx", j)
-				return true, false, err
+				return &syncResult{overrideFailed: overrideFailed}, err
 			}
 		}
 		if len(simpleManifests) == 0 {
@@ -571,31 +583,45 @@ func (r *Reconciler) syncAllWork(ctx context.Context, resourceBinding fleetv1bet
 
 	// wait for all the create/update/delete requests to finish
 	if updateErr := errs.Wait(); updateErr != nil {
-		return true, false, updateErr
+		return &syncResult{}, updateErr
 	}
 	klog.V(2).InfoS("Successfully synced all the work associated with the resourceBinding", "updateAny", updateAny.Load(), "resourceBinding", resourceBindingRef)
-	return true, updateAny.Load(), nil
+	return &syncResult{workUpdated: updateAny.Load()}, nil
+}
+
+// overrideContext carries the inputs needed to apply overrides to a resource: the target
+// cluster and the override snapshots that apply to the binding, keyed by the resource each
+// selector targets. It is assembled once per sync so the snapshots are fetched only once and
+// threaded down the call stack as a single value.
+type overrideContext struct {
+	cluster *clusterv1beta1.MemberCluster
+	croMap  map[fleetv1beta1.ResourceIdentifier][]*fleetv1beta1.ClusterResourceOverrideSnapshot
+	roMap   map[fleetv1beta1.ResourceIdentifier][]*fleetv1beta1.ResourceOverrideSnapshot
 }
 
 // processOneSelectedResource processes a single selected resource from the resource snapshot.
 //
 // If the selected resource is an envelope (either configMap-based or envelope-based), create a new dedicated
 // work object for the envelope. Otherwise, append the selected resource to the list of simple manifests.
+//
+// The returned bool reports an override failure (used to fail the binding's Overridden condition);
+// it is only meaningful when the returned error is non-nil and is always false on success.
 func (r *Reconciler) processOneSelectedResource(
 	ctx context.Context,
 	selectedResource *fleetv1beta1.ResourceContent,
+	overrideCtx *overrideContext,
 	resourceBinding fleetv1beta1.BindingObj,
 	snapshot fleetv1beta1.ResourceSnapshotObj,
 	workNamePrefix, resourceOverrideSnapshotHash, clusterResourceOverrideSnapshotHash string,
 	activeWork map[string]*fleetv1beta1.Work,
 	newWork []*fleetv1beta1.Work,
 	simpleManifests []fleetv1beta1.Manifest,
-) ([]*fleetv1beta1.Work, []fleetv1beta1.Manifest, error) {
+) ([]*fleetv1beta1.Work, []fleetv1beta1.Manifest, bool, error) {
 	// Unmarshal the YAML content into an unstructured object.
 	var uResource unstructured.Unstructured
 	if unMarshallErr := uResource.UnmarshalJSON(selectedResource.Raw); unMarshallErr != nil {
 		klog.ErrorS(unMarshallErr, "work has invalid content", "snapshot", klog.KObj(snapshot), "selectedResource", selectedResource.Raw)
-		return nil, nil, controller.NewUnexpectedBehaviorError(unMarshallErr)
+		return nil, nil, false, controller.NewUnexpectedBehaviorError(unMarshallErr)
 	}
 
 	uGVK := uResource.GetObjectKind().GroupVersionKind().GroupKind()
@@ -608,15 +634,15 @@ func (r *Reconciler) processOneSelectedResource(
 				"clusterResourceBinding", klog.KObj(resourceBinding),
 				"clusterResourceSnapshot", klog.KObj(snapshot),
 				"selectedResource", klog.KObj(&uResource))
-			return nil, nil, controller.NewUnexpectedBehaviorError(err)
+			return nil, nil, false, controller.NewUnexpectedBehaviorError(err)
 		}
-		work, err := r.createOrUpdateEnvelopeCRWorkObj(ctx, &clusterResourceEnvelope, workNamePrefix, resourceBinding, snapshot, resourceOverrideSnapshotHash, clusterResourceOverrideSnapshotHash)
+		work, overrideFailed, err := r.createOrUpdateEnvelopeCRWorkObj(ctx, &clusterResourceEnvelope, workNamePrefix, resourceBinding, snapshot, overrideCtx, resourceOverrideSnapshotHash, clusterResourceOverrideSnapshotHash)
 		if err != nil {
 			klog.ErrorS(err, "Failed to create or get the work object for the ClusterResourceEnvelope",
 				"clusterResourceEnvelope", klog.KObj(&clusterResourceEnvelope),
 				"clusterResourceBinding", klog.KObj(resourceBinding),
 				"clusterResourceSnapshot", klog.KObj(snapshot))
-			return nil, nil, err
+			return nil, nil, overrideFailed, err
 		}
 		activeWork[work.Name] = work
 		newWork = append(newWork, work)
@@ -628,25 +654,34 @@ func (r *Reconciler) processOneSelectedResource(
 				"clusterResourceBinding", klog.KObj(resourceBinding),
 				"clusterResourceSnapshot", klog.KObj(snapshot),
 				"selectedResource", klog.KObj(&uResource))
-			return nil, nil, controller.NewUnexpectedBehaviorError(err)
+			return nil, nil, false, controller.NewUnexpectedBehaviorError(err)
 		}
-		work, err := r.createOrUpdateEnvelopeCRWorkObj(ctx, &resourceEnvelope, workNamePrefix, resourceBinding, snapshot, resourceOverrideSnapshotHash, clusterResourceOverrideSnapshotHash)
+		work, overrideFailed, err := r.createOrUpdateEnvelopeCRWorkObj(ctx, &resourceEnvelope, workNamePrefix, resourceBinding, snapshot, overrideCtx, resourceOverrideSnapshotHash, clusterResourceOverrideSnapshotHash)
 		if err != nil {
 			klog.ErrorS(err, "Failed to create or get the work object for the ResourceEnvelope",
 				"resourceEnvelope", klog.KObj(&resourceEnvelope),
 				"clusterResourceBinding", klog.KObj(resourceBinding),
 				"clusterResourceSnapshot", klog.KObj(snapshot))
-			return nil, nil, err
+			return nil, nil, overrideFailed, err
 		}
 		activeWork[work.Name] = work
 		newWork = append(newWork, work)
 
 	default:
+		resourceDeleted, overrideErr := r.applyOverrides(selectedResource, overrideCtx.cluster, overrideCtx.croMap, overrideCtx.roMap)
+		if overrideErr != nil {
+			return nil, nil, true, overrideErr
+		}
+		if resourceDeleted {
+			klog.V(2).InfoS("The resource is deleted by the override rules", "snapshot", klog.KObj(snapshot), "selectedResource", selectedResource)
+			return newWork, simpleManifests, false, nil
+		}
+
 		// The resource is not an envelope; add it to the list of simple manifests.
 		simpleManifests = append(simpleManifests, fleetv1beta1.Manifest(*selectedResource))
 	}
 
-	return newWork, simpleManifests, nil
+	return newWork, simpleManifests, false, nil
 }
 
 // syncApplyStrategy syncs the apply strategy specified on a binding object

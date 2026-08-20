@@ -50,6 +50,7 @@ Examples of unacceptable behavior include but are not limited to:
 * Other conduct which could reasonably be considered inappropriate in a professional setting
 
 The following behaviors are also prohibited:
+
 * Providing knowingly false or misleading information in connection with a Code of Conduct investigation or otherwise intentionally tampering with an investigation.
 * Retaliating against a person because they reported an incident or provided information about an incident as a witness.
 
@@ -65,7 +66,7 @@ permanently removed from the project team.
 ## Reporting
 
 Report abusive, harassing, or otherwise unacceptable behaviors in the KubeFleet community
-to the project team at [kubefleet-maintainers@googlegroups.com](mailto:kubefleet-maintainers@googlegroups.com).
+to the [KubeFleet maintainers](mailto:kubefleet@microsoft.com).
 All reports will be thoroughly reviewed and investigated, and a response will be prepared,
 as appropriate.
 

@@ -1,0 +1,132 @@
+# This example shows overrides targeting resources inside envelope objects.
+# Fleet places the unpacked inner manifests on member clusters, not the envelope wrappers.
+---
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: app
+---
+apiVersion: placement.kubernetes-fleet.io/v1beta1
+kind: ResourceEnvelope
+metadata:
+  name: ingress
+  namespace: app
+data:
+  "deploy.yaml":
+    apiVersion: apps/v1
+    kind: Deployment
+    metadata:
+      name: ingress
+      namespace: app
+    spec:
+      replicas: 1
+      selector:
+        matchLabels:
+          app: nginx
+      template:
+        metadata:
+          labels:
+            app: nginx
+        spec:
+          containers:
+          - name: web
+            image: nginx
+---
+apiVersion: placement.kubernetes-fleet.io/v1beta1
+kind: ResourcePlacement
+metadata:
+  name: ingress
+  namespace: app
+spec:
+  resourceSelectors:
+  - group: placement.kubernetes-fleet.io
+    kind: ResourceEnvelope
+    name: ingress
+    version: v1beta1
+  policy:
+    placementType: PickAll
+  strategy:
+    type: RollingUpdate
+---
+apiVersion: placement.kubernetes-fleet.io/v1beta1
+kind: ResourceOverride
+metadata:
+  name: ingress-replicas
+  namespace: app
+spec:
+  placement:
+    name: ingress
+    scope: Namespaced
+  # This selector matches the inner Deployment in the ResourceEnvelope above.
+  # It does not target the ResourceEnvelope wrapper or a /data/... path.
+  resourceSelectors:
+  - group: apps
+    kind: Deployment
+    name: ingress
+    version: v1
+  policy:
+    overrideRules:
+    - clusterSelector:
+        clusterSelectorTerms:
+        - labelSelector:
+            matchLabels:
+              env: canary
+      jsonPatchOverrides:
+      - op: replace
+        path: /spec/replicas
+        value: 3
+---
+apiVersion: placement.kubernetes-fleet.io/v1beta1
+kind: ClusterResourceEnvelope
+metadata:
+  name: reader-role
+data:
+  "clusterrole.yaml":
+    apiVersion: rbac.authorization.k8s.io/v1
+    kind: ClusterRole
+    metadata:
+      name: pod-reader
+    rules:
+    - apiGroups: [""]
+      resources: ["pods"]
+      verbs: ["get", "list"]
+---
+apiVersion: placement.kubernetes-fleet.io/v1beta1
+kind: ClusterResourcePlacement
+metadata:
+  name: reader-role
+spec:
+  resourceSelectors:
+  - group: placement.kubernetes-fleet.io
+    kind: ClusterResourceEnvelope
+    name: reader-role
+    version: v1beta1
+  policy:
+    placementType: PickAll
+  strategy:
+    type: RollingUpdate
+---
+apiVersion: placement.kubernetes-fleet.io/v1beta1
+kind: ClusterResourceOverride
+metadata:
+  name: pod-reader-extra-verb
+spec:
+  placement:
+    name: reader-role
+  # This selector matches the inner ClusterRole, not the ClusterResourceEnvelope wrapper.
+  clusterResourceSelectors:
+  - group: rbac.authorization.k8s.io
+    kind: ClusterRole
+    name: pod-reader
+    version: v1
+  policy:
+    overrideRules:
+    - clusterSelector:
+        clusterSelectorTerms:
+        - labelSelector:
+            matchLabels:
+              env: canary
+      jsonPatchOverrides:
+      - op: add
+        path: /rules/0/verbs/-
+        value: watch

@@ -35,9 +35,9 @@ You can reach the KubeFleet community and developers via the following channels:
 
 ## Community Meetings
 
-March 2026: we're currently revamping our community call schedule and will have more to share soon.
+We aim to hold one meeting per month. Community meetings for US/EU and APAC/India communities happen in alternate months.
 
-Future plans will land on our [community repository](https://github.com/kubefleet-dev/community).
+Please refer to the [calendar](https://zoom-lfx.platform.linuxfoundation.org/meetings/kubefleet?view=month) for the latest schedule.
 
 <!--
 We host bi-weekly community meetings that alternate between US/EU and APAC friendly time. In these sessions the community will showcase demos and discuss the current and future state of the project.

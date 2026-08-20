@@ -24,14 +24,30 @@ env:
 jobs:
     export:
         runs-on: ubuntu-latest
+        # Validates an input and writes step outputs; it touches no GitHub API,
+        # so it needs no token. Without this it inherits the caller's
+        # permissions, and chart.yml calls it with contents/packages write.
+        permissions: {}
         outputs:
             registry: ${{ steps.setup.outputs.registry }}
             tag: ${{ steps.setup.outputs.tag }}
             version: ${{ steps.setup.outputs.version }}
         steps:
             - id: setup
+              # The tag arrives as an environment variable rather than being
+              # interpolated into the script body: `TAG="${{ inputs.tag }}"`
+              # expands the value in the shell before the validation below can
+              # reject it. Both callers are affected, not just the
+              # workflow_dispatch input - backticks and $(...) are legal in git
+              # ref names and still match the v*.*.* push filter. Reaching
+              # either needs repository write access, so this is defence in
+              # depth, but the outputs below are interpolated into shell by
+              # every downstream job, which makes the regex the trust boundary
+              # for all of them.
+              env:
+                  RELEASE_TAG: ${{ inputs.tag }}
               run: |
-                  TAG="${{ inputs.tag }}"
+                  TAG="${RELEASE_TAG}"
                   if [[ ! "${TAG}" =~ ^v[0-9]+\.[0-9]+\.[0-9]+(-rc\.[0-9]+)?$ ]]; then
                     echo "Error: Invalid release tag '${TAG}'. Expected format: vMAJOR.MINOR.PATCH or vMAJOR.MINOR.PATCH-rc.N"
                     exit 1

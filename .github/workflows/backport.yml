@@ -1,0 +1,189 @@
+name: Backport
+
+# Opens a backport pull request against `release-0.Y` when a merged pull
+# request carries a `cherry-pick/0.Y` label. The label can be added before or
+# after the merge; adding it to an already-merged PR triggers the backport
+# immediately.
+#
+# Policy (see also CONTRIBUTING.md, "Backporting to release branches"):
+#
+#   * Squash merges only. The automation cherry-picks the single squash commit
+#     recorded as the PR's merge commit. A PR merged with a merge commit, or a
+#     multi-commit PR merged by rebase, is NOT backported automatically - the
+#     workflow leaves a comment asking for a manual backport instead. This repo
+#     squash-merges by convention, so this only matters for exceptions.
+#
+#   * Conflicts are never pushed. If the cherry-pick does not apply cleanly the
+#     workflow aborts the pick and comments on the original PR with the exact
+#     commands for a manual backport. It never opens a PR containing conflict
+#     markers.
+#
+#   * Backport branches are bot-owned and force-pushed. The automation owns
+#     `cherry-pick/0.Y/pr-<N>` branches and force-pushes them on re-runs so the
+#     operation is idempotent (re-labeling retries a failed backport). Do not
+#     push manual work to these branches; use your own branch for manual
+#     backports.
+#
+# The cherry-pick keeps the original commit message, including the author's
+# Signed-off-by line (DCO), and appends the "(cherry picked from commit ...)"
+# trailer via `git cherry-pick -x`.
+#
+# NOTE: pull_request_target grants a write token, so this workflow must never
+# check out or execute code from the PR. It only manipulates git history
+# (cherry-pick of an already-merged commit) and calls the GitHub API. All
+# PR-controlled strings (title, label names) are passed through environment
+# variables, never interpolated into shell text.
+
+on:
+  pull_request_target:
+    types: [closed, labeled]
+
+permissions:
+  contents: write
+  pull-requests: write
+
+# One backport run per PR at a time: a `closed` event and a late `labeled`
+# event for the same PR must not race on the same bot branch.
+concurrency:
+  group: backport-${{ github.event.pull_request.number }}
+  cancel-in-progress: false
+
+jobs:
+  backport:
+    # Run only for merged PRs, and only when the event can introduce a
+    # cherry-pick label: the merge itself, or a cherry-pick/* label added
+    # to an already-merged PR.
+    if: >
+      github.event.pull_request.merged == true &&
+      (github.event.action == 'closed' ||
+       startsWith(github.event.label.name, 'cherry-pick/'))
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout base repository
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          # Full history: the merge commit and the release branches must both
+          # be reachable for the cherry-pick.
+          fetch-depth: 0
+          # Deliberately the default ref (base repo main), never the PR head.
+          persist-credentials: true
+
+      - name: Cherry-pick to release branches
+        env:
+          GH_TOKEN: ${{ github.token }}
+          PR_NUMBER: ${{ github.event.pull_request.number }}
+          MERGE_SHA: ${{ github.event.pull_request.merge_commit_sha }}
+          EVENT_ACTION: ${{ github.event.action }}
+          EVENT_LABEL: ${{ github.event.label.name || '' }}
+          REPO: ${{ github.repository }}
+        run: |
+          set -euo pipefail
+
+          # Commit as the github-actions[bot] app user so backport commits are
+          # attributed to the automation (the original author and their DCO
+          # sign-off are preserved by the cherry-pick). The user ID is resolved
+          # from the API so the noreply address is provably correct; on API
+          # failure fall back to the app user's long-stable known ID. Note that
+          # gh prints the error body to stdout on failure, hence the numeric
+          # guard rather than a plain `|| echo`.
+          bot_id="$(gh api 'users/github-actions%5Bbot%5D' --jq .id 2>/dev/null || true)"
+          case "${bot_id}" in
+            ''|*[!0-9]*) bot_id=41898282 ;;
+          esac
+          git config user.name "github-actions[bot]"
+          git config user.email "${bot_id}+github-actions[bot]@users.noreply.github.com"
+
+          # Collect the cherry-pick labels to act on: just the added label for
+          # a `labeled` event, every cherry-pick label on the PR for `closed`.
+          if [ "${EVENT_ACTION}" = "labeled" ]; then
+            labels="${EVENT_LABEL}"
+          else
+            labels="$(gh api "repos/${REPO}/issues/${PR_NUMBER}/labels" \
+              --jq '.[].name | select(startswith("cherry-pick/"))')"
+          fi
+          if [ -z "${labels}" ]; then
+            echo "No cherry-pick/* labels on PR #${PR_NUMBER}; nothing to do."
+            exit 0
+          fi
+
+          comment() {
+            gh pr comment "${PR_NUMBER}" --repo "${REPO}" --body "$1"
+          }
+
+          # Backport only squash commits (single parent) whose subject carries
+          # this PR's number - the shape every squash-merged PR in this repo
+          # has. This rejects merge commits outright and refuses to guess on
+          # rebase-merged multi-commit PRs, where picking only the merge SHA
+          # would silently drop the earlier commits.
+          parent_count="$(git rev-list --parents -n 1 "${MERGE_SHA}" | wc -w)"
+          subject="$(git log --format=%s -n 1 "${MERGE_SHA}")"
+          if [ "${parent_count}" -ne 2 ] || ! grep -q "(#${PR_NUMBER})" <<<"${subject}"; then
+            comment ":no_entry: Automatic backport skipped: PR #${PR_NUMBER} was not squash-merged (or its merge commit does not reference the PR), so the merge commit cannot be cherry-picked safely. Please backport manually."
+            exit 0
+          fi
+
+          mapfile -t label_list <<<"${labels}"
+          failed=""
+          for label in "${label_list[@]}"; do
+            [ -n "${label}" ] || continue
+            minor="${label#cherry-pick/}"
+            target="release-${minor}"
+            bot_branch="cherry-pick/${minor}/pr-${PR_NUMBER}"
+
+            # Soft-fail (comment, but keep the run green): labels may
+            # legitimately be applied before the release branch is cut; the
+            # backport is picked up by re-adding the label once it exists.
+            if ! git rev-parse --verify --quiet "origin/${target}" >/dev/null; then
+              comment ":no_entry: Backport to \`${target}\` skipped: the branch does not exist. If the \`${label}\` label is correct, create the release branch first and re-add the label to retry."
+              continue
+            fi
+
+            echo "Backporting ${MERGE_SHA} to ${target} (label: ${label})"
+            git switch --force-create "${bot_branch}" "origin/${target}"
+
+            if ! git cherry-pick -x "${MERGE_SHA}"; then
+              git cherry-pick --abort || true
+              comment ":warning: Backport to \`${target}\` failed: the cherry-pick has conflicts. Please backport manually:
+
+          \`\`\`
+          git fetch origin
+          git switch -c backport-${PR_NUMBER}-to-${target} origin/${target}
+          git cherry-pick -x ${MERGE_SHA}
+          # resolve conflicts, then
+          git cherry-pick --continue
+          git push origin backport-${PR_NUMBER}-to-${target}
+          \`\`\`
+
+          Re-adding the \`${label}\` label retries the automatic backport."
+              failed="true"
+              continue
+            fi
+
+            # Bot-owned branch: force-push so retries are idempotent.
+            git push --force origin "${bot_branch}"
+
+            # Reuse the open backport PR for this branch if one exists.
+            existing="$(gh pr list --repo "${REPO}" --head "${bot_branch}" \
+              --base "${target}" --state open --json number --jq '.[0].number // empty')"
+            if [ -n "${existing}" ]; then
+              echo "Backport PR #${existing} already open for ${bot_branch}; branch updated."
+              continue
+            fi
+
+            # Suffix the target rather than prefixing it: PR-title lint runs on
+            # backport PRs too and requires the conventional prefix (feat:,
+            # fix:, ...) at the start of the title.
+            title="$(gh pr view "${PR_NUMBER}" --repo "${REPO}" --json title --jq .title)"
+            url="$(gh pr create --repo "${REPO}" \
+              --base "${target}" --head "${bot_branch}" \
+              --title "${title} [backport ${target}]" \
+              --body "Automated cherry-pick of #${PR_NUMBER} to \`${target}\`, requested via the \`${label}\` label.
+
+          > [!NOTE]
+          > Workflows do not run automatically on PRs opened by github-actions; a maintainer may need to close and reopen this PR (or push an empty commit) to trigger CI.")"
+            comment ":cherries: Backport to \`${target}\` opened: ${url}"
+          done
+
+          if [ -n "${failed}" ]; then
+            exit 1
+          fi

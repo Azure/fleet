@@ -18,6 +18,7 @@ package overrider
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"testing"
@@ -53,6 +54,110 @@ func serviceScheme(t *testing.T) *runtime.Scheme {
 	return scheme
 }
 
+func clusterResourceSnapshotForTest(resources ...placementv1beta1.ResourceContent) *placementv1beta1.ClusterResourceSnapshot {
+	return &placementv1beta1.ClusterResourceSnapshot{
+		ObjectMeta: metav1.ObjectMeta{
+			Name: fmt.Sprintf(placementv1beta1.ResourceSnapshotNameFmt, crpName, 0),
+			Labels: map[string]string{
+				placementv1beta1.ResourceIndexLabel:     "0",
+				placementv1beta1.PlacementTrackingLabel: crpName,
+			},
+			Annotations: map[string]string{
+				placementv1beta1.ResourceGroupHashAnnotation:         "abc",
+				placementv1beta1.NumberOfResourceSnapshotsAnnotation: "1",
+			},
+		},
+		Spec: placementv1beta1.ResourceSnapshotSpec{
+			SelectedResources: resources,
+		},
+	}
+}
+
+func resourceEnvelopeContentForTest(t *testing.T, namespace, name string, data map[string]string) placementv1beta1.ResourceContent {
+	t.Helper()
+	return envelopeContentForTest(t, string(placementv1beta1.ResourceEnvelopeType), namespace, name, data)
+}
+
+func clusterResourceEnvelopeContentForTest(t *testing.T, name string, data map[string]string) placementv1beta1.ResourceContent {
+	t.Helper()
+	return envelopeContentForTest(t, string(placementv1beta1.ClusterResourceEnvelopeType), "", name, data)
+}
+
+func envelopeContentForTest(t *testing.T, kind, namespace, name string, data map[string]string) placementv1beta1.ResourceContent {
+	t.Helper()
+	rawData := make(map[string]json.RawMessage, len(data))
+	for key, value := range data {
+		rawData[key] = json.RawMessage(value)
+	}
+	metadata := map[string]string{"name": name}
+	if namespace != "" {
+		metadata["namespace"] = namespace
+	}
+	raw, err := json.Marshal(map[string]interface{}{
+		"apiVersion": placementv1beta1.GroupVersion.String(),
+		"kind":       kind,
+		"metadata":   metadata,
+		"data":       rawData,
+	})
+	if err != nil {
+		t.Fatalf("json.Marshal(%s) = %v, want no error", kind, err)
+	}
+	return placementv1beta1.ResourceContent{RawExtension: runtime.RawExtension{Raw: raw}}
+}
+
+func deploymentRawForTest(namespace, name string) string {
+	return fmt.Sprintf(`{"apiVersion":"apps/v1","kind":"Deployment","metadata":{"namespace":%q,"name":%q}}`, namespace, name)
+}
+
+func secretRawForTest(namespace, name string) string {
+	return fmt.Sprintf(`{"apiVersion":"v1","kind":"Secret","metadata":{"namespace":%q,"name":%q}}`, namespace, name)
+}
+
+func clusterRoleRawForTest(name string) string {
+	return fmt.Sprintf(`{"apiVersion":"rbac.authorization.k8s.io/v1","kind":"ClusterRole","metadata":{"name":%q}}`, name)
+}
+
+func latestCROSnapshotForTest(name string, selectors ...placementv1beta1.ResourceSelectorTerm) placementv1beta1.ClusterResourceOverrideSnapshot {
+	return placementv1beta1.ClusterResourceOverrideSnapshot{
+		ObjectMeta: metav1.ObjectMeta{
+			Name: name,
+			Labels: map[string]string{
+				placementv1beta1.IsLatestSnapshotLabel: "true",
+			},
+		},
+		Spec: placementv1beta1.ClusterResourceOverrideSnapshotSpec{
+			OverrideSpec: placementv1beta1.ClusterResourceOverrideSpec{
+				ClusterResourceSelectors: selectors,
+			},
+		},
+	}
+}
+
+func latestROSnapshotForTest(namespace, name string, selectors ...placementv1beta1.ResourceSelector) placementv1beta1.ResourceOverrideSnapshot {
+	return placementv1beta1.ResourceOverrideSnapshot{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      name,
+			Namespace: namespace,
+			Labels: map[string]string{
+				placementv1beta1.IsLatestSnapshotLabel: "true",
+			},
+		},
+		Spec: placementv1beta1.ResourceOverrideSnapshotSpec{
+			OverrideSpec: placementv1beta1.ResourceOverrideSpec{
+				ResourceSelectors: selectors,
+			},
+		},
+	}
+}
+
+func clusterResourceOverrideSnapshotPtrForTest(snapshot placementv1beta1.ClusterResourceOverrideSnapshot) *placementv1beta1.ClusterResourceOverrideSnapshot {
+	return &snapshot
+}
+
+func resourceOverrideSnapshotPtrForTest(snapshot placementv1beta1.ResourceOverrideSnapshot) *placementv1beta1.ResourceOverrideSnapshot {
+	return &snapshot
+}
+
 func TestFetchAllMatchingOverridesForResourceSnapshot(t *testing.T) {
 	fakeInformer := informer.FakeManager{
 		APIResources: map[schema.GroupVersionKind]bool{
@@ -84,6 +189,7 @@ func TestFetchAllMatchingOverridesForResourceSnapshot(t *testing.T) {
 		roList       []placementv1beta1.ResourceOverrideSnapshot
 		wantCRO      []*placementv1beta1.ClusterResourceOverrideSnapshot
 		wantRO       []*placementv1beta1.ResourceOverrideSnapshot
+		wantErr      error
 	}{
 		{
 			name:         "single resource snapshot selecting empty resources",
@@ -1482,6 +1588,385 @@ func TestFetchAllMatchingOverridesForResourceSnapshot(t *testing.T) {
 				},
 			},
 		},
+		{
+			name: "resource envelope inner deployment matches resource override",
+			master: clusterResourceSnapshotForTest(resourceEnvelopeContentForTest(t, "ns", "env", map[string]string{
+				"deployment.yaml": deploymentRawForTest("ns", "my-app"),
+			})),
+			roList: []placementv1beta1.ResourceOverrideSnapshot{
+				latestROSnapshotForTest("ns", "ro-deployment", placementv1beta1.ResourceSelector{
+					Group:   "apps",
+					Version: "v1",
+					Kind:    "Deployment",
+					Name:    "my-app",
+				}),
+			},
+			wantCRO: []*placementv1beta1.ClusterResourceOverrideSnapshot{},
+			wantRO: []*placementv1beta1.ResourceOverrideSnapshot{
+				resourceOverrideSnapshotPtrForTest(latestROSnapshotForTest("ns", "ro-deployment", placementv1beta1.ResourceSelector{
+					Group:   "apps",
+					Version: "v1",
+					Kind:    "Deployment",
+					Name:    "my-app",
+				})),
+			},
+		},
+		{
+			name: "cluster resource envelope inner cluster role matches cluster resource override",
+			master: clusterResourceSnapshotForTest(clusterResourceEnvelopeContentForTest(t, "env", map[string]string{
+				"clusterrole.yaml": clusterRoleRawForTest("foo"),
+			})),
+			croList: []placementv1beta1.ClusterResourceOverrideSnapshot{
+				latestCROSnapshotForTest("cro-clusterrole", placementv1beta1.ResourceSelectorTerm{
+					Group:   "rbac.authorization.k8s.io",
+					Version: "v1",
+					Kind:    "ClusterRole",
+					Name:    "foo",
+				}),
+			},
+			wantCRO: []*placementv1beta1.ClusterResourceOverrideSnapshot{
+				clusterResourceOverrideSnapshotPtrForTest(latestCROSnapshotForTest("cro-clusterrole", placementv1beta1.ResourceSelectorTerm{
+					Group:   "rbac.authorization.k8s.io",
+					Version: "v1",
+					Kind:    "ClusterRole",
+					Name:    "foo",
+				})),
+			},
+			wantRO: []*placementv1beta1.ResourceOverrideSnapshot{},
+		},
+		{
+			name: "explicit envelope wrapper selectors are not matched",
+			master: clusterResourceSnapshotForTest(
+				clusterResourceEnvelopeContentForTest(t, "env", map[string]string{
+					"clusterrole.yaml": clusterRoleRawForTest("foo"),
+				}),
+				resourceEnvelopeContentForTest(t, "ns", "env", map[string]string{
+					"deployment.yaml": deploymentRawForTest("ns", "my-app"),
+				}),
+			),
+			croList: []placementv1beta1.ClusterResourceOverrideSnapshot{
+				latestCROSnapshotForTest("cro-wrapper", placementv1beta1.ResourceSelectorTerm{
+					Group:   placementv1beta1.GroupVersion.Group,
+					Version: placementv1beta1.GroupVersion.Version,
+					Kind:    string(placementv1beta1.ClusterResourceEnvelopeType),
+					Name:    "env",
+				}),
+			},
+			roList: []placementv1beta1.ResourceOverrideSnapshot{
+				latestROSnapshotForTest("ns", "ro-wrapper", placementv1beta1.ResourceSelector{
+					Group:   placementv1beta1.GroupVersion.Group,
+					Version: placementv1beta1.GroupVersion.Version,
+					Kind:    string(placementv1beta1.ResourceEnvelopeType),
+					Name:    "env",
+				}),
+			},
+			wantCRO: []*placementv1beta1.ClusterResourceOverrideSnapshot{},
+			wantRO:  []*placementv1beta1.ResourceOverrideSnapshot{},
+		},
+		{
+			name: "resource envelope namespace matches namespace cluster resource override",
+			master: clusterResourceSnapshotForTest(resourceEnvelopeContentForTest(t, "ns", "env", map[string]string{
+				"deployment.yaml": deploymentRawForTest("ns", "my-app"),
+			})),
+			croList: []placementv1beta1.ClusterResourceOverrideSnapshot{
+				latestCROSnapshotForTest("cro-namespace", placementv1beta1.ResourceSelectorTerm{
+					Group:   "",
+					Version: "v1",
+					Kind:    "Namespace",
+					Name:    "ns",
+				}),
+			},
+			wantCRO: []*placementv1beta1.ClusterResourceOverrideSnapshot{
+				clusterResourceOverrideSnapshotPtrForTest(latestCROSnapshotForTest("cro-namespace", placementv1beta1.ResourceSelectorTerm{
+					Group:   "",
+					Version: "v1",
+					Kind:    "Namespace",
+					Name:    "ns",
+				})),
+			},
+			wantRO: []*placementv1beta1.ResourceOverrideSnapshot{},
+		},
+		{
+			// Collecting override candidates is a best-effort selection concern and must never block the
+			// rollout. An inner manifest that cannot be parsed is skipped, and candidates from the remaining valid
+			// manifests in the same envelope are still collected.
+			name: "resource envelope inner manifest that cannot be parsed is skipped and valid inner manifests still collected",
+			master: clusterResourceSnapshotForTest(resourceEnvelopeContentForTest(t, "ns", "env", map[string]string{
+				"bad.yaml":        `"not-an-object"`,
+				"deployment.yaml": deploymentRawForTest("ns", "my-app"),
+			})),
+			roList: []placementv1beta1.ResourceOverrideSnapshot{
+				latestROSnapshotForTest("ns", "ro-deployment", placementv1beta1.ResourceSelector{
+					Group:   "apps",
+					Version: "v1",
+					Kind:    "Deployment",
+					Name:    "my-app",
+				}),
+			},
+			wantCRO: []*placementv1beta1.ClusterResourceOverrideSnapshot{},
+			wantRO: []*placementv1beta1.ResourceOverrideSnapshot{
+				resourceOverrideSnapshotPtrForTest(latestROSnapshotForTest("ns", "ro-deployment", placementv1beta1.ResourceSelector{
+					Group:   "apps",
+					Version: "v1",
+					Kind:    "Deployment",
+					Name:    "my-app",
+				})),
+			},
+		},
+		{
+			// A cluster-scoped object wrapped in a resource envelope is invalid input, but candidate
+			// collection must not hard-fail on it: the offending manifest is skipped while the valid inner
+			// manifest in the same envelope is still collected. The authoritative validation lives in the
+			// work generator.
+			name: "cluster scoped object wrapped in resource envelope is skipped and valid inner manifest still collected",
+			master: clusterResourceSnapshotForTest(resourceEnvelopeContentForTest(t, "ns", "env", map[string]string{
+				"clusterrole.yaml": clusterRoleRawForTest("foo"),
+				"deployment.yaml":  deploymentRawForTest("ns", "my-app"),
+			})),
+			croList: []placementv1beta1.ClusterResourceOverrideSnapshot{
+				latestCROSnapshotForTest("cro-clusterrole", placementv1beta1.ResourceSelectorTerm{
+					Group:   "rbac.authorization.k8s.io",
+					Version: "v1",
+					Kind:    "ClusterRole",
+					Name:    "foo",
+				}),
+			},
+			roList: []placementv1beta1.ResourceOverrideSnapshot{
+				latestROSnapshotForTest("ns", "ro-deployment", placementv1beta1.ResourceSelector{
+					Group:   "apps",
+					Version: "v1",
+					Kind:    "Deployment",
+					Name:    "my-app",
+				}),
+			},
+			wantCRO: []*placementv1beta1.ClusterResourceOverrideSnapshot{},
+			wantRO: []*placementv1beta1.ResourceOverrideSnapshot{
+				resourceOverrideSnapshotPtrForTest(latestROSnapshotForTest("ns", "ro-deployment", placementv1beta1.ResourceSelector{
+					Group:   "apps",
+					Version: "v1",
+					Kind:    "Deployment",
+					Name:    "my-app",
+				})),
+			},
+		},
+		{
+			// A namespaced object wrapped in a cluster resource envelope is invalid input, but candidate
+			// collection must not hard-fail on it: the offending manifest is skipped while the valid inner
+			// manifest in the same envelope is still collected.
+			name: "namespaced object wrapped in cluster resource envelope is skipped and valid inner manifest still collected",
+			master: clusterResourceSnapshotForTest(clusterResourceEnvelopeContentForTest(t, "env", map[string]string{
+				"deployment.yaml":  deploymentRawForTest("ns", "my-app"),
+				"clusterrole.yaml": clusterRoleRawForTest("foo"),
+			})),
+			croList: []placementv1beta1.ClusterResourceOverrideSnapshot{
+				latestCROSnapshotForTest("cro-clusterrole", placementv1beta1.ResourceSelectorTerm{
+					Group:   "rbac.authorization.k8s.io",
+					Version: "v1",
+					Kind:    "ClusterRole",
+					Name:    "foo",
+				}),
+				latestCROSnapshotForTest("cro-deployment", placementv1beta1.ResourceSelectorTerm{
+					Group:   "apps",
+					Version: "v1",
+					Kind:    "Deployment",
+					Name:    "my-app",
+				}),
+			},
+			wantCRO: []*placementv1beta1.ClusterResourceOverrideSnapshot{
+				clusterResourceOverrideSnapshotPtrForTest(latestCROSnapshotForTest("cro-clusterrole", placementv1beta1.ResourceSelectorTerm{
+					Group:   "rbac.authorization.k8s.io",
+					Version: "v1",
+					Kind:    "ClusterRole",
+					Name:    "foo",
+				})),
+			},
+			wantRO: []*placementv1beta1.ResourceOverrideSnapshot{},
+		},
+		{
+			// An inner manifest in a different namespace than the resource envelope is invalid input, but
+			// candidate collection must not hard-fail on it: the offending manifest is skipped while the
+			// valid inner manifest in the same envelope is still collected.
+			name: "inner manifest in a different namespace than the resource envelope is skipped and valid inner manifest still collected",
+			master: clusterResourceSnapshotForTest(resourceEnvelopeContentForTest(t, "ns", "env", map[string]string{
+				"other.yaml":      deploymentRawForTest("other-ns", "other-app"),
+				"deployment.yaml": deploymentRawForTest("ns", "my-app"),
+			})),
+			roList: []placementv1beta1.ResourceOverrideSnapshot{
+				latestROSnapshotForTest("ns", "ro-deployment", placementv1beta1.ResourceSelector{
+					Group:   "apps",
+					Version: "v1",
+					Kind:    "Deployment",
+					Name:    "my-app",
+				}),
+				latestROSnapshotForTest("other-ns", "ro-other", placementv1beta1.ResourceSelector{
+					Group:   "apps",
+					Version: "v1",
+					Kind:    "Deployment",
+					Name:    "other-app",
+				}),
+			},
+			wantCRO: []*placementv1beta1.ClusterResourceOverrideSnapshot{},
+			wantRO: []*placementv1beta1.ResourceOverrideSnapshot{
+				resourceOverrideSnapshotPtrForTest(latestROSnapshotForTest("ns", "ro-deployment", placementv1beta1.ResourceSelector{
+					Group:   "apps",
+					Version: "v1",
+					Kind:    "Deployment",
+					Name:    "my-app",
+				})),
+			},
+		},
+		{
+			name: "resource envelope with multiple inner resources only selects targeted override",
+			master: clusterResourceSnapshotForTest(resourceEnvelopeContentForTest(t, "ns", "env", map[string]string{
+				"deployment.yaml": deploymentRawForTest("ns", "my-app"),
+				"secret.yaml":     secretRawForTest("ns", "secret-name"),
+			})),
+			roList: []placementv1beta1.ResourceOverrideSnapshot{
+				latestROSnapshotForTest("ns", "ro-deployment", placementv1beta1.ResourceSelector{
+					Group:   "apps",
+					Version: "v1",
+					Kind:    "Deployment",
+					Name:    "my-app",
+				}),
+				latestROSnapshotForTest("ns", "ro-service", placementv1beta1.ResourceSelector{
+					Group:   "",
+					Version: "v1",
+					Kind:    "Service",
+					Name:    "svc-name",
+				}),
+			},
+			wantCRO: []*placementv1beta1.ClusterResourceOverrideSnapshot{},
+			wantRO: []*placementv1beta1.ResourceOverrideSnapshot{
+				resourceOverrideSnapshotPtrForTest(latestROSnapshotForTest("ns", "ro-deployment", placementv1beta1.ResourceSelector{
+					Group:   "apps",
+					Version: "v1",
+					Kind:    "Deployment",
+					Name:    "my-app",
+				})),
+			},
+		},
+		{
+			name: "resource envelope does not duplicate snapshot when multiple selectors match",
+			master: clusterResourceSnapshotForTest(resourceEnvelopeContentForTest(t, "ns", "env", map[string]string{
+				"deployment.yaml": deploymentRawForTest("ns", "my-app"),
+				"secret.yaml":     secretRawForTest("ns", "secret-name"),
+			})),
+			roList: []placementv1beta1.ResourceOverrideSnapshot{
+				latestROSnapshotForTest("ns", "ro-multiple-selectors",
+					placementv1beta1.ResourceSelector{
+						Group:   "apps",
+						Version: "v1",
+						Kind:    "Deployment",
+						Name:    "my-app",
+					},
+					placementv1beta1.ResourceSelector{
+						Group:   "",
+						Version: "v1",
+						Kind:    "Secret",
+						Name:    "secret-name",
+					},
+				),
+			},
+			wantCRO: []*placementv1beta1.ClusterResourceOverrideSnapshot{},
+			wantRO: []*placementv1beta1.ResourceOverrideSnapshot{
+				resourceOverrideSnapshotPtrForTest(latestROSnapshotForTest("ns", "ro-multiple-selectors",
+					placementv1beta1.ResourceSelector{
+						Group:   "apps",
+						Version: "v1",
+						Kind:    "Deployment",
+						Name:    "my-app",
+					},
+					placementv1beta1.ResourceSelector{
+						Group:   "",
+						Version: "v1",
+						Kind:    "Secret",
+						Name:    "secret-name",
+					},
+				)),
+			},
+		},
+		{
+			// Only a later selector matches; the snapshot is still selected. This pins the partial-match
+			// behaviour so the no-match warning stays scoped to snapshots where no selector matches at all.
+			name: "resource override with multiple selectors where only a later selector matches is still selected",
+			master: clusterResourceSnapshotForTest(resourceEnvelopeContentForTest(t, "ns", "env", map[string]string{
+				"deployment.yaml": deploymentRawForTest("ns", "my-app"),
+			})),
+			roList: []placementv1beta1.ResourceOverrideSnapshot{
+				latestROSnapshotForTest("ns", "ro-partial-match",
+					placementv1beta1.ResourceSelector{
+						Group:   "",
+						Version: "v1",
+						Kind:    "Service",
+						Name:    "does-not-exist",
+					},
+					placementv1beta1.ResourceSelector{
+						Group:   "apps",
+						Version: "v1",
+						Kind:    "Deployment",
+						Name:    "my-app",
+					},
+				),
+			},
+			wantCRO: []*placementv1beta1.ClusterResourceOverrideSnapshot{},
+			wantRO: []*placementv1beta1.ResourceOverrideSnapshot{
+				resourceOverrideSnapshotPtrForTest(latestROSnapshotForTest("ns", "ro-partial-match",
+					placementv1beta1.ResourceSelector{
+						Group:   "",
+						Version: "v1",
+						Kind:    "Service",
+						Name:    "does-not-exist",
+					},
+					placementv1beta1.ResourceSelector{
+						Group:   "apps",
+						Version: "v1",
+						Kind:    "Deployment",
+						Name:    "my-app",
+					},
+				)),
+			},
+		},
+		{
+			// Only a later selector matches; the snapshot is still selected. This pins the partial-match
+			// behaviour so the no-match warning stays scoped to snapshots where no selector matches at all.
+			name: "cluster resource override with multiple selectors where only a later selector matches is still selected",
+			master: clusterResourceSnapshotForTest(clusterResourceEnvelopeContentForTest(t, "env", map[string]string{
+				"clusterrole.yaml": clusterRoleRawForTest("foo"),
+			})),
+			croList: []placementv1beta1.ClusterResourceOverrideSnapshot{
+				latestCROSnapshotForTest("cro-partial-match",
+					placementv1beta1.ResourceSelectorTerm{
+						Group:   "rbac.authorization.k8s.io",
+						Version: "v1",
+						Kind:    "ClusterRole",
+						Name:    "does-not-exist",
+					},
+					placementv1beta1.ResourceSelectorTerm{
+						Group:   "rbac.authorization.k8s.io",
+						Version: "v1",
+						Kind:    "ClusterRole",
+						Name:    "foo",
+					},
+				),
+			},
+			wantCRO: []*placementv1beta1.ClusterResourceOverrideSnapshot{
+				clusterResourceOverrideSnapshotPtrForTest(latestCROSnapshotForTest("cro-partial-match",
+					placementv1beta1.ResourceSelectorTerm{
+						Group:   "rbac.authorization.k8s.io",
+						Version: "v1",
+						Kind:    "ClusterRole",
+						Name:    "does-not-exist",
+					},
+					placementv1beta1.ResourceSelectorTerm{
+						Group:   "rbac.authorization.k8s.io",
+						Version: "v1",
+						Kind:    "ClusterRole",
+						Name:    "foo",
+					},
+				)),
+			},
+			wantRO: []*placementv1beta1.ResourceOverrideSnapshot{},
+		},
 	}
 
 	for _, tc := range tests {
@@ -1502,8 +1987,11 @@ func TestFetchAllMatchingOverridesForResourceSnapshot(t *testing.T) {
 				WithObjects(objects...).
 				Build()
 			gotCRO, gotRO, err := FetchAllMatchingOverridesForResourceSnapshot(context.Background(), fakeClient, &fakeInformer, tc.placementKey, tc.master)
-			if err != nil {
-				t.Fatalf("fetchAllMatchingOverridesForResourceSnapshot() failed, got err %v, want no err", err)
+			if gotErr, wantErr := err != nil, tc.wantErr != nil; gotErr != wantErr || (err != nil && !errors.Is(err, tc.wantErr)) {
+				t.Fatalf("fetchAllMatchingOverridesForResourceSnapshot() got error %v, want error %v", err, tc.wantErr)
+			}
+			if tc.wantErr != nil {
+				return
 			}
 			options := []cmp.Option{
 				cmpopts.IgnoreFields(metav1.ObjectMeta{}, "ResourceVersion"),
