@@ -19,6 +19,7 @@ package overrider
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"sort"
@@ -28,6 +29,7 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
 	"k8s.io/apimachinery/pkg/labels"
+	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/types"
 	"k8s.io/klog/v2"
 	"sigs.k8s.io/controller-runtime/pkg/client"
@@ -77,37 +79,16 @@ func FetchAllMatchingOverridesForResourceSnapshot(
 	// List all the possible CROs and ROs based on the selected resources.
 	for _, snapshot := range resourceSnapshots {
 		for _, res := range snapshot.GetResourceSnapshotSpec().SelectedResources {
-			var uResource unstructured.Unstructured
-			if err := uResource.UnmarshalJSON(res.Raw); err != nil {
-				klog.ErrorS(err, "Resource has invalid content", "snapshot", klog.KObj(snapshot), "selectedResource", res.Raw)
-				return nil, nil, controller.NewUnexpectedBehaviorError(err)
+			croCandidates, roCandidates, err := collectOverrideCandidatesFromSelectedResource(manager, res)
+			if err != nil {
+				klog.ErrorS(err, "Failed to collect override candidates from selected resource", "snapshot", klog.KObj(snapshot), "selectedResource", res.Raw)
+				return nil, nil, err
 			}
-			// If the resource is namespaced scope resource, the resource could be selected by the namespace or selected
-			// by the object itself.
-			if !manager.IsClusterScopedResources(uResource.GroupVersionKind()) {
-				croKey := placementv1beta1.ResourceIdentifier{
-					Group:   utils.NamespaceMetaGVK.Group,
-					Version: utils.NamespaceMetaGVK.Version,
-					Kind:    utils.NamespaceMetaGVK.Kind,
-					Name:    uResource.GetNamespace(),
-				}
-				possibleCROs[croKey] = true // selected by the namespace
-				roKey := placementv1beta1.ResourceIdentifier{
-					Group:     uResource.GetObjectKind().GroupVersionKind().Group,
-					Version:   uResource.GetObjectKind().GroupVersionKind().Version,
-					Kind:      uResource.GetObjectKind().GroupVersionKind().Kind,
-					Namespace: uResource.GetNamespace(),
-					Name:      uResource.GetName(),
-				}
-				possibleROs[roKey] = true // selected by the object itself
-			} else {
-				croKey := placementv1beta1.ResourceIdentifier{
-					Group:   uResource.GetObjectKind().GroupVersionKind().Group,
-					Version: uResource.GetObjectKind().GroupVersionKind().Version,
-					Kind:    uResource.GetObjectKind().GroupVersionKind().Kind,
-					Name:    uResource.GetName(),
-				}
-				possibleCROs[croKey] = true // selected by the object itself
+			for cro := range croCandidates {
+				possibleCROs[cro] = true
+			}
+			for ro := range roCandidates {
+				possibleROs[ro] = true
 			}
 		}
 	}
@@ -121,6 +102,7 @@ func FetchAllMatchingOverridesForResourceSnapshot(
 			continue
 		}
 
+		matched := false
 		for _, selector := range croList.Items[i].Spec.OverrideSpec.ClusterResourceSelectors {
 			croKey := placementv1beta1.ResourceIdentifier{
 				Group:   selector.Group,
@@ -130,8 +112,12 @@ func FetchAllMatchingOverridesForResourceSnapshot(
 			}
 			if possibleCROs[croKey] {
 				filteredCRO = append(filteredCRO, &croList.Items[i])
+				matched = true
 				break
 			}
+		}
+		if !matched {
+			klog.V(2).InfoS("ClusterResourceOverrideSnapshot has no selector that matches a selected resource or inner envelope resource in this placement", "clusterResourceOverride", klog.KObj(&croList.Items[i]), "placement", placementKey, "selectors", croList.Items[i].Spec.OverrideSpec.ClusterResourceSelectors)
 		}
 	}
 	for i := range roList.Items {
@@ -147,6 +133,7 @@ func FetchAllMatchingOverridesForResourceSnapshot(
 			}
 		}
 
+		matched := false
 		for _, selector := range roList.Items[i].Spec.OverrideSpec.ResourceSelectors {
 			roKey := placementv1beta1.ResourceIdentifier{
 				Group:     selector.Group,
@@ -157,11 +144,170 @@ func FetchAllMatchingOverridesForResourceSnapshot(
 			}
 			if possibleROs[roKey] {
 				filteredRO = append(filteredRO, &roList.Items[i])
+				matched = true
 				break
 			}
 		}
+		if !matched {
+			klog.V(2).InfoS("ResourceOverrideSnapshot has no selector that matches a selected resource or inner envelope resource in this placement", "resourceOverride", klog.KObj(&roList.Items[i]), "placement", placementKey, "selectors", roList.Items[i].Spec.OverrideSpec.ResourceSelectors)
+		}
 	}
 	return filteredCRO, filteredRO, nil
+}
+
+func collectOverrideCandidatesFromSelectedResource(
+	manager informer.Manager,
+	resourceContent placementv1beta1.ResourceContent,
+) (map[placementv1beta1.ResourceIdentifier]bool, map[placementv1beta1.ResourceIdentifier]bool, error) {
+	uResource, err := unmarshalSelectedResource(resourceContent)
+	if err != nil {
+		return nil, nil, err
+	}
+
+	croCandidates := make(map[placementv1beta1.ResourceIdentifier]bool)
+	roCandidates := make(map[placementv1beta1.ResourceIdentifier]bool)
+	switch uResource.GroupVersionKind() {
+	case placementv1beta1.GroupVersion.WithKind(string(placementv1beta1.ClusterResourceEnvelopeType)):
+		var envelope placementv1beta1.ClusterResourceEnvelope
+		if err := json.Unmarshal(resourceContent.Raw, &envelope); err != nil {
+			return nil, nil, controller.NewUnexpectedBehaviorError(err)
+		}
+		collectCandidatesFromClusterResourceEnvelope(manager, &envelope, croCandidates)
+	case placementv1beta1.GroupVersion.WithKind(string(placementv1beta1.ResourceEnvelopeType)):
+		var envelope placementv1beta1.ResourceEnvelope
+		if err := json.Unmarshal(resourceContent.Raw, &envelope); err != nil {
+			return nil, nil, controller.NewUnexpectedBehaviorError(err)
+		}
+		croCandidates[namespaceCROCandidate(envelope.GetNamespace())] = true
+		collectCandidatesFromResourceEnvelope(manager, &envelope, roCandidates)
+	default:
+		addCandidatesFromResource(manager, uResource, croCandidates, roCandidates)
+	}
+	return croCandidates, roCandidates, nil
+}
+
+func unmarshalSelectedResource(resourceContent placementv1beta1.ResourceContent) (*unstructured.Unstructured, error) {
+	var uResource unstructured.Unstructured
+	if err := uResource.UnmarshalJSON(resourceContent.Raw); err != nil {
+		klog.ErrorS(err, "Resource has invalid content", "selectedResource", resourceContent.Raw)
+		return nil, controller.NewUnexpectedBehaviorError(err)
+	}
+	return &uResource, nil
+}
+
+// collectCandidatesFromClusterResourceEnvelope collects override candidates from the inner manifests of a
+// cluster resource envelope. Collecting candidates is a best-effort selection concern and must never block
+// the rollout, so an invalid inner manifest or one that cannot be parsed is logged and skipped rather than returning an
+// error. The authoritative validation of envelope contents lives in the work generator
+// (pkg/controllers/workgenerator/envelope.go), which surfaces the user-facing failure.
+func collectCandidatesFromClusterResourceEnvelope(
+	manager informer.Manager,
+	envelope *placementv1beta1.ClusterResourceEnvelope,
+	croCandidates map[placementv1beta1.ResourceIdentifier]bool,
+) {
+	keys := sortedEnvelopeDataKeys(envelope.Data)
+	for _, key := range keys {
+		uObj, err := unmarshalEnvelopeData(envelope, key)
+		if err != nil {
+			klog.V(2).InfoS("Skipped an inner manifest that could not be parsed while collecting override candidates", "manifestKey", key, "envelope", klog.KObj(envelope), "err", err)
+			continue
+		}
+		if !manager.IsClusterScopedResources(uObj.GroupVersionKind()) {
+			klog.V(2).InfoS("Skipped an inner manifest while collecting override candidates: a namespaced object has been wrapped in a cluster resource envelope", "manifestKey", key, "wrappedObject", klog.KRef(uObj.GetNamespace(), uObj.GetName()), "envelope", klog.KObj(envelope))
+			continue
+		}
+		croCandidates[clusterScopedCROCandidate(uObj)] = true
+	}
+}
+
+// collectCandidatesFromResourceEnvelope collects override candidates from the inner manifests of a resource
+// envelope. Collecting candidates is a best-effort selection concern and must never block the rollout, so an
+// invalid inner manifest or one that cannot be parsed is logged and skipped rather than returning an error. The
+// authoritative validation of envelope contents lives in the work generator
+// (pkg/controllers/workgenerator/envelope.go), which surfaces the user-facing failure.
+func collectCandidatesFromResourceEnvelope(
+	manager informer.Manager,
+	envelope *placementv1beta1.ResourceEnvelope,
+	roCandidates map[placementv1beta1.ResourceIdentifier]bool,
+) {
+	keys := sortedEnvelopeDataKeys(envelope.Data)
+	for _, key := range keys {
+		uObj, err := unmarshalEnvelopeData(envelope, key)
+		if err != nil {
+			klog.V(2).InfoS("Skipped an inner manifest that could not be parsed while collecting override candidates", "manifestKey", key, "envelope", klog.KObj(envelope), "err", err)
+			continue
+		}
+		if manager.IsClusterScopedResources(uObj.GroupVersionKind()) {
+			klog.V(2).InfoS("Skipped an inner manifest while collecting override candidates: a cluster scoped object has been wrapped in a resource envelope", "manifestKey", key, "wrappedObject", klog.KRef(uObj.GetNamespace(), uObj.GetName()), "envelope", klog.KObj(envelope))
+			continue
+		}
+		if envelope.GetNamespace() != uObj.GetNamespace() {
+			klog.V(2).InfoS("Skipped an inner manifest while collecting override candidates: a namespaced object has been wrapped in a resource envelope from another namespace", "manifestKey", key, "wrappedObject", klog.KRef(uObj.GetNamespace(), uObj.GetName()), "envelope", klog.KObj(envelope))
+			continue
+		}
+		roCandidates[namespacedROCandidate(uObj, envelope.GetNamespace())] = true
+	}
+}
+
+func unmarshalEnvelopeData(envelope placementv1beta1.EnvelopeReader, key string) (*unstructured.Unstructured, error) {
+	var uObj unstructured.Unstructured
+	if err := uObj.UnmarshalJSON(envelope.GetData()[key].Raw); err != nil {
+		return nil, fmt.Errorf("failed to parse the wrapped manifest data to a Kubernetes runtime object (manifestKey=%s,envelopeObjRef=%v): %w", key, envelope.GetEnvelopeObjRef(), err)
+	}
+	return &uObj, nil
+}
+
+func sortedEnvelopeDataKeys(data map[string]runtime.RawExtension) []string {
+	keys := make([]string, 0, len(data))
+	for key := range data {
+		keys = append(keys, key)
+	}
+	sort.Strings(keys)
+	return keys
+}
+
+func addCandidatesFromResource(
+	manager informer.Manager,
+	uResource *unstructured.Unstructured,
+	croCandidates map[placementv1beta1.ResourceIdentifier]bool,
+	roCandidates map[placementv1beta1.ResourceIdentifier]bool,
+) {
+	if !manager.IsClusterScopedResources(uResource.GroupVersionKind()) {
+		croCandidates[namespaceCROCandidate(uResource.GetNamespace())] = true           // selected by the namespace
+		roCandidates[namespacedROCandidate(uResource, uResource.GetNamespace())] = true // selected by the object itself
+		return
+	}
+	croCandidates[clusterScopedCROCandidate(uResource)] = true // selected by the object itself
+}
+
+func namespaceCROCandidate(namespace string) placementv1beta1.ResourceIdentifier {
+	return placementv1beta1.ResourceIdentifier{
+		Group:   utils.NamespaceMetaGVK.Group,
+		Version: utils.NamespaceMetaGVK.Version,
+		Kind:    utils.NamespaceMetaGVK.Kind,
+		Name:    namespace,
+	}
+}
+
+func clusterScopedCROCandidate(uObj *unstructured.Unstructured) placementv1beta1.ResourceIdentifier {
+	gvk := uObj.GroupVersionKind()
+	return placementv1beta1.ResourceIdentifier{
+		Group:   gvk.Group,
+		Version: gvk.Version,
+		Kind:    gvk.Kind,
+		Name:    uObj.GetName(),
+	}
+}
+
+func namespacedROCandidate(uObj *unstructured.Unstructured, namespace string) placementv1beta1.ResourceIdentifier {
+	gvk := uObj.GroupVersionKind()
+	return placementv1beta1.ResourceIdentifier{
+		Group:     gvk.Group,
+		Version:   gvk.Version,
+		Kind:      gvk.Kind,
+		Namespace: namespace,
+		Name:      uObj.GetName(),
+	}
 }
 
 // PickFromResourceMatchedOverridesForTargetCluster filter the overrides that are matched with resources to the target cluster.

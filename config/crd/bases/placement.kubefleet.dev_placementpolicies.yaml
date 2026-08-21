@@ -1,0 +1,683 @@
+---
+apiVersion: apiextensions.k8s.io/v1
+kind: CustomResourceDefinition
+metadata:
+  annotations:
+    controller-gen.kubebuilder.io/version: v0.20.0
+  name: placementpolicies.placement.kubefleet.dev
+spec:
+  group: placement.kubefleet.dev
+  names:
+    categories:
+    - kubefleet
+    - kubefleet-placement
+    kind: PlacementPolicy
+    listKind: PlacementPolicyList
+    plural: placementpolicies
+    singular: placementpolicy
+  scope: Namespaced
+  versions:
+  - name: v1alpha1
+    schema:
+      openAPIV3Schema:
+        description: |-
+          PlacementPolicy is the KubeFleet API that enables users to place resources within a namespace across
+          member clusters.
+        properties:
+          apiVersion:
+            description: |-
+              APIVersion defines the versioned schema of this representation of an object.
+              Servers should convert recognized schemas to the latest internal value, and
+              may reject unrecognized values.
+              More info: https://git.k8s.io/community/contributors/devel/sig-architecture/api-conventions.md#resources
+            type: string
+          kind:
+            description: |-
+              Kind is a string value representing the REST resource this object represents.
+              Servers may infer this from the endpoint the client submits requests to.
+              Cannot be updated.
+              In CamelCase.
+              More info: https://git.k8s.io/community/contributors/devel/sig-architecture/api-conventions.md#types-kinds
+            type: string
+          metadata:
+            type: object
+          spec:
+            description: The specification of the placement policy.
+            properties:
+              clusterSelectors:
+                description: |-
+                  A list of cluster selectors that specifies the target clusters where KubeFleet should place
+                  the resources. A cluster selector consists of a list of label and cluster property selectors
+                  and a count; and for each cluster selector, KubeFleet will pick `count` number of clusters
+                  that match the given selectors for placing the resources.
+
+                  If not specified, KubeFleet will place the resources to all available member clusters.
+                items:
+                  properties:
+                    count:
+                      anyOf:
+                      - type: integer
+                      - type: string
+                      default: 1
+                      description: |-
+                        The desired number of clusters that KubeFleet should select based on the given terms.
+
+                        The default value is 1. To select all clusters that match the given terms, use the value "All".
+                      pattern: ^([1-9][0-9]{0,2}|All)$
+                      x-kubernetes-int-or-string: true
+                    minCount:
+                      description: |-
+                        The minimum number of clusters that KubeFleet should select based on the given terms, when KubeFleet is not able
+                        to find the desired number of clusters.
+
+                        The default value is set to the same value of `count`, if `count` is an integer. If `count` is set to "All", the
+                        default value of `minCount` is 1.
+                      format: int32
+                      maximum: 999
+                      minimum: 0
+                      type: integer
+                    terms:
+                      description: |-
+                        A list of terms that form the selector. The terms are ORed, i.e., a cluster would match the selector
+                        if it matches any of the terms.
+
+                        If not specified, the selector will match all clusters.
+                      items:
+                        properties:
+                          matchClusterPropertyExpressions:
+                            description: A list of cluster property expressions that
+                              a cluster must all satisfy to match this selector term.
+                            items:
+                              properties:
+                                key:
+                                  description: The key of the label or cluster property
+                                    that selector applies to.
+                                  type: string
+                                operator:
+                                  description: |-
+                                    The operator that specifies the relationship between the current value under the key and the given values.
+
+                                    If the operation is In, NotIn, Exists, or DoesNotExist, the key must be one referring to a label, or to a string-based
+                                    cluster property.
+                                    If the operation is Gt, Lt, Ge, Le, Eq, or Ne, the key must be one referring to a numeric-based cluster property.
+                                    Applying an unsupported operator to a key will cause an error at the scheduling phase.
+                                  enum:
+                                  - In
+                                  - NotIn
+                                  - Exists
+                                  - DoesNotExist
+                                  - Gt
+                                  - Lt
+                                  - Ge
+                                  - Le
+                                  - Eq
+                                  - Ne
+                                  type: string
+                                values:
+                                  description: |-
+                                    The values that are used in conjunction with the operator to determine if a selector matches.
+
+                                    If the operator is In or NotIn, the values array must be non-empty.
+                                    If the operator is Exists or DoesNotExist, the values array must be empty.
+                                    If the operator is Gt, Lt, Ge, Le, Eq, or Ne, the values array must contain exactly one element.
+                                  items:
+                                    type: string
+                                  type: array
+                              required:
+                              - key
+                              - operator
+                              type: object
+                              x-kubernetes-validations:
+                              - message: values must be non-empty when operator is
+                                  In or NotIn
+                                rule: '(self.operator == ''In'' || self.operator ==
+                                  ''NotIn'') ? (has(self.values) && size(self.values)
+                                  > 0) : true'
+                              - message: values must be empty when operator is Exists
+                                  or DoesNotExist
+                                rule: '(self.operator == ''Exists'' || self.operator
+                                  == ''DoesNotExist'') ? (!has(self.values) || size(self.values)
+                                  == 0) : true'
+                              - message: values must contain exactly one element when
+                                  operator is Gt, Lt, Ge, Le, Eq, or Ne
+                                rule: '(self.operator == ''Gt'' || self.operator ==
+                                  ''Lt'' || self.operator == ''Ge'' || self.operator
+                                  == ''Le'' || self.operator == ''Eq'' || self.operator
+                                  == ''Ne'') ? (has(self.values) && size(self.values)
+                                  == 1) : true'
+                            maxItems: 10
+                            type: array
+                          matchLabelExpressions:
+                            description: A list of label expressions that a cluster
+                              must all satisfy to match this selector term.
+                            items:
+                              properties:
+                                key:
+                                  description: The key of the label or cluster property
+                                    that selector applies to.
+                                  type: string
+                                operator:
+                                  description: |-
+                                    The operator that specifies the relationship between the current value under the key and the given values.
+
+                                    If the operation is In, NotIn, Exists, or DoesNotExist, the key must be one referring to a label, or to a string-based
+                                    cluster property.
+                                    If the operation is Gt, Lt, Ge, Le, Eq, or Ne, the key must be one referring to a numeric-based cluster property.
+                                    Applying an unsupported operator to a key will cause an error at the scheduling phase.
+                                  enum:
+                                  - In
+                                  - NotIn
+                                  - Exists
+                                  - DoesNotExist
+                                  - Gt
+                                  - Lt
+                                  - Ge
+                                  - Le
+                                  - Eq
+                                  - Ne
+                                  type: string
+                                values:
+                                  description: |-
+                                    The values that are used in conjunction with the operator to determine if a selector matches.
+
+                                    If the operator is In or NotIn, the values array must be non-empty.
+                                    If the operator is Exists or DoesNotExist, the values array must be empty.
+                                    If the operator is Gt, Lt, Ge, Le, Eq, or Ne, the values array must contain exactly one element.
+                                  items:
+                                    type: string
+                                  type: array
+                              required:
+                              - key
+                              - operator
+                              type: object
+                              x-kubernetes-validations:
+                              - message: values must be non-empty when operator is
+                                  In or NotIn
+                                rule: '(self.operator == ''In'' || self.operator ==
+                                  ''NotIn'') ? (has(self.values) && size(self.values)
+                                  > 0) : true'
+                              - message: values must be empty when operator is Exists
+                                  or DoesNotExist
+                                rule: '(self.operator == ''Exists'' || self.operator
+                                  == ''DoesNotExist'') ? (!has(self.values) || size(self.values)
+                                  == 0) : true'
+                              - message: values must contain exactly one element when
+                                  operator is Gt, Lt, Ge, Le, Eq, or Ne
+                                rule: '(self.operator == ''Gt'' || self.operator ==
+                                  ''Lt'' || self.operator == ''Ge'' || self.operator
+                                  == ''Le'' || self.operator == ''Eq'' || self.operator
+                                  == ''Ne'') ? (has(self.values) && size(self.values)
+                                  == 1) : true'
+                            maxItems: 10
+                            type: array
+                          matchLabels:
+                            additionalProperties:
+                              type: string
+                            description: A list of label key-value pairs that a cluster
+                              must have to match this selector term.
+                            maxProperties: 10
+                            type: object
+                        type: object
+                      maxItems: 5
+                      type: array
+                    whenUnfulfilled:
+                      default: RequestCluster
+                      description: |-
+                        The action to take when KubeFleet is not able to find the desired (minimum) number of clusters based on the given terms.
+
+                        Available options are:
+                        * RequestCluster: KubeFleet will submit a cluster request to signal that a new cluster is needed to complete the placement.
+                          It is up to the platform/cloud provider to fulfill the request.
+                        * KeepSearching: KubeFleet will keep searching for clusters that match the given terms silently; no cluster request will be
+                          submitted.
+
+                        This field takes effect only when cluster requests are enabled in KubeFleet.
+                      enum:
+                      - RequestCluster
+                      - KeepSearching
+                      type: string
+                  type: object
+                  x-kubernetes-validations:
+                  - message: minCount must be less than or equal to count when count
+                      is not All
+                    rule: '!has(self.minCount) || !has(self.count) || (type(self.count)
+                      == string && self.count == ''All'') || (type(self.count) ==
+                      int && self.minCount <= self.count) || (type(self.count) ==
+                      string && self.count.matches(''^[0-9]+$'') && self.minCount
+                      <= int(self.count))'
+                maxItems: 10
+                minItems: 1
+                type: array
+              resourceRevisionHistoryLimit:
+                default: 3
+                description: |-
+                  The resource revision history limit for this placement policy.
+
+                  KubeFleet will snapshot the resources selected by a placement policy; when the resources are
+                  updated and a rollout is triggered on the placement policy, KubeFleet will create a new
+                  revision of the selected resources (in the form of a resource snapshot), which tracks the state of
+                  the selected resources at that point of time. These revisions are kept for auditing and
+                  failure recovery purposes; one can inspect them to see the past state of the selected resources,
+                  or roll back to a previous revision if the latest revision is not working as expected.
+
+                  It is also possible to manually request a new resource revision to be created.
+
+                  The default value is 3.
+                format: int32
+                maximum: 20
+                minimum: 1
+                type: integer
+              resourceSelectors:
+                description: |-
+                  A list of resource selectors that specifies the resources that KubeFleet should place across
+                  the target clusters.
+                items:
+                  properties:
+                    apiGroup:
+                      type: string
+                    apiVersion:
+                      type: string
+                    kind:
+                      type: string
+                    labelSelector:
+                      description: |-
+                        The label selector that selects multiple resources for placement.
+
+                        Alternatively, one can use the Name field to select a single resource by its name.
+
+                        This field is mutually exclusive with the Name field.
+                      properties:
+                        matchExpressions:
+                          description: matchExpressions is a list of label selector
+                            requirements. The requirements are ANDed.
+                          items:
+                            description: |-
+                              A label selector requirement is a selector that contains values, a key, and an operator that
+                              relates the key and values.
+                            properties:
+                              key:
+                                description: key is the label key that the selector
+                                  applies to.
+                                type: string
+                              operator:
+                                description: |-
+                                  operator represents a key's relationship to a set of values.
+                                  Valid operators are In, NotIn, Exists and DoesNotExist.
+                                type: string
+                              values:
+                                description: |-
+                                  values is an array of string values. If the operator is In or NotIn,
+                                  the values array must be non-empty. If the operator is Exists or DoesNotExist,
+                                  the values array must be empty. This array is replaced during a strategic
+                                  merge patch.
+                                items:
+                                  type: string
+                                type: array
+                                x-kubernetes-list-type: atomic
+                            required:
+                            - key
+                            - operator
+                            type: object
+                          type: array
+                          x-kubernetes-list-type: atomic
+                        matchLabels:
+                          additionalProperties:
+                            type: string
+                          description: |-
+                            matchLabels is a map of {key,value} pairs. A single {key,value} in the matchLabels
+                            map is equivalent to an element of matchExpressions, whose key field is "key", the
+                            operator is "In", and the values array contains only "value". The requirements are ANDed.
+                          type: object
+                      type: object
+                      x-kubernetes-map-type: atomic
+                    name:
+                      description: |-
+                        The name of the resource to select.
+
+                        Alternatively, one can use the LabelSelector field to select multiple resources by their labels.
+
+                        This field is mutually exclusive with the LabelSelector field.
+                      type: string
+                    namespace:
+                      description: |-
+                        The namespace of the resource to select.
+
+                        This field applies only when selecting namespaced resources using the ClusterPlacementPolicy API.
+
+                        For usage with the PlacementPolicy API, this field must be set empty or use the same value of the PlacementPolicy's
+                        namespace itself.
+                      type: string
+                  required:
+                  - apiVersion
+                  - kind
+                  type: object
+                maxItems: 10
+                minItems: 1
+                type: array
+                x-kubernetes-validations:
+                - message: name and labelSelector are mutually exclusive in a resource
+                    selector
+                  rule: self.all(x, !(has(x.name) && size(x.name) > 0 && has(x.labelSelector)))
+              syncStrategy:
+                description: |-
+                  The strategy that KubeFleet uses to synchronize the selected resources to the target clusters.
+                  Set the strategy to configure how selected resources are applied to a target cluster, how to handle
+                  drifts/conflicts when applying the resources, what to do with placed resources when the placement policy
+                  is deleted, and many more.
+                properties:
+                  applyMethod:
+                    default: ClientSideApply
+                    description: |-
+                      The method KubeFleet uses to apply resources to target clusters.
+
+                      Available options are:
+                      * ClientSideApply: KubeFleet applies resources to a target cluster using three-way merge patch, similar
+                        to how the Kubernetes CLI performs a client-side apply.
+                      * ServerSideApply: KubeFleet applies resources to a target cluster using server-side apply, which allows
+                        the API server to manage conflicts and merge changes.
+
+                      The default value is ClientSideApply.
+                    enum:
+                    - ClientSideApply
+                    - ServerSideApply
+                    type: string
+                  comparisonOption:
+                    default: PartialComparison
+                    description: |-
+                      How to compare the states between the target cluster side and the hub cluster side, when calculating drifts
+                      or diffs.
+
+                      Available options are:
+                      * PartialComparison: KubeFleet compares only the resource fields that have been explicitly specified on the hub cluster
+                        side.
+                      * FullComparison: KubeFleet compares all the fields of a resource, including those that are not specified on
+                        the hub cluster side.
+
+                      The default value is PartialComparison.
+                    enum:
+                    - PartialComparison
+                    - FullComparison
+                    type: string
+                  serverSideApplyOptions:
+                    description: |-
+                      The options for running server-side apply ops. This field takes effect only if the apply method is
+                      set to ServerSideApply.
+                    properties:
+                      forceConflicts:
+                        type: boolean
+                    type: object
+                  whenAlreadyExists:
+                    default: ReportError
+                    description: |-
+                      The action to take when a resource to be placed already exists on the target cluster side and is not managed
+                      by KubeFleet.
+
+                      Available options are:
+                      * AlwaysTakeOver: KubeFleet takes over the resource by registering itself as an owner of the resource (if
+                        the resource has no owner or co-ownership is allowed). This enables KubeFleet to adopt the existing resource for
+                        centralized management.
+                      * TakeOverIfNoDiff: KubeFleet takes over the resource only if the existing resource reads the same as the desired state
+                        specified on the hub cluster side.
+                      * ReportError: KubeFleet reports an error and leaves the existing resource as is.
+
+                      The default value is ReportError.
+                    enum:
+                    - AlwaysTakeOver
+                    - TakeOverIfNoDiff
+                    - ReportError
+                    type: string
+                  whenDrifted:
+                    default: ApplyAnyway
+                    description: |-
+                      The action to take when a resource on the target cluster side has drifted from its desired state as controlled
+                      by the placement. A drift can occur when a user or a controller on the target cluster makes an inadvertent change
+                      to a KubeFleet-managed resource.
+
+                      Available options are:
+                      * ApplyAnyway: KubeFleet applies the desired state, which might overwrite the drift.
+                      * ReportError: KubeFleet reports an error and leaves the drift as is.
+
+                      The default value is ApplyAnyway.
+                    enum:
+                    - ApplyAnyway
+                    - ReportError
+                    type: string
+                  whenNamespaceDoesNotExist:
+                    default: CreateNamespace
+                    description: |-
+                      The action to take when a resource to be placed is namespaced but its namespace does not exist on a target cluster.
+
+                      Available options are:
+                      * CreateNamespace: KubeFleet creates the namespace on the target cluster. Note that the namespace itself will not be
+                        managed by KubeFleet, and thus will not be deleted even if the placement itself has been deleted.
+                      * ReportError: KubeFleet reports an error and does not place the resource to the target cluster.
+
+                      The default value is CreateNamespace.
+                    enum:
+                    - CreateNamespace
+                    - ReportError
+                    type: string
+                  whenOwnedByOthers:
+                    default: ReportError
+                    description: |-
+                      How to handle resource co-ownership. This is most relevant when KubeFleet must manage resources that
+                      are already (or expected to be) owned by other non-KubeFleet controllers in target clusters.
+
+                      Available options are:
+                      * ShareOwnership: KubeFleet registers itself as a co-owner of the resource.
+                      * ReportError: KubeFleet reports an error when a resource to be placed is already owned by other controllers.
+
+                      The default value is ReportError.
+                    enum:
+                    - ShareOwnership
+                    - ReportError
+                    type: string
+                  whenPlacementDeleted:
+                    default: CleanUpResources
+                    description: |-
+                      The action to take on resources managed by a KubeFleet placement when the placement itself is deleted.
+
+                      Available options are:
+                      * CleanUpResources: KubeFleet deletes all the resources managed by the placement.
+                      * OrphanResources: KubeFleet relinquishes ownership of such resources and leaves them as they are on target clusters.
+
+                      The default value is CleanUpResources.
+                    enum:
+                    - CleanUpResources
+                    - OrphanResources
+                    type: string
+                type: object
+              tolerations:
+                description: |-
+                  The tolerations which allows KubeFleet to synchronize selected resources to tainted target
+                  clusters.
+                items:
+                  properties:
+                    effect:
+                      default: NoSchedule
+                      description: |-
+                        The effect of the taint that the toleration applies to.
+
+                        If set to empty, the toleration matches all taint effects.
+
+                        Currently the only accepted value is NoSchedule.
+                      enum:
+                      - NoSchedule
+                      type: string
+                    key:
+                      description: |-
+                        The key of the taint that the toleration applies to.
+
+                        If set to empty, the toleration matches all taint keys; and in this case, the Operator field must be set to Exists.
+                        This effectively sets the placement to tolerate all taints, regardless of their configuration.
+                      type: string
+                    operator:
+                      default: Equal
+                      description: |-
+                        The relationship between the key and value of the taint that the toleration applies to.
+
+                        Available options are Exists and Equal:
+                        * Exists: the toleration matches a taint as long as the it has the same key, regardless of its value.
+                        * Equal: the toleration matches a taint only if it has the same key and value.
+
+                        If set to Exists, the Value field must be left empty.
+
+                        Defaults to Equal.
+                      enum:
+                      - Equal
+                      - Exists
+                      type: string
+                    value:
+                      description: |-
+                        The value of the taint that the toleration applies to.
+
+                        If the Operator field is set to Exists, this field must be left empty.
+                      type: string
+                  type: object
+                maxItems: 10
+                type: array
+                x-kubernetes-validations:
+                - message: operator must be Exists and value must be empty when key
+                    is empty
+                  rule: self.all(t, t.key != '' || (t.operator == 'Exists' && t.value
+                    == ''))
+                - message: value must be empty when operator is Exists
+                  rule: self.all(t, t.operator != 'Exists' || t.value == '')
+            required:
+            - resourceSelectors
+            type: object
+          status:
+            description: The observed status of the placement policy.
+            properties:
+              bindingManager:
+                description: The binding manager that is currently managing the bindings
+                  for this placement.
+                properties:
+                  controllerName:
+                    description: A name of the controller that manages the bindings
+                      for this placement.
+                    type: string
+                  objectRefs:
+                    description: |-
+                      A list of references to the objects that are currently managing the bindings for this placement,
+                      under the reconciliation of the specified controller.
+                    items:
+                      properties:
+                        apiGroup:
+                          type: string
+                        apiVersion:
+                          type: string
+                        kind:
+                          type: string
+                        name:
+                          description: The name of the referenced object.
+                          type: string
+                        namespace:
+                          description: |-
+                            The namespace of the referenced object.
+
+                            If the object is cluster-scoped, this field should be left empty.
+                          type: string
+                      required:
+                      - apiVersion
+                      - kind
+                      - name
+                      type: object
+                    type: array
+                required:
+                - controllerName
+                type: object
+              conditions:
+                description: A list of conditions that describe the workload placement.
+                items:
+                  description: Condition contains details for one aspect of the current
+                    state of this API Resource.
+                  properties:
+                    lastTransitionTime:
+                      description: |-
+                        lastTransitionTime is the last time the condition transitioned from one status to another.
+                        This should be when the underlying condition changed.  If that is not known, then using the time when the API field changed is acceptable.
+                      format: date-time
+                      type: string
+                    message:
+                      description: |-
+                        message is a human readable message indicating details about the transition.
+                        This may be an empty string.
+                      maxLength: 32768
+                      type: string
+                    observedGeneration:
+                      description: |-
+                        observedGeneration represents the .metadata.generation that the condition was set based upon.
+                        For instance, if .metadata.generation is currently 12, but the .status.conditions[x].observedGeneration is 9, the condition is out of date
+                        with respect to the current state of the instance.
+                      format: int64
+                      minimum: 0
+                      type: integer
+                    reason:
+                      description: |-
+                        reason contains a programmatic identifier indicating the reason for the condition's last transition.
+                        Producers of specific condition types may define expected values and meanings for this field,
+                        and whether the values are considered a guaranteed API.
+                        The value should be a CamelCase string.
+                        This field may not be empty.
+                      maxLength: 1024
+                      minLength: 1
+                      pattern: ^[A-Za-z]([A-Za-z0-9_,:]*[A-Za-z0-9_])?$
+                      type: string
+                    status:
+                      description: status of the condition, one of True, False, Unknown.
+                      enum:
+                      - "True"
+                      - "False"
+                      - Unknown
+                      type: string
+                    type:
+                      description: type of condition in CamelCase or in foo.example.com/CamelCase.
+                      maxLength: 316
+                      pattern: ^([a-z0-9]([-a-z0-9]*[a-z0-9])?(\.[a-z0-9]([-a-z0-9]*[a-z0-9])?)*/)?(([A-Za-z0-9][-A-Za-z0-9_.]*)?[A-Za-z0-9])$
+                      type: string
+                  required:
+                  - lastTransitionTime
+                  - message
+                  - reason
+                  - status
+                  - type
+                  type: object
+                type: array
+              desiredClusters:
+                description: The number of clusters that are expected to be selected
+                  by this placement.
+                format: int32
+                type: integer
+              latestResourceRevisionName:
+                description: The name of the latest revision of the resources selected
+                  by this placement policy, in the form of a resource snapshot.
+                type: string
+              ongoingClusterRequests:
+                description: The number of ongoing cluster requests that have been
+                  submitted by this placement.
+                format: int32
+                type: integer
+              resourcesAvailableClusters:
+                description: The number of clusters that have resources in the available
+                  state, as verified by KubeFleet's availability check.
+                format: int32
+                type: integer
+              scheduledClusters:
+                description: The number of clusters that have been selected by this
+                  placement.
+                format: int32
+                type: integer
+              synchronizedClusters:
+                description: The number of clusters that have resources synchronized
+                  with their desired state on the hub cluster side.
+                format: int32
+                type: integer
+            type: object
+        required:
+        - spec
+        type: object
+    served: true
+    storage: true
+    subresources:
+      status: {}

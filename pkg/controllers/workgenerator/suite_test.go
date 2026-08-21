@@ -132,6 +132,17 @@ var _ = BeforeSuite(func() {
 				Version: "v1",
 				Kind:    "MutatingWebhookConfiguration",
 			}: true,
+			{
+				Group:   "admissionregistration.k8s.io",
+				Version: "v1",
+				Kind:    "ValidatingWebhookConfiguration",
+			}: true,
+			{
+				Group:   "rbac.authorization.k8s.io",
+				Version: "v1",
+				Kind:    "ClusterRole",
+			}: true,
+			placementv1beta1.GroupVersion.WithKind(string(placementv1beta1.ClusterResourceEnvelopeType)): true,
 		},
 		IsClusterScopedResource: true,
 	}

@@ -36,27 +36,41 @@ import (
 )
 
 // createOrUpdateEnvelopeCRWorkObj creates or updates a work object for a given envelope CR.
+//
+// The returned bool reports an override failure (used to fail the binding's Overridden condition);
+// it is only meaningful when the returned error is non-nil and is always false on success.
 func (r *Reconciler) createOrUpdateEnvelopeCRWorkObj(
 	ctx context.Context,
 	envelopeReader fleetv1beta1.EnvelopeReader,
 	workNamePrefix string,
 	binding fleetv1beta1.BindingObj,
 	resourceSnapshot fleetv1beta1.ResourceSnapshotObj,
+	overrideCtx *overrideContext,
 	resourceOverrideSnapshotHash, clusterResourceOverrideSnapshotHash string,
-) (*fleetv1beta1.Work, error) {
+) (*fleetv1beta1.Work, bool, error) {
 	manifests, err := extractManifestsFromEnvelopeCR(envelopeReader)
 	if err != nil {
 		klog.ErrorS(err, "Failed to extract manifests from the envelope spec",
 			"resourceBinding", klog.KObj(binding),
 			"resourceSnapshot", klog.KObj(resourceSnapshot),
 			"envelope", envelopeReader.GetEnvelopeObjRef())
-		return nil, err
+		return nil, false, err
 	}
 	klog.V(2).InfoS("Successfully extracted wrapped manifests from the envelope",
 		"numOfResources", len(manifests),
 		"resourceBinding", klog.KObj(binding),
 		"resourceSnapshot", klog.KObj(resourceSnapshot),
 		"envelope", envelopeReader.GetEnvelopeObjRef())
+
+	var overrideFailed bool
+	manifests, overrideFailed, err = r.applyOverridesToEnvelopeManifests(manifests, overrideCtx, envelopeReader)
+	if err != nil {
+		klog.ErrorS(err, "Failed to apply override rules to the manifests extracted from the envelope",
+			"resourceBinding", klog.KObj(binding),
+			"resourceSnapshot", klog.KObj(resourceSnapshot),
+			"envelope", envelopeReader.GetEnvelopeObjRef())
+		return nil, overrideFailed, err
+	}
 
 	// Check to see if a corresponding work object has been created for the envelope.
 	labelMatcher := client.MatchingLabels{
@@ -83,7 +97,7 @@ func (r *Reconciler) createOrUpdateEnvelopeCRWorkObj(
 			"resourceSnapshot", klog.KObj(resourceSnapshot),
 			"envelope", envelopeReader.GetEnvelopeObjRef())
 		wrappedErr := fmt.Errorf("failed to list work objects when finding the work object for an envelope %v: %w", envelopeReader.GetEnvelopeObjRef(), err)
-		return nil, controller.NewAPIServerError(true, wrappedErr)
+		return nil, false, controller.NewAPIServerError(true, wrappedErr)
 	}
 
 	var work *fleetv1beta1.Work
@@ -110,7 +124,7 @@ func (r *Reconciler) createOrUpdateEnvelopeCRWorkObj(
 		r.recorder.Eventf(binding, corev1.EventTypeWarning, "DuplicateEnvelopeWorks",
 			"Multiple Work objects (%v) found for envelope %v in namespace %s; delete all but the oldest to recover",
 			workNames, envelopeReader.GetEnvelopeObjRef(), fmt.Sprintf(utils.NamespaceNameFormat, binding.GetBindingSpec().TargetCluster))
-		return nil, controller.NewUnexpectedBehaviorError(wrappedErr)
+		return nil, false, controller.NewUnexpectedBehaviorError(wrappedErr)
 	case len(workList.Items) == 1:
 		klog.V(2).InfoS("Found existing work object for the envelope; updating it",
 			"work", klog.KObj(&workList.Items[0]),
@@ -128,7 +142,54 @@ func (r *Reconciler) createOrUpdateEnvelopeCRWorkObj(
 		work = buildNewWorkForEnvelopeCR(workNamePrefix, binding, resourceSnapshot, envelopeReader, manifests, resourceOverrideSnapshotHash, clusterResourceOverrideSnapshotHash)
 	}
 
-	return work, nil
+	return work, false, nil
+}
+
+// applyOverridesToEnvelopeManifests applies the override rules to each manifest extracted from an
+// envelope, dropping any manifest that a Delete override removes, and returns the surviving,
+// overridden manifests.
+//
+// The returned bool reports whether applying the override rules failed, as opposed to a manifest
+// parse failure; it is only meaningful when the returned error is non-nil, and lets the caller fail
+// the binding's Overridden condition. On success it is always false, so false alone does not mean
+// "overrides succeeded".
+func (r *Reconciler) applyOverridesToEnvelopeManifests(
+	manifests []fleetv1beta1.Manifest,
+	overrideCtx *overrideContext,
+	envelopeReader fleetv1beta1.EnvelopeReader,
+) ([]fleetv1beta1.Manifest, bool, error) {
+	overriddenManifests := make([]fleetv1beta1.Manifest, 0, len(manifests))
+	for i := range manifests {
+		manifest := manifests[i]
+		resourceContent := &fleetv1beta1.ResourceContent{
+			RawExtension: manifest.RawExtension,
+		}
+		if manifest.Raw != nil {
+			resourceContent.Raw = append([]byte(nil), manifest.Raw...)
+		}
+
+		var target unstructured.Unstructured
+		if err := target.UnmarshalJSON(resourceContent.Raw); err != nil {
+			wrappedErr := fmt.Errorf("failed to parse manifest from envelope %v: %w", envelopeReader.GetEnvelopeObjRef(), err)
+			return nil, false, controller.NewUnexpectedBehaviorError(wrappedErr)
+		}
+
+		deleted, err := r.applyOverrides(resourceContent, overrideCtx.cluster, overrideCtx.croMap, overrideCtx.roMap)
+		if err != nil {
+			return nil, true, fmt.Errorf("failed to apply overrides to %s from envelope %v: %w", formatOverrideTarget(&target), envelopeReader.GetEnvelopeObjRef(), err)
+		}
+		if deleted {
+			klog.V(2).InfoS("The envelope manifest is deleted by the override rules",
+				"envelope", envelopeReader.GetEnvelopeObjRef(),
+				"resource", klog.KObj(&target))
+			continue
+		}
+
+		overriddenManifests = append(overriddenManifests, fleetv1beta1.Manifest{
+			RawExtension: resourceContent.RawExtension,
+		})
+	}
+	return overriddenManifests, false, nil
 }
 
 func extractManifestsFromEnvelopeCR(envelopeReader fleetv1beta1.EnvelopeReader) ([]fleetv1beta1.Manifest, error) {
