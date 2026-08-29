@@ -6,6 +6,8 @@ updates:
       interval: "weekly"
     commit-message:
       prefix: "chore"
+    cooldown:
+      default-days: 7
 
   - package-ecosystem: "docker"
     directory: "/docker"
