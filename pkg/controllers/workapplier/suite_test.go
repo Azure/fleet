@@ -298,6 +298,7 @@ var _ = BeforeSuite(func() {
 	setupResources()
 
 	By("Setting up the controller and the controller manager for member cluster 1")
+	gracefulShutdownTimeout := 2 * time.Minute
 	hubMgr1, err = ctrl.NewManager(hubCfg, ctrl.Options{
 		Scheme: scheme.Scheme,
 		Metrics: server.Options{
@@ -308,7 +309,8 @@ var _ = BeforeSuite(func() {
 				memberReservedNSName1: {},
 			},
 		},
-		Logger: textlogger.NewLogger(textlogger.NewConfig(textlogger.Verbosity(4))),
+		Logger:                  textlogger.NewLogger(textlogger.NewConfig(textlogger.Verbosity(4))),
+		GracefulShutdownTimeout: &gracefulShutdownTimeout,
 	})
 	Expect(err).ToNot(HaveOccurred())
 
@@ -341,7 +343,8 @@ var _ = BeforeSuite(func() {
 				memberReservedNSName2: {},
 			},
 		},
-		Logger: textlogger.NewLogger(textlogger.NewConfig(textlogger.Verbosity(4))),
+		Logger:                  textlogger.NewLogger(textlogger.NewConfig(textlogger.Verbosity(4))),
+		GracefulShutdownTimeout: &gracefulShutdownTimeout,
 	})
 	Expect(err).ToNot(HaveOccurred())
 
@@ -392,7 +395,8 @@ var _ = BeforeSuite(func() {
 				memberReservedNSName3: {},
 			},
 		},
-		Logger: textlogger.NewLogger(textlogger.NewConfig(textlogger.Verbosity(4))),
+		Logger:                  textlogger.NewLogger(textlogger.NewConfig(textlogger.Verbosity(4))),
+		GracefulShutdownTimeout: &gracefulShutdownTimeout,
 	})
 	Expect(err).ToNot(HaveOccurred())
 
@@ -431,7 +435,8 @@ var _ = BeforeSuite(func() {
 				memberReservedNSName4: {},
 			},
 		},
-		Logger: textlogger.NewLogger(textlogger.NewConfig(textlogger.Verbosity(4))),
+		Logger:                  textlogger.NewLogger(textlogger.NewConfig(textlogger.Verbosity(4))),
+		GracefulShutdownTimeout: &gracefulShutdownTimeout,
 	})
 	Expect(err).ToNot(HaveOccurred())
 
