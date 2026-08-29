@@ -35,7 +35,7 @@ jobs:
       REGISTRY: ${{ needs.export-registry.outputs.registry }}
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6.1.0
         with:
           submodules: true
           fetch-depth: 0
@@ -48,7 +48,7 @@ jobs:
             echo "REFRESH_TOKEN_IMAGE_VERSION=${GITHUB_REF#refs/tags/}"
           } >> "$GITHUB_ENV"
       - name: Login to ${{ env.REGISTRY }}
-        uses: docker/login-action@5e57cd118135c172c3672efd75eb46360885c0ef
+        uses: docker/login-action@5e57cd118135c172c3672efd75eb46360885c0ef # v3.6.0
         with:
           registry: ${{ env.REGISTRY }}
           username: ${{ github.actor }}
