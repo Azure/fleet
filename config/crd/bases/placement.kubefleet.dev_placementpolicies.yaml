@@ -221,19 +221,19 @@ spec:
                       maxItems: 5
                       type: array
                     whenUnfulfilled:
-                      default: RequestCluster
+                      default: AddClusterClaim
                       description: |-
                         The action to take when KubeFleet is not able to find the desired (minimum) number of clusters based on the given terms.
 
                         Available options are:
-                        * RequestCluster: KubeFleet will submit a cluster request to signal that a new cluster is needed to complete the placement.
-                          It is up to the platform/cloud provider to fulfill the request.
-                        * KeepSearching: KubeFleet will keep searching for clusters that match the given terms silently; no cluster request will be
-                          submitted.
+                        * AddClusterClaim: KubeFleet will add a cluster claim to signal that a new cluster is needed to complete the placement.
+                          It is up to the platform/cloud provider to fulfill the claim.
+                        * KeepSearching: KubeFleet will keep searching for clusters that match the given terms silently; no cluster claim will be
+                          added.
 
-                        This field takes effect only when cluster requests are enabled in KubeFleet.
+                        This field takes effect only when cluster claims are enabled in KubeFleet.
                       enum:
-                      - RequestCluster
+                      - AddClusterClaim
                       - KeepSearching
                       type: string
                   type: object
@@ -549,6 +549,11 @@ spec:
           status:
             description: The observed status of the placement policy.
             properties:
+              activeClusterClaims:
+                description: The number of active cluster claims that have been submitted
+                  by this placement.
+                format: int32
+                type: integer
               bindingManager:
                 description: The binding manager that is currently managing the bindings
                   for this placement.
@@ -653,11 +658,6 @@ spec:
                 description: The name of the latest revision of the resources selected
                   by this placement policy, in the form of a resource snapshot.
                 type: string
-              ongoingClusterRequests:
-                description: The number of ongoing cluster requests that have been
-                  submitted by this placement.
-                format: int32
-                type: integer
               resourcesAvailableClusters:
                 description: The number of clusters that have resources in the available
                   state, as verified by KubeFleet's availability check.

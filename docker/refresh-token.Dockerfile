@@ -1,8 +1,12 @@
+# syntax=docker/dockerfile:1
 # Build the refreshtoken binary
 FROM mcr.microsoft.com/oss/go/microsoft/golang:1.26.6-1 AS builder
 
-ARG GOOS="linux"
-ARG GOARCH="amd64"
+# TARGETOS and TARGETARCH are populated automatically by BuildKit for each
+# platform being built, so a single multi-platform `docker buildx build`
+# produces a correctly built binary per architecture.
+ARG TARGETOS
+ARG TARGETARCH
 
 WORKDIR /workspace
 # Copy the Go Modules manifests
@@ -18,17 +22,19 @@ COPY pkg/authtoken pkg/authtoken
 # writefile is a dependency of pkg/authtoken for secure file creation (0600 permissions)
 COPY pkg/utils/writefile pkg/utils/writefile
 
-ARG TARGETARCH
+# Build. CGO + systemcrypto compiles against the target architecture's OpenSSL,
+# which is why the builder runs per-target under emulation (see the Makefile's
+# docker-buildx-builder / setup-qemu targets) rather than cross-compiling.
+RUN echo "Building refreshtoken with GOOS=${TARGETOS} GOARCH=${TARGETARCH}" && \
+    CGO_ENABLED=1 GOOS=${TARGETOS} GOARCH=${TARGETARCH} GOEXPERIMENT=systemcrypto go build -o refreshtoken .
 
-# Build
-RUN echo "Building images with GOOS=${GOOS} GOARCH=${GOARCH}"
-RUN CGO_ENABLED=1 GOOS=$GOOS GOARCH=$GOARCH GOEXPERIMENT=systemcrypto GO111MODULE=on go build -o refreshtoken main.go
-
-# Use Azure Linux distroless base image to package the refreshtoken binary
-# Refer to https://mcr.microsoft.com/en-us/artifact/mar/azurelinux/distroless/base/about for more details
-FROM mcr.microsoft.com/azurelinux/distroless/base:3.0
+# Use distroless as minimal base image to package the refreshtoken binary.
+# The pinned digest must reference a multi-arch image index so BuildKit can
+# resolve the matching base layer for each target architecture.
+# Refer to https://github.com/GoogleContainerTools/distroless for more details
+FROM gcr.io/distroless/base:nonroot@sha256:2d7d29b504e7166f6d0c7655a18ebf5def5b37b029f8c4f8667e434ba774844f
 WORKDIR /
-COPY --from=builder /workspace/refreshtoken .
+COPY --link --from=builder /workspace/refreshtoken .
 USER 65532:65532
 
 ENTRYPOINT ["/refreshtoken"]

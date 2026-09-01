@@ -184,16 +184,16 @@ type ClusterSelector struct {
 	// The action to take when KubeFleet is not able to find the desired (minimum) number of clusters based on the given terms.
 	//
 	// Available options are:
-	// * RequestCluster: KubeFleet will submit a cluster request to signal that a new cluster is needed to complete the placement.
-	//   It is up to the platform/cloud provider to fulfill the request.
-	// * KeepSearching: KubeFleet will keep searching for clusters that match the given terms silently; no cluster request will be
-	//   submitted.
+	// * AddClusterClaim: KubeFleet will add a cluster claim to signal that a new cluster is needed to complete the placement.
+	//   It is up to the platform/cloud provider to fulfill the claim.
+	// * KeepSearching: KubeFleet will keep searching for clusters that match the given terms silently; no cluster claim will be
+	//   added.
 	//
-	// This field takes effect only when cluster requests are enabled in KubeFleet.
+	// This field takes effect only when cluster claims are enabled in KubeFleet.
 	//
 	// +kubebuilder:validation:Optional
-	// +kubebuilder:default=RequestCluster
-	// +kubebuilder:validation:Enum=RequestCluster;KeepSearching
+	// +kubebuilder:default=AddClusterClaim
+	// +kubebuilder:validation:Enum=AddClusterClaim;KeepSearching
 	WhenUnfulfilled WhenUnfulfilledOption `json:"whenUnfulfilled,omitempty"`
 }
 
@@ -271,8 +271,8 @@ const (
 type WhenUnfulfilledOption string
 
 const (
-	WhenUnfulfilledOptionRequestCluster WhenUnfulfilledOption = "RequestCluster"
-	WhenUnfulfilledOptionKeepSearching  WhenUnfulfilledOption = "KeepSearching"
+	WhenUnfulfilledOptionAddClusterClaim WhenUnfulfilledOption = "AddClusterClaim"
+	WhenUnfulfilledOptionKeepSearching   WhenUnfulfilledOption = "KeepSearching"
 )
 
 type ResourceSelector struct {
@@ -547,8 +547,8 @@ type PlacementPolicyStatus struct {
 	// The number of clusters that have resources in the available state, as verified by KubeFleet's availability check.
 	ResourcesAvailableClusters *int32 `json:"resourcesAvailableClusters,omitempty"`
 
-	// The number of ongoing cluster requests that have been submitted by this placement.
-	OngoingClusterRequests *int32 `json:"ongoingClusterRequests,omitempty"`
+	// The number of active cluster claims that have been submitted by this placement.
+	ActiveClusterClaims *int32 `json:"activeClusterClaims,omitempty"`
 
 	// The binding manager that is currently managing the bindings for this placement.
 	// +kubebuilder:validation:Optional

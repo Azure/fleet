@@ -8,6 +8,12 @@ MEMBER_AGENT_IMAGE_VERSION ?= $(TAG)
 REFRESH_TOKEN_IMAGE_VERSION ?= $(TAG)
 CRD_INSTALLER_IMAGE_VERSION ?= $(TAG)
 
+# Optional additional tag applied to every image within the same `docker buildx
+# build` invocation. A stable release sets this to the short, v-less version
+# (e.g. "0.4.0") so both "v0.4.0" and "0.4.0" are published from one build,
+# which replaces a separate `docker buildx imagetools create` retag step.
+IMAGE_EXTRA_TAG ?=
+
 HUB_AGENT_IMAGE_NAME ?= hub-agent
 MEMBER_AGENT_IMAGE_NAME ?= member-agent
 REFRESH_TOKEN_IMAGE_NAME ?= refresh-token
@@ -71,7 +77,7 @@ GOIMPORTS_VER := v0.42.0
 GOIMPORTS_BIN := goimports
 GOIMPORTS := $(abspath $(TOOLS_BIN_DIR)/$(GOIMPORTS_BIN)-$(GOIMPORTS_VER))
 
-GOLANGCI_LINT_VER := v1.64.7
+GOLANGCI_LINT_VER := v2.13.2
 GOLANGCI_LINT_BIN := golangci-lint
 GOLANGCI_LINT := $(abspath $(TOOLS_BIN_DIR)/$(GOLANGCI_LINT_BIN)-$(GOLANGCI_LINT_VER))
 
@@ -106,7 +112,7 @@ GO_INSTALL := ./hack/go-install.sh
 ## --------------------------------------
 
 $(GOLANGCI_LINT):
-	GOBIN=$(TOOLS_BIN_DIR) $(GO_INSTALL) github.com/golangci/golangci-lint/cmd/golangci-lint $(GOLANGCI_LINT_BIN) $(GOLANGCI_LINT_VER)
+	GOBIN=$(TOOLS_BIN_DIR) $(GO_INSTALL) github.com/golangci/golangci-lint/v2/cmd/golangci-lint $(GOLANGCI_LINT_BIN) $(GOLANGCI_LINT_VER)
 
 $(CONTROLLER_GEN):
 	GOBIN=$(TOOLS_BIN_DIR) $(GO_INSTALL) sigs.k8s.io/controller-tools/cmd/controller-gen $(CONTROLLER_GEN_BIN) $(CONTROLLER_GEN_VER)
@@ -151,11 +157,11 @@ help: ## Display this help
 
 .PHONY: lint
 lint: $(GOLANGCI_LINT) ## Run fast linting
-	$(GOLANGCI_LINT) run -v
+	$(GOLANGCI_LINT) run -v --fast-only
 
 .PHONY: lint-full
 lint-full: $(GOLANGCI_LINT) ## Run slower linters to detect possible issues
-	$(GOLANGCI_LINT) run -v --fast=false
+	$(GOLANGCI_LINT) run -v
 
 ## --------------------------------------
 ## Development
@@ -295,12 +301,49 @@ run-crdinstaller: manifests generate fmt vet ## Run CRD installer from your host
 
 OUTPUT_TYPE ?= type=registry
 BUILDX_BUILDER_NAME ?= img-builder
-QEMU_VERSION ?= 7.2.0-1
 BUILDKIT_VERSION ?= v0.18.1
 
+# QEMU binfmt registration images (see setup-qemu). Both run --privileged, so
+# they come from the Microsoft-vetted MCR mirrors (no direct third-party pulls)
+# and are pinned by digest as well as tag: a floating reference on a privileged
+# release-path container is a supply-chain risk. The binfmt mirror digest is
+# byte-identical to the upstream docker.io/tonistiigi/binfmt tag it mirrors.
+#
+# qemu-user-static has no manifest list - neither upstream nor on the mirror. It
+# is a single linux/amd64 schema-2 manifest, which is all setup-qemu needs: the
+# QEMU_IMAGE branch runs only when TARGET_ARCH is amd64. Obtain its digest with a
+# request that names a schema-2 or OCI media type (substitute QEMU_VERSION for the
+# tag):
+#
+#   curl -sI -H 'Accept: application/vnd.docker.distribution.manifest.v2+json' \
+#     https://mcr.microsoft.com/v2/mirror/docker/multiarch/qemu-user-static/manifests/7.2.0-1 \
+#     | grep -i docker-content-digest
+#
+# `docker manifest inspect -v` and `docker buildx imagetools inspect` also report
+# the correct digest. What does NOT is a bare `curl -sI` sending no Accept header,
+# or one naming only the manifest-list type: MCR then answers with a deprecated
+# schema-1 `v1+prettyjws` view synthesised on demand from the schema-2 manifest.
+# The digest it advertises is stable, but it is never stored as a manifest
+# revision, so fetching by it returns "manifest unknown" and every pull of a pin
+# taken that way fails - most likely how the previous pin here was produced.
+#
+# Both mirrors carry exactly one tag today, so bumping either version below needs
+# MCR to onboard the new tag first.
+QEMU_VERSION ?= 7.2.0-1
+QEMU_IMAGE ?= mcr.microsoft.com/mirror/docker/multiarch/qemu-user-static:$(QEMU_VERSION)@sha256:fe60359c92e86a43cc87b3d906006245f77bfc0565676b80004cc666e4feb9f0
+BINFMT_VERSION ?= qemu-v9.2.2-52
+BINFMT_IMAGE ?= mcr.microsoft.com/mirror/docker/tonistiigi/binfmt:$(BINFMT_VERSION)@sha256:1b804311fe87047a4c96d38b4b3ef6f62fca8cd125265917a9e3dc3c996c39e6
+
+# Platforms to build container images for. Defaults to the host/target platform
+# so local single-arch builds (e.g. loading into kind, which cannot load a
+# multi-platform image) keep working unchanged; `push` overrides this to build a
+# multi-arch manifest for the release.
+PLATFORMS ?= $(TARGET_OS)/$(TARGET_ARCH)
+RELEASE_PLATFORMS ?= linux/amd64,linux/arm64
+
 .PHONY: push
-push: ## Build and push all Docker images
-	$(MAKE) OUTPUT_TYPE="type=registry" docker-build-hub-agent docker-build-member-agent docker-build-refresh-token docker-build-crd-installer
+push: ## Build and push all Docker images as multi-arch manifests
+	$(MAKE) OUTPUT_TYPE="type=registry" PLATFORMS="$(RELEASE_PLATFORMS)" docker-build-hub-agent docker-build-member-agent docker-build-refresh-token
 
 .PHONY: helm-push
 helm-push: ## Package and push Helm charts to OCI registry
@@ -347,72 +390,78 @@ crd-verify: ## Verify the chart CRD directories cover every CRD in config/crd/ba
 	fi; \
 	echo "crd-verify: chart CRD directories cover all CRDs in config/crd/bases"
 
-# By default, docker buildx create will pull image moby/buildkit:buildx-stable-1 and hit the too many requests error
+# Register QEMU binfmt handlers so the host can build/run non-native binaries.
+# This must run for any build that targets a non-native platform - whether a
+# multi-platform build or a single-platform cross build (e.g. PLATFORMS=linux/arm64
+# on an amd64 host) - regardless of whether the buildx builder already exists (a
+# pre-existing builder would otherwise skip emulation setup and the foreign-arch
+# build would fail with "exec format error"). The registration is idempotent, so
+# it is safe to re-run. It is skipped only when PLATFORMS is exactly the native
+# platform, which never needs emulation.
 #
-# Note (chenyu1): the step below sets up emulation for building/running non-native binaries on the host. The original
-# setup assumes that the Makefile is always run on an x86_64 platform, and adds support for non-x86_64 hosts. Here
-# we keep the original setup if the build target is x86_64 platforms (default) for compatibility reasons, but will switch to
-# a more general setup for non-x86_64 hosts.
-#
-# On some systems the emulation setup might not work at all (e.g., macOS on Apple Silicon -> Rosetta 2 will be used
-# by Docker Desktop as the default emulation option for AMD64 on ARM64 container compatibility).
-.PHONY: docker-buildx-builder
-# Note (chenyu1): the step below sets up emulation for building/running non-native binaries on the host. The original
-# setup assumes that the Makefile is always run on an x86_64 platform, and adds support for non-x86_64 hosts. Here
-# we keep the original setup if the build target is x86_64 platforms (default) for compatibility reasons, but will switch to
-# a more general setup for non-x86_64 hosts.
-#
-# On some systems the emulation setup might not work at all (e.g., macOS on Apple Silicon -> Rosetta 2 will be used 
-# by Docker Desktop as the default emulation option for AMD64 on ARM64 container compatibility).
-docker-buildx-builder:
+# On some systems the emulation setup might not work at all (e.g., macOS on Apple
+# Silicon -> Rosetta 2 will be used by Docker Desktop as the default emulation
+# option for AMD64 on ARM64 container compatibility).
+.PHONY: setup-qemu
+setup-qemu: ## Register QEMU emulation for multi-architecture image builds
 	$(info Auto-detected system architecture: $(TARGET_ARCH))
-	@if ! docker buildx ls | grep $(BUILDX_BUILDER_NAME); then \
-		if [ "$(TARGET_ARCH)" = "amd64" ] ; then \
-			echo "The target is an x86_64 platform; setting up emulation for other known architectures"; \
-			docker run --rm --privileged mcr.microsoft.com/mirror/docker/multiarch/qemu-user-static:$(QEMU_VERSION) --reset -p yes; \
-		else \
-			echo "Setting up emulation for known architectures"; \
-			docker run --rm --privileged tonistiigi/binfmt --install all; \
-		fi ;\
-		docker buildx create --driver-opt image=mcr.microsoft.com/oss/v2/moby/buildkit:$(BUILDKIT_VERSION) --name $(BUILDX_BUILDER_NAME) --use; \
-		docker buildx inspect $(BUILDX_BUILDER_NAME) --bootstrap; \
+	@case "$(PLATFORMS)" in \
+		"$(TARGET_OS)/$(TARGET_ARCH)") \
+			echo "Native single-platform build ($(PLATFORMS)); skipping QEMU setup" ;; \
+		*) \
+			echo "Build targets non-native platforms ($(PLATFORMS)); registering QEMU emulation"; \
+			if [ "$(TARGET_ARCH)" = "amd64" ] ; then \
+				docker run --rm --privileged $(QEMU_IMAGE) --reset -p yes; \
+			else \
+				docker run --rm --privileged $(BINFMT_IMAGE) --install all; \
+			fi ;; \
+	esac
+
+# By default, docker buildx create will pull image moby/buildkit:buildx-stable-1 and hit the too many requests error
+# Always select and bootstrap the named builder, not only on creation: if the
+# builder already exists but another builder is current, the subsequent
+# `docker buildx build` would silently run on the wrong builder (potentially a
+# docker-driver one with no multi-platform support).
+.PHONY: docker-buildx-builder
+docker-buildx-builder: setup-qemu
+	@if ! docker buildx ls | grep -q "$(BUILDX_BUILDER_NAME)"; then \
+		docker buildx create --driver-opt image=mcr.microsoft.com/oss/v2/moby/buildkit:$(BUILDKIT_VERSION) --name $(BUILDX_BUILDER_NAME); \
 	fi
+	docker buildx use $(BUILDX_BUILDER_NAME)
+	docker buildx inspect $(BUILDX_BUILDER_NAME) --bootstrap
 
 .PHONY: docker-build-hub-agent
 docker-build-hub-agent: docker-buildx-builder ## Build hub-agent image
 	docker buildx build \
 		--file docker/$(HUB_AGENT_IMAGE_NAME).Dockerfile \
 		--output=$(OUTPUT_TYPE) \
-		--platform=$(TARGET_OS)/$(TARGET_ARCH) \
+		--platform=$(PLATFORMS) \
 		--pull \
 		--tag $(REGISTRY)/$(HUB_AGENT_IMAGE_NAME):$(HUB_AGENT_IMAGE_VERSION) \
-		--progress=$(BUILDKIT_PROGRESS_TYPE) \
-		--build-arg GOARCH=$(TARGET_ARCH) \
-		--build-arg GOOS=$(TARGET_OS) .
+		$(if $(IMAGE_EXTRA_TAG),--tag $(REGISTRY)/$(HUB_AGENT_IMAGE_NAME):$(IMAGE_EXTRA_TAG)) \
+		--progress=$(BUILDKIT_PROGRESS_TYPE) .
 
 .PHONY: docker-build-member-agent
 docker-build-member-agent: docker-buildx-builder ## Build member-agent image
 	docker buildx build \
 		--file docker/$(MEMBER_AGENT_IMAGE_NAME).Dockerfile \
 		--output=$(OUTPUT_TYPE) \
-		--platform=$(TARGET_OS)/$(TARGET_ARCH) \
+		--platform=$(PLATFORMS) \
 		--pull \
 		--tag $(REGISTRY)/$(MEMBER_AGENT_IMAGE_NAME):$(MEMBER_AGENT_IMAGE_VERSION) \
-		--progress=$(BUILDKIT_PROGRESS_TYPE) \
-		--build-arg GOARCH=$(TARGET_ARCH) \
-		--build-arg GOOS=$(TARGET_OS) .
+		$(if $(IMAGE_EXTRA_TAG),--tag $(REGISTRY)/$(MEMBER_AGENT_IMAGE_NAME):$(IMAGE_EXTRA_TAG)) \
+		--progress=$(BUILDKIT_PROGRESS_TYPE) .
 
 .PHONY: docker-build-refresh-token
 docker-build-refresh-token: docker-buildx-builder ## Build refresh-token image
 	docker buildx build \
 		--file docker/$(REFRESH_TOKEN_IMAGE_NAME).Dockerfile \
 		--output=$(OUTPUT_TYPE) \
-		--platform=$(TARGET_OS)/$(TARGET_ARCH) \
+		--platform=$(PLATFORMS) \
 		--pull \
 		--tag $(REGISTRY)/$(REFRESH_TOKEN_IMAGE_NAME):$(REFRESH_TOKEN_IMAGE_VERSION) \
-		--progress=$(BUILDKIT_PROGRESS_TYPE) \
-		--build-arg GOARCH=$(TARGET_ARCH) \
-		--build-arg GOOS=${TARGET_OS} .
+		$(if $(IMAGE_EXTRA_TAG),--tag $(REGISTRY)/$(REFRESH_TOKEN_IMAGE_NAME):$(IMAGE_EXTRA_TAG)) \
+		--progress=$(BUILDKIT_PROGRESS_TYPE) .
 
 .PHONY: docker-build-crd-installer
 docker-build-crd-installer: docker-buildx-builder

@@ -32,10 +32,9 @@ import (
 
 	fleetnetworkingv1alpha1 "go.goms.io/fleet-networking/api/v1alpha1"
 
-	clusterv1beta1 "go.goms.io/fleet/apis/cluster/v1beta1"
-	placementv1beta1 "go.goms.io/fleet/apis/placement/v1beta1"
-	"go.goms.io/fleet/pkg/utils"
-	"go.goms.io/fleet/pkg/utils/controller"
+	clusterv1beta1 "github.com/kubefleet-dev/kubefleet/apis/cluster/v1beta1"
+	placementv1beta1 "github.com/kubefleet-dev/kubefleet/apis/placement/v1beta1"
+	"github.com/kubefleet-dev/kubefleet/pkg/utils"
 )
 
 const (
@@ -462,14 +461,10 @@ var _ = Describe("Test member cluster join and leave with clusterProfile", Label
 					if cp.Status.Version.Kubernetes == "" {
 						return fmt.Errorf("cluster profile %s Kubernetes version should not be empty", cp.Name)
 					}
-					if len(cp.Status.AccessProviders) != 1 {
-						return fmt.Errorf("cluster profile %s has no access providers %+v", cp.Name, cp.Status.AccessProviders)
-					}
-					if cp.Status.AccessProviders[0].Name != controller.ClusterManagerName {
-						return fmt.Errorf("cluster profile %s access provider name %s doesn't match expected %s", cp.Name, cp.Status.AccessProviders[0].Name, controller.ClusterManagerName)
-					}
-					if len(cp.Status.AccessProviders[0].Cluster.CertificateAuthorityData) == 0 {
-						return fmt.Errorf("cluster profile %s access provider certificate authority data should not be empty", allMemberClusterNames[idx])
+					if len(cp.Status.AccessProviders) != 0 {
+						// Note: at this moment the Azure property provider does not expose cluster FQDNs, and
+						// as a result no access provider will be populated.
+						return fmt.Errorf("cluster profile %s has access providers %+v", cp.Name, cp.Status.AccessProviders)
 					}
 				}
 				return nil

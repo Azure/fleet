@@ -171,6 +171,10 @@ var _ = Describe("Test ClusterProfile Controller", func() {
 			},
 		}
 		mc.Status.Properties = map[clusterv1beta1.PropertyName]clusterv1beta1.PropertyValue{
+			propertyprovider.ClusterEntryPointProperty: {
+				Value:           "https://dummy-cluster-endpoint",
+				ObservationTime: metav1.Time{Time: time.Now()},
+			},
 			propertyprovider.ClusterCertificateAuthorityProperty: {
 				Value:           "dummy-ca-data",
 				ObservationTime: metav1.Time{Time: time.Now()},

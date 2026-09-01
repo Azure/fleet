@@ -23,6 +23,7 @@ import (
 	"github.com/google/go-cmp/cmp"
 	"k8s.io/apimachinery/pkg/api/meta"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	clientcmdv1 "k8s.io/client-go/tools/clientcmd/api/v1"
 	clusterinventory "sigs.k8s.io/cluster-inventory-api/apis/v1alpha1"
 
 	clusterv1beta1 "go.goms.io/fleet/apis/cluster/v1beta1"
@@ -84,7 +85,7 @@ func TestFillInClusterStatus(t *testing.T) {
 			},
 			clusterProfile:       &clusterinventory.ClusterProfile{},
 			expectVersion:        false,
-			expectAccessProvider: true,
+			expectAccessProvider: false,
 		},
 		{
 			name: "Cluster property collection succeeded with k8s version only",
@@ -111,7 +112,7 @@ func TestFillInClusterStatus(t *testing.T) {
 			clusterProfile:       &clusterinventory.ClusterProfile{},
 			expectVersion:        true,
 			expectedK8sVersion:   "v1.28.0",
-			expectAccessProvider: true,
+			expectAccessProvider: false,
 		},
 		{
 			name: "Cluster property collection succeeded with all properties",
@@ -176,8 +177,79 @@ func TestFillInClusterStatus(t *testing.T) {
 			clusterProfile:       &clusterinventory.ClusterProfile{},
 			expectVersion:        true,
 			expectedK8sVersion:   "v1.27.5",
-			expectAccessProvider: true,
-			expectedServer:       "https://api.partial-cluster.example.com:6443",
+			expectAccessProvider: false,
+		},
+		{
+			name: "Cluster property collection succeeded but access provider properties are empty",
+			memberCluster: &clusterv1beta1.MemberCluster{
+				ObjectMeta: metav1.ObjectMeta{
+					Name:       "test-cluster",
+					Generation: 1,
+				},
+				Status: clusterv1beta1.MemberClusterStatus{
+					Conditions: []metav1.Condition{
+						{
+							Type:               string(clusterv1beta1.ConditionTypeClusterPropertyCollectionSucceeded),
+							Status:             metav1.ConditionTrue,
+							ObservedGeneration: 1,
+						},
+					},
+					Properties: map[clusterv1beta1.PropertyName]clusterv1beta1.PropertyValue{
+						propertyprovider.K8sVersionProperty: {
+							Value: "v1.30.0",
+						},
+						propertyprovider.ClusterEntryPointProperty: {
+							Value: "",
+						},
+						propertyprovider.ClusterCertificateAuthorityProperty: {
+							Value: "",
+						},
+					},
+				},
+			},
+			clusterProfile:       &clusterinventory.ClusterProfile{},
+			expectVersion:        true,
+			expectedK8sVersion:   "v1.30.0",
+			expectAccessProvider: false,
+		},
+		{
+			name: "Access provider properties missing resets a previously populated access provider",
+			memberCluster: &clusterv1beta1.MemberCluster{
+				ObjectMeta: metav1.ObjectMeta{
+					Name:       "test-cluster",
+					Generation: 1,
+				},
+				Status: clusterv1beta1.MemberClusterStatus{
+					Conditions: []metav1.Condition{
+						{
+							Type:               string(clusterv1beta1.ConditionTypeClusterPropertyCollectionSucceeded),
+							Status:             metav1.ConditionTrue,
+							ObservedGeneration: 1,
+						},
+					},
+					Properties: map[clusterv1beta1.PropertyName]clusterv1beta1.PropertyValue{
+						propertyprovider.K8sVersionProperty: {
+							Value: "v1.31.0",
+						},
+					},
+				},
+			},
+			clusterProfile: &clusterinventory.ClusterProfile{
+				Status: clusterinventory.ClusterProfileStatus{
+					AccessProviders: []clusterinventory.AccessProvider{
+						{
+							Name: controller.ClusterManagerName,
+							Cluster: clientcmdv1.Cluster{
+								Server:                   "https://api.stale-cluster.example.com:6443",
+								CertificateAuthorityData: []byte("c3RhbGUtY2EtZGF0YQ=="),
+							},
+						},
+					},
+				},
+			},
+			expectVersion:        true,
+			expectedK8sVersion:   "v1.31.0",
+			expectAccessProvider: false,
 		},
 	}
 
