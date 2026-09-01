@@ -20,15 +20,17 @@ Merge the latest `kubefleet-dev/kubefleet` main branch into `Azure/fleet` main w
 - [x] Dockerfiles use the latest incoming Microsoft Go builder consistently.
 - [x] No new CRD template symlinks remain.
 - [x] `make reviewable` passes in WSL.
-- [ ] A new pull request targets `Azure/fleet:main` from the pushed fork branch.
+- [x] A new pull request targets `Azure/fleet:main` from the pushed fork branch.
 
 ## Implementation Notes
 
 - Base: `upstream/main` at `f21dbd0cfd3cb10923472fa8557e4c9717ba3597`.
-- Incoming: `cncf/main` at `48bde0d8`.
-- Merge: `533a4a8a`.
+- Initial incoming: `cncf/main` at `48bde0d8`, merged as `533a4a8a`.
+- Refreshed incoming: `cncf/main` at `81194d7d`, merged as `ccd19190`.
 - Restored incoming Go imports in `test/e2e/join_and_leave_test.go` to `go.goms.io/fleet`.
 - Confirmed all four Dockerfiles use `mcr.microsoft.com/oss/go/microsoft/golang:1.26.6-1`.
 - Confirmed the Slack archives URL remains covered by `ignorePatterns`.
 - Confirmed no new CRD template symlinks were introduced relative to the first merge parent.
 - Ran `make reviewable` successfully in WSL with `GOTOOLCHAIN=go1.26.6`; shell scripts were normalized only in the working tree for validation and restored to the checkout line-ending convention afterward.
+- Refetched `cncf/main` after PR #858 landed, merged its cross-compilation changes, and reran `make reviewable` successfully.
+- Published the backport as `Azure/fleet` PR #1338.
