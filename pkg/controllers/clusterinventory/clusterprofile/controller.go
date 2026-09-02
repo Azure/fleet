@@ -27,6 +27,7 @@ import (
 	"k8s.io/apimachinery/pkg/api/meta"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/types"
+	clientcmdv1 "k8s.io/client-go/tools/clientcmd/api/v1"
 	"k8s.io/client-go/util/workqueue"
 	"k8s.io/klog/v2"
 	clusterinventory "sigs.k8s.io/cluster-inventory-api/apis/v1alpha1"
@@ -180,8 +181,8 @@ func (r *Reconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.Resu
 	return ctrl.Result{}, nil
 }
 
-// fillInClusterStatus fills in the ClusterProfile status fields from the MemberCluster status.
-// Currently, it only fills in the Kubernetes version field.
+// fillInClusterStatus fills in the ClusterProfile status fields from the MemberCluster status,
+// including the Kubernetes version and, when available, the cluster access provider.
 func (r *Reconciler) fillInClusterStatus(mc *clusterv1beta1.MemberCluster, cp *clusterinventory.ClusterProfile) {
 	clusterPropertyCondition := meta.FindStatusCondition(mc.Status.Conditions, string(clusterv1beta1.ConditionTypeClusterPropertyCollectionSucceeded))
 	if !condition.IsConditionStatusTrue(clusterPropertyCondition, mc.Generation) {
@@ -196,27 +197,26 @@ func (r *Reconciler) fillInClusterStatus(mc *clusterv1beta1.MemberCluster, cp *c
 			Kubernetes: k8sversion.Value,
 		}
 	}
-	// Add the class access provider, we only have one so far
-	cp.Status.AccessProviders = []clusterinventory.AccessProvider{
-		{
-			Name: controller.ClusterManagerName,
-		},
-	}
-	// TODO throw and unexpected error if clusterEntryPoint is not found
-	// We don't have a way to get it yet
-	clusterEntry, exists := mc.Status.Properties[propertyprovider.ClusterEntryPointProperty]
-	if exists {
-		klog.V(3).InfoS("Get Kubernetes cluster entry point from member cluster status", "clusterEntryPoint", clusterEntry.Value, "clusterProfile", klog.KObj(cp))
-		cp.Status.AccessProviders[0].Cluster.Server = clusterEntry.Value
-	}
-	// Get the CA Data
-	certificateAuthorityData, exists := mc.Status.Properties[propertyprovider.ClusterCertificateAuthorityProperty]
-	if exists {
-		klog.V(3).InfoS("Get Kubernetes cluster certificate authority data from member cluster status", "clusterProfile", klog.KObj(cp))
-		cp.Status.AccessProviders[0].Cluster.CertificateAuthorityData = []byte(certificateAuthorityData.Value)
+
+	// Add cluster access provider, if and only if a cluster entry point and the CA data exist as part of the
+	// cluster properties.
+	clusterEntrypoint, entryPtExists := mc.Status.Properties[propertyprovider.ClusterEntryPointProperty]
+	caData, caDataExists := mc.Status.Properties[propertyprovider.ClusterCertificateAuthorityProperty]
+	if entryPtExists && caDataExists && len(clusterEntrypoint.Value) > 0 && len(caData.Value) > 0 {
+		cp.Status.AccessProviders = []clusterinventory.AccessProvider{
+			{
+				Name: controller.ClusterManagerName,
+				Cluster: clientcmdv1.Cluster{
+					Server:                   clusterEntrypoint.Value,
+					CertificateAuthorityData: []byte(caData.Value),
+				},
+			},
+		}
 	} else {
-		// throw an alert
-		_ = controller.NewUnexpectedBehaviorError(fmt.Errorf("cluster certificate authority data not found in member cluster %s status", mc.Name))
+		cp.Status.AccessProviders = nil
+		klog.V(2).InfoS("Cluster entry point and/or CA data is missing or empty; reset cluster access provider to cluster profile status",
+			"memberCluster", klog.KObj(mc), "clusterProfile", klog.KObj(cp),
+			"clusterEntryPointExists", entryPtExists, "caDataExists", caDataExists)
 	}
 }
 

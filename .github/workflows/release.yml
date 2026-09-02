@@ -60,39 +60,47 @@ jobs:
           username: ${{ github.actor }}
           password: ${{ secrets.GITHUB_TOKEN }}
 
+      # A single multi-arch `docker buildx build` per image publishes the full
+      # tag (e.g. "v0.4.0") and, for stable releases, the short alias
+      # (e.g. "0.4.0") in the same push - no separate retag step. RC images are
+      # published under the long form ("v0.4.0-rc.1") for testers only: the
+      # short-tag namespace is deliberately reserved for stable releases that
+      # consumers can safely pin to, so RC tags get no short alias.
       - name: Build and push images with tag ${{ env.TAG }}
-        run: |
-          make push
-
-      # The short-tag (e.g. ":0.4.0") aliases the long form for stable releases
-      # only. RC images are published under the long form (":v0.4.0-rc.1") for
-      # testers, but we deliberately do NOT alias them to a short tag - the
-      # short-tag namespace is reserved for stable releases that consumers can
-      # safely pin to (and "imagetools create" with an RC alias would publish
-      # "0.4.0-rc.1" into that namespace, muddying it).
-      - name: Tag and push images without v prefix
-        if: ${{ !contains(needs.export-registry.outputs.tag, '-rc.') }}
         env:
           VERSION: ${{ needs.export-registry.outputs.version }}
         run: |
           set -euo pipefail
-          for IMAGE in ${{ env.HUB_AGENT_IMAGE_NAME }} ${{ env.MEMBER_AGENT_IMAGE_NAME }} ${{ env.REFRESH_TOKEN_IMAGE_NAME }}; do
-            docker buildx imagetools create \
-              --tag "${{ env.REGISTRY }}/${IMAGE}:${VERSION}" \
-              "${{ env.REGISTRY }}/${IMAGE}:${{ env.TAG }}"
-          done
+          if [[ "${TAG}" == *-rc.* ]]; then
+            make push
+          else
+            make push IMAGE_EXTRA_TAG="${VERSION}"
+          fi
 
-      - name: Verify images
+      # Confirm every published tag is a real multi-arch manifest list rather
+      # than a silently degraded single-arch image: a build that pushed only one
+      # architecture would otherwise go unnoticed until a consumer on the other
+      # architecture failed to pull. Stable releases also carry the short alias.
+      - name: Verify images are multi-arch
         env:
           VERSION: ${{ needs.export-registry.outputs.version }}
         run: |
           set -euo pipefail
-          echo "✅ Published images:"
+          tags="${TAG}"
+          if [[ "${TAG}" != *-rc.* ]]; then
+            tags="${tags} ${VERSION}"
+          fi
+          echo "✅ Verifying published images:"
           for IMAGE in ${{ env.HUB_AGENT_IMAGE_NAME }} ${{ env.MEMBER_AGENT_IMAGE_NAME }} ${{ env.REFRESH_TOKEN_IMAGE_NAME }}; do
-            echo "  - ${{ env.REGISTRY }}/${IMAGE}:${{ env.TAG }}"
-            if [[ "${TAG}" != *-rc.* ]]; then
-              echo "  - ${{ env.REGISTRY }}/${IMAGE}:${VERSION}"
-            fi
+            for tag in ${tags}; do
+              ref="${{ env.REGISTRY }}/${IMAGE}:${tag}"
+              echo "  - ${ref}"
+              manifest="$(docker buildx imagetools inspect "${ref}")"
+              for platform in linux/amd64 linux/arm64; do
+                grep -q "Platform:.*${platform}" <<<"${manifest}" \
+                  || { echo "::error::${ref} is missing platform ${platform}"; exit 1; }
+              done
+            done
           done
 
   # Publish the raw CRDs as a standalone release asset so consumers can install
