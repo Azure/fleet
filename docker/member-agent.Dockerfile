@@ -8,7 +8,7 @@
 # Segmentation fault" / "cgo: gcc produced no output" in runtime/cgo and net)
 # and, when it did not crash, took over an hour per image. Only the final
 # distroless stage is per-target, and it runs no commands.
-FROM --platform=$BUILDPLATFORM mcr.microsoft.com/oss/go/microsoft/golang:1.26.6-1 AS builder
+FROM --platform=$BUILDPLATFORM mcr.microsoft.com/oss/go/microsoft/golang:1.26.8-1 AS builder
 
 WORKDIR /workspace
 # Copy the Go Modules manifests
