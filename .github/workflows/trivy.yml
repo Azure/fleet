@@ -1,7 +1,7 @@
 name: Trivy Vulnerability Scanner
 on:
   schedule:
-    - cron: '0 6 * * *' # Daily at 6:00 AM UTC
+    - cron: '0 6 * * *' # Daily at 6:00 AM UTC; findings are reported into a single issue per ISO week
   push:
     branches:
       - main
@@ -142,9 +142,9 @@ jobs:
         run: |
           {
             echo 'body<<EOF'
-            echo "## Trivy CVE Scan - $(date -u +%Y-%m-%d)"
+            echo "## Trivy CVE Scan - $(date -u +%G-W%V) (last updated $(date -u +%Y-%m-%d))"
             echo ""
-            echo "The daily vulnerability scan found **HIGH/CRITICAL** CVEs in our container images."
+            echo "The latest vulnerability scan found **HIGH/CRITICAL** CVEs in our container images."
             echo "Please remediate the vulnerabilities listed below."
             echo ""
             echo "### Vulnerabilities"
@@ -180,36 +180,73 @@ jobs:
         uses: actions/github-script@v9
         with:
           script: |
-            const today = new Date().toISOString().split('T')[0];
-            const title = `fix: address trivy CVEs found on ${today}`;
+            // ISO week date (e.g. 2026-W37); the ISO year can differ from the calendar year near year end.
+            const isoWeek = (date) => {
+              const d = new Date(Date.UTC(date.getUTCFullYear(), date.getUTCMonth(), date.getUTCDate()));
+              d.setUTCDate(d.getUTCDate() + 4 - (d.getUTCDay() || 7));
+              const yearStart = new Date(Date.UTC(d.getUTCFullYear(), 0, 1));
+              const week = Math.ceil(((d - yearStart) / 86400000 + 1) / 7);
+              return `${d.getUTCFullYear()}-W${String(week).padStart(2, '0')}`;
+            };
+
+            const currentWeek = isoWeek(new Date());
+            const title = `fix: address trivy CVEs found in ${currentWeek}`;
             const securityTeam = '@kubefleet-dev/kubefleet-secops';
             const body = `${process.env.ISSUE_BODY}\n\n### Security owners\n${securityTeam}`;
 
-            // Check if an open issue already exists for today
-            const existing = await github.rest.issues.listForRepo({
+            // Every report this workflow files carries these labels; they are the only handle used to find prior reports.
+            const reportLabels = ['security', 'trivy'];
+
+            const open = await github.paginate(github.rest.issues.listForRepo, {
               owner: context.repo.owner,
               repo: context.repo.repo,
               state: 'open',
-              labels: 'security,trivy',
+              labels: reportLabels.join(','),
+              sort: 'created',
+              direction: 'desc',
               per_page: 100
             });
-            const issue = existing.data.find(i => i.title === title);
-            if (issue) {
+            // listForRepo also returns pull requests, which are never trivy reports.
+            const reports = open.filter(i => !i.pull_request);
+
+            const newest = reports[0];
+            const thisWeek = newest && isoWeek(new Date(newest.created_at)) === currentWeek ? newest : null;
+
+            if (thisWeek) {
               await github.rest.issues.update({
                 owner: context.repo.owner,
                 repo: context.repo.repo,
-                issue_number: issue.number,
+                issue_number: thisWeek.number,
                 body: body
               });
-              console.log('Updated the existing issue with the current scan and security team mention.');
+              console.log(`Updated issue #${thisWeek.number} with the current scan.`);
             } else {
-              await github.rest.issues.create({
+              const created = await github.rest.issues.create({
                 owner: context.repo.owner,
                 repo: context.repo.repo,
                 title: title,
                 body: body,
-                labels: ['security', 'trivy']
+                labels: reportLabels
               });
+              console.log(`Created issue #${created.data.number} for ${currentWeek}.`);
+            }
+
+            // Any other open report predates this week; the current one supersedes it.
+            for (const stale of reports.filter(i => i.number !== thisWeek?.number)) {
+              await github.rest.issues.createComment({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                issue_number: stale.number,
+                body: `Superseded by the scan reported in \`${title}\`; closing this stale report.`
+              });
+              await github.rest.issues.update({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                issue_number: stale.number,
+                state: 'closed',
+                state_reason: 'not_planned'
+              });
+              console.log(`Closed stale issue #${stale.number} (created ${stale.created_at}).`);
             }
         env:
           ISSUE_BODY: ${{ steps.vuln-summary.outputs.body }}
