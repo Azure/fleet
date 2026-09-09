@@ -46,6 +46,7 @@ type ClusterClaim struct {
 	Status ClusterClaimStatus `json:"status,omitempty"`
 }
 
+// +kubebuilder:validation:XValidation:rule="has(self.clusterSelectorTerms) == has(oldSelf.clusterSelectorTerms)",message="the clusterSelectorTerms field cannot be added or removed after creation"
 type ClusterClaimSpec struct {
 	// The reference to the placement policy that adds the cluster claim.
 	//

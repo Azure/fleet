@@ -220,6 +220,10 @@ spec:
             required:
             - placementPolicyRef
             type: object
+            x-kubernetes-validations:
+            - message: the clusterSelectorTerms field cannot be added or removed after
+                creation
+              rule: has(self.clusterSelectorTerms) == has(oldSelf.clusterSelectorTerms)
           status:
             description: The observed status of the cluster claim.
             properties:
