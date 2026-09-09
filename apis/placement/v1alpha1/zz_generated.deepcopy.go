@@ -22,7 +22,7 @@ package v1alpha1
 
 import (
 	"github.com/kubefleet-dev/kubefleet/apis/placement/v1beta1"
-	"k8s.io/apimachinery/pkg/apis/meta/v1"
+	v1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	runtime "k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/util/intstr"
 )
