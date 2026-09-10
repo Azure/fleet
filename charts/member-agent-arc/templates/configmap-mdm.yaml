@@ -1,0 +1,11 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: mdm-config
+  namespace: {{ .Values.namespace }}
+data:
+  mdmconfig.json: |
+    {
+      "account": "{{ .Values.geneva.mdm.account }}",
+      "input": "influxdb_udp"
+    }

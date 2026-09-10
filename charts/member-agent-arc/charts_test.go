@@ -52,6 +52,38 @@ func TestHelmChartTemplatesRenderValidYAML(t *testing.T) {
 		"enableTrafficManagerFeature": true,
 		"enableNetworkingFeatures":    true,
 		"propertyProvider":            "azure",
+		"geneva": map[string]interface{}{
+			"mdsd": map[string]interface{}{
+				"repository": "linuxgeneva-microsoft.azurecr.io/genevamdsd",
+				"tag":        "v1.0.0",
+			},
+			"fluentd": map[string]interface{}{
+				"repository": "linuxgeneva-microsoft.azurecr.io/genevafluentd_td-agent",
+				"tag":        "v1.0.0",
+			},
+			"mdm": map[string]interface{}{
+				"repository": "linuxgeneva-microsoft.azurecr.io/genevamdm",
+				"tag":        "v1.0.0",
+				"account":    "test-mdm-account",
+			},
+			"gcs": map[string]interface{}{
+				"environment":   "Test",
+				"account":       "test-account",
+				"region":        "test-region",
+				"namespace":     "test-namespace",
+				"configVersion": "1.0",
+				"authIdType":    "AuthMSIToken",
+			},
+			"config": map[string]interface{}{
+				"tenant":              "test-tenant",
+				"role":                "test-role",
+				"azureEnvironment":    "AzurePublicCloud",
+				"enableGigBridgeMode": "1",
+			},
+			"debugging": map[string]interface{}{
+				"dockerLogging": "false",
+			},
+		},
 		"Azure": map[string]interface{}{
 			"proxySettings": map[string]interface{}{
 				"isProxyEnabled": true,
@@ -91,6 +123,8 @@ func TestHelmChartTemplatesRenderValidYAML(t *testing.T) {
 		{name: "rbac template", templateFile: "rbac.yaml"},
 		{name: "serviceaccount template", templateFile: "serviceaccount.yaml"},
 		{name: "azure-proxy-secrets template", templateFile: "azure-proxy-secrets.yaml"},
+		{name: "configmap-fluentd template", templateFile: "configmap-fluentd.yaml"},
+		{name: "configmap-mdm template", templateFile: "configmap-mdm.yaml"},
 	}
 
 	for _, tt := range tests {
