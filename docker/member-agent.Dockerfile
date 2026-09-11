@@ -58,11 +58,11 @@ COPY pkg/ pkg/
 RUN echo "Building memberagent with GOOS=${TARGETOS} GOARCH=${TARGETARCH} CC=$(readlink -f /usr/local/bin/target-gcc)" && \
     CGO_ENABLED=1 CC=target-gcc GOOS=${TARGETOS} GOARCH=${TARGETARCH} GOEXPERIMENT=systemcrypto go build -o memberagent ./cmd/memberagent/
 
-# Use distroless as minimal base image to package the memberagent binary.
-# The pinned digest must reference a multi-arch image index so BuildKit can
-# resolve the matching base layer for each target architecture.
-# Refer to https://github.com/GoogleContainerTools/distroless for more details
-FROM gcr.io/distroless/base:nonroot@sha256:2d7d29b504e7166f6d0c7655a18ebf5def5b37b029f8c4f8667e434ba774844f
+# GOEXPERIMENT=systemcrypto above dlopen()s libcrypto from THIS image and needs
+# a FIPS provider on FIPS-enabled nodes. Azure Linux has one; gcr.io/distroless
+# has no ossl-modules at all and panics before main(). Upstream uses gcr.io, so
+# backports will try to overwrite this - the base and systemcrypto move together.
+FROM mcr.microsoft.com/azurelinux/distroless/base:3.0
 WORKDIR /
 COPY --link --from=builder /workspace/memberagent .
 USER 65532:65532
