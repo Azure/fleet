@@ -28,8 +28,9 @@ import (
 	"k8s.io/klog/v2"
 	metricsV1beta1 "k8s.io/metrics/pkg/apis/metrics/v1beta1"
 
-	clusterv1beta1 "go.goms.io/fleet/apis/cluster/v1beta1"
-	placementv1beta1 "go.goms.io/fleet/apis/placement/v1beta1"
+	clusterv1beta1 "github.com/kubefleet-dev/kubefleet/apis/cluster/v1beta1"
+	kfplacementv1alpha1 "github.com/kubefleet-dev/kubefleet/apis/kubefleet.dev/placement/v1alpha1"
+	placementv1beta1 "github.com/kubefleet-dev/kubefleet/apis/placement/v1beta1"
 )
 
 var (
@@ -206,6 +207,12 @@ func NewResourceConfig(isAllowList bool) *ResourceConfig {
 
 	// disable cluster group by default
 	r.AddGroup(clusterv1beta1.GroupVersion.Group)
+
+	// Disable the placement.kubefleet.dev group wholesale: everything in it is KubeFleet's own
+	// bookkeeping (placement policies, bindings, snapshots, works, claims), including the policies
+	// that annotation-based placement generates. Treating those as placeable resources would let a
+	// placement that selects a whole namespace propagate KubeFleet's own generated objects.
+	r.AddGroup(kfplacementv1alpha1.GroupVersion.Group)
 
 	// disable some fleet networking resources
 	r.AddGroupKind(serviceImportGK)
