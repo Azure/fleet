@@ -18,8 +18,10 @@ package trackers
 
 import (
 	"context"
+	"fmt"
 	"time"
 
+	"github.com/Azure/karpenter-provider-azure/pkg/auth"
 	"github.com/Azure/karpenter-provider-azure/pkg/providers/pricing"
 	"github.com/Azure/karpenter-provider-azure/pkg/providers/pricing/client"
 )
@@ -53,7 +55,16 @@ func (k *AKSKarpenterPricingClient) LastUpdated() time.Time {
 
 // NewAKSKarpenterPricingClient returns a new AKS Karpenter pricing client, which implements
 // the PricingProvider interface.
-func NewAKSKarpenterPricingClient(ctx context.Context, region string) *AKSKarpenterPricingClient {
+func NewAKSKarpenterPricingClient(ctx context.Context, region string) (*AKSKarpenterPricingClient, error) {
+	// Pin the public cloud: the 1.5 pricing client had no environment and always queried the
+	// public retail prices endpoint, so this preserves existing behaviour. 1.14 can reject
+	// non-public clouds outright; wire that up with the member agent's cloud config
+	// (see the TODO in cmd/memberagent/main.go).
+	env, err := auth.EnvironmentFromName("AzurePublicCloud")
+	if err != nil {
+		return nil, fmt.Errorf("failed to resolve the Azure public cloud environment: %w", err)
+	}
+
 	// In the case of Azure property provider, there is no need to wait for leader election
 	// successes; close the channel immediately to allow immediate boot-up of the pricing
 	// client.
@@ -61,6 +72,6 @@ func NewAKSKarpenterPricingClient(ctx context.Context, region string) *AKSKarpen
 	close(ch)
 
 	return &AKSKarpenterPricingClient{
-		karpenterPricingClient: pricing.NewProvider(ctx, client.New(), region, ch),
-	}
+		karpenterPricingClient: pricing.NewProvider(ctx, env, client.New(env.Cloud), region, ch),
+	}, nil
 }

@@ -118,9 +118,20 @@ var (
 		APIGroups: []string{placementv1beta1.GroupVersion.Group},
 		Resources: []string{"*"},
 	}
+	// EventRule grants access to core/v1 Events. The Fleet controllers have
+	// moved to the events.k8s.io recorder, but this rule is still required:
+	// the fleet-networking agents that share this role emit core/v1 Events.
 	EventRule = rbacv1.PolicyRule{
 		Verbs:     []string{"get", "list", "update", "patch", "watch", "create"},
 		APIGroups: []string{""},
+		Resources: []string{"events"},
+	}
+	// EventsK8sIoRule grants the access needed by the events.k8s.io event
+	// recorder the controllers use. The recorder's sink only ever creates or
+	// patches Event objects, so no read access is granted here.
+	EventsK8sIoRule = rbacv1.PolicyRule{
+		Verbs:     []string{"create", "patch"},
+		APIGroups: []string{"events.k8s.io"},
 		Resources: []string{"events"},
 	}
 	FleetNetworkRule = rbacv1.PolicyRule{

@@ -29,7 +29,7 @@ import (
 	"k8s.io/apimachinery/pkg/api/meta"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/types"
-	"k8s.io/client-go/tools/record"
+	"k8s.io/client-go/tools/events"
 	"k8s.io/client-go/util/retry"
 	"k8s.io/klog/v2"
 	"k8s.io/utils/ptr"
@@ -68,7 +68,7 @@ const (
 // Reconciler reconciles a MemberCluster object
 type Reconciler struct {
 	client.Client
-	recorder record.EventRecorder
+	recorder events.EventRecorder
 	// Need to update MC based on the IMC conditions based on the agent list.
 	NetworkingAgentsEnabled bool
 	// the max number of concurrent reconciles per controller.
@@ -283,16 +283,29 @@ func (r *Reconciler) ensureFinalizer(ctx context.Context, mc *clusterv1beta1.Mem
 // ensureMemberNameLabel makes sure that the member cluster has a label with its own name.
 // This enables selecting clusters by name in ResourceOverride and ClusterResourceOverride via labelSelector.
 func (r *Reconciler) ensureMemberNameLabel(ctx context.Context, mc *clusterv1beta1.MemberCluster) error {
-	if mc.Labels != nil && mc.Labels[placementv1beta1.MemberNameLabel] == mc.Name {
-		return nil
-	}
-
+	changed := false
 	if mc.Labels == nil {
 		mc.Labels = make(map[string]string)
 	}
-	mc.Labels[placementv1beta1.MemberNameLabel] = mc.Name
 
-	klog.InfoS("Ensured the member cluster name label", "memberCluster", klog.KObj(mc))
+	if mc.Labels[placementv1beta1.MemberNameLabel] != mc.Name {
+		mc.Labels[placementv1beta1.MemberNameLabel] = mc.Name
+		changed = true
+	}
+
+	// The alias label is seeded from the cluster name, but only when it is absent. Unlike the name
+	// label above, which the controller owns and reasserts, the alias exists to be renamed by an
+	// admin so that a selector can follow a role rather than a fixed name; reasserting it would
+	// revert that rename on the next reconcile.
+	if _, found := mc.Labels[placementv1beta1.ClusterAliasLabel]; !found {
+		mc.Labels[placementv1beta1.ClusterAliasLabel] = mc.Name
+		changed = true
+	}
+
+	if !changed {
+		return nil
+	}
+	klog.InfoS("Ensured the member cluster name and alias labels", "memberCluster", klog.KObj(mc))
 	return r.Update(ctx, mc, client.FieldOwner(utils.MCControllerFieldManagerName))
 }
 
@@ -369,7 +382,7 @@ func (r *Reconciler) syncNamespace(ctx context.Context, mc *clusterv1beta1.Membe
 		if err = r.Client.Create(ctx, &expectedNS, client.FieldOwner(utils.MCControllerFieldManagerName)); err != nil {
 			return "", fmt.Errorf("failed to create namespace %s: %w", namespaceName, err)
 		}
-		r.recorder.Event(mc, corev1.EventTypeNormal, eventReasonNamespaceCreated, "Namespace was created")
+		r.recorder.Eventf(mc, nil, corev1.EventTypeNormal, eventReasonNamespaceCreated, "ReconcileNamespace", "Namespace was created")
 		klog.V(2).InfoS("created namespace", "memberCluster", klog.KObj(mc), "namespace", namespaceName)
 		return namespaceName, nil
 	}
@@ -382,7 +395,7 @@ func (r *Reconciler) syncNamespace(ctx context.Context, mc *clusterv1beta1.Membe
 		if err := r.Client.Patch(ctx, &currentNS, patch, client.FieldOwner(utils.MCControllerFieldManagerName)); err != nil {
 			return "", fmt.Errorf("failed to patch namespace %s: %w", namespaceName, err)
 		}
-		r.recorder.Event(mc, corev1.EventTypeNormal, eventReasonNamespacePatched, "Namespace was patched")
+		r.recorder.Eventf(mc, nil, corev1.EventTypeNormal, eventReasonNamespacePatched, "ReconcileNamespace", "Namespace was patched")
 		klog.V(2).InfoS("patched namespace", "memberCluster", klog.KObj(mc), "namespace", namespaceName)
 	}
 	return namespaceName, nil
@@ -399,7 +412,7 @@ func (r *Reconciler) syncRole(ctx context.Context, mc *clusterv1beta1.MemberClus
 			Namespace:       namespaceName,
 			OwnerReferences: []metav1.OwnerReference{*toOwnerReference(mc)},
 		},
-		Rules: []rbacv1.PolicyRule{utils.FleetClusterRule, utils.FleetPlacementRule, utils.FleetNetworkRule, utils.EventRule},
+		Rules: []rbacv1.PolicyRule{utils.FleetClusterRule, utils.FleetPlacementRule, utils.FleetNetworkRule, utils.EventRule, utils.EventsK8sIoRule},
 	}
 
 	// Creates role if not found.
@@ -412,7 +425,7 @@ func (r *Reconciler) syncRole(ctx context.Context, mc *clusterv1beta1.MemberClus
 		if err = r.Client.Create(ctx, &expectedRole, client.FieldOwner(utils.MCControllerFieldManagerName)); err != nil {
 			return "", fmt.Errorf("failed to create role %s with rules %+v: %w", roleName, expectedRole.Rules, err)
 		}
-		r.recorder.Event(mc, corev1.EventTypeNormal, eventReasonRoleCreated, "role was created")
+		r.recorder.Eventf(mc, nil, corev1.EventTypeNormal, eventReasonRoleCreated, "ReconcileRole", "role was created")
 		klog.V(2).InfoS("created role", "memberCluster", klog.KObj(mc), "role", roleName)
 		return roleName, nil
 	}
@@ -426,7 +439,7 @@ func (r *Reconciler) syncRole(ctx context.Context, mc *clusterv1beta1.MemberClus
 	if err := r.Client.Update(ctx, &currentRole, client.FieldOwner(utils.MCControllerFieldManagerName)); err != nil {
 		return "", fmt.Errorf("failed to update role %s with rules %+v: %w", roleName, currentRole.Rules, err)
 	}
-	r.recorder.Event(mc, corev1.EventTypeNormal, eventReasonRoleUpdated, "role was updated")
+	r.recorder.Eventf(mc, nil, corev1.EventTypeNormal, eventReasonRoleUpdated, "ReconcileRole", "role was updated")
 	klog.V(2).InfoS("updated role", "memberCluster", klog.KObj(mc), "role", roleName)
 	return roleName, nil
 }
@@ -468,7 +481,7 @@ func (r *Reconciler) syncRoleBinding(ctx context.Context, mc *clusterv1beta1.Mem
 		if err = r.Client.Create(ctx, &expectedRoleBinding, client.FieldOwner(utils.MCControllerFieldManagerName)); err != nil {
 			return fmt.Errorf("failed to create role binding %s: %w", roleBindingName, err)
 		}
-		r.recorder.Event(mc, corev1.EventTypeNormal, eventReasonRoleBindingCreated, "role binding was created")
+		r.recorder.Eventf(mc, nil, corev1.EventTypeNormal, eventReasonRoleBindingCreated, "ReconcileRoleBinding", "role binding was created")
 		klog.V(2).InfoS("created role binding", "memberCluster", klog.KObj(mc), "subject", mc.Spec.Identity)
 		return nil
 	}
@@ -483,7 +496,7 @@ func (r *Reconciler) syncRoleBinding(ctx context.Context, mc *clusterv1beta1.Mem
 	if err := r.Client.Update(ctx, &expectedRoleBinding, client.FieldOwner(utils.MCControllerFieldManagerName)); err != nil {
 		return fmt.Errorf("failed to update role binding %s: %w", roleBindingName, err)
 	}
-	r.recorder.Event(mc, corev1.EventTypeNormal, eventReasonRoleBindingUpdated, "role binding was updated")
+	r.recorder.Eventf(mc, nil, corev1.EventTypeNormal, eventReasonRoleBindingUpdated, "ReconcileRoleBinding", "role binding was updated")
 	klog.V(2).InfoS("updated role binding", "memberCluster", klog.KObj(mc), "subject", mc.Spec.Identity)
 	return nil
 }
@@ -514,7 +527,7 @@ func (r *Reconciler) syncInternalMemberCluster(ctx context.Context, mc *clusterv
 		if err := r.Client.Create(ctx, &expectedImc, client.FieldOwner(utils.MCControllerFieldManagerName)); err != nil {
 			return nil, controller.NewAPIServerError(false, fmt.Errorf("failed to create internal member cluster %s with spec %+v: %w", klog.KObj(&expectedImc), expectedImc.Spec, err))
 		}
-		r.recorder.Event(mc, corev1.EventTypeNormal, eventReasonIMCCreated, "Internal member cluster was created")
+		r.recorder.Eventf(mc, nil, corev1.EventTypeNormal, eventReasonIMCCreated, "ReconcileInternalMemberCluster", "Internal member cluster was created")
 		klog.V(2).InfoS("created internal member cluster", "InternalMemberCluster", klog.KObj(&expectedImc), "spec", expectedImc.Spec)
 		return &expectedImc, nil
 	}
@@ -528,7 +541,7 @@ func (r *Reconciler) syncInternalMemberCluster(ctx context.Context, mc *clusterv
 	if err := r.Client.Update(ctx, currentImc, client.FieldOwner(utils.MCControllerFieldManagerName)); err != nil {
 		return nil, controller.NewAPIServerError(false, fmt.Errorf("failed to update internal member cluster %s with spec %+v: %w", klog.KObj(currentImc), currentImc.Spec, err))
 	}
-	r.recorder.Event(mc, corev1.EventTypeNormal, eventReasonIMCSpecUpdated, "internal member cluster spec updated")
+	r.recorder.Eventf(mc, nil, corev1.EventTypeNormal, eventReasonIMCSpecUpdated, "ReconcileInternalMemberCluster", "internal member cluster spec updated")
 	klog.V(2).InfoS("updated internal member cluster", "InternalMemberCluster", klog.KObj(currentImc), "spec", currentImc.Spec)
 	return currentImc, nil
 }
@@ -642,7 +655,7 @@ func (r *Reconciler) aggregateJoinedCondition(mc *clusterv1beta1.MemberCluster) 
 }
 
 // markMemberClusterReadyToJoin is used to update the ReadyToJoin condition as true of member cluster.
-func markMemberClusterReadyToJoin(recorder record.EventRecorder, mc apis.ConditionedObj) {
+func markMemberClusterReadyToJoin(recorder events.EventRecorder, mc apis.ConditionedObj) {
 	klog.V(4).InfoS("Mark the member cluster ReadyToJoin", "memberCluster", klog.KObj(mc))
 	newCondition := metav1.Condition{
 		Type:               string(clusterv1beta1.ConditionTypeMemberClusterReadyToJoin),
@@ -655,7 +668,7 @@ func markMemberClusterReadyToJoin(recorder record.EventRecorder, mc apis.Conditi
 	// Joined status changed.
 	existingCondition := mc.GetCondition(newCondition.Type)
 	if existingCondition == nil || existingCondition.Status != newCondition.Status {
-		recorder.Event(mc, corev1.EventTypeNormal, reasonMemberClusterReadyToJoin, "member cluster ready to join")
+		recorder.Eventf(mc, nil, corev1.EventTypeNormal, reasonMemberClusterReadyToJoin, "Join", "member cluster ready to join")
 		klog.V(2).InfoS("member cluster ready to join", "memberCluster", klog.KObj(mc))
 	}
 
@@ -663,7 +676,7 @@ func markMemberClusterReadyToJoin(recorder record.EventRecorder, mc apis.Conditi
 }
 
 // markMemberClusterJoined is used to the update the status of the member cluster to have the joined condition.
-func markMemberClusterJoined(recorder record.EventRecorder, mc apis.ConditionedObj) {
+func markMemberClusterJoined(recorder events.EventRecorder, mc apis.ConditionedObj) {
 	klog.V(4).InfoS("Mark the member cluster joined", "memberCluster", klog.KObj(mc))
 	newCondition := metav1.Condition{
 		Type:               string(clusterv1beta1.ConditionTypeMemberClusterJoined),
@@ -676,7 +689,7 @@ func markMemberClusterJoined(recorder record.EventRecorder, mc apis.ConditionedO
 	// Joined status changed.
 	existingCondition := mc.GetCondition(newCondition.Type)
 	if existingCondition == nil || existingCondition.Status != newCondition.Status {
-		recorder.Event(mc, corev1.EventTypeNormal, reasonMemberClusterJoined, "member cluster joined")
+		recorder.Eventf(mc, nil, corev1.EventTypeNormal, reasonMemberClusterJoined, "Join", "member cluster joined")
 		klog.V(2).InfoS("memberCluster joined", "memberCluster", klog.KObj(mc))
 		sharedmetrics.ReportJoinResultMetric()
 	}
@@ -685,7 +698,7 @@ func markMemberClusterJoined(recorder record.EventRecorder, mc apis.ConditionedO
 }
 
 // markMemberClusterLeft is used to update the status of the member cluster to have the left condition and mark member cluster as not ready to join.
-func markMemberClusterLeft(recorder record.EventRecorder, mc apis.ConditionedObj) {
+func markMemberClusterLeft(recorder events.EventRecorder, mc apis.ConditionedObj) {
 	klog.V(4).InfoS("Mark the member cluster left", "memberCluster", klog.KObj(mc))
 	newCondition := metav1.Condition{
 		Type:               string(clusterv1beta1.ConditionTypeMemberClusterJoined),
@@ -705,7 +718,7 @@ func markMemberClusterLeft(recorder record.EventRecorder, mc apis.ConditionedObj
 	// Joined status changed.
 	existingCondition := mc.GetCondition(newCondition.Type)
 	if existingCondition == nil || existingCondition.Status != newCondition.Status {
-		recorder.Event(mc, corev1.EventTypeNormal, reasonMemberClusterJoined, "member cluster left")
+		recorder.Eventf(mc, nil, corev1.EventTypeNormal, reasonMemberClusterLeft, "Leave", "member cluster left")
 		klog.V(2).InfoS("memberCluster left", "memberCluster", klog.KObj(mc))
 		sharedmetrics.ReportLeaveResultMetric()
 	}
@@ -713,8 +726,8 @@ func markMemberClusterLeft(recorder record.EventRecorder, mc apis.ConditionedObj
 	mc.SetConditions(newCondition, notReadyCondition)
 }
 
-// markMemberClusterUnknown is used to update the status of the member cluster to have the left condition.
-func markMemberClusterUnknown(recorder record.EventRecorder, mc apis.ConditionedObj, unknownMessage string) {
+// markMemberClusterUnknown is used to update the status of the member cluster to have the joined condition set to unknown.
+func markMemberClusterUnknown(recorder events.EventRecorder, mc apis.ConditionedObj, unknownMessage string) {
 	klog.V(4).InfoS("Mark the member cluster join condition unknown", "memberCluster", klog.KObj(mc))
 	newCondition := metav1.Condition{
 		Type:               string(clusterv1beta1.ConditionTypeMemberClusterJoined),
@@ -727,7 +740,7 @@ func markMemberClusterUnknown(recorder record.EventRecorder, mc apis.Conditioned
 	// Joined status changed.
 	existingCondition := mc.GetCondition(newCondition.Type)
 	if existingCondition == nil || existingCondition.Status != newCondition.Status {
-		recorder.Event(mc, corev1.EventTypeWarning, reasonMemberClusterUnknown, "member cluster join state unknown")
+		recorder.Eventf(mc, nil, corev1.EventTypeWarning, reasonMemberClusterUnknown, "Join", "member cluster join state unknown")
 		klog.V(2).InfoS("memberCluster join state unknown", "memberCluster", klog.KObj(mc))
 	}
 
@@ -736,7 +749,7 @@ func markMemberClusterUnknown(recorder record.EventRecorder, mc apis.Conditioned
 
 // SetupWithManager sets up the controller with the Manager.
 func (r *Reconciler) SetupWithManager(mgr runtime.Manager, name string) error {
-	r.recorder = mgr.GetEventRecorderFor("mcv1beta1")
+	r.recorder = mgr.GetEventRecorder("mcv1beta1")
 	r.agents = make(map[clusterv1beta1.AgentType]bool)
 	r.agents[clusterv1beta1.MemberAgent] = true
 

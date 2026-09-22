@@ -34,7 +34,7 @@ import (
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/types"
-	"k8s.io/client-go/tools/record"
+	"k8s.io/client-go/tools/events"
 	"k8s.io/client-go/util/retry"
 	"k8s.io/client-go/util/workqueue"
 	"k8s.io/klog/v2"
@@ -76,7 +76,7 @@ type Reconciler struct {
 	client.Client
 	// the max number of concurrent reconciles per controller.
 	MaxConcurrentReconciles int
-	recorder                record.EventRecorder
+	recorder                events.EventRecorder
 	// the informer contains the cache for all the resources we need.
 	// to check the resource scope
 	InformerManager informer.Manager
@@ -1507,7 +1507,7 @@ func extractDiffedResourcePlacementsFromWork(work *fleetv1beta1.Work) []fleetv1b
 // SetupWithManagerForClusterResourceBinding sets up the controller with the Manager.
 // It watches clusterResourceBinding events and also update/delete events for work.
 func (r *Reconciler) SetupWithManagerForClusterResourceBinding(mgr controllerruntime.Manager) error {
-	r.recorder = mgr.GetEventRecorderFor("cluster resource binding work generator")
+	r.recorder = mgr.GetEventRecorder("cluster-resource-binding-work-generator")
 	return controllerruntime.NewControllerManagedBy(mgr).Named("cluster-resource-binding-work-generator").
 		WithOptions(ctrl.Options{MaxConcurrentReconciles: r.MaxConcurrentReconciles}). // set the max number of concurrent reconciles
 		For(&fleetv1beta1.ClusterResourceBinding{}, builder.WithPredicates(predicate.GenerationChangedPredicate{})).
@@ -1518,7 +1518,7 @@ func (r *Reconciler) SetupWithManagerForClusterResourceBinding(mgr controllerrun
 // SetupWithManagerForResourceBinding sets up the controller with the Manager.
 // It watches resourceBinding events and also update/delete events for work.
 func (r *Reconciler) SetupWithManagerForResourceBinding(mgr controllerruntime.Manager) error {
-	r.recorder = mgr.GetEventRecorderFor("resource binding work generator")
+	r.recorder = mgr.GetEventRecorder("resource-binding-work-generator")
 	return controllerruntime.NewControllerManagedBy(mgr).Named("resource-binding-work-generator").
 		WithOptions(ctrl.Options{MaxConcurrentReconciles: r.MaxConcurrentReconciles}). // set the max number of concurrent reconciles
 		For(&fleetv1beta1.ResourceBinding{}, builder.WithPredicates(predicate.GenerationChangedPredicate{})).

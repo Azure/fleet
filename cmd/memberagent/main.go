@@ -387,7 +387,7 @@ func Start(ctx context.Context, hubCfg, memberConfig *rest.Config, hubOpts, memb
 		spokeDynamicClient,
 		memberMgr.GetClient(),
 		restMapper,
-		hubMgr.GetEventRecorderFor("work_applier"),
+		hubMgr.GetEventRecorder("work_applier"),
 		// The number of concurrent reconcilations. This is set to 5 to boost performance in
 		// resource processing.
 		5,

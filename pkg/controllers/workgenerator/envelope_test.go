@@ -32,7 +32,7 @@ import (
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/runtime/schema"
-	"k8s.io/client-go/tools/record"
+	"k8s.io/client-go/tools/events"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/client/fake"
 
@@ -470,7 +470,7 @@ func TestCreateOrUpdateEnvelopeCRWorkObj_EmptyManifestListRetained(t *testing.T)
 			APIResources:            map[schema.GroupVersionKind]bool{utils.DeploymentGVK: true},
 			IsClusterScopedResource: false,
 		},
-		recorder: record.NewFakeRecorder(10),
+		recorder: events.NewFakeRecorder(10),
 	}
 	roMap := map[fleetv1beta1.ResourceIdentifier][]*fleetv1beta1.ResourceOverrideSnapshot{
 		deploymentResourceIdentifier("app", "web"): {resourceOverrideSnapshot("delete-ro", "app", deleteOverrideRule())},
@@ -880,7 +880,7 @@ func TestCreateOrUpdateEnvelopeCRWorkObj(t *testing.T) {
 			// Create reconciler
 			r := &Reconciler{
 				Client:          fakeClient,
-				recorder:        record.NewFakeRecorder(10),
+				recorder:        events.NewFakeRecorder(10),
 				InformerManager: &informer.FakeManager{},
 			}
 
@@ -1046,7 +1046,7 @@ func TestProcessOneSelectedResource(t *testing.T) {
 			// Create reconciler
 			r := &Reconciler{
 				Client:          fakeClient,
-				recorder:        record.NewFakeRecorder(10),
+				recorder:        events.NewFakeRecorder(10),
 				InformerManager: &informer.FakeManager{},
 			}
 
@@ -1233,7 +1233,7 @@ func TestProcessOneSelectedResource_OverrideBehavior(t *testing.T) {
 					},
 					IsClusterScopedResource: false,
 				},
-				recorder: record.NewFakeRecorder(10),
+				recorder: events.NewFakeRecorder(10),
 			}
 			activeWork := make(map[string]*fleetv1beta1.Work)
 			gotNewWork, gotSimpleManifests, overrideFailed, err := r.processOneSelectedResource(
@@ -1304,7 +1304,7 @@ func TestProcessOneSelectedResource_EnvelopeInnerOverrideFailureClassifiedAsOver
 			},
 			IsClusterScopedResource: false,
 		},
-		recorder: record.NewFakeRecorder(10),
+		recorder: events.NewFakeRecorder(10),
 	}
 	roMap := map[fleetv1beta1.ResourceIdentifier][]*fleetv1beta1.ResourceOverrideSnapshot{
 		deploymentResourceIdentifier("app", "web"): {
@@ -1469,7 +1469,7 @@ func TestCreateOrUpdateEnvelopeCRWorkObj_DuplicateWorksSurfaceWithoutMutation(t 
 		WithObjects(objs...).
 		Build()
 
-	recorder := record.NewFakeRecorder(10)
+	recorder := events.NewFakeRecorder(10)
 	r := &Reconciler{
 		Client:          fakeClient,
 		recorder:        recorder,

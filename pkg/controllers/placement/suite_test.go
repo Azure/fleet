@@ -124,7 +124,7 @@ var _ = BeforeSuite(func() {
 		Client:                   mgr.GetClient(),
 		Scheme:                   mgr.GetScheme(),
 		UncachedReader:           mgr.GetAPIReader(),
-		Recorder:                 mgr.GetEventRecorderFor(controllerName),
+		Recorder:                 mgr.GetEventRecorder(controllerName),
 		ResourceSelectorResolver: resourceSelectorResolver,
 		ResourceSnapshotResolver: resourceSnapshotResolver,
 	}

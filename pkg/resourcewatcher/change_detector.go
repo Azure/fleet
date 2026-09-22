@@ -154,6 +154,14 @@ func (d *ChangeDetector) discoverResources(dynamicResourceEventHandler cache.Res
 
 // dynamicResourceFilter filters out resources that we don't want to watch.
 func (d *ChangeDetector) dynamicResourceFilter(obj any) bool {
+	// A deletion the watch missed arrives as a tombstone wrapping the object's final state, not as
+	// the object itself. It has to be unwrapped before anything here inspects the object; filtering
+	// on the tombstone would silently drop every relist-detected deletion, since a tombstone is not
+	// a runtime object and fails the key derivation below.
+	if tombstone, ok := obj.(cache.DeletedFinalStateUnknown); ok {
+		obj = tombstone.Obj
+	}
+
 	key, err := controller.ClusterWideKeyFunc(obj)
 	if err != nil {
 		return false

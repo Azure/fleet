@@ -17,6 +17,9 @@ on:
             version:
                 description: "Release version without v prefix (e.g., 1.0.0)"
                 value: ${{ jobs.export.outputs.version }}
+            prerelease:
+                description: "\"true\" when the tag is a pre-release (e.g., v1.0.0-rc.1), \"false\" otherwise"
+                value: ${{ jobs.export.outputs.prerelease }}
 
 env:
     REGISTRY: ghcr.io
@@ -32,6 +35,7 @@ jobs:
             registry: ${{ steps.setup.outputs.registry }}
             tag: ${{ steps.setup.outputs.tag }}
             version: ${{ steps.setup.outputs.version }}
+            prerelease: ${{ steps.setup.outputs.prerelease }}
         steps:
             - id: setup
               # The tag arrives as an environment variable rather than being
@@ -53,10 +57,18 @@ jobs:
                     exit 1
                   fi
 
+                  # The regex above admits exactly one pre-release form, so the
+                  # suffix test is a complete classification. Callers gate on
+                  # this single output instead of re-deriving "is this an RC?"
+                  # in every consuming job.
+                  PRERELEASE=false
+                  case "${TAG}" in *-rc.*) PRERELEASE=true ;; esac
+
                   # registry must be in lowercase
                   {
                     echo "registry=$(echo "${{ env.REGISTRY }}/${{ github.repository }}" | tr '[:upper:]' '[:lower:]')"
                     echo "tag=${TAG}"
                     echo "version=${TAG#v}"
+                    echo "prerelease=${PRERELEASE}"
                   } >> "$GITHUB_OUTPUT"
-                  echo "Release tag: ${TAG}, version: ${TAG#v}"
+                  echo "Release tag: ${TAG}, version: ${TAG#v}, prerelease: ${PRERELEASE}"

@@ -564,8 +564,9 @@ type BindingManager struct {
 	// A list of references to the objects that are currently managing the bindings for this placement,
 	// under the reconciliation of the specified controller.
 	//
-	// +kubebuilder:validation:Optional
-	ObjectRefs []ObjectReference `json:"objectRefs,omitempty"`
+	// +kubebuilder:validation:Required
+	// +kubebuilder:validation:MinItems=1
+	ObjectRefs []ObjectReference `json:"objectRefs"`
 }
 
 // The list objects for the PlacementPolicy and ClusterPlacementPolicy APIs.

@@ -22,6 +22,39 @@ import (
 )
 
 const (
+	// The label key that denotes the namespace of a work object's owner placement policy and placement binding
+	// objects. For cluster-scoped owners, the label has an empty value.
+	WorkOwnerNamespaceLabelKey = "placement.kubefleet.dev/owner-namespace"
+	// The label key that denotes the name of a work object's owner placement policy object.
+	//
+	// KubeFleet might truncate the name value and append a hash to satisfy Kubernetes' label value length limit
+	// (63 characters).
+	WorkOwnedByPlacementPolicyLabelKey = "placement.kubefleet.dev/owned-by-placement-policy"
+	// The label key that denotes the name of a work object's owner placement binding object.
+	//
+	// KubeFleet might truncate the name value and append a hash to satisfy Kubernetes' label value length limit
+	// (63 characters).
+	WorkOwnedByPlacementBindingLabelKey = "placement.kubefleet.dev/owned-by-placement-binding"
+
+	// The annotation key that denotes the name of a work object's owner placement policy object.
+	//
+	// The name will saved as the annotation value as it is.
+	WorkOwnedByPlacementPolicyAnnotationKey = "placement.kubefleet.dev/owned-by-placement-policy"
+	// The annotation key that denotes the name of a work object's owner placement binding object.
+	//
+	// The name will saved as the annotation value as it is.
+	WorkOwnedByPlacementBindingAnnotationKey = "placement.kubefleet.dev/owned-by-placement-binding"
+	// The annotation key that denotes the name of a work object's primary placement resource snapshot.
+	//
+	// The name will saved as the annotation value as it is.
+	WorkLinkedToPrimaryPlacementResourceSnapshotAnnotationKey = "placement.kubefleet.dev/linked-to-primary-placement-resource-snapshot"
+	// The annotation key that denotes the number of linked work objects.
+	LinkedWorkCountAnnotationKey = "placement.kubefleet.dev/linked-work-count"
+	// The annotation key that denotes the source from which the work object is derived.
+	WorkDerivedFromSourceAnnotationKey = "placement.kubefleet.dev/derived-from"
+)
+
+const (
 	// The condition types for the Work API.
 	WorkCondTypeApplied   = "Applied"
 	WorkCondTypeAvailable = "Available"

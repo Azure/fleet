@@ -234,13 +234,15 @@ var (
 			// disappear from the status of the MemberCluster object.
 			c.Type == string(clusterv1beta1.ConditionTypeClusterPropertyProviderStarted)
 	})
-	ignoreTimeTypeFields                                      = cmpopts.IgnoreTypes(time.Time{}, metav1.Time{})
-	ignorePlacementStatusDriftedPlacementsTimestampFields     = cmpopts.IgnoreFields(placementv1beta1.DriftedResourcePlacement{}, "ObservationTime", "FirstDriftedObservedTime")
-	ignorePlacementStatusDriftedPlacementsTimestampFieldsV1   = cmpopts.IgnoreFields(placementv1.DriftedResourcePlacement{}, "ObservationTime", "FirstDriftedObservedTime")
-	ignorePlacementStatusDiffedPlacementsTimestampFields      = cmpopts.IgnoreFields(placementv1beta1.DiffedResourcePlacement{}, "ObservationTime", "FirstDiffedObservedTime")
-	ignorePlacementStatusDiffedPlacementsTimestampFieldsV1    = cmpopts.IgnoreFields(placementv1.DiffedResourcePlacement{}, "ObservationTime", "FirstDiffedObservedTime")
-	ignorePerClusterPlacementStatusObservedResourceIndexField = cmpopts.IgnoreFields(placementv1beta1.PerClusterPlacementStatus{}, "ObservedResourceIndex")
-	ignorePlacementStatusObservedResourceIndexField           = cmpopts.IgnoreFields(placementv1beta1.PlacementStatus{}, "ObservedResourceIndex")
+	ignoreTimeTypeFields                                        = cmpopts.IgnoreTypes(time.Time{}, metav1.Time{})
+	ignorePlacementStatusDriftedPlacementsTimestampFields       = cmpopts.IgnoreFields(placementv1beta1.DriftedResourcePlacement{}, "ObservationTime", "FirstDriftedObservedTime")
+	ignorePlacementStatusDriftedPlacementsTimestampFieldsV1     = cmpopts.IgnoreFields(placementv1.DriftedResourcePlacement{}, "ObservationTime", "FirstDriftedObservedTime")
+	ignorePlacementStatusDiffedPlacementsTimestampFields        = cmpopts.IgnoreFields(placementv1beta1.DiffedResourcePlacement{}, "ObservationTime", "FirstDiffedObservedTime")
+	ignorePlacementStatusDiffedPlacementsTimestampFieldsV1      = cmpopts.IgnoreFields(placementv1.DiffedResourcePlacement{}, "ObservationTime", "FirstDiffedObservedTime")
+	ignorePerClusterPlacementStatusObservedResourceIndexField   = cmpopts.IgnoreFields(placementv1beta1.PerClusterPlacementStatus{}, "ObservedResourceIndex")
+	ignorePerClusterPlacementStatusObservedResourceIndexFieldV1 = cmpopts.IgnoreFields(placementv1.PerClusterPlacementStatus{}, "ObservedResourceIndex")
+	ignorePlacementStatusObservedResourceIndexField             = cmpopts.IgnoreFields(placementv1beta1.PlacementStatus{}, "ObservedResourceIndex")
+	ignorePlacementStatusObservedResourceIndexFieldV1           = cmpopts.IgnoreFields(placementv1.PlacementStatus{}, "ObservedResourceIndex")
 
 	placementStatusCmpOptions = cmp.Options{
 		cmpopts.SortSlices(lessFuncCondition),
@@ -382,35 +384,26 @@ func beforeSuiteForAllProcesses() {
 	sysMastersClient = hubCluster.SystemMastersClient
 	Expect(sysMastersClient).NotTo(BeNil(), "Failed to initialize impersonate client for accessing Kubernetes cluster")
 
-	var pricingProvider1 trackers.PricingProvider
-	if isAzurePropertyProviderEnabled {
-		pricingProvider1 = trackers.NewAKSKarpenterPricingClient(ctx, memberCluster1AKSRegion)
-	}
+	pricingProvider1 := newPricingProvider(ctx, memberCluster1AKSRegion)
 	memberCluster1EastProd = framework.NewCluster(memberCluster1EastProdName, memberCluster1EastProdSAName, scheme, pricingProvider1)
 	Expect(memberCluster1EastProd).NotTo(BeNil(), "Failed to initialize cluster object")
 	framework.GetClusterClient(memberCluster1EastProd)
 	memberCluster1EastProdClient = memberCluster1EastProd.KubeClient
 	Expect(memberCluster1EastProdClient).NotTo(BeNil(), "Failed to initialize client for accessing Kubernetes cluster")
 
-	var pricingProvider2 trackers.PricingProvider
-	if isAzurePropertyProviderEnabled {
-		pricingProvider2 = trackers.NewAKSKarpenterPricingClient(ctx, memberCluster2AKSRegion)
-	}
+	pricingProvider2 := newPricingProvider(ctx, memberCluster2AKSRegion)
 	memberCluster2EastCanary = framework.NewCluster(memberCluster2EastCanaryName, memberCluster2EastCanarySAName, scheme, pricingProvider2)
 	Expect(memberCluster2EastCanary).NotTo(BeNil(), "Failed to initialize cluster object")
 	framework.GetClusterClient(memberCluster2EastCanary)
 	memberCluster2EastCanaryClient = memberCluster2EastCanary.KubeClient
 	Expect(memberCluster2EastCanaryClient).NotTo(BeNil(), "Failed to initialize client for accessing Kubernetes cluster")
 
-	var pricingProvider3 trackers.PricingProvider
-	if isAzurePropertyProviderEnabled {
-		pricingProvider3 = trackers.NewAKSKarpenterPricingClient(ctx, memberCluster3AKSRegion)
-	}
+	pricingProvider3 := newPricingProvider(ctx, memberCluster3AKSRegion)
 	memberCluster3WestProd = framework.NewCluster(memberCluster3WestProdName, memberCluster3WestProdSAName, scheme, pricingProvider3)
 	Expect(memberCluster3WestProd).NotTo(BeNil(), "Failed to initialize cluster object")
 	framework.GetClusterClient(memberCluster3WestProd)
 	memberCluster3WestProdClient = memberCluster3WestProd.KubeClient
-	Expect(memberCluster3WestProdClient).NotTo(BeNil(), "Failed to initialize client for accessing kubernetes cluster")
+	Expect(memberCluster3WestProdClient).NotTo(BeNil(), "Failed to initialize client for accessing Kubernetes cluster")
 
 	allMemberClusters = []*framework.Cluster{memberCluster1EastProd, memberCluster2EastCanary, memberCluster3WestProd}
 	once.Do(func() {
@@ -427,6 +420,20 @@ func beforeSuiteForAllProcesses() {
 
 	// Expect that the managedResource VAP and its binding to exist when hub starts
 	checkVAPAndBindingExistence(hubCluster)
+}
+
+// newPricingProvider returns an AKS Karpenter pricing client for the given region, or
+// nil when the Azure property provider is disabled. Returning an untyped nil matters:
+// the node tracker decides whether to collect cost properties by comparing the provider
+// against nil.
+func newPricingProvider(ctx context.Context, region string) trackers.PricingProvider {
+	if !isAzurePropertyProviderEnabled {
+		return nil
+	}
+
+	pp, err := trackers.NewAKSKarpenterPricingClient(ctx, region)
+	Expect(err).NotTo(HaveOccurred(), "Failed to create the AKS Karpenter pricing client for region %s", region)
+	return pp
 }
 
 func maxDuration(a, b time.Duration) time.Duration {

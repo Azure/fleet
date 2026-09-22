@@ -21,7 +21,7 @@ limitations under the License.
 package v1alpha1
 
 import (
-	v1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/util/intstr"
 )
@@ -709,6 +709,11 @@ func (in *PlacementBindingStatus) DeepCopyInto(out *PlacementBindingStatus) {
 		for i := range *in {
 			(*in)[i].DeepCopyInto(&(*out)[i])
 		}
+	}
+	if in.LastProcessedResourceSnapshotName != nil {
+		in, out := &in.LastProcessedResourceSnapshotName, &out.LastProcessedResourceSnapshotName
+		*out = new(string)
+		**out = **in
 	}
 }
 

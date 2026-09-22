@@ -952,8 +952,11 @@ spec:
                           This does not apply to the case that we do in-place update of resources on the same cluster.
                           This can not be 0 if MaxUnavailable is 0.
                           Defaults to 25%.
-                        pattern: ^((100|[0-9]{1,2})%|[0-9]+)$
+                        pattern: ^((100|[0-9]{1,2})%|[0-9]{1,9})$
                         x-kubernetes-int-or-string: true
+                        x-kubernetes-validations:
+                        - message: maxSurge must be a non-negative integer or a percentage
+                          rule: 'type(self) == int ? self >= 0 : true'
                       maxUnavailable:
                         anyOf:
                         - type: integer
@@ -971,8 +974,12 @@ spec:
                           The minimum of MaxUnavailable is 0 to allow no downtime moving a placement from one cluster to another.
                           Please set it to be greater than 0 to avoid rolling out stuck during in-place resource update.
                           Defaults to 25%.
-                        pattern: ^((100|[0-9]{1,2})%|[0-9]+)$
+                        pattern: ^((100|[0-9]{1,2})%|[0-9]{1,9})$
                         x-kubernetes-int-or-string: true
+                        x-kubernetes-validations:
+                        - message: maxUnavailable must be a non-negative integer or
+                            a percentage
+                          rule: 'type(self) == int ? self >= 0 : true'
                       unavailablePeriodSeconds:
                         default: 60
                         description: |-
@@ -2631,8 +2638,11 @@ spec:
                           This does not apply to the case that we do in-place update of resources on the same cluster.
                           This can not be 0 if MaxUnavailable is 0.
                           Defaults to 25%.
-                        pattern: ^((100|[0-9]{1,2})%|[0-9]+)$
+                        pattern: ^((100|[0-9]{1,2})%|[0-9]{1,9})$
                         x-kubernetes-int-or-string: true
+                        x-kubernetes-validations:
+                        - message: maxSurge must be a non-negative integer or a percentage
+                          rule: 'type(self) == int ? self >= 0 : true'
                       maxUnavailable:
                         anyOf:
                         - type: integer
@@ -2650,8 +2660,12 @@ spec:
                           The minimum of MaxUnavailable is 0 to allow no downtime moving a placement from one cluster to another.
                           Please set it to be greater than 0 to avoid rolling out stuck during in-place resource update.
                           Defaults to 25%.
-                        pattern: ^((100|[0-9]{1,2})%|[0-9]+)$
+                        pattern: ^((100|[0-9]{1,2})%|[0-9]{1,9})$
                         x-kubernetes-int-or-string: true
+                        x-kubernetes-validations:
+                        - message: maxUnavailable must be a non-negative integer or
+                            a percentage
+                          rule: 'type(self) == int ? self >= 0 : true'
                       unavailablePeriodSeconds:
                         default: 60
                         description: |-

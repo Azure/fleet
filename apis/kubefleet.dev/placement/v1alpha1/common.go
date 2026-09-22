@@ -16,6 +16,18 @@ limitations under the License.
 
 package v1alpha1
 
+const (
+	// The Kinds of API resource types in this package.
+	ClusterClaimKind                     = "ClusterClaim"
+	PlacementPolicyKind                  = "PlacementPolicy"
+	ClusterPlacementPolicyKind           = "ClusterPlacementPolicy"
+	PlacementBindingKind                 = "PlacementBinding"
+	ClusterPlacementBindingKind          = "ClusterPlacementBinding"
+	PlacementResourceSnapshotKind        = "PlacementResourceSnapshot"
+	ClusterPlacementResourceSnapshotKind = "ClusterPlacementResourceSnapshot"
+	WorkKind                             = "Work"
+)
+
 type ObjectReference struct {
 	// The namespace of the referenced object.
 	//

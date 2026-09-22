@@ -6,6 +6,16 @@ updates:
       interval: "weekly"
     commit-message:
       prefix: "chore"
+    groups:
+      # init, autobuild and analyze are separate dependencies to Dependabot, so
+      # ungrouped they land in separate pull requests. They share one CodeQL
+      # bundle — init writes a configuration file that the other two read back —
+      # so whichever merges first leaves the workflow on mismatched versions and
+      # the run fails with "Loaded a configuration file for version X, but
+      # running version Y". Keep them in one pull request.
+      codeql-action:
+        patterns:
+          - "github/codeql-action*"
 
   - package-ecosystem: "docker"
     directory: "/docker"

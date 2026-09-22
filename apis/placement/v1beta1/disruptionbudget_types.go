@@ -66,8 +66,8 @@ type PlacementDisruptionBudgetSpec struct {
 	// One may use a value of 0 for this field; in this case, no voluntary disruption would be
 	// allowed.
 	//
-	// This field is mutually exclusive with the MinAvailable field in the spec; exactly one
-	// of them can be set at a time.
+	// This field is mutually exclusive with the MinAvailable field in the spec; set only one of them
+	// at a time. If none is set, no disruption is allowed for the target placement.
 	//
 	// +kubebuilder:validation:XIntOrString
 	// +kubebuilder:validation:XValidation:rule="type(self) == string ? self.matches('^(100|[0-9]{1,2})%$') : self >= 0",message="If supplied value is String should match regex '^(100|[0-9]{1,2})%$' or If supplied value is Integer must be greater than or equal to 0"
@@ -95,8 +95,8 @@ type PlacementDisruptionBudgetSpec struct {
 	// One may use a value of 0 for this field; in this case, voluntary disruption would be
 	// allowed at any time.
 	//
-	// This field is mutually exclusive with the MaxUnavailable field in the spec; exactly one
-	// of them can be set at a time.
+	// This field is mutually exclusive with the MaxUnavailable field in the spec; set only one of them
+	// at a time. If none is set, no disruption is allowed for the target placement.
 	//
 	// +kubebuilder:validation:XIntOrString
 	// +kubebuilder:validation:XValidation:rule="type(self) == string ? self.matches('^(100|[0-9]{1,2})%$') : self >= 0",message="If supplied value is String should match regex '^(100|[0-9]{1,2})%$' or If supplied value is Integer must be greater than or equal to 0"

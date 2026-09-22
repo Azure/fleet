@@ -6,11 +6,13 @@ on:
     paths:
       - ".github/workflows/**"
       - ".github/release.yml"
+      - "hack/release/**"
   pull_request:
     branches: [main, "release-*"]
     paths:
       - ".github/workflows/**"
       - ".github/release.yml"
+      - "hack/release/**"
 
 permissions:
   contents: read
@@ -43,3 +45,11 @@ jobs:
 
       - name: Run actionlint
         run: actionlint -color
+
+      # The release scripts live outside the workflow files, so actionlint's
+      # embedded-shell checking does not reach them.
+      - name: Shellcheck the release scripts
+        run: shellcheck hack/release/*.sh hack/release/testdata/gh
+
+      - name: Test the release scripts
+        run: ./hack/release/test-release-scripts.sh

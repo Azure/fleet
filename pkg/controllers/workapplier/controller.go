@@ -30,7 +30,7 @@ import (
 	"k8s.io/apimachinery/pkg/runtime/schema"
 	"k8s.io/apimachinery/pkg/types"
 	"k8s.io/client-go/dynamic"
-	"k8s.io/client-go/tools/record"
+	"k8s.io/client-go/tools/events"
 	"k8s.io/client-go/util/workqueue"
 	"k8s.io/klog/v2"
 	"k8s.io/utils/ptr"
@@ -104,7 +104,7 @@ type Reconciler struct {
 	spokeDynamicClient   dynamic.Interface
 	spokeClient          client.Client
 	restMapper           meta.RESTMapper
-	recorder             record.EventRecorder
+	recorder             events.EventRecorder
 	concurrentReconciles int
 	deletionWaitTime     time.Duration
 	joined               *atomic.Bool
@@ -126,7 +126,7 @@ func NewReconciler(
 	controllerName string,
 	hubClient client.Client, workNameSpace string,
 	spokeDynamicClient dynamic.Interface, spokeClient client.Client, restMapper meta.RESTMapper,
-	recorder record.EventRecorder,
+	recorder events.EventRecorder,
 	concurrentReconciles int,
 	parallelizer parallelizerutil.Parallelizer,
 	deletionWaitTime time.Duration,

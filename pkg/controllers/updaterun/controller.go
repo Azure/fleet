@@ -26,7 +26,7 @@ import (
 	"k8s.io/apimachinery/pkg/api/meta"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/types"
-	"k8s.io/client-go/tools/record"
+	"k8s.io/client-go/tools/events"
 	"k8s.io/client-go/util/workqueue"
 	"k8s.io/klog/v2"
 	runtime "sigs.k8s.io/controller-runtime"
@@ -57,7 +57,7 @@ var (
 // Reconciler reconciles an updateRun object.
 type Reconciler struct {
 	client.Client
-	recorder record.EventRecorder
+	recorder events.EventRecorder
 	// the informer contains the cache for all the resources we need to check the resource scope.
 	InformerManager informer.Manager
 
@@ -345,7 +345,7 @@ func (r *Reconciler) recordUpdateRunStatus(ctx context.Context, updateRun placem
 
 // SetupWithManagerForClusterStagedUpdateRun sets up the controller with the Manager for ClusterStagedUpdateRun resources.
 func (r *Reconciler) SetupWithManagerForClusterStagedUpdateRun(mgr runtime.Manager) error {
-	r.recorder = mgr.GetEventRecorderFor("clusterstagedupdaterun-controller")
+	r.recorder = mgr.GetEventRecorder("clusterstagedupdaterun-controller")
 	return runtime.NewControllerManagedBy(mgr).
 		Named("clusterstagedupdaterun-controller").
 		For(&placementv1beta1.ClusterStagedUpdateRun{}, builder.WithPredicates(predicate.GenerationChangedPredicate{})).
@@ -365,7 +365,7 @@ func (r *Reconciler) SetupWithManagerForClusterStagedUpdateRun(mgr runtime.Manag
 
 // SetupWithManagerForStagedUpdateRun sets up the controller with the Manager for StagedUpdateRun resources.
 func (r *Reconciler) SetupWithManagerForStagedUpdateRun(mgr runtime.Manager) error {
-	r.recorder = mgr.GetEventRecorderFor("stagedupdaterun-controller")
+	r.recorder = mgr.GetEventRecorder("stagedupdaterun-controller")
 	return runtime.NewControllerManagedBy(mgr).
 		Named("stagedupdaterun-controller").
 		For(&placementv1beta1.StagedUpdateRun{}, builder.WithPredicates(predicate.GenerationChangedPredicate{})).

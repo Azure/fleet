@@ -24,7 +24,7 @@ import (
 	"github.com/google/go-cmp/cmp"
 	"github.com/google/go-cmp/cmp/cmpopts"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
-	"k8s.io/client-go/tools/record"
+	"k8s.io/client-go/tools/events"
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 
@@ -56,7 +56,7 @@ var (
 func (mh *MockHandle) Client() client.Client               { return nil }
 func (mh *MockHandle) Manager() ctrl.Manager               { return nil }
 func (mh *MockHandle) UncachedReader() client.Reader       { return nil }
-func (mh *MockHandle) EventRecorder() record.EventRecorder { return nil }
+func (mh *MockHandle) EventRecorder() events.EventRecorder { return nil }
 func (mh *MockHandle) ClusterEligibilityChecker() *clustereligibilitychecker.ClusterEligibilityChecker {
 	return mh.clusterEligibilityChecker
 }

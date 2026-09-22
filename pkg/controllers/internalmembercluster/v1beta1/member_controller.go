@@ -31,7 +31,7 @@ import (
 	utilrand "k8s.io/apimachinery/pkg/util/rand"
 	"k8s.io/client-go/kubernetes"
 	"k8s.io/client-go/rest"
-	"k8s.io/client-go/tools/record"
+	"k8s.io/client-go/tools/events"
 	"k8s.io/client-go/util/retry"
 	"k8s.io/klog/v2"
 	ctrl "sigs.k8s.io/controller-runtime"
@@ -109,7 +109,7 @@ type Reconciler struct {
 	// The property provider configuration.
 	propertyProviderCfg *propertyProviderConfig
 
-	recorder record.EventRecorder
+	recorder events.EventRecorder
 }
 
 const (
@@ -342,16 +342,16 @@ func (r *Reconciler) connectToPropertyProvider(ctx context.Context, imc *cluster
 			err := fmt.Errorf("property provider startup deadline exceeded")
 			klog.ErrorS(err, "Failed to start property provider within the startup deadline", "internalMemberCluster", klog.KObj(imc))
 			reportPropertyProviderStartedCondition(imc, metav1.ConditionFalse, ClusterPropertyProviderStartedTimedOutReason, ClusterPropertyProviderStartedTimedOutMessage)
-			r.recorder.Event(imc, corev1.EventTypeWarning, ClusterPropertyProviderStartedTimedOutReason, ClusterPropertyProviderStartedTimedOutMessage)
+			r.recorder.Eventf(imc, nil, corev1.EventTypeWarning, ClusterPropertyProviderStartedTimedOutReason, "StartPropertyProvider", ClusterPropertyProviderStartedTimedOutMessage)
 		case err := <-startedCh:
 			if err != nil {
 				klog.ErrorS(err, "Failed to start property provider", "internalMemberCluster", klog.KObj(imc))
 				reportPropertyProviderStartedCondition(imc, metav1.ConditionFalse, ClusterPropertyProviderStartedFailedReason, fmt.Sprintf(ClusterPropertyProviderStartedFailedMessage, err))
-				r.recorder.Event(imc, corev1.EventTypeWarning, ClusterPropertyProviderStartedFailedReason, fmt.Sprintf(ClusterPropertyProviderStartedFailedMessage, err))
+				r.recorder.Eventf(imc, nil, corev1.EventTypeWarning, ClusterPropertyProviderStartedFailedReason, "StartPropertyProvider", ClusterPropertyProviderStartedFailedMessage, err)
 			} else {
 				klog.V(2).InfoS("Property provider started", "internalMemberCluster", klog.KObj(imc))
 				reportPropertyProviderStartedCondition(imc, metav1.ConditionTrue, ClusterPropertyProviderStartedReason, ClusterPropertyProviderStartedMessage)
-				r.recorder.Event(imc, corev1.EventTypeNormal, ClusterPropertyProviderStartedReason, ClusterPropertyProviderStartedMessage)
+				r.recorder.Eventf(imc, nil, corev1.EventTypeNormal, ClusterPropertyProviderStartedReason, "StartPropertyProvider", ClusterPropertyProviderStartedMessage)
 				r.propertyProviderCfg.isPropertyProviderStarted = true
 			}
 		}
@@ -448,7 +448,7 @@ func (r *Reconciler) reportClusterPropertiesWithPropertyProvider(ctx context.Con
 		)
 		err := fmt.Errorf("property provider collection deadline exceeded")
 		klog.ErrorS(err, "Failed to collect cluster properties", "internalMemberCluster", klog.KObj(imc))
-		r.recorder.Event(imc, corev1.EventTypeWarning, ClusterPropertyCollectionTimedOutReason, ClusterPropertyCollectionTimedOutMessage)
+		r.recorder.Eventf(imc, nil, corev1.EventTypeWarning, ClusterPropertyCollectionTimedOutReason, "CollectClusterProperties", ClusterPropertyCollectionTimedOutMessage)
 		return err
 	case <-collectedCh:
 		// The property provider has returned the latest cluster properties; update the
@@ -597,7 +597,7 @@ func (r *Reconciler) markInternalMemberClusterHealthy(imc clusterv1beta1.Conditi
 	existingCondition := imc.GetConditionWithType(clusterv1beta1.MemberAgent, newCondition.Type)
 	if existingCondition == nil || existingCondition.Status != newCondition.Status {
 		klog.V(2).InfoS("InternalMemberCluster is healthy", "internalMemberCluster", klog.KObj(imc))
-		r.recorder.Event(imc, corev1.EventTypeNormal, EventReasonInternalMemberClusterHealthy, "internal member cluster healthy")
+		r.recorder.Eventf(imc, nil, corev1.EventTypeNormal, EventReasonInternalMemberClusterHealthy, "HealthCheck", "internal member cluster healthy")
 	}
 
 	imc.SetConditionsWithType(clusterv1beta1.MemberAgent, newCondition)
@@ -617,7 +617,7 @@ func (r *Reconciler) markInternalMemberClusterUnhealthy(imc clusterv1beta1.Condi
 	existingCondition := imc.GetConditionWithType(clusterv1beta1.MemberAgent, newCondition.Type)
 	if existingCondition == nil || existingCondition.Status != newCondition.Status {
 		klog.V(2).InfoS("InternalMemberCluster is unhealthy", "internalMemberCluster", klog.KObj(imc))
-		r.recorder.Event(imc, corev1.EventTypeWarning, EventReasonInternalMemberClusterUnhealthy, "internal member cluster unhealthy")
+		r.recorder.Eventf(imc, nil, corev1.EventTypeWarning, EventReasonInternalMemberClusterUnhealthy, "HealthCheck", "internal member cluster unhealthy")
 	}
 
 	imc.SetConditionsWithType(clusterv1beta1.MemberAgent, newCondition)
@@ -635,7 +635,7 @@ func (r *Reconciler) markInternalMemberClusterJoined(imc clusterv1beta1.Conditio
 	// Joined status changed.
 	existingCondition := imc.GetConditionWithType(clusterv1beta1.MemberAgent, newCondition.Type)
 	if existingCondition == nil || existingCondition.ObservedGeneration != imc.GetGeneration() || existingCondition.Status != newCondition.Status {
-		r.recorder.Event(imc, corev1.EventTypeNormal, EventReasonInternalMemberClusterJoined, "internal member cluster joined")
+		r.recorder.Eventf(imc, nil, corev1.EventTypeNormal, EventReasonInternalMemberClusterJoined, "Join", "internal member cluster joined")
 		klog.V(2).InfoS("InternalMemberCluster has joined", "internalMemberCluster", klog.KObj(imc))
 		sharedmetrics.ReportJoinResultMetric()
 	}
@@ -656,7 +656,7 @@ func (r *Reconciler) markInternalMemberClusterJoinFailed(imc clusterv1beta1.Cond
 	// Joined status changed.
 	existingCondition := imc.GetConditionWithType(clusterv1beta1.MemberAgent, newCondition.Type)
 	if existingCondition == nil || existingCondition.ObservedGeneration != imc.GetGeneration() || existingCondition.Status != newCondition.Status {
-		r.recorder.Event(imc, corev1.EventTypeNormal, EventReasonInternalMemberClusterFailedToJoin, "internal member cluster failed to join")
+		r.recorder.Eventf(imc, nil, corev1.EventTypeNormal, EventReasonInternalMemberClusterFailedToJoin, "Join", "internal member cluster failed to join")
 		klog.ErrorS(err, "Agent failed to join", "internalMemberCluster", klog.KObj(imc))
 	}
 
@@ -675,7 +675,7 @@ func (r *Reconciler) markInternalMemberClusterLeft(imc clusterv1beta1.Conditione
 	// Joined status changed.
 	existingCondition := imc.GetConditionWithType(clusterv1beta1.MemberAgent, newCondition.Type)
 	if existingCondition == nil || existingCondition.ObservedGeneration != imc.GetGeneration() || existingCondition.Status != newCondition.Status {
-		r.recorder.Event(imc, corev1.EventTypeNormal, EventReasonInternalMemberClusterLeft, "internal member cluster left")
+		r.recorder.Eventf(imc, nil, corev1.EventTypeNormal, EventReasonInternalMemberClusterLeft, "Leave", "internal member cluster left")
 		klog.V(2).InfoS("InternalMemberCluster has left", "internalMemberCluster", klog.KObj(imc))
 		sharedmetrics.ReportLeaveResultMetric()
 	}
@@ -695,7 +695,7 @@ func (r *Reconciler) markInternalMemberClusterLeaveFailed(imc clusterv1beta1.Con
 
 	// Joined status changed.
 	if !condition.IsConditionStatusTrue(imc.GetConditionWithType(clusterv1beta1.MemberAgent, newCondition.Type), imc.GetGeneration()) {
-		r.recorder.Event(imc, corev1.EventTypeNormal, EventReasonInternalMemberClusterFailedToLeave, "internal member cluster failed to leave")
+		r.recorder.Eventf(imc, nil, corev1.EventTypeNormal, EventReasonInternalMemberClusterFailedToLeave, "Leave", "internal member cluster failed to leave")
 		klog.ErrorS(err, "Agent leave failed", "internalMemberCluster", klog.KObj(imc))
 	}
 
@@ -704,7 +704,7 @@ func (r *Reconciler) markInternalMemberClusterLeaveFailed(imc clusterv1beta1.Con
 
 // SetupWithManager sets up the controller with the Manager.
 func (r *Reconciler) SetupWithManager(mgr ctrl.Manager, name string) error {
-	r.recorder = mgr.GetEventRecorderFor("v1beta1InternalMemberClusterController")
+	r.recorder = mgr.GetEventRecorder("v1beta1InternalMemberClusterController")
 	return ctrl.NewControllerManagedBy(mgr).Named(name).
 		For(&clusterv1beta1.InternalMemberCluster{}, builder.WithPredicates(predicate.GenerationChangedPredicate{})).
 		Complete(r)

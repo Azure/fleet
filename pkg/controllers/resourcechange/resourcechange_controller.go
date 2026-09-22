@@ -29,7 +29,7 @@ import (
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/runtime/schema"
 	"k8s.io/client-go/dynamic"
-	"k8s.io/client-go/tools/record"
+	"k8s.io/client-go/tools/events"
 	"k8s.io/klog/v2"
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client"
@@ -59,7 +59,7 @@ type Reconciler struct {
 	ResourcePlacementController controller.Controller
 
 	// Event recorder to indicate the which placement picks up this object
-	Recorder record.EventRecorder
+	Recorder events.EventRecorder
 }
 
 func (r *Reconciler) Reconcile(_ context.Context, key controller.QueueKey) (ctrl.Result, error) {

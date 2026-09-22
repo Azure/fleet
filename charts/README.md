@@ -124,15 +124,21 @@ helm upgrade member-agent kubefleet/member-agent --namespace fleet-system
 
 ## Chart Publishing
 
-Charts are automatically published to both locations when:
-- Changes are pushed to the `main` branch affecting chart files
-- A version tag (e.g., `v1.0.0`) is created
+Charts are published to both locations when a stable version tag (e.g.
+`v1.0.0`) is pushed, carrying that release's version and appVersion.
+Release-candidate tags (e.g. `v1.0.0-rc.1`) build and publish images but
+deliberately do not publish charts, so no pre-release version reaches the chart
+index.
 
 **Published Locations:**
 - **OCI Registry**: `oci://ghcr.io/kubefleet-dev/kubefleet/charts/{chart-name}`
 - **GitHub Pages**: `https://kubefleet-dev.github.io/kubefleet/charts`
 
-The publishing workflow is defined in `.github/workflows/chart.yml`.
+Chart publishing is part of the release workflow in
+`.github/workflows/release.yml`, which publishes the GitHub Release only after
+the charts and every other release artifact have been published. See
+[RELEASING.md](../RELEASING.md) for the full pipeline and its recovery
+procedure.
 
 ## Development
 

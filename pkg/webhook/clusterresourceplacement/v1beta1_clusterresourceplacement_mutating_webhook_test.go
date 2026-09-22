@@ -19,13 +19,13 @@ package clusterresourceplacement
 import (
 	"context"
 	"encoding/json"
+	"strconv"
 	"testing"
 
 	"gomodules.xyz/jsonpatch/v2"
 
 	"github.com/google/go-cmp/cmp"
 	"github.com/google/go-cmp/cmp/cmpopts"
-	"github.com/stretchr/testify/assert"
 	admissionv1 "k8s.io/api/admission/v1"
 	authenticationv1 "k8s.io/api/authentication/v1"
 	corev1 "k8s.io/api/core/v1"
@@ -349,7 +349,9 @@ func TestMutatingHandle(t *testing.T) {
 	crpUpdateAllFieldsNewBytes, _ := json.Marshal(crpUpdateAllFieldsNew)
 
 	scheme := runtime.NewScheme()
-	assert.Nil(t, placementv1beta1.AddToScheme(scheme))
+	if err := placementv1beta1.AddToScheme(scheme); err != nil {
+		t.Fatalf("AddToScheme() = %v, want nil", err)
+	}
 	decoder := admission.NewDecoder(scheme)
 	mutator := &clusterResourcePlacementMutator{decoder: decoder}
 
@@ -378,7 +380,7 @@ func TestMutatingHandle(t *testing.T) {
 					{
 						Operation: "add",
 						Path:      "/spec/revisionHistoryLimit",
-						Value:     float64(defaulter.DefaultRevisionHistoryLimitValue),
+						Value:     json.Number(strconv.Itoa(defaulter.DefaultRevisionHistoryLimitValue)),
 					},
 				},
 				AdmissionResponse: admissionv1.AdmissionResponse{
@@ -450,7 +452,7 @@ func TestMutatingHandle(t *testing.T) {
 						Value: map[string]any{
 							"maxSurge":                 defaulter.DefaultMaxSurgeValue,
 							"maxUnavailable":           defaulter.DefaultMaxUnavailableValue,
-							"unavailablePeriodSeconds": float64(defaulter.DefaultUnavailablePeriodSeconds),
+							"unavailablePeriodSeconds": json.Number(strconv.Itoa(defaulter.DefaultUnavailablePeriodSeconds)),
 						},
 					},
 					{
@@ -529,7 +531,7 @@ func TestMutatingHandle(t *testing.T) {
 						Value: map[string]any{
 							"maxSurge":                 defaulter.DefaultMaxSurgeValue,
 							"maxUnavailable":           defaulter.DefaultMaxUnavailableValue,
-							"unavailablePeriodSeconds": float64(defaulter.DefaultUnavailablePeriodSeconds),
+							"unavailablePeriodSeconds": json.Number(strconv.Itoa(defaulter.DefaultUnavailablePeriodSeconds)),
 						},
 					},
 				},
@@ -688,7 +690,7 @@ func TestMutatingHandle(t *testing.T) {
 						Value: map[string]any{
 							"maxSurge":                 defaulter.DefaultMaxSurgeValue,
 							"maxUnavailable":           defaulter.DefaultMaxUnavailableValue,
-							"unavailablePeriodSeconds": float64(defaulter.DefaultUnavailablePeriodSeconds),
+							"unavailablePeriodSeconds": json.Number(strconv.Itoa(defaulter.DefaultUnavailablePeriodSeconds)),
 						},
 					},
 					{
@@ -704,7 +706,7 @@ func TestMutatingHandle(t *testing.T) {
 					{
 						Operation: "add",
 						Path:      "/spec/revisionHistoryLimit",
-						Value:     float64(defaulter.DefaultRevisionHistoryLimitValue),
+						Value:     json.Number(strconv.Itoa(defaulter.DefaultRevisionHistoryLimitValue)),
 					},
 				},
 			},

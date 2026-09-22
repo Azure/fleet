@@ -1,0 +1,76 @@
+#!/usr/bin/env bash
+# Stand-in for the gh CLI, used by test-release-scripts.sh. It is put on PATH
+# ahead of the real gh so the release scripts can be exercised without touching
+# GitHub.
+#
+# Behaviour is driven by the environment:
+#   FAKE_GH_STATE    absent | draft | published
+#   FAKE_GH_ERROR    stderr text for the "absent" case (default: release not found)
+#   FAKE_GH_ASSETS   asset rows as "name;state;size", one per line
+#   FAKE_GH_DOWNLOAD good | corrupt - whether the downloaded bundle matches its
+#                    recorded checksum
+#   FAKE_GH_LOG      file every invocation is appended to
+#
+# The --jq expressions are handed to the real jq so the scripts' own filters are
+# what gets tested, not a reimplementation of them.
+
+set -uo pipefail
+
+echo "gh $*" >>"${FAKE_GH_LOG}"
+
+jq_expr=""
+dir=""
+args=("$@")
+for i in "${!args[@]}"; do
+  case "${args[$i]}" in
+    --jq) jq_expr="${args[$((i + 1))]}" ;;
+    --dir) dir="${args[$((i + 1))]}" ;;
+  esac
+done
+
+case "${1:-} ${2:-}" in
+  "release view")
+    if [ "${FAKE_GH_STATE}" = "absent" ]; then
+      echo "${FAKE_GH_ERROR:-release not found}" >&2
+      exit 1
+    fi
+    if [[ "$*" == *isDraft* ]]; then
+      [ "${FAKE_GH_STATE}" = "draft" ] && echo "true" || echo "false"
+      exit 0
+    fi
+    if [[ "$*" == *assets* ]]; then
+      # Rebuild the assets JSON gh would return, then apply the caller's filter.
+      json="$(
+        while IFS=';' read -r name state size; do
+          [ -n "${name}" ] || continue
+          jq -n --arg n "${name}" --arg s "${state}" --argjson z "${size}" \
+            '{name: $n, state: $s, size: $z}'
+        done <<<"${FAKE_GH_ASSETS:-}" | jq -s '{assets: .}'
+      )"
+      jq -r "${jq_expr}" <<<"${json}"
+      exit 0
+    fi
+    exit 0
+    ;;
+  "release download")
+    mkdir -p "${dir}"
+    printf 'pretend-tarball\n' >"${dir}/kubefleet-crds-${TAG}.tgz"
+    if command -v sha256sum >/dev/null 2>&1; then
+      sum="$(cd "${dir}" && sha256sum "kubefleet-crds-${TAG}.tgz")"
+    else
+      sum="$(cd "${dir}" && shasum -a 256 "kubefleet-crds-${TAG}.tgz")"
+    fi
+    if [ "${FAKE_GH_DOWNLOAD:-good}" = "corrupt" ]; then
+      # Overwrite the content after the checksum was taken, so the recorded
+      # checksum no longer describes the file - what a truncated or tampered
+      # upload looks like on download.
+      printf 'tampered\n' >"${dir}/kubefleet-crds-${TAG}.tgz"
+    fi
+    echo "${sum}" >"${dir}/kubefleet-crds-${TAG}.tgz.sha256"
+    exit 0
+    ;;
+  "release create" | "release edit" | "release upload")
+    exit 0
+    ;;
+esac
+exit 0

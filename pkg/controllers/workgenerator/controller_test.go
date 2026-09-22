@@ -31,7 +31,7 @@ import (
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/runtime/schema"
-	"k8s.io/client-go/tools/record"
+	"k8s.io/client-go/tools/events"
 	"k8s.io/utils/ptr"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/client/fake"
@@ -364,7 +364,7 @@ func TestUpsertWork(t *testing.T) {
 			// Create reconciler with custom client
 			reconciler := &Reconciler{
 				Client:          fakeClient,
-				recorder:        record.NewFakeRecorder(10),
+				recorder:        events.NewFakeRecorder(10),
 				InformerManager: &informer.FakeManager{},
 			}
 			changed, _ := reconciler.upsertWork(ctx, newWork, tt.existingWork, resourceSnapshot)
@@ -3602,7 +3602,7 @@ func TestUpdateBindingStatusWithRetry(t *testing.T) {
 			// Create reconciler with custom client
 			r := &Reconciler{
 				Client:          conflictClient,
-				recorder:        record.NewFakeRecorder(10),
+				recorder:        events.NewFakeRecorder(10),
 				InformerManager: &informer.FakeManager{},
 			}
 			err := r.updateBindingStatusWithRetry(ctx, tt.resourceBinding)
