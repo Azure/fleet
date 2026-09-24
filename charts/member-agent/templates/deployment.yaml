@@ -1,3 +1,12 @@
+{{- $useSidecar := and (not .Values.useCAAuth) (not .Values.useKubeconfig) }}
+{{- $mountIdentitySecret := and .Values.useCAAuth .Values.config.identitySecretName }}
+{{- $mountHubKubeconfig := and (not .Values.useCAAuth) .Values.useKubeconfig }}
+{{- if and .Values.useCAAuth .Values.useKubeconfig }}
+{{- fail "useCAAuth and useKubeconfig must not both be true: with both set, useCAAuth silently wins (only --use-ca-auth is passed to the member agent) and the requested kubeconfig mode is never applied. Set exactly one." }}
+{{- end }}
+{{- if and .Values.useKubeconfig (not .Values.config.hubKubeconfigSecretName) }}
+{{- fail "config.hubKubeconfigSecretName must be set when useKubeconfig is true (it names the Secret, key \"kubeconfig\", to mount as the hub kubeconfig)" }}
+{{- end }}
 apiVersion: apps/v1
 kind: Deployment
 metadata:
@@ -13,6 +22,9 @@ spec:
     metadata:
       labels:
         {{- include "member-agent.selectorLabels" . | nindent 8 }}
+        {{- with .Values.podLabels }}
+        {{- toYaml . | nindent 8 }}
+        {{- end }}
     spec:
       restartPolicy: Always
       serviceAccountName: {{ include "member-agent.fullname" . }}-sa
@@ -49,6 +61,8 @@ spec:
             - --leader-elect=true
             {{- if .Values.useCAAuth }}
             - --use-ca-auth={{ .Values.useCAAuth }}
+            {{- else if $mountHubKubeconfig }}
+            - --use-kubeconfig=true
             {{- else }}
             - --tls-insecure={{ .Values.tlsClientInsecure }}
             {{- end }}
@@ -99,19 +113,29 @@ spec:
             - --enable-namespace-collection-in-property-provider={{ .Values.enableNamespaceCollectionInPropertyProvider }}
             {{- end }}
           env:
+          {{- if not $mountHubKubeconfig }}
           - name: HUB_SERVER_URL
             value: "{{ .Values.config.hubURL }}"
+          {{- end }}
+          {{- if $mountHubKubeconfig }}
+          - name: KUBE_CONFIG_PATH
+            value: "/etc/kubefleet/hub-kubeconfig/kubeconfig"
+          {{- end }}
+          {{- if $useSidecar }}
           - name: CONFIG_PATH
             value: "/config/token"
+          {{- end }}
           - name: MEMBER_CLUSTER_NAME
             value: "{{ .Values.config.memberClusterName }}"
+          {{- if not $mountHubKubeconfig }}
           - name: HUB_CERTIFICATE_AUTHORITY
             value: "{{ .Values.config.hubCA }}"
+          {{- end }}
           {{- if .Values.useCAAuth }}
           - name: IDENTITY_KEY
-            value:  "{{ .Values.config.identityKey }}"
+            value:  "{{ if .Values.config.identitySecretName }}/etc/kubefleet/hub-identity/tls.key{{ else }}{{ .Values.config.identityKey }}{{ end }}"
           - name: IDENTITY_CERT
-            value:  "{{ .Values.config.identityCert }}"
+            value:  "{{ if .Values.config.identitySecretName }}/etc/kubefleet/hub-identity/tls.crt{{ else }}{{ .Values.config.identityCert }}{{ end }}"
           - name: CA_BUNDLE
             value:  "{{ .Values.config.CABundle }}"
           {{- end }}
@@ -146,10 +170,10 @@ spec:
             httpGet:
               path: /readyz
               port: hubhealthz
-        {{- if or (not .Values.useCAAuth) (eq .Values.propertyProvider "azure") }}
+        {{- if or ($useSidecar) (eq .Values.propertyProvider "azure") ($mountIdentitySecret) ($mountHubKubeconfig) (.Values.extraVolumeMounts) }}
           volumeMounts:
-          {{- if not .Values.useCAAuth }}
-          - name: provider-token 
+          {{- if $useSidecar }}
+          - name: provider-token
             mountPath: /config
           {{- end }}
           {{- if eq .Values.propertyProvider "azure" }}
@@ -157,8 +181,21 @@ spec:
             mountPath: /etc/kubernetes/provider
             readOnly: true
           {{- end }}
+          {{- if $mountIdentitySecret }}
+          - name: hub-identity
+            mountPath: /etc/kubefleet/hub-identity
+            readOnly: true
+          {{- end }}
+          {{- if $mountHubKubeconfig }}
+          - name: hub-kubeconfig
+            mountPath: /etc/kubefleet/hub-kubeconfig
+            readOnly: true
+          {{- end }}
+          {{- with .Values.extraVolumeMounts }}
+          {{- toYaml . | nindent 10 }}
+          {{- end }}
         {{- end }}
-        {{- if not .Values.useCAAuth }}
+        {{- if $useSidecar }}
         - name: refresh-token
           image: "{{ .Values.refreshtoken.repository }}:{{ .Values.refreshtoken.tag | default .Chart.AppVersion }}"
           imagePullPolicy: {{ .Values.refreshtoken.pullPolicy }}
@@ -184,9 +221,13 @@ spec:
           - name: provider-token
             mountPath: /config
         {{- end }}
-      {{- if or (not .Values.useCAAuth) (eq .Values.propertyProvider "azure") }}
+      {{- if .Values.extraInitContainers }}
+      initContainers:
+        {{- toYaml .Values.extraInitContainers | nindent 8 }}
+      {{- end }}
+      {{- if or ($useSidecar) (eq .Values.propertyProvider "azure") ($mountIdentitySecret) ($mountHubKubeconfig) (.Values.extraVolumes) }}
       volumes:
-      {{- if not .Values.useCAAuth }}
+      {{- if $useSidecar }}
       - name: provider-token
         emptyDir: {}
       {{- end }}
@@ -194,6 +235,19 @@ spec:
       - name: cloud-provider-config
         secret:
           secretName: cloud-config
+      {{- end }}
+      {{- if $mountIdentitySecret }}
+      - name: hub-identity
+        secret:
+          secretName: {{ .Values.config.identitySecretName }}
+      {{- end }}
+      {{- if $mountHubKubeconfig }}
+      - name: hub-kubeconfig
+        secret:
+          secretName: {{ .Values.config.hubKubeconfigSecretName }}
+      {{- end }}
+      {{- with .Values.extraVolumes }}
+      {{- toYaml . | nindent 6 }}
       {{- end }}
       {{- end }}
       {{- with .Values.nodeSelector }}
