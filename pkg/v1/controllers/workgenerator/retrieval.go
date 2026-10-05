@@ -26,9 +26,10 @@ import (
 	"k8s.io/klog/v2"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 
-	placementv1alpha1 "go.goms.io/fleet/apis/kubefleet.dev/placement/v1alpha1"
-	"go.goms.io/fleet/pkg/utils"
-	"go.goms.io/fleet/pkg/utils/errors"
+	placementv1alpha1 "github.com/kubefleet-dev/kubefleet/apis/kubefleet.dev/placement/v1alpha1"
+	"github.com/kubefleet-dev/kubefleet/pkg/utils"
+	"github.com/kubefleet-dev/kubefleet/pkg/utils/errors"
+	"github.com/kubefleet-dev/kubefleet/pkg/v1/utils/fieldindexers"
 )
 
 func (r *Reconciler) retrievePlacementBinding(ctx context.Context, namespacedName types.NamespacedName) (placementv1alpha1.PlacementBindingAccessor, error) {
@@ -55,9 +56,12 @@ func (r *Reconciler) listWorksByOwnerBinding(ctx context.Context, clusterName, o
 	workList := &placementv1alpha1.WorkList{}
 	listOptions := []client.ListOption{
 		client.InNamespace(memberClusterNamespace),
-		client.MatchingLabels{
-			placementv1alpha1.WorkOwnedByPlacementBindingLabelKey: workOwnerLabelValue(ownerBindingName),
-			placementv1alpha1.WorkOwnerNamespaceLabelKey:          ownerBindingNSName,
+		client.MatchingFields{
+			fieldindexers.WorkOwnedByBindingCustomFieldName: fmt.Sprintf(
+				fieldindexers.WorkOwnedByBindingCustomFieldValFmt,
+				ownerBindingNSName,
+				workOwnerLabelValue(ownerBindingName),
+			),
 		},
 	}
 	if err := r.hubClient.List(ctx, workList, listOptions...); err != nil {
@@ -109,15 +113,18 @@ func (r *Reconciler) retrievePrimaryAndSecondaryPlacementResourceSnapshots(
 		return nil, errors.NewUnexpectedError(nil, "the primary placement resource snapshot is missing required labels",
 			"primaryPlacementResourceSnapshot", klog.KObj(primarySnapshot))
 	}
-	labelMatchers := client.MatchingLabels{
-		placementv1alpha1.PlacementResourceSnapshotOwnedByLabelKey: ownedBy,
-		placementv1alpha1.PlacementResourceSnapshotIndexLabelKey:   index,
+	fieldMatchers := client.MatchingFields{
+		fieldindexers.PlacementResourceSnapshotOwnedByAndIndexedCustomFieldName: fmt.Sprintf(
+			fieldindexers.PlacementResourceSnapshotOwnedByAndIndexedCustomFieldValFmt,
+			ownedBy,
+			index,
+		),
 	}
 
 	var snapshots []placementv1alpha1.PlacementResourceSnapshotAccessor
 	if namespace == "" {
 		snapshotList := &placementv1alpha1.ClusterPlacementResourceSnapshotList{}
-		if err := r.hubClient.List(ctx, snapshotList, labelMatchers); err != nil {
+		if err := r.hubClient.List(ctx, snapshotList, fieldMatchers); err != nil {
 			return nil, errors.NewAPIServerError(err, "failed to list cluster placement resource snapshots", true)
 		}
 		snapshots = make([]placementv1alpha1.PlacementResourceSnapshotAccessor, len(snapshotList.Items))
@@ -126,7 +133,7 @@ func (r *Reconciler) retrievePrimaryAndSecondaryPlacementResourceSnapshots(
 		}
 	} else {
 		snapshotList := &placementv1alpha1.PlacementResourceSnapshotList{}
-		if err := r.hubClient.List(ctx, snapshotList, client.InNamespace(namespace), labelMatchers); err != nil {
+		if err := r.hubClient.List(ctx, snapshotList, client.InNamespace(namespace), fieldMatchers); err != nil {
 			return nil, errors.NewAPIServerError(err, "failed to list placement resource snapshots", true)
 		}
 		snapshots = make([]placementv1alpha1.PlacementResourceSnapshotAccessor, len(snapshotList.Items))

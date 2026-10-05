@@ -50,6 +50,10 @@ const (
 	// This is added to help the placement resource snapshot manager retrieve all placement resource snapshots of a
 	// specific index associated with a placement policy.
 	PlacementResourceSnapshotOwnedByAndIndexedCustomFieldName = "ownedByWithIndex"
+
+	// WorkOwnedByBindingCustomFieldName is the name of the custom field that indexes Work objects by their owner
+	// placement bindings.
+	WorkOwnedByBindingCustomFieldName = "workOwnedByBinding"
 )
 
 const (
@@ -66,6 +70,12 @@ const (
 	//
 	// Note that slashes are used to avoid unexpected collisions.
 	PlacementResourceSnapshotOwnedByAndIndexedCustomFieldValFmt = "%s/%s"
+
+	// WorkOwnedByBindingCustomFieldValFmt is used to format the value for the custom field,
+	// `WorkOwnedByBindingCustomFieldName`.
+	//
+	// The first value is the owner binding namespace, and the second value is the owner binding name.
+	WorkOwnedByBindingCustomFieldValFmt = "%s/%s"
 )
 
 type fieldValueExtractor func(obj client.Object) ([]string, error)
@@ -110,6 +120,16 @@ var (
 		}
 		return []string{fmt.Sprintf(PlacementResourceSnapshotOwnedByAndIndexedCustomFieldValFmt, ownedBy, index)}, nil
 	}
+
+	workOwnedByBindingFieldExtractor fieldValueExtractor = func(obj client.Object) ([]string, error) {
+		ownerNS, ownerNSFound := obj.GetLabels()[placementv1alpha1.WorkOwnerNamespaceLabelKey]
+		ownerBinding := obj.GetLabels()[placementv1alpha1.WorkOwnedByPlacementBindingLabelKey]
+		if !ownerNSFound || ownerBinding == "" {
+			wrappedErr := errors.NewUnexpectedError(nil, "work is missing required owner binding metadata")
+			return nil, wrappedErr
+		}
+		return []string{fmt.Sprintf(WorkOwnedByBindingCustomFieldValFmt, ownerNS, ownerBinding)}, nil
+	}
 )
 
 // SetupWithHubControllerManager sets up the indices that controllers from the KubeFleet hub agent need to run properly.
@@ -143,6 +163,13 @@ func SetupWithHubControllerManager(ctx context.Context, mgr ctrl.Manager) error 
 		PlacementResourceSnapshotOwnedByAndIndexedCustomFieldName, placementResourceSnapshotOwnedByAndIdxedFieldExtractor,
 	); err != nil {
 		return errors.Wraps(err, "failed to set up cluster placement resource snapshot owner and index field index")
+	}
+
+	if err := indexCompositeField(ctx, fieldIdxer,
+		&placementv1alpha1.Work{},
+		WorkOwnedByBindingCustomFieldName, workOwnedByBindingFieldExtractor,
+	); err != nil {
+		return errors.Wraps(err, "failed to set up work owner binding field index")
 	}
 
 	return nil
