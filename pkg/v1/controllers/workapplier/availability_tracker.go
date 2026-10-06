@@ -1,0 +1,328 @@
+/*
+Copyright 2026 The KubeFleet Authors.
+
+Licensed under the Apache License, Version 2.0 (the "License");
+you may not use this file except in compliance with the License.
+You may obtain a copy of the License at
+
+    http://www.apache.org/licenses/LICENSE-2.0
+
+Unless required by applicable law or agreed to in writing, software
+distributed under the License is distributed on an "AS IS" BASIS,
+WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+See the License for the specific language governing permissions and
+limitations under the License.
+*/
+
+package workapplier
+
+import (
+	"context"
+
+	appv1 "k8s.io/api/apps/v1"
+	corev1 "k8s.io/api/core/v1"
+	policyv1 "k8s.io/api/policy/v1"
+	apiextensionshelpers "k8s.io/apiextensions-apiserver/pkg/apihelpers"
+	apiextensionsv1 "k8s.io/apiextensions-apiserver/pkg/apis/apiextensions/v1"
+	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
+	"k8s.io/apimachinery/pkg/runtime"
+	"k8s.io/apimachinery/pkg/runtime/schema"
+	"k8s.io/component-helpers/apps/poddisruptionbudget"
+	"k8s.io/klog/v2"
+
+	"github.com/kubefleet-dev/kubefleet/pkg/utils"
+	"github.com/kubefleet-dev/kubefleet/pkg/utils/errors"
+)
+
+// trackInMemberClusterObjAvailability tracks the availability of applied objects in the member cluster.
+func (r *Reconciler) trackInMemberClusterObjAvailability(ctx context.Context, manifestProcessingStates []*manifestProcessingState) error {
+	// Track the availability of all the applied objects in the member cluster in parallel.
+	//
+	// This is concurrency-safe as the processing state slice has been pre-allocated.
+
+	// Prepare a child context.
+	// Cancel the child context anyway to avoid leaks.
+	childCtx, cancel := context.WithCancel(ctx)
+	defer cancel()
+
+	doWork := func(pieces int) {
+		state := manifestProcessingStates[pieces]
+		ownerWorkObj := state.fromWorkObj
+		primaryWorkObj := state.fromPrimaryWorkObject
+
+		if !isManifestObjectApplied(state.applyRes) {
+			// The manifest object has not been applied yet. No availability check is needed.
+			state.availabilityCheckRes = AvailabilityResultTypeSkipped
+
+			// Note that some of the objects might have failed the pre-processing stage and do not
+			// even have a GVR or a manifest object.
+			if state.gvr != nil && state.manifestObj != nil {
+				klog.V(2).InfoS("The manifest object is not applied yet, skipping the availability check",
+					"manifestObj", klog.KObj(state.manifestObj), "GVR", *state.gvr,
+					"inMemberClusterObj", klog.KObj(state.inMemberClusterObj),
+					"work", klog.KObj(ownerWorkObj), "primaryWork", klog.KObj(primaryWorkObj))
+			} else {
+				klog.V(2).InfoS("The manifest object is not applied yet, skipping the availability check",
+					"ordinal", pieces,
+					"work", klog.KObj(ownerWorkObj), "primaryWork", klog.KObj(primaryWorkObj))
+			}
+			return
+		}
+
+		availabilityCheckRes, err := trackInMemberClusterObjAvailabilityByGVR(state.gvr, state.inMemberClusterObj)
+		if err != nil {
+			// An unexpected error has occurred during the availability check.
+			state.availabilityCheckErr = err
+			state.availabilityCheckRes = AvailabilityResultTypeFailed
+			klog.ErrorS(err, "Failed to track the availability of the applied object in the member cluster",
+				errors.Args(err,
+					"manifestObj", klog.KObj(state.manifestObj), "GVR", *state.gvr,
+					"work", klog.KObj(ownerWorkObj), "primaryWork", klog.KObj(primaryWorkObj))...)
+			return
+		}
+		state.availabilityCheckRes = availabilityCheckRes
+		klog.V(2).InfoS("Tracked availability of a resource",
+			"manifestObj", klog.KObj(state.manifestObj), "GVR", *state.gvr,
+			"work", klog.KObj(ownerWorkObj), "primaryWork", klog.KObj(primaryWorkObj),
+			"availabilityCheckRes", availabilityCheckRes)
+	}
+
+	// Run the availability check in parallel.
+	r.parallelizer.ParallelizeUntil(childCtx, len(manifestProcessingStates), doWork, "trackInMemberClusterObjAvailability")
+
+	// Unlike some other steps in the reconciliation loop, the availability checking step does not end
+	// with a contextual API call; consequently, if the context has been cancelled during this step,
+	// some checks might not run at all, and passing such states to the next step may trigger
+	// unexpected behaviors. To address this, at the end of this step the work applier checks for context
+	// cancellation directly.
+	if err := ctx.Err(); err != nil {
+		klog.V(2).InfoS("Availability checking has been interrupted as the main context has been cancelled")
+		return errors.NewTransientError(err, "availability checking has been interrupted")
+	}
+	return nil
+}
+
+// isManifestObjectApplied returns whether an apply result type indicates that the manifest object
+// has been applied.
+func isManifestObjectApplied(applyRes ApplyResultType) bool {
+	return applyRes == ApplyResTypeApplied || applyRes == ApplyResTypeAppliedWithFailedDriftDetection
+}
+
+// trackInMemberClusterObjAvailabilityByGVR tracks the availability of an object in the member cluster based
+// on its GVR.
+func trackInMemberClusterObjAvailabilityByGVR(
+	gvr *schema.GroupVersionResource,
+	inMemberClusterObj *unstructured.Unstructured,
+) (AvailabilityCheckResultType, error) {
+	switch *gvr {
+	case utils.DeploymentGVR:
+		return trackDeploymentAvailability(inMemberClusterObj)
+	case utils.StatefulSetGVR:
+		return trackStatefulSetAvailability(inMemberClusterObj)
+	case utils.DaemonSetGVR:
+		return trackDaemonSetAvailability(inMemberClusterObj)
+	case utils.ServiceGVR:
+		return trackServiceAvailability(inMemberClusterObj)
+	case utils.CustomResourceDefinitionGVR:
+		return trackCRDAvailability(inMemberClusterObj)
+	case utils.PodDisruptionBudgetGVR:
+		return trackPDBAvailability(inMemberClusterObj)
+	default:
+		if isDataResource(*gvr) {
+			klog.V(2).InfoS("The object from the member cluster is a data object, consider it to be immediately available",
+				"GVR", *gvr, "inMemberClusterObj", klog.KObj(inMemberClusterObj))
+			return AvailabilityResultTypeAvailable, nil
+		}
+		klog.V(2).InfoS("Cannot determine the availability of the object from the member cluster; untrack its availability",
+			"GVR", *gvr, "inMemberClusterObj", klog.KObj(inMemberClusterObj))
+		return AvailabilityResultTypeNotTrackable, nil
+	}
+}
+
+// trackDeploymentAvailability tracks the availability of a deployment in the member cluster.
+func trackDeploymentAvailability(inMemberClusterObj *unstructured.Unstructured) (AvailabilityCheckResultType, error) {
+	var deploy appv1.Deployment
+	if err := runtime.DefaultUnstructuredConverter.FromUnstructured(inMemberClusterObj.Object, &deploy); err != nil {
+		// Normally this branch should never run.
+		return AvailabilityResultTypeFailed, errors.NewUnexpectedError(err, "failed to convert the unstructured object to a deployment")
+	}
+
+	// Check if the deployment is available.
+	requiredReplicas := int32(1)
+	if deploy.Spec.Replicas != nil {
+		requiredReplicas = *deploy.Spec.Replicas
+	}
+	if deploy.Status.ObservedGeneration == deploy.Generation &&
+		requiredReplicas == deploy.Status.AvailableReplicas &&
+		requiredReplicas == deploy.Status.UpdatedReplicas &&
+		deploy.Status.UnavailableReplicas == 0 {
+		klog.V(2).InfoS("Deployment is available", "deployment", klog.KObj(inMemberClusterObj))
+		return AvailabilityResultTypeAvailable, nil
+	}
+	klog.V(2).InfoS("Deployment is not ready yet, will check later to see if it becomes available", "deployment", klog.KObj(inMemberClusterObj))
+	return AvailabilityResultTypeNotYetAvailable, nil
+}
+
+// trackStatefulSetAvailability tracks the availability of a stateful set in the member cluster.
+func trackStatefulSetAvailability(inMemberClusterObj *unstructured.Unstructured) (AvailabilityCheckResultType, error) {
+	var statefulSet appv1.StatefulSet
+	if err := runtime.DefaultUnstructuredConverter.FromUnstructured(inMemberClusterObj.Object, &statefulSet); err != nil {
+		// Normally this branch should never run.
+		return AvailabilityResultTypeFailed, errors.NewUnexpectedError(err, "failed to convert the unstructured object to a stateful set")
+	}
+
+	// Check if the stateful set is available.
+	//
+	// A statefulSet is available if all if its replicas are available and the current replica count
+	// is equal to the updated replica count, which implies that all replicas are up to date.
+	requiredReplicas := int32(1)
+	if statefulSet.Spec.Replicas != nil {
+		requiredReplicas = *statefulSet.Spec.Replicas
+	}
+	if statefulSet.Status.ObservedGeneration == statefulSet.Generation &&
+		statefulSet.Status.AvailableReplicas == requiredReplicas &&
+		statefulSet.Status.CurrentReplicas == statefulSet.Status.UpdatedReplicas &&
+		statefulSet.Status.CurrentRevision == statefulSet.Status.UpdateRevision {
+		klog.V(2).InfoS("StatefulSet is available", "statefulSet", klog.KObj(inMemberClusterObj))
+		return AvailabilityResultTypeAvailable, nil
+	}
+	klog.V(2).InfoS("Stateful set is not ready yet, will check later to see if it becomes available", "statefulSet", klog.KObj(inMemberClusterObj))
+	return AvailabilityResultTypeNotYetAvailable, nil
+}
+
+// trackDaemonSetAvailability tracks the availability of a daemon set in the member cluster.
+func trackDaemonSetAvailability(inMemberClusterObj *unstructured.Unstructured) (AvailabilityCheckResultType, error) {
+	var daemonSet appv1.DaemonSet
+	if err := runtime.DefaultUnstructuredConverter.FromUnstructured(inMemberClusterObj.Object, &daemonSet); err != nil {
+		// Normally this branch should never run.
+		return AvailabilityResultTypeFailed, errors.NewUnexpectedError(err, "failed to convert the unstructured object to a daemon set")
+	}
+
+	// Check if the daemonSet is available.
+	//
+	// A daemonSet is available if all if its desired replicas (the count of which is equal to
+	// the number of applicable nodes in the cluster) are available and the current replica count
+	// is equal to the updated replica count, which implies that all replicas are up to date.
+	if daemonSet.Status.ObservedGeneration == daemonSet.Generation &&
+		daemonSet.Status.NumberAvailable == daemonSet.Status.DesiredNumberScheduled &&
+		daemonSet.Status.CurrentNumberScheduled == daemonSet.Status.UpdatedNumberScheduled {
+		klog.V(2).InfoS("DaemonSet is available", "daemonSet", klog.KObj(inMemberClusterObj))
+		return AvailabilityResultTypeAvailable, nil
+	}
+	klog.V(2).InfoS("Daemon set is not ready yet, will check later to see if it becomes available", "daemonSet", klog.KObj(inMemberClusterObj))
+	return AvailabilityResultTypeNotYetAvailable, nil
+}
+
+// trackServiceAvailability tracks the availability of a service in the member cluster.
+func trackServiceAvailability(inMemberClusterObj *unstructured.Unstructured) (AvailabilityCheckResultType, error) {
+	var svc corev1.Service
+	if err := runtime.DefaultUnstructuredConverter.FromUnstructured(inMemberClusterObj.Object, &svc); err != nil {
+		return AvailabilityResultTypeFailed, errors.NewUnexpectedError(err, "failed to convert the unstructured object to a service")
+	}
+	switch svc.Spec.Type {
+	case "":
+		fallthrough // The default service type is ClusterIP.
+	case corev1.ServiceTypeClusterIP:
+		fallthrough
+	case corev1.ServiceTypeNodePort:
+		// KubeFleet considers a ClusterIP or NodePort service to be available if it has at least one
+		// IP assigned.
+		if len(svc.Spec.ClusterIPs) > 0 && len(svc.Spec.ClusterIPs[0]) > 0 {
+			klog.V(2).InfoS("Service is available", "service", klog.KObj(inMemberClusterObj), "serviceType", svc.Spec.Type)
+			return AvailabilityResultTypeAvailable, nil
+		}
+		klog.V(2).InfoS("Service is not ready yet, will check later to see if it becomes available", "service", klog.KObj(inMemberClusterObj), "serviceType", svc.Spec.Type)
+		return AvailabilityResultTypeNotYetAvailable, nil
+	case corev1.ServiceTypeLoadBalancer:
+		// KubeFleet considers a loadBalancer service to be available if it has at least one load
+		// balancer IP or hostname assigned.
+		if len(svc.Status.LoadBalancer.Ingress) > 0 &&
+			(len(svc.Status.LoadBalancer.Ingress[0].IP) > 0 || len(svc.Status.LoadBalancer.Ingress[0].Hostname) > 0) {
+			klog.V(2).InfoS("Service is available", "service", klog.KObj(inMemberClusterObj), "serviceType", svc.Spec.Type)
+			return AvailabilityResultTypeAvailable, nil
+		}
+		klog.V(2).InfoS("Service is not ready yet, will check later to see if it becomes available", "service", klog.KObj(inMemberClusterObj), "serviceType", svc.Spec.Type)
+		return AvailabilityResultTypeNotYetAvailable, nil
+	}
+
+	// KubeFleet does not know how to track the availability of an externalName service.
+	klog.V(2).InfoS("Cannot determine the availability of external name services; untrack its availability", "service", klog.KObj(inMemberClusterObj))
+	return AvailabilityResultTypeNotTrackable, nil
+}
+
+// trackCRDAvailability tracks the availability of a custom resource definition in the member cluster.
+func trackCRDAvailability(inMemberClusterObj *unstructured.Unstructured) (AvailabilityCheckResultType, error) {
+	var crd apiextensionsv1.CustomResourceDefinition
+	if err := runtime.DefaultUnstructuredConverter.FromUnstructured(inMemberClusterObj.Object, &crd); err != nil {
+		return AvailabilityResultTypeFailed, errors.NewUnexpectedError(err, "failed to convert the unstructured object to a custom resource definition")
+	}
+
+	// If both conditions are True, the CRD has become available.
+	if apiextensionshelpers.IsCRDConditionTrue(&crd, apiextensionsv1.Established) && apiextensionshelpers.IsCRDConditionTrue(&crd, apiextensionsv1.NamesAccepted) {
+		klog.V(2).InfoS("CustomResourceDefinition is available", "customResourceDefinition", klog.KObj(inMemberClusterObj))
+		return AvailabilityResultTypeAvailable, nil
+	}
+
+	klog.V(2).InfoS("Custom resource definition is not ready yet, will check later to see if it becomes available",
+		"customResourceDefinition", klog.KObj(inMemberClusterObj))
+	return AvailabilityResultTypeNotYetAvailable, nil
+}
+
+// trackPDBAvailability tracks the availability of a pod disruption budget in the member cluster.
+func trackPDBAvailability(inMemberClusterObj *unstructured.Unstructured) (AvailabilityCheckResultType, error) {
+	var pdb policyv1.PodDisruptionBudget
+	if err := runtime.DefaultUnstructuredConverter.FromUnstructured(inMemberClusterObj.Object, &pdb); err != nil {
+		return AvailabilityResultTypeFailed, errors.NewUnexpectedError(err, "failed to convert the unstructured object to a pod disruption budget")
+	}
+	// Check if conditions are up-to-date.
+	if poddisruptionbudget.ConditionsAreUpToDate(&pdb) {
+		klog.V(2).InfoS("PodDisruptionBudget is available", "podDisruptionBudget", klog.KObj(inMemberClusterObj))
+		return AvailabilityResultTypeAvailable, nil
+	}
+	klog.V(2).InfoS("Still need to wait for PodDisruptionBudget to be available", "podDisruptionBudget", klog.KObj(inMemberClusterObj))
+	return AvailabilityResultTypeNotYetAvailable, nil
+}
+
+// isDataResource checks if the resource is a data resource; such resources are
+// available immediately after creation.
+func isDataResource(gvr schema.GroupVersionResource) bool {
+	switch gvr {
+	case utils.NamespaceGVR:
+		return true
+	case utils.SecretGVR:
+		return true
+	case utils.ConfigMapGVR:
+		return true
+	case utils.RoleGVR:
+		return true
+	case utils.ClusterRoleGVR:
+		return true
+	case utils.RoleBindingGVR:
+		return true
+	case utils.ClusterRoleBindingGVR:
+		return true
+	case utils.ServiceAccountGVR:
+		return true
+	case utils.NetworkPolicyGVR:
+		return true
+	case utils.CSIDriverGVR:
+		return true
+	case utils.CSINodeGVR:
+		return true
+	case utils.StorageClassGVR:
+		return true
+	case utils.CSIStorageCapacityGVR:
+		return true
+	case utils.ControllerRevisionGVR:
+		return true
+	case utils.IngressClassGVR:
+		return true
+	case utils.LimitRangeGVR:
+		return true
+	case utils.ResourceQuotaGVR:
+		return true
+	case utils.PriorityClassGVR:
+		return true
+	}
+	return false
+}

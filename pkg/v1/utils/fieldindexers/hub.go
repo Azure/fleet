@@ -14,13 +14,13 @@ See the License for the specific language governing permissions and
 limitations under the License.
 */
 
+// Package fieldindexers provides utilities for setting up and using field-based indexes for KubeFleet API objects on the KubeFleet agent side.
 package fieldindexers
 
 import (
 	"context"
 	"fmt"
 
-	"k8s.io/klog/v2"
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 
@@ -29,13 +29,13 @@ import (
 )
 
 const (
-	// The field-based indexes set up for KubeFleet API objects.
+	// The field-based indexes set up for KubeFleet API objects (on the hub agent side).
 	//
-	// Important: many KubeFleet components run under the assumption that proper custom fields
+	// Important: many KubeFleet components on the hub agent side run under the assumption that proper custom fields
 	// have been added and indexed in the cache when running. Failure to complete such prior setup **before
-	// the manager starts** will result in unexpected behaviors. Make sure that all applicable components
-	// are properly set up using the client provided by the hub controller manager, and `SetupWithManager` is
-	// called before the manager starts.
+	// the manager starts** will result in unexpected behaviors/failures. Make sure that all applicable components
+	// are properly set up using the client provided by the hub controller manager, and
+	// `SetupWithHubAgentControllerManager` is called before the manager starts.
 
 	// PlacementResourceSnapshotOwnedByAndSubIndexedCustomFieldName is the name of the custom field that indexes
 	// placement resource snapshots by their owner placement policies and their sub-indices.
@@ -78,28 +78,6 @@ const (
 	WorkOwnedByBindingCustomFieldValFmt = "%s/%s"
 )
 
-type fieldValueExtractor func(obj client.Object) ([]string, error)
-
-func indexCompositeField(ctx context.Context,
-	fieldIdxer client.FieldIndexer,
-	obj client.Object,
-	fieldName string, fieldValueExt fieldValueExtractor) error {
-	if err := fieldIdxer.IndexField(ctx, obj, fieldName, func(rawObj client.Object) []string {
-		fieldVals, extErr := fieldValueExt(rawObj)
-		if extErr != nil {
-			wrappedErr := errors.NewUnexpectedError(extErr, "failed to extract field value", "object", klog.KObj(rawObj))
-			klog.ErrorS(wrappedErr, "failed to index field", errors.Args(wrappedErr)...)
-			return nil
-		}
-		return fieldVals
-	}); err != nil {
-		wrappedErr := errors.NewUnexpectedError(err, "", "fieldName", fieldName, "object", klog.KObj(obj))
-		klog.ErrorS(wrappedErr, "failed to index field", errors.Args(wrappedErr)...)
-		return wrappedErr
-	}
-	return nil
-}
-
 var (
 	placementResourceSnapshotOwnedByAndSubIdxedFieldExtractor fieldValueExtractor = func(obj client.Object) ([]string, error) {
 		ownedBy := obj.GetLabels()[placementv1alpha1.PlacementResourceSnapshotOwnedByLabelKey]
@@ -132,9 +110,10 @@ var (
 	}
 )
 
-// SetupWithHubControllerManager sets up the indices that controllers from the KubeFleet hub agent need to run properly.
+// SetupWithHubAgentControllerManager sets up the indices that controllers from the KubeFleet hub agent need to run properly.
+//
 // It must be called before the manager starts.
-func SetupWithHubControllerManager(ctx context.Context, mgr ctrl.Manager) error {
+func SetupWithHubAgentControllerManager(ctx context.Context, mgr ctrl.Manager) error {
 	fieldIdxer := mgr.GetFieldIndexer()
 
 	if err := indexCompositeField(ctx, fieldIdxer,
