@@ -7,6 +7,7 @@ import (
 	"go.goms.io/fleet/pkg/webhook/clusterresourceplacementeviction"
 	"go.goms.io/fleet/pkg/webhook/deployment"
 	"go.goms.io/fleet/pkg/webhook/fleetresourcehandler"
+	"go.goms.io/fleet/pkg/webhook/job"
 	"go.goms.io/fleet/pkg/webhook/membercluster"
 	"go.goms.io/fleet/pkg/webhook/pdb"
 	"go.goms.io/fleet/pkg/webhook/pod"
@@ -32,4 +33,6 @@ func init() {
 	AddToManagerFuncs = append(AddToManagerFuncs, clusterresourceplacementdisruptionbudget.Add)
 	AddToManagerFuncs = append(AddToManagerFuncs, deployment.AddMutating)
 	AddToManagerFuncs = append(AddToManagerFuncs, deployment.Add)
+	AddToManagerFuncs = append(AddToManagerFuncs, job.AddMutating)
+	AddToManagerFuncs = append(AddToManagerFuncs, job.Add)
 }

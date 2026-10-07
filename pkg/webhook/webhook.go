@@ -62,6 +62,7 @@ import (
 	"go.goms.io/fleet/pkg/webhook/clusterresourceplacementeviction"
 	"go.goms.io/fleet/pkg/webhook/deployment"
 	"go.goms.io/fleet/pkg/webhook/fleetresourcehandler"
+	"go.goms.io/fleet/pkg/webhook/job"
 	"go.goms.io/fleet/pkg/webhook/membercluster"
 	"go.goms.io/fleet/pkg/webhook/pdb"
 	"go.goms.io/fleet/pkg/webhook/pod"
@@ -432,6 +433,23 @@ func (w *Config) buildFleetMutatingWebhooks() []admv1.MutatingWebhook {
 			},
 			TimeoutSeconds: longWebhookTimeout,
 		},
+		{
+			Name:                    "fleet.job.mutating",
+			ClientConfig:            w.createClientConfig(job.MutatingPath),
+			FailurePolicy:           &ignoreFailurePolicy,
+			SideEffects:             &sideEffortsNone,
+			AdmissionReviewVersions: admissionReviewVersions,
+			Rules: []admv1.RuleWithOperations{
+				{
+					Operations: []admv1.OperationType{
+						admv1.Create,
+						admv1.Update,
+					},
+					Rule: createRule([]string{batchv1.SchemeGroupVersion.Group}, []string{batchv1.SchemeGroupVersion.Version}, []string{jobResourceName}, &namespacedScope),
+				},
+			},
+			TimeoutSeconds: longWebhookTimeout,
+		},
 	}
 	return webHooks
 }
@@ -616,6 +634,19 @@ func (w *Config) buildFleetValidatingWebhooks() []admv1.ValidatingWebhook {
 		Rules: []admv1.RuleWithOperations{{
 			Operations: []admv1.OperationType{admv1.Create, admv1.Update},
 			Rule:       createRule([]string{appsv1.SchemeGroupVersion.Group}, []string{appsv1.SchemeGroupVersion.Version}, []string{deploymentResourceName}, &namespacedScope),
+		}},
+		TimeoutSeconds: longWebhookTimeout,
+	})
+
+	webHooks = append(webHooks, admv1.ValidatingWebhook{
+		Name:                    "fleet.job.validating",
+		ClientConfig:            w.createClientConfig(job.ValidationPath),
+		FailurePolicy:           &failFailurePolicy,
+		SideEffects:             &sideEffortsNone,
+		AdmissionReviewVersions: admissionReviewVersions,
+		Rules: []admv1.RuleWithOperations{{
+			Operations: []admv1.OperationType{admv1.Create, admv1.Update},
+			Rule:       createRule([]string{batchv1.SchemeGroupVersion.Group}, []string{batchv1.SchemeGroupVersion.Version}, []string{jobResourceName}, &namespacedScope),
 		}},
 		TimeoutSeconds: longWebhookTimeout,
 	})

@@ -111,7 +111,7 @@ var _ = Describe("Policies, Policy Bindings and their Effects", Ordered, func() 
 					},
 					Validations: []admissionregistrationv1.Validation{
 						{
-							Expression: `((request.namespace.startsWith("fleet-")) || (request.namespace.startsWith("kube-"))) || ((object.metadata.labels["fleet.azure.com/reconcile"] == "managed") && ((request.userInfo.username == "system:serviceaccount:kube-system:deployment-controller") || (request.userInfo.username == "system:serviceaccount:kube-system:replicaset-controller") || (request.userInfo.username == "system:kube-controller-manager")))`,
+							Expression: `((request.namespace.startsWith("fleet-")) || (request.namespace.startsWith("kube-"))) || ((object.metadata.labels["fleet.azure.com/reconcile"] == "managed") && ((request.userInfo.username == "system:serviceaccount:kube-system:deployment-controller") || (request.userInfo.username == "system:serviceaccount:kube-system:job-controller") || (request.userInfo.username == "system:serviceaccount:kube-system:replicaset-controller") || (request.userInfo.username == "system:kube-controller-manager")))`,
 							Message:    "creating pods and replicas is disallowed in the fleet hub cluster",
 							Reason:     ptr.To(metav1.StatusReasonForbidden),
 						},

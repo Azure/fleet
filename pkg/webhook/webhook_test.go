@@ -9,6 +9,7 @@ import (
 	"github.com/google/go-cmp/cmp/cmpopts"
 	"github.com/stretchr/testify/assert"
 	admv1 "k8s.io/api/admissionregistration/v1"
+	batchv1 "k8s.io/api/batch/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client"
@@ -17,6 +18,7 @@ import (
 
 	"go.goms.io/fleet/cmd/hubagent/options"
 	"go.goms.io/fleet/pkg/utils"
+	jobwebhook "go.goms.io/fleet/pkg/webhook/job"
 	testmanager "go.goms.io/fleet/test/utils/manager"
 )
 
@@ -33,7 +35,7 @@ func TestBuildFleetMutatingWebhooks(t *testing.T) {
 				serviceURL:           "test-url",
 				clientConnectionType: &url,
 			},
-			wantLength: 2,
+			wantLength: 3,
 		},
 	}
 
@@ -60,7 +62,7 @@ func TestBuildFleetValidatingWebhooks(t *testing.T) {
 				serviceURL:           "test-url",
 				clientConnectionType: &url,
 			},
-			wantLength: 10,
+			wantLength: 11,
 		},
 		"enable workload": {
 			config: Config{
@@ -70,7 +72,7 @@ func TestBuildFleetValidatingWebhooks(t *testing.T) {
 				clientConnectionType: &url,
 				enableWorkload:       true,
 			},
-			wantLength: 8,
+			wantLength: 9,
 		},
 		"enable PDBs": {
 			config: Config{
@@ -80,7 +82,7 @@ func TestBuildFleetValidatingWebhooks(t *testing.T) {
 				clientConnectionType: &url,
 				enablePDBs:           true,
 			},
-			wantLength: 9,
+			wantLength: 10,
 		},
 	}
 
@@ -89,6 +91,72 @@ func TestBuildFleetValidatingWebhooks(t *testing.T) {
 			gotResult := testCase.config.buildFleetValidatingWebhooks()
 			assert.Equal(t, testCase.wantLength, len(gotResult), utils.TestCaseMsg, testName)
 		})
+	}
+}
+
+func TestBuildFleetJobWebhooks(t *testing.T) {
+	url := options.WebhookClientConnectionType("url")
+	config := Config{
+		serviceNamespace:     "test-namespace",
+		servicePort:          8080,
+		serviceURL:           "test-url",
+		clientConnectionType: &url,
+	}
+
+	wantMutating := admv1.MutatingWebhook{
+		Name:                    "fleet.job.mutating",
+		ClientConfig:            config.createClientConfig(jobwebhook.MutatingPath),
+		FailurePolicy:           &ignoreFailurePolicy,
+		SideEffects:             &sideEffortsNone,
+		AdmissionReviewVersions: admissionReviewVersions,
+		Rules: []admv1.RuleWithOperations{{
+			Operations: []admv1.OperationType{admv1.Create, admv1.Update},
+			Rule:       createRule([]string{batchv1.SchemeGroupVersion.Group}, []string{batchv1.SchemeGroupVersion.Version}, []string{jobResourceName}, &namespacedScope),
+		}},
+		TimeoutSeconds: longWebhookTimeout,
+	}
+	var gotMutating *admv1.MutatingWebhook
+	mutatingWebhooks := config.buildFleetMutatingWebhooks()
+	for i := range mutatingWebhooks {
+		webhook := &mutatingWebhooks[i]
+		if webhook.Name == wantMutating.Name {
+			gotMutating = webhook
+			break
+		}
+	}
+	if gotMutating == nil {
+		t.Fatalf("buildFleetMutatingWebhooks() did not include %q", wantMutating.Name)
+	}
+	if diff := cmp.Diff(wantMutating, *gotMutating); diff != "" {
+		t.Errorf("Job mutating webhook mismatch (-want +got):\n%s", diff)
+	}
+
+	wantValidating := admv1.ValidatingWebhook{
+		Name:                    "fleet.job.validating",
+		ClientConfig:            config.createClientConfig(jobwebhook.ValidationPath),
+		FailurePolicy:           &failFailurePolicy,
+		SideEffects:             &sideEffortsNone,
+		AdmissionReviewVersions: admissionReviewVersions,
+		Rules: []admv1.RuleWithOperations{{
+			Operations: []admv1.OperationType{admv1.Create, admv1.Update},
+			Rule:       createRule([]string{batchv1.SchemeGroupVersion.Group}, []string{batchv1.SchemeGroupVersion.Version}, []string{jobResourceName}, &namespacedScope),
+		}},
+		TimeoutSeconds: longWebhookTimeout,
+	}
+	var gotValidating *admv1.ValidatingWebhook
+	validatingWebhooks := config.buildFleetValidatingWebhooks()
+	for i := range validatingWebhooks {
+		webhook := &validatingWebhooks[i]
+		if webhook.Name == wantValidating.Name {
+			gotValidating = webhook
+			break
+		}
+	}
+	if gotValidating == nil {
+		t.Fatalf("buildFleetValidatingWebhooks() did not include %q", wantValidating.Name)
+	}
+	if diff := cmp.Diff(wantValidating, *gotValidating); diff != "" {
+		t.Errorf("Job validating webhook mismatch (-want +got):\n%s", diff)
 	}
 }
 
