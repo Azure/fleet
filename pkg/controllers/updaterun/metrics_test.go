@@ -19,8 +19,10 @@ package updaterun
 import (
 	"fmt"
 	"testing"
+	"time"
 
 	"github.com/google/go-cmp/cmp"
+	"github.com/prometheus/client_golang/prometheus/testutil"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 
 	"go.goms.io/fleet/apis/placement/v1beta1"
@@ -197,5 +199,127 @@ func TestIsFailureReason(t *testing.T) {
 				t.Errorf("isFailureReason(%q) = %v, want %v", tc.reason, got, tc.want)
 			}
 		})
+	}
+}
+
+func TestEmitUpdateRunStatusMetricUsesConditionTransitionTime(t *testing.T) {
+	tests := []struct {
+		name        string
+		state       v1beta1.State
+		conditions  []metav1.Condition
+		wantType    v1beta1.StagedUpdateRunConditionType
+		wantStatus  metav1.ConditionStatus
+		wantReason  string
+		wantFailure hubmetrics.UpdateRunFailureType
+		wantTime    metav1.Time
+	}{
+		{
+			name:  "failed run keeps failure transition time",
+			state: v1beta1.StateRun,
+			conditions: []metav1.Condition{
+				newUpdateRunMetricCondition(v1beta1.StagedUpdateRunConditionSucceeded, metav1.ConditionFalse, condition.UpdateRunFailedReason, "internal error", time.Unix(100, 123456789)),
+			},
+			wantType:    v1beta1.StagedUpdateRunConditionSucceeded,
+			wantStatus:  metav1.ConditionFalse,
+			wantReason:  condition.UpdateRunFailedReason,
+			wantFailure: hubmetrics.UpdateRunFailureTypeInternalError,
+			wantTime:    metav1.NewTime(time.Unix(100, 123456789)),
+		},
+		{
+			name:  "initialized run uses initialization transition time",
+			state: v1beta1.StateInitialize,
+			conditions: []metav1.Condition{
+				newUpdateRunMetricCondition(v1beta1.StagedUpdateRunConditionInitialized, metav1.ConditionTrue, condition.UpdateRunInitializeSucceededReason, "initialized", time.Unix(200, 0)),
+			},
+			wantType:    v1beta1.StagedUpdateRunConditionInitialized,
+			wantStatus:  metav1.ConditionTrue,
+			wantReason:  condition.UpdateRunInitializeSucceededReason,
+			wantFailure: hubmetrics.UpdateRunFailureTypeNone,
+			wantTime:    metav1.NewTime(time.Unix(200, 0)),
+		},
+		{
+			name:  "executing run uses progressing transition time",
+			state: v1beta1.StateRun,
+			conditions: []metav1.Condition{
+				newUpdateRunMetricCondition(v1beta1.StagedUpdateRunConditionInitialized, metav1.ConditionTrue, condition.UpdateRunInitializeSucceededReason, "initialized", time.Unix(200, 0)),
+				newUpdateRunMetricCondition(v1beta1.StagedUpdateRunConditionProgressing, metav1.ConditionTrue, condition.UpdateRunProgressingReason, "progressing", time.Unix(300, 0)),
+			},
+			wantType:    v1beta1.StagedUpdateRunConditionProgressing,
+			wantStatus:  metav1.ConditionTrue,
+			wantReason:  condition.UpdateRunProgressingReason,
+			wantFailure: hubmetrics.UpdateRunFailureTypeNone,
+			wantTime:    metav1.NewTime(time.Unix(300, 0)),
+		},
+		{
+			name:  "succeeded run uses success transition time",
+			state: v1beta1.StateRun,
+			conditions: []metav1.Condition{
+				newUpdateRunMetricCondition(v1beta1.StagedUpdateRunConditionInitialized, metav1.ConditionTrue, condition.UpdateRunInitializeSucceededReason, "initialized", time.Unix(200, 0)),
+				newUpdateRunMetricCondition(v1beta1.StagedUpdateRunConditionProgressing, metav1.ConditionFalse, condition.UpdateRunSucceededReason, "completed", time.Unix(400, 0)),
+				newUpdateRunMetricCondition(v1beta1.StagedUpdateRunConditionSucceeded, metav1.ConditionTrue, condition.UpdateRunSucceededReason, "succeeded", time.Unix(400, 0)),
+			},
+			wantType:    v1beta1.StagedUpdateRunConditionSucceeded,
+			wantStatus:  metav1.ConditionTrue,
+			wantReason:  condition.UpdateRunSucceededReason,
+			wantFailure: hubmetrics.UpdateRunFailureTypeNone,
+			wantTime:    metav1.NewTime(time.Unix(400, 0)),
+		},
+	}
+
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			hubmetrics.FleetUpdateRunStatusLastTimestampSeconds.Reset()
+			t.Cleanup(hubmetrics.FleetUpdateRunStatusLastTimestampSeconds.Reset)
+
+			updateRun := &v1beta1.ClusterStagedUpdateRun{
+				ObjectMeta: metav1.ObjectMeta{
+					Name:       "test-update-run",
+					Generation: 1,
+				},
+				Spec: v1beta1.UpdateRunSpec{
+					State: tc.state,
+				},
+				Status: v1beta1.UpdateRunStatus{
+					Conditions: tc.conditions,
+				},
+			}
+
+			metric := hubmetrics.FleetUpdateRunStatusLastTimestampSeconds.WithLabelValues(
+				"",
+				updateRun.Name,
+				string(tc.state),
+				string(tc.wantType),
+				string(tc.wantStatus),
+				tc.wantReason,
+				string(tc.wantFailure),
+			)
+			wantTimestamp := float64(tc.wantTime.UnixNano()) / float64(time.Second)
+
+			emitUpdateRunStatusMetric(updateRun)
+			if got := testutil.ToFloat64(metric); got != wantTimestamp {
+				t.Fatalf("emitUpdateRunStatusMetric() timestamp = %v, want %v", got, wantTimestamp)
+			}
+
+			emitUpdateRunStatusMetric(updateRun)
+			if got := testutil.ToFloat64(metric); got != wantTimestamp {
+				t.Fatalf("emitUpdateRunStatusMetric() timestamp after unchanged reconciliation = %v, want %v", got, wantTimestamp)
+			}
+		})
+	}
+}
+
+func newUpdateRunMetricCondition(
+	conditionType v1beta1.StagedUpdateRunConditionType,
+	status metav1.ConditionStatus,
+	reason, message string,
+	transitionTime time.Time,
+) metav1.Condition {
+	return metav1.Condition{
+		Type:               string(conditionType),
+		Status:             status,
+		ObservedGeneration: 1,
+		LastTransitionTime: metav1.NewTime(transitionTime),
+		Reason:             reason,
+		Message:            message,
 	}
 }

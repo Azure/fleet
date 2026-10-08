@@ -20,10 +20,13 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"sort"
 	"strconv"
+	"strings"
 	"time"
 
 	"github.com/google/go-cmp/cmp"
+	"github.com/google/go-cmp/cmp/cmpopts"
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
 	prometheusclientmodel "github.com/prometheus/client_model/go"
@@ -41,12 +44,11 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/controller/controllerutil"
 	ctrlmetrics "sigs.k8s.io/controller-runtime/pkg/metrics"
 
-	clusterv1beta1 "go.goms.io/fleet/apis/cluster/v1beta1"
-	placementv1beta1 "go.goms.io/fleet/apis/placement/v1beta1"
-	hubmetrics "go.goms.io/fleet/pkg/metrics/hub"
-	"go.goms.io/fleet/pkg/utils"
-	"go.goms.io/fleet/pkg/utils/condition"
-	metricsutils "go.goms.io/fleet/test/utils/metrics"
+	clusterv1beta1 "github.com/kubefleet-dev/kubefleet/apis/cluster/v1beta1"
+	placementv1beta1 "github.com/kubefleet-dev/kubefleet/apis/placement/v1beta1"
+	hubmetrics "github.com/kubefleet-dev/kubefleet/pkg/metrics/hub"
+	"github.com/kubefleet-dev/kubefleet/pkg/utils"
+	"github.com/kubefleet-dev/kubefleet/pkg/utils/condition"
 )
 
 const (
@@ -72,6 +74,34 @@ var (
 	testCROName              string
 	updateRunNamespacedName  types.NamespacedName
 )
+
+var updateRunStatusMetricCmpOptions = []cmp.Option{
+	// Metric slices are pre-sorted deterministically (see sortMetricsByGaugeThenLabel) before
+	// diffing, so we intentionally do not also sort *Metric here via cmpopts.SortSlices.
+	cmpopts.SortSlices(func(a, b *prometheusclientmodel.LabelPair) bool {
+		return a.GetName() < b.GetName()
+	}),
+	// No custom Comparer for *Gauge is registered here: leaving it to cmp's default
+	// (exported-field) comparison means gauge values, which now carry the exact
+	// persisted condition.LastTransitionTime, are compared for exact equality.
+	cmpopts.IgnoreUnexported(prometheusclientmodel.Metric{}, prometheusclientmodel.LabelPair{}, prometheusclientmodel.Gauge{}),
+}
+
+// sortMetricsByGaugeThenLabel sorts metrics in place by gauge value, breaking ties by
+// label identity. Gauge values now reflect persisted (second-precision) condition
+// LastTransitionTime, so two distinct condition transitions can legitimately tie on
+// gauge value; the label-identity tie-break guarantees a deterministic, matching order
+// between the "got" (scraped) and "want" (test-authored) slices without relying on
+// cmp's own slice-sorting/pairing for *Metric.
+func sortMetricsByGaugeThenLabel(metrics []*prometheusclientmodel.Metric) {
+	sort.Slice(metrics, func(i, j int) bool {
+		gi, gj := metrics[i].GetGauge().GetValue(), metrics[j].GetGauge().GetValue()
+		if gi != gj {
+			return gi < gj
+		}
+		return metricLabelKey(metrics[i]) < metricLabelKey(metrics[j])
+	})
+}
 
 var _ = Describe("Test the clusterStagedUpdateRun controller", func() {
 
@@ -238,7 +268,7 @@ func resetUpdateRunMetrics() {
 	hubmetrics.FleetUpdateRunApprovalRequestLatencySeconds.Reset()
 }
 
-// validateUpdateRunMetricsEmitted validates the update run status metrics are emitted and are emitted in the correct order.
+// validateUpdateRunMetricsEmitted validates the update run status metrics are emitted with the expected labels and values.
 func validateUpdateRunMetricsEmitted(wantMetrics ...*prometheusclientmodel.Metric) {
 	Eventually(func() error {
 		metricFamilies, err := ctrlmetrics.Registry.Gather()
@@ -251,13 +281,27 @@ func validateUpdateRunMetricsEmitted(wantMetrics ...*prometheusclientmodel.Metri
 				gotMetrics = mf.GetMetric()
 			}
 		}
-
-		if diff := cmp.Diff(gotMetrics, wantMetrics, metricsutils.MetricsCmpOptions...); diff != "" {
+		// Pre-sort both slices deterministically (by gauge value, then label identity) so
+		// that got/want are paired up correctly even when multiple metrics tie on gauge
+		// value; the cmp options below intentionally do not re-sort *Metric slices.
+		sortMetricsByGaugeThenLabel(gotMetrics)
+		sortMetricsByGaugeThenLabel(wantMetrics)
+		if diff := cmp.Diff(gotMetrics, wantMetrics, updateRunStatusMetricCmpOptions...); diff != "" {
 			return fmt.Errorf("update run status metrics mismatch (-got, +want):\n%s", diff)
 		}
 
 		return nil
 	}, timeout, interval).Should(Succeed(), "failed to validate the update run status metrics")
+}
+
+func metricLabelKey(metric *prometheusclientmodel.Metric) string {
+	labels := metric.GetLabel()
+	pairs := make([]string, 0, len(labels))
+	for _, label := range labels {
+		pairs = append(pairs, label.GetName()+"="+label.GetValue())
+	}
+	sort.Strings(pairs)
+	return strings.Join(pairs, ";")
 }
 
 // validateUpdateRunApprovalStageTaskMetric validates the update run approval stage task metric by checking labels and count.
@@ -390,12 +434,84 @@ func generateMetricsLabels(
 	}
 }
 
+// conditionTransitionTimeSeconds returns the gauge value that emitUpdateRunStatusMetric
+// would have set for updateRun's condition of the given type and reason, derived from the
+// condition's persisted LastTransitionTime (rather than the time the test happens to run at).
+//
+// Callers typically build the expected metric before the controller has necessarily
+// finished reconciling (validateUpdateRunMetricsEmitted then polls until it converges),
+// so this re-fetches updateRun from the API server and waits for the condition to appear
+// rather than requiring it to already be present on the (possibly stale) object passed in.
+//
+// A single condition type (e.g. Progressing) cycles through multiple reasons over an
+// updateRun's lifetime (Waiting -> Progressing -> Stuck, etc.), but the live object only
+// ever exposes the *current* reason's LastTransitionTime; once the condition moves on to a
+// new reason, the previous reason's transition time can no longer be recovered from the
+// object (Kubernetes conditions retain only the most recent transition per type). The metric
+// emitted while that earlier reason was current, however, remains persisted in the metrics
+// registry under its own label set (each reason has a distinct time series that is never
+// overwritten by a later reason). So when the requested reason is no longer the condition's
+// current reason, this falls back to reading the already-persisted metric for that reason
+// straight out of the registry instead of the (now unavailable) live condition.
+func conditionTransitionTimeSeconds(updateRun *placementv1beta1.ClusterStagedUpdateRun, conditionType placementv1beta1.StagedUpdateRunConditionType, reason string) float64 {
+	var value float64
+	Eventually(func() error {
+		if err := k8sClient.Get(ctx, types.NamespacedName{Name: updateRun.Name, Namespace: updateRun.Namespace}, updateRun); err != nil {
+			return err
+		}
+		cond := meta.FindStatusCondition(updateRun.Status.Conditions, string(conditionType))
+		if cond == nil {
+			return fmt.Errorf("condition %s not found on updateRun %s", conditionType, updateRun.Name)
+		}
+		if cond.Reason == reason {
+			value = float64(cond.LastTransitionTime.UnixNano()) / float64(time.Second)
+			return nil
+		}
+		v, found, err := persistedConditionGaugeValue(updateRun, conditionType, reason)
+		if err != nil {
+			return err
+		}
+		if !found {
+			return fmt.Errorf("condition %s on updateRun %s currently has reason %q, want %q, and no metric for reason %q was found in the registry", conditionType, updateRun.Name, cond.Reason, reason, reason)
+		}
+		value = v
+		return nil
+	}, timeout, interval).Should(Succeed(), "failed to determine transition time for condition %s (reason %s) on updateRun %s", conditionType, reason, updateRun.Name)
+	return value
+}
+
+// persistedConditionGaugeValue looks up the already-emitted update run status gauge for the
+// given condition type and reason directly from the metrics registry. It returns found=false
+// if no such metric has been emitted (yet).
+func persistedConditionGaugeValue(updateRun *placementv1beta1.ClusterStagedUpdateRun, conditionType placementv1beta1.StagedUpdateRunConditionType, reason string) (float64, bool, error) {
+	metricFamilies, err := ctrlmetrics.Registry.Gather()
+	if err != nil {
+		return 0, false, fmt.Errorf("failed to gather metrics: %w", err)
+	}
+	for _, mf := range metricFamilies {
+		if mf.GetName() != "fleet_workload_update_run_status_last_timestamp_seconds" {
+			continue
+		}
+		for _, m := range mf.GetMetric() {
+			labels := make(map[string]string, len(m.GetLabel()))
+			for _, l := range m.GetLabel() {
+				labels[l.GetName()] = l.GetValue()
+			}
+			if labels["namespace"] == updateRun.Namespace && labels["name"] == updateRun.Name &&
+				labels["condition"] == string(conditionType) && labels["reason"] == reason {
+				return m.GetGauge().GetValue(), true, nil
+			}
+		}
+	}
+	return 0, false, nil
+}
+
 func generateInitializationSucceededMetric(state placementv1beta1.State, updateRun *placementv1beta1.ClusterStagedUpdateRun) *prometheusclientmodel.Metric {
 	return &prometheusclientmodel.Metric{
 		Label: generateMetricsLabels(updateRun, string(state), string(placementv1beta1.StagedUpdateRunConditionInitialized),
 			string(metav1.ConditionTrue), condition.UpdateRunInitializeSucceededReason, string(hubmetrics.UpdateRunFailureTypeNone)),
 		Gauge: &prometheusclientmodel.Gauge{
-			Value: ptr.To(float64(time.Now().UnixNano()) / 1e9),
+			Value: new(conditionTransitionTimeSeconds(updateRun, placementv1beta1.StagedUpdateRunConditionInitialized, condition.UpdateRunInitializeSucceededReason)),
 		},
 	}
 }
@@ -405,7 +521,7 @@ func generateInitializationFailedMetric(state placementv1beta1.State, updateRun 
 		Label: generateMetricsLabels(updateRun, string(state), string(placementv1beta1.StagedUpdateRunConditionInitialized),
 			string(metav1.ConditionFalse), condition.UpdateRunInitializeFailedReason, failureType),
 		Gauge: &prometheusclientmodel.Gauge{
-			Value: ptr.To(float64(time.Now().UnixNano()) / 1e9),
+			Value: new(conditionTransitionTimeSeconds(updateRun, placementv1beta1.StagedUpdateRunConditionInitialized, condition.UpdateRunInitializeFailedReason)),
 		},
 	}
 }
@@ -415,7 +531,7 @@ func generateProgressingMetric(state placementv1beta1.State, updateRun *placemen
 		Label: generateMetricsLabels(updateRun, string(state), string(placementv1beta1.StagedUpdateRunConditionProgressing),
 			string(metav1.ConditionTrue), condition.UpdateRunProgressingReason, string(hubmetrics.UpdateRunFailureTypeNone)),
 		Gauge: &prometheusclientmodel.Gauge{
-			Value: ptr.To(float64(time.Now().UnixNano()) / 1e9),
+			Value: new(conditionTransitionTimeSeconds(updateRun, placementv1beta1.StagedUpdateRunConditionProgressing, condition.UpdateRunProgressingReason)),
 		},
 	}
 }
@@ -425,7 +541,7 @@ func generateWaitingMetric(state placementv1beta1.State, updateRun *placementv1b
 		Label: generateMetricsLabels(updateRun, string(state), string(placementv1beta1.StagedUpdateRunConditionProgressing),
 			string(metav1.ConditionFalse), condition.UpdateRunWaitingReason, string(hubmetrics.UpdateRunFailureTypeNone)),
 		Gauge: &prometheusclientmodel.Gauge{
-			Value: ptr.To(float64(time.Now().UnixNano()) / 1e9),
+			Value: new(conditionTransitionTimeSeconds(updateRun, placementv1beta1.StagedUpdateRunConditionProgressing, condition.UpdateRunWaitingReason)),
 		},
 	}
 }
@@ -435,7 +551,7 @@ func generateStuckMetric(state placementv1beta1.State, updateRun *placementv1bet
 		Label: generateMetricsLabels(updateRun, string(state), string(placementv1beta1.StagedUpdateRunConditionProgressing),
 			string(metav1.ConditionFalse), condition.UpdateRunStuckReason, string(hubmetrics.UpdateRunFailureTypeInternalError)),
 		Gauge: &prometheusclientmodel.Gauge{
-			Value: ptr.To(float64(time.Now().UnixNano()) / 1e9),
+			Value: new(conditionTransitionTimeSeconds(updateRun, placementv1beta1.StagedUpdateRunConditionProgressing, condition.UpdateRunStuckReason)),
 		},
 	}
 }
@@ -445,7 +561,7 @@ func generateFailedMetric(state placementv1beta1.State, updateRun *placementv1be
 		Label: generateMetricsLabels(updateRun, string(state), string(placementv1beta1.StagedUpdateRunConditionSucceeded),
 			string(metav1.ConditionFalse), condition.UpdateRunFailedReason, failureType),
 		Gauge: &prometheusclientmodel.Gauge{
-			Value: ptr.To(float64(time.Now().UnixNano()) / 1e9),
+			Value: new(conditionTransitionTimeSeconds(updateRun, placementv1beta1.StagedUpdateRunConditionSucceeded, condition.UpdateRunFailedReason)),
 		},
 	}
 }
@@ -455,7 +571,7 @@ func generateStoppingMetric(state placementv1beta1.State, updateRun *placementv1
 		Label: generateMetricsLabels(updateRun, string(state), string(placementv1beta1.StagedUpdateRunConditionProgressing),
 			string(metav1.ConditionUnknown), condition.UpdateRunStoppingReason, string(hubmetrics.UpdateRunFailureTypeNone)),
 		Gauge: &prometheusclientmodel.Gauge{
-			Value: ptr.To(float64(time.Now().UnixNano()) / 1e9),
+			Value: new(conditionTransitionTimeSeconds(updateRun, placementv1beta1.StagedUpdateRunConditionProgressing, condition.UpdateRunStoppingReason)),
 		},
 	}
 }
@@ -465,7 +581,7 @@ func generateStoppedMetric(state placementv1beta1.State, updateRun *placementv1b
 		Label: generateMetricsLabels(updateRun, string(state), string(placementv1beta1.StagedUpdateRunConditionProgressing),
 			string(metav1.ConditionFalse), condition.UpdateRunStoppedReason, string(hubmetrics.UpdateRunFailureTypeNone)),
 		Gauge: &prometheusclientmodel.Gauge{
-			Value: ptr.To(float64(time.Now().UnixNano()) / 1e9),
+			Value: new(conditionTransitionTimeSeconds(updateRun, placementv1beta1.StagedUpdateRunConditionProgressing, condition.UpdateRunStoppedReason)),
 		},
 	}
 }
@@ -475,7 +591,7 @@ func generateSucceededMetric(state placementv1beta1.State, updateRun *placementv
 		Label: generateMetricsLabels(updateRun, string(state), string(placementv1beta1.StagedUpdateRunConditionSucceeded),
 			string(metav1.ConditionTrue), condition.UpdateRunSucceededReason, string(hubmetrics.UpdateRunFailureTypeNone)),
 		Gauge: &prometheusclientmodel.Gauge{
-			Value: ptr.To(float64(time.Now().UnixNano()) / 1e9),
+			Value: new(conditionTransitionTimeSeconds(updateRun, placementv1beta1.StagedUpdateRunConditionSucceeded, condition.UpdateRunSucceededReason)),
 		},
 	}
 }
