@@ -40,10 +40,10 @@ const (
 )
 
 var (
-	// FleetPlacementStatusLastTimeStampSeconds is a prometheus metric which keeps track of the last placement status.
+	// FleetPlacementStatusLastTimeStampSeconds is a prometheus metric which keeps track of the last placement status transition.
 	FleetPlacementStatusLastTimeStampSeconds = prometheus.NewGaugeVec(prometheus.GaugeOpts{
 		Name: "fleet_workload_placement_status_last_timestamp_seconds",
-		Help: "Last update timestamp of placement status in seconds",
+		Help: "Last placement status timestamp in seconds; this is the condition transition timestamp when available, or the placement creation timestamp when the selected condition is missing",
 	}, []string{"namespace", "name", "generation", "conditionType", "status", "reason"})
 
 	// FleetEvictionStatus is prometheus metrics which holds the

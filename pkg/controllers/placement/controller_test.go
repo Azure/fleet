@@ -27,6 +27,7 @@ import (
 
 	"github.com/google/go-cmp/cmp"
 	"github.com/google/go-cmp/cmp/cmpopts"
+	"github.com/prometheus/client_golang/prometheus/testutil"
 	corev1 "k8s.io/api/core/v1"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -38,12 +39,13 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/client/fake"
 
-	fleetv1beta1 "go.goms.io/fleet/apis/placement/v1beta1"
-	"go.goms.io/fleet/pkg/utils"
-	"go.goms.io/fleet/pkg/utils/condition"
-	"go.goms.io/fleet/pkg/utils/controller"
-	"go.goms.io/fleet/pkg/utils/defaulter"
-	"go.goms.io/fleet/test/utils/resource"
+	fleetv1beta1 "github.com/kubefleet-dev/kubefleet/apis/placement/v1beta1"
+	hubmetrics "github.com/kubefleet-dev/kubefleet/pkg/metrics/hub"
+	"github.com/kubefleet-dev/kubefleet/pkg/utils"
+	"github.com/kubefleet-dev/kubefleet/pkg/utils/condition"
+	"github.com/kubefleet-dev/kubefleet/pkg/utils/controller"
+	"github.com/kubefleet-dev/kubefleet/pkg/utils/defaulter"
+	"github.com/kubefleet-dev/kubefleet/test/utils/resource"
 )
 
 const (
@@ -116,6 +118,175 @@ func clusterResourcePlacementForTest() *fleetv1beta1.ClusterResourcePlacement {
 			},
 			Policy: placementPolicyForTest(),
 		},
+	}
+}
+
+func TestEmitPlacementStatusMetric(t *testing.T) {
+	generation := int64(3)
+	creationTime := metav1.NewTime(time.Date(2026, time.September, 1, 2, 3, 4, 123456789, time.UTC))
+	scheduledTime := metav1.NewTime(time.Date(2026, time.September, 2, 3, 4, 5, 234567890, time.UTC))
+	rolloutTime := metav1.NewTime(time.Date(2026, time.September, 3, 4, 5, 6, 345678901, time.UTC))
+	overriddenTime := metav1.NewTime(time.Date(2026, time.September, 4, 5, 6, 7, 456789012, time.UTC))
+	synchronizedTime := metav1.NewTime(time.Date(2026, time.September, 5, 6, 7, 8, 567890123, time.UTC))
+	appliedTime := metav1.NewTime(time.Date(2026, time.September, 6, 7, 8, 9, 678901234, time.UTC))
+	availableTime := metav1.NewTime(time.Date(2026, time.September, 7, 8, 9, 10, 789012345, time.UTC))
+
+	newPlacement := func(clusterScoped bool, conditions ...metav1.Condition) fleetv1beta1.PlacementObj {
+		objectMeta := metav1.ObjectMeta{
+			Name:              "test-placement",
+			Generation:        generation,
+			CreationTimestamp: creationTime,
+		}
+		if clusterScoped {
+			return &fleetv1beta1.ClusterResourcePlacement{
+				ObjectMeta: objectMeta,
+				Status: fleetv1beta1.PlacementStatus{
+					Conditions: conditions,
+				},
+			}
+		}
+		objectMeta.Namespace = "test-namespace"
+		return &fleetv1beta1.ResourcePlacement{
+			ObjectMeta: objectMeta,
+			Status: fleetv1beta1.PlacementStatus{
+				Conditions: conditions,
+			},
+		}
+	}
+	newCondition := func(conditionType string, status metav1.ConditionStatus, reason string, transitionTime metav1.Time) metav1.Condition {
+		return metav1.Condition{
+			Type:               conditionType,
+			Status:             status,
+			Reason:             reason,
+			ObservedGeneration: generation,
+			LastTransitionTime: transitionTime,
+		}
+	}
+	completedConditions := func(clusterScoped bool) []metav1.Condition {
+		placementObj := newPlacement(clusterScoped)
+		return []metav1.Condition{
+			newCondition(getPlacementScheduledConditionType(placementObj), metav1.ConditionTrue, "Scheduled", scheduledTime),
+			newCondition(getPlacementConditionType(placementObj, condition.RolloutStartedCondition), metav1.ConditionTrue, "RolloutStarted", rolloutTime),
+			newCondition(getPlacementConditionType(placementObj, condition.OverriddenCondition), metav1.ConditionTrue, "Overridden", overriddenTime),
+			newCondition(getPlacementConditionType(placementObj, condition.WorkSynchronizedCondition), metav1.ConditionTrue, "WorkSynchronized", synchronizedTime),
+			newCondition(getPlacementConditionType(placementObj, condition.AppliedCondition), metav1.ConditionTrue, "Applied", appliedTime),
+			newCondition(getPlacementConditionType(placementObj, condition.AvailableCondition), metav1.ConditionTrue, "Available", availableTime),
+		}
+	}
+
+	tests := []struct {
+		name              string
+		placementObj      fleetv1beta1.PlacementObj
+		wantConditionType string
+		wantStatus        string
+		wantReason        string
+		wantTimestamp     metav1.Time
+	}{
+		{
+			name:              "cluster-scoped missing scheduled condition uses creation timestamp",
+			placementObj:      newPlacement(true),
+			wantConditionType: string(fleetv1beta1.ClusterResourcePlacementScheduledConditionType),
+			wantStatus:        "nil",
+			wantReason:        "nil",
+			wantTimestamp:     creationTime,
+		},
+		{
+			name:              "namespace-scoped missing scheduled condition uses creation timestamp",
+			placementObj:      newPlacement(false),
+			wantConditionType: string(fleetv1beta1.ResourcePlacementScheduledConditionType),
+			wantStatus:        "nil",
+			wantReason:        "nil",
+			wantTimestamp:     creationTime,
+		},
+		{
+			name: "cluster-scoped scheduling failure uses condition transition timestamp",
+			placementObj: newPlacement(true,
+				newCondition(string(fleetv1beta1.ClusterResourcePlacementScheduledConditionType), metav1.ConditionFalse, "SchedulingFailed", scheduledTime),
+			),
+			wantConditionType: string(fleetv1beta1.ClusterResourcePlacementScheduledConditionType),
+			wantStatus:        string(metav1.ConditionFalse),
+			wantReason:        "SchedulingFailed",
+			wantTimestamp:     scheduledTime,
+		},
+		{
+			name: "namespace-scoped scheduling pending uses condition transition timestamp",
+			placementObj: newPlacement(false,
+				newCondition(string(fleetv1beta1.ResourcePlacementScheduledConditionType), metav1.ConditionUnknown, "SchedulingPending", scheduledTime),
+			),
+			wantConditionType: string(fleetv1beta1.ResourcePlacementScheduledConditionType),
+			wantStatus:        string(metav1.ConditionUnknown),
+			wantReason:        "SchedulingPending",
+			wantTimestamp:     scheduledTime,
+		},
+		{
+			name: "cluster-scoped missing intermediate condition uses creation timestamp",
+			placementObj: newPlacement(true,
+				newCondition(string(fleetv1beta1.ClusterResourcePlacementScheduledConditionType), metav1.ConditionTrue, "Scheduled", scheduledTime),
+			),
+			wantConditionType: string(fleetv1beta1.ClusterResourcePlacementRolloutStartedConditionType),
+			wantStatus:        "nil",
+			wantReason:        "nil",
+			wantTimestamp:     creationTime,
+		},
+		{
+			name: "namespace-scoped selects first non-true intermediate condition",
+			placementObj: newPlacement(false,
+				newCondition(string(fleetv1beta1.ResourcePlacementScheduledConditionType), metav1.ConditionTrue, "Scheduled", scheduledTime),
+				newCondition(string(fleetv1beta1.ResourcePlacementRolloutStartedConditionType), metav1.ConditionTrue, "RolloutStarted", rolloutTime),
+				newCondition(string(fleetv1beta1.ResourcePlacementOverriddenConditionType), metav1.ConditionFalse, "OverrideFailed", overriddenTime),
+				newCondition(string(fleetv1beta1.ResourcePlacementWorkSynchronizedConditionType), metav1.ConditionFalse, "SynchronizationFailed", synchronizedTime),
+			),
+			wantConditionType: string(fleetv1beta1.ResourcePlacementOverriddenConditionType),
+			wantStatus:        string(metav1.ConditionFalse),
+			wantReason:        "OverrideFailed",
+			wantTimestamp:     overriddenTime,
+		},
+		{
+			name:              "cluster-scoped completed uses final expected condition transition timestamp",
+			placementObj:      newPlacement(true, completedConditions(true)...),
+			wantConditionType: "Completed",
+			wantStatus:        string(metav1.ConditionTrue),
+			wantReason:        "Completed",
+			wantTimestamp:     availableTime,
+		},
+		{
+			name:              "namespace-scoped completed uses final expected condition transition timestamp",
+			placementObj:      newPlacement(false, completedConditions(false)...),
+			wantConditionType: "Completed",
+			wantStatus:        string(metav1.ConditionTrue),
+			wantReason:        "Completed",
+			wantTimestamp:     availableTime,
+		},
+	}
+
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			hubmetrics.FleetPlacementStatusLastTimeStampSeconds.Reset()
+			emitPlacementStatusMetric(tc.placementObj)
+
+			gauge := hubmetrics.FleetPlacementStatusLastTimeStampSeconds.WithLabelValues(
+				tc.placementObj.GetNamespace(),
+				tc.placementObj.GetName(),
+				strconv.FormatInt(tc.placementObj.GetGeneration(), 10),
+				tc.wantConditionType,
+				tc.wantStatus,
+				tc.wantReason,
+			)
+			wantTimestamp := float64(tc.wantTimestamp.UnixNano()) / float64(time.Second)
+			firstTimestamp := testutil.ToFloat64(gauge)
+			if firstTimestamp != wantTimestamp {
+				t.Fatalf("emitPlacementStatusMetric() timestamp = %v, want %v", firstTimestamp, wantTimestamp)
+			}
+			if gotMetricCount := testutil.CollectAndCount(hubmetrics.FleetPlacementStatusLastTimeStampSeconds); gotMetricCount != 1 {
+				t.Fatalf("emitPlacementStatusMetric() metric count = %d, want 1", gotMetricCount)
+			}
+
+			emitPlacementStatusMetric(tc.placementObj)
+			secondTimestamp := testutil.ToFloat64(gauge)
+			if secondTimestamp != firstTimestamp {
+				t.Errorf("emitPlacementStatusMetric() repeated timestamp = %v, want %v", secondTimestamp, firstTimestamp)
+			}
+		})
 	}
 }
 
