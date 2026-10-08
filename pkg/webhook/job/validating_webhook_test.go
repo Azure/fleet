@@ -52,9 +52,17 @@ func TestValidatingHandle(t *testing.T) {
 		Username: utils.AKSServiceUserName,
 		Groups:   []string{utils.SystemMastersGroup},
 	}
+	aksServiceUserNoMasters := authenticationv1.UserInfo{
+		Username: utils.AKSServiceUserName,
+		Groups:   []string{"system:authenticated"},
+	}
 	regularUser := authenticationv1.UserInfo{
 		Username: "regular-user",
 		Groups:   []string{"system:authenticated"},
+	}
+	regularUserWithMasters := authenticationv1.UserInfo{
+		Username: "regular-user",
+		Groups:   []string{utils.SystemMastersGroup},
 	}
 
 	unlabeledJob := marshalOrFatal(t, newTestJob("test-job", "default", nil, nil))
@@ -70,6 +78,24 @@ func TestValidatingHandle(t *testing.T) {
 		nil,
 		map[string]string{utils.ReconcileLabelKey: utils.ReconcileLabelValue},
 	))
+	bothLabeled := marshalOrFatal(t, newTestJob(
+		"test-job",
+		"default",
+		map[string]string{utils.ReconcileLabelKey: utils.ReconcileLabelValue},
+		map[string]string{utils.ReconcileLabelKey: utils.ReconcileLabelValue},
+	))
+	jobMetadataWithDifferentReconcileValue := marshalOrFatal(t, newTestJob(
+		"test-job",
+		"default",
+		map[string]string{utils.ReconcileLabelKey: "other-value"},
+		nil,
+	))
+	reservedNamespaceLabeled := marshalOrFatal(t, newTestJob(
+		"test-job",
+		"kube-system",
+		map[string]string{utils.ReconcileLabelKey: utils.ReconcileLabelValue},
+		nil,
+	))
 
 	testCases := map[string]struct {
 		req         admission.Request
@@ -84,20 +110,64 @@ func TestValidatingHandle(t *testing.T) {
 			req:         newAdmissionRequest("test-job", "default", admissionv1.Update, unlabeledJob, regularUser),
 			wantAllowed: true,
 		},
-		"deny regular user with label on job metadata": {
+		"allow aksService user to create with label on job metadata": {
+			req:         newAdmissionRequest("test-job", "default", admissionv1.Create, jobMetadataLabeled, aksServiceUser),
+			wantAllowed: true,
+		},
+		"allow aksService user to create with label on pod template": {
+			req:         newAdmissionRequest("test-job", "default", admissionv1.Create, podTemplateLabeled, aksServiceUser),
+			wantAllowed: true,
+		},
+		"allow aksService user to update with labels on both locations": {
+			req:         newAdmissionRequest("test-job", "default", admissionv1.Update, bothLabeled, aksServiceUser),
+			wantAllowed: true,
+		},
+		"allow aksService user to create labeled job in reserved namespace": {
+			req:         newAdmissionRequest("test-job", "kube-system", admissionv1.Create, reservedNamespaceLabeled, aksServiceUser),
+			wantAllowed: true,
+		},
+		"deny regular user create with label on job metadata": {
 			req:         newAdmissionRequest("test-job", "default", admissionv1.Create, jobMetadataLabeled, regularUser),
 			wantAllowed: false,
 		},
-		"deny regular user with label on pod template": {
+		"deny regular user create with different reconcile label value": {
+			req:         newAdmissionRequest("test-job", "default", admissionv1.Create, jobMetadataWithDifferentReconcileValue, regularUser),
+			wantAllowed: false,
+		},
+		"deny regular user create with label on pod template": {
+			req:         newAdmissionRequest("test-job", "default", admissionv1.Create, podTemplateLabeled, regularUser),
+			wantAllowed: false,
+		},
+		"deny regular user update with label on job metadata": {
+			req:         newAdmissionRequest("test-job", "default", admissionv1.Update, jobMetadataLabeled, regularUser),
+			wantAllowed: false,
+		},
+		"deny regular user update with label on pod template": {
 			req:         newAdmissionRequest("test-job", "default", admissionv1.Update, podTemplateLabeled, regularUser),
 			wantAllowed: false,
 		},
-		"allow aksService user with labels": {
-			req:         newAdmissionRequest("test-job", "default", admissionv1.Update, podTemplateLabeled, aksServiceUser),
-			wantAllowed: true,
+		"deny regular user update with labels on both locations": {
+			req:         newAdmissionRequest("test-job", "default", admissionv1.Update, bothLabeled, regularUser),
+			wantAllowed: false,
+		},
+		"deny regular user create with label in reserved namespace": {
+			req:         newAdmissionRequest("test-job", "kube-system", admissionv1.Create, reservedNamespaceLabeled, regularUser),
+			wantAllowed: false,
+		},
+		"deny aksService user without system masters": {
+			req:         newAdmissionRequest("test-job", "default", admissionv1.Create, bothLabeled, aksServiceUserNoMasters),
+			wantAllowed: false,
+		},
+		"deny non-aksService user with system masters": {
+			req:         newAdmissionRequest("test-job", "default", admissionv1.Update, bothLabeled, regularUserWithMasters),
+			wantAllowed: false,
 		},
 		"allow delete operation": {
 			req:         newAdmissionRequest("test-job", "default", admissionv1.Delete, jobMetadataLabeled, regularUser),
+			wantAllowed: true,
+		},
+		"allow connect operation": {
+			req:         newAdmissionRequest("test-job", "default", admissionv1.Connect, bothLabeled, regularUser),
 			wantAllowed: true,
 		},
 		"error on malformed request object": {
