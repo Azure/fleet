@@ -17,12 +17,17 @@ limitations under the License.
 package updaterun
 
 import (
+	"context"
+	"errors"
 	"fmt"
+	"strings"
 	"testing"
 	"time"
 
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/utils/ptr"
+	"sigs.k8s.io/controller-runtime/pkg/client/fake"
 
 	placementv1beta1 "go.goms.io/fleet/apis/placement/v1beta1"
 )
@@ -167,5 +172,36 @@ func TestValidateAfterStageTask(t *testing.T) {
 				t.Errorf("validateAfterStageTask() error = %v, wantErr %v", err, tt.wantErr)
 			}
 		})
+	}
+}
+
+// TestGenerateStagesByStrategy_InvalidDeleteStageTasks tests that an update run whose strategy has invalid before
+// stage tasks in its delete stage fails the validation.
+func TestGenerateStagesByStrategy_InvalidDeleteStageTasks(t *testing.T) {
+	scheme := runtime.NewScheme()
+	if err := placementv1beta1.AddToScheme(scheme); err != nil {
+		t.Fatalf("AddToScheme() = %v, want no error", err)
+	}
+	strategy := &placementv1beta1.ClusterStagedUpdateStrategy{
+		ObjectMeta: metav1.ObjectMeta{Name: "test-strategy"},
+		Spec: placementv1beta1.UpdateStrategySpec{
+			DeleteStage: &placementv1beta1.DeleteStageConfig{
+				BeforeStageTasks: []placementv1beta1.StageTask{{Type: placementv1beta1.StageTaskTypeTimedWait}},
+			},
+		},
+	}
+	r := &Reconciler{Client: fake.NewClientBuilder().WithScheme(scheme).WithObjects(strategy).Build()}
+	updateRun := &placementv1beta1.ClusterStagedUpdateRun{
+		ObjectMeta: metav1.ObjectMeta{Name: "test-update-run", Generation: 1},
+		Spec:       placementv1beta1.UpdateRunSpec{StagedUpdateStrategyName: strategy.Name},
+	}
+
+	err := r.generateStagesByStrategy(context.Background(), nil, nil, updateRun)
+	if !errors.Is(err, errValidationFailed) {
+		t.Fatalf("generateStagesByStrategy() error = %v, want %v", err, errValidationFailed)
+	}
+	wantErrMsg := fmt.Sprintf("the before stage tasks are invalid, updateStrategy: `/test-strategy`, stage: %s, err: task 0 of type TimedWait is not allowed in beforeStageTasks, allowed type: Approval", placementv1beta1.UpdateRunDeleteStageName)
+	if !strings.Contains(err.Error(), wantErrMsg) {
+		t.Errorf("generateStagesByStrategy() error = %v, want an error containing %q", err, wantErrMsg)
 	}
 }

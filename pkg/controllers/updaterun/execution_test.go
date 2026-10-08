@@ -26,6 +26,7 @@ import (
 
 	"github.com/google/go-cmp/cmp"
 	"github.com/google/go-cmp/cmp/cmpopts"
+	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	"k8s.io/apimachinery/pkg/api/meta"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
@@ -35,8 +36,9 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/client/fake"
 	"sigs.k8s.io/controller-runtime/pkg/client/interceptor"
 
-	placementv1beta1 "go.goms.io/fleet/apis/placement/v1beta1"
-	"go.goms.io/fleet/pkg/utils/condition"
+	placementv1beta1 "github.com/kubefleet-dev/kubefleet/apis/placement/v1beta1"
+	"github.com/kubefleet-dev/kubefleet/pkg/utils/condition"
+	"github.com/kubefleet-dev/kubefleet/pkg/utils/controller"
 )
 
 func TestIsBindingSyncedWithClusterStatus(t *testing.T) {
@@ -363,6 +365,12 @@ func TestCheckClusterUpdateResult(t *testing.T) {
 }
 
 func TestBuildApprovalRequestObject(t *testing.T) {
+	// Pin the values that show up on the approval requests of the delete stage, which users see and select with.
+	const (
+		deleteStageName                = "kubernetes-fleet.io/deleteStage"
+		deleteStageLabelValue          = "delete-stage"
+		deleteStageApprovalRequestName = "test-update-run-before-delete-stage"
+	)
 	tests := []struct {
 		name           string
 		namespacedName types.NamespacedName
@@ -419,6 +427,56 @@ func TestBuildApprovalRequestObject(t *testing.T) {
 				Spec: placementv1beta1.ApprovalRequestSpec{
 					TargetUpdateRun: "test-update-run",
 					TargetStage:     "test-stage",
+				},
+			},
+		},
+		{
+			name: "should create ClusterApprovalRequest with a valid stage label for the delete stage",
+			namespacedName: types.NamespacedName{
+				Name: deleteStageApprovalRequestName,
+			},
+			stageName:     deleteStageName,
+			updateRunName: "test-update-run",
+			stageTaskType: placementv1beta1.BeforeStageTaskLabelValue,
+			want: &placementv1beta1.ClusterApprovalRequest{
+				ObjectMeta: metav1.ObjectMeta{
+					Name: deleteStageApprovalRequestName,
+					Labels: map[string]string{
+						placementv1beta1.TargetUpdatingStageNameLabel:   deleteStageLabelValue,
+						placementv1beta1.TargetUpdateRunLabel:           "test-update-run",
+						placementv1beta1.TaskTypeLabel:                  placementv1beta1.BeforeStageTaskLabelValue,
+						placementv1beta1.IsLatestUpdateRunApprovalLabel: "true",
+					},
+				},
+				Spec: placementv1beta1.ApprovalRequestSpec{
+					TargetUpdateRun: "test-update-run",
+					TargetStage:     deleteStageName,
+				},
+			},
+		},
+		{
+			name: "should create namespaced ApprovalRequest with a valid stage label for the delete stage",
+			namespacedName: types.NamespacedName{
+				Name:      deleteStageApprovalRequestName,
+				Namespace: testNamespaceName,
+			},
+			stageName:     deleteStageName,
+			updateRunName: "test-update-run",
+			stageTaskType: placementv1beta1.BeforeStageTaskLabelValue,
+			want: &placementv1beta1.ApprovalRequest{
+				ObjectMeta: metav1.ObjectMeta{
+					Name:      deleteStageApprovalRequestName,
+					Namespace: testNamespaceName,
+					Labels: map[string]string{
+						placementv1beta1.TargetUpdatingStageNameLabel:   deleteStageLabelValue,
+						placementv1beta1.TargetUpdateRunLabel:           "test-update-run",
+						placementv1beta1.TaskTypeLabel:                  placementv1beta1.BeforeStageTaskLabelValue,
+						placementv1beta1.IsLatestUpdateRunApprovalLabel: "true",
+					},
+				},
+				Spec: placementv1beta1.ApprovalRequestSpec{
+					TargetUpdateRun: "test-update-run",
+					TargetStage:     deleteStageName,
 				},
 			},
 		},
@@ -1251,7 +1309,9 @@ func TestCheckBeforeStageTasksStatus_NegativeCases(t *testing.T) {
 				Client: fakeClient,
 			}
 			ctx := context.Background()
-			_, gotErr := r.checkBeforeStageTasksStatus(ctx, tt.stageIndex, tt.updateRun)
+			status := tt.updateRun.GetUpdateRunStatus()
+			tasks := status.UpdateStrategySnapshot.Stages[tt.stageIndex].BeforeStageTasks
+			_, gotErr := r.checkBeforeStageTasksStatus(ctx, &status.StagesStatus[tt.stageIndex], tasks, tt.updateRun)
 			if gotErr == nil {
 				t.Fatalf("checkBeforeStageTasksStatus() want error but got nil")
 			}
@@ -1260,6 +1320,318 @@ func TestCheckBeforeStageTasksStatus_NegativeCases(t *testing.T) {
 			}
 			if tt.wantErrAborted && !errors.Is(gotErr, errStagedUpdatedAborted) {
 				t.Fatalf("checkBeforeStageTasksStatus() want aborted error but got different error: %v", gotErr)
+			}
+		})
+	}
+}
+
+func TestExecuteDeleteStage(t *testing.T) {
+	const (
+		updateRunName = "test-update-run"
+		clusterName   = "cluster-1"
+	)
+	approvalRequestName := fmt.Sprintf(placementv1beta1.BeforeStageApprovalTaskNameFmt, updateRunName, placementv1beta1.UpdateRunDeleteStageTaskName)
+	now := metav1.Now()
+
+	approvalTask := placementv1beta1.StageTask{Type: placementv1beta1.StageTaskTypeApproval}
+	approvalTaskStatus := placementv1beta1.StageTaskStatus{Type: placementv1beta1.StageTaskTypeApproval, ApprovalRequestName: approvalRequestName}
+	newCondition := func(condType any, status metav1.ConditionStatus, reason string) metav1.Condition {
+		return metav1.Condition{Type: fmt.Sprint(condType), Status: status, Reason: reason, ObservedGeneration: 1}
+	}
+	stageWaitingCond := newCondition(placementv1beta1.StageUpdatingConditionProgressing, metav1.ConditionFalse, condition.StageUpdatingWaitingReason)
+	stageStartedCond := newCondition(placementv1beta1.StageUpdatingConditionProgressing, metav1.ConditionTrue, condition.StageUpdatingStartedReason)
+	runWaitingCond := newCondition(placementv1beta1.StagedUpdateRunConditionProgressing, metav1.ConditionFalse, condition.UpdateRunWaitingReason)
+	runProgressingCond := newCondition(placementv1beta1.StagedUpdateRunConditionProgressing, metav1.ConditionTrue, condition.UpdateRunProgressingReason)
+	requestCreatedCond := newCondition(placementv1beta1.StageTaskConditionApprovalRequestCreated, metav1.ConditionTrue, condition.StageTaskApprovalRequestCreatedReason)
+	requestApprovedCond := newCondition(placementv1beta1.StageTaskConditionApprovalRequestApproved, metav1.ConditionTrue, condition.StageTaskApprovalRequestApprovedReason)
+	clusterStartedCond := newCondition(placementv1beta1.ClusterUpdatingConditionStarted, metav1.ConditionTrue, condition.ClusterUpdatingStartedReason)
+	approvedRequest := &placementv1beta1.ClusterApprovalRequest{
+		ObjectMeta: metav1.ObjectMeta{Name: approvalRequestName, Generation: 1},
+		Spec: placementv1beta1.ApprovalRequestSpec{
+			TargetUpdateRun: updateRunName,
+			TargetStage:     placementv1beta1.UpdateRunDeleteStageName,
+		},
+		Status: placementv1beta1.ApprovalRequestStatus{
+			Conditions: []metav1.Condition{
+				newCondition(placementv1beta1.ApprovalRequestConditionApproved, metav1.ConditionTrue, "Approved"),
+			},
+		},
+	}
+	noClusters := []placementv1beta1.ClusterUpdatingStatus{}
+
+	tests := []struct {
+		name string
+		// tasks are the before stage tasks of the delete stage.
+		tasks []placementv1beta1.StageTask
+		// deleteStageStatus is the status of the delete stage, whose name and clusters are defaulted.
+		deleteStageStatus placementv1beta1.StageUpdatingStatus
+		approvalRequest   *placementv1beta1.ClusterApprovalRequest
+		noBinding         bool
+		wantFinished      bool
+		wantWaitTime      time.Duration
+		wantErr           error
+		wantBindingKept   bool
+		// wantDeleteStageStatus is the wanted status of the delete stage, whose name and clusters are defaulted.
+		wantDeleteStageStatus placementv1beta1.StageUpdatingStatus
+		wantRunConditions     []metav1.Condition
+		wantApprovalRequest   bool
+	}{
+		{
+			name:         "no delete stage configuration should delete the binding",
+			wantWaitTime: clusterUpdatingWaitTime,
+			wantDeleteStageStatus: placementv1beta1.StageUpdatingStatus{
+				Clusters:   []placementv1beta1.ClusterUpdatingStatus{{ClusterName: clusterName, Conditions: []metav1.Condition{clusterStartedCond}}},
+				Conditions: []metav1.Condition{stageStartedCond},
+			},
+		},
+		{
+			name:  "pending approval task should create the approval request and keep the binding",
+			tasks: []placementv1beta1.StageTask{approvalTask},
+			deleteStageStatus: placementv1beta1.StageUpdatingStatus{
+				BeforeStageTaskStatus: []placementv1beta1.StageTaskStatus{approvalTaskStatus},
+			},
+			wantWaitTime:    stageUpdatingWaitTime,
+			wantBindingKept: true,
+			wantDeleteStageStatus: placementv1beta1.StageUpdatingStatus{
+				BeforeStageTaskStatus: []placementv1beta1.StageTaskStatus{{
+					Type:                placementv1beta1.StageTaskTypeApproval,
+					ApprovalRequestName: approvalRequestName,
+					Conditions:          []metav1.Condition{requestCreatedCond},
+				}},
+				Conditions: []metav1.Condition{stageWaitingCond},
+			},
+			wantRunConditions:   []metav1.Condition{runWaitingCond},
+			wantApprovalRequest: true,
+		},
+		{
+			name:  "approved approval task should delete the binding",
+			tasks: []placementv1beta1.StageTask{approvalTask},
+			deleteStageStatus: placementv1beta1.StageUpdatingStatus{
+				BeforeStageTaskStatus: []placementv1beta1.StageTaskStatus{approvalTaskStatus},
+				Conditions:            []metav1.Condition{stageWaitingCond},
+			},
+			approvalRequest: approvedRequest,
+			wantWaitTime:    clusterUpdatingWaitTime,
+			wantDeleteStageStatus: placementv1beta1.StageUpdatingStatus{
+				Clusters: []placementv1beta1.ClusterUpdatingStatus{{ClusterName: clusterName, Conditions: []metav1.Condition{clusterStartedCond}}},
+				BeforeStageTaskStatus: []placementv1beta1.StageTaskStatus{{
+					Type:                placementv1beta1.StageTaskTypeApproval,
+					ApprovalRequestName: approvalRequestName,
+					Conditions:          []metav1.Condition{requestCreatedCond, requestApprovedCond},
+				}},
+				Conditions: []metav1.Condition{stageStartedCond},
+			},
+			wantRunConditions:   []metav1.Condition{runProgressingCond},
+			wantApprovalRequest: true,
+		},
+		{
+			name:  "accepted approval request that is unapproved afterwards should still delete the binding",
+			tasks: []placementv1beta1.StageTask{approvalTask},
+			deleteStageStatus: placementv1beta1.StageUpdatingStatus{
+				BeforeStageTaskStatus: []placementv1beta1.StageTaskStatus{approvalTaskStatus},
+			},
+			approvalRequest: &placementv1beta1.ClusterApprovalRequest{
+				ObjectMeta: approvedRequest.ObjectMeta,
+				Spec:       approvedRequest.Spec,
+				Status: placementv1beta1.ApprovalRequestStatus{
+					Conditions: []metav1.Condition{
+						newCondition(placementv1beta1.ApprovalRequestConditionApproved, metav1.ConditionFalse, "Unapproved"),
+						newCondition(placementv1beta1.ApprovalRequestConditionApprovalAccepted, metav1.ConditionTrue, condition.ApprovalRequestApprovalAcceptedReason),
+					},
+				},
+			},
+			wantWaitTime: clusterUpdatingWaitTime,
+			wantDeleteStageStatus: placementv1beta1.StageUpdatingStatus{
+				Clusters: []placementv1beta1.ClusterUpdatingStatus{{ClusterName: clusterName, Conditions: []metav1.Condition{clusterStartedCond}}},
+				BeforeStageTaskStatus: []placementv1beta1.StageTaskStatus{{
+					Type:                placementv1beta1.StageTaskTypeApproval,
+					ApprovalRequestName: approvalRequestName,
+					Conditions:          []metav1.Condition{requestCreatedCond, requestApprovedCond},
+				}},
+				Conditions: []metav1.Condition{stageStartedCond},
+			},
+			wantRunConditions:   []metav1.Condition{runProgressingCond},
+			wantApprovalRequest: true,
+		},
+		{
+			// A delete stage that has started is not gated again, so no approval request is created.
+			name:  "tasks should not be checked again after the delete stage has started",
+			tasks: []placementv1beta1.StageTask{approvalTask},
+			deleteStageStatus: placementv1beta1.StageUpdatingStatus{
+				StartTime:             &now,
+				BeforeStageTaskStatus: []placementv1beta1.StageTaskStatus{approvalTaskStatus},
+				Conditions:            []metav1.Condition{stageStartedCond},
+			},
+			wantWaitTime: clusterUpdatingWaitTime,
+			wantDeleteStageStatus: placementv1beta1.StageUpdatingStatus{
+				Clusters:              []placementv1beta1.ClusterUpdatingStatus{{ClusterName: clusterName, Conditions: []metav1.Condition{clusterStartedCond}}},
+				BeforeStageTaskStatus: []placementv1beta1.StageTaskStatus{approvalTaskStatus},
+				Conditions:            []metav1.Condition{stageStartedCond},
+			},
+		},
+		{
+			name:  "tasks should be skipped when there is no cluster to delete",
+			tasks: []placementv1beta1.StageTask{approvalTask},
+			deleteStageStatus: placementv1beta1.StageUpdatingStatus{
+				Clusters:              noClusters,
+				BeforeStageTaskStatus: []placementv1beta1.StageTaskStatus{approvalTaskStatus},
+			},
+			noBinding:    true,
+			wantFinished: true,
+			wantWaitTime: clusterUpdatingWaitTime,
+			wantDeleteStageStatus: placementv1beta1.StageUpdatingStatus{
+				Clusters:              noClusters,
+				BeforeStageTaskStatus: []placementv1beta1.StageTaskStatus{approvalTaskStatus},
+				Conditions: []metav1.Condition{
+					newCondition(placementv1beta1.StageUpdatingConditionProgressing, metav1.ConditionFalse, condition.StageUpdatingSucceededReason),
+					newCondition(placementv1beta1.StageUpdatingConditionSucceeded, metav1.ConditionTrue, condition.StageUpdatingSucceededReason),
+				},
+			},
+		},
+		{
+			name:  "tasks should be skipped when the bindings are already deleted",
+			tasks: []placementv1beta1.StageTask{approvalTask},
+			deleteStageStatus: placementv1beta1.StageUpdatingStatus{
+				BeforeStageTaskStatus: []placementv1beta1.StageTaskStatus{approvalTaskStatus},
+			},
+			noBinding:    true,
+			wantFinished: true,
+			wantWaitTime: clusterUpdatingWaitTime,
+			wantDeleteStageStatus: placementv1beta1.StageUpdatingStatus{
+				Clusters: []placementv1beta1.ClusterUpdatingStatus{{
+					ClusterName: clusterName,
+					Conditions: []metav1.Condition{
+						clusterStartedCond,
+						newCondition(placementv1beta1.ClusterUpdatingConditionSucceeded, metav1.ConditionTrue, condition.ClusterUpdatingSucceededReason),
+					},
+				}},
+				BeforeStageTaskStatus: []placementv1beta1.StageTaskStatus{approvalTaskStatus},
+				Conditions: []metav1.Condition{
+					newCondition(placementv1beta1.StageUpdatingConditionProgressing, metav1.ConditionFalse, condition.StageUpdatingSucceededReason),
+					newCondition(placementv1beta1.StageUpdatingConditionSucceeded, metav1.ConditionTrue, condition.StageUpdatingSucceededReason),
+				},
+			},
+		},
+		{
+			name:  "approval request targeting another update run should abort the update run",
+			tasks: []placementv1beta1.StageTask{approvalTask},
+			deleteStageStatus: placementv1beta1.StageUpdatingStatus{
+				BeforeStageTaskStatus: []placementv1beta1.StageTaskStatus{approvalTaskStatus},
+			},
+			approvalRequest: &placementv1beta1.ClusterApprovalRequest{
+				ObjectMeta: metav1.ObjectMeta{Name: approvalRequestName, Generation: 1},
+				Spec: placementv1beta1.ApprovalRequestSpec{
+					TargetUpdateRun: "another-update-run",
+					TargetStage:     placementv1beta1.UpdateRunDeleteStageName,
+				},
+			},
+			wantErr:         errStagedUpdatedAborted,
+			wantBindingKept: true,
+			wantDeleteStageStatus: placementv1beta1.StageUpdatingStatus{
+				BeforeStageTaskStatus: []placementv1beta1.StageTaskStatus{{
+					Type:                placementv1beta1.StageTaskTypeApproval,
+					ApprovalRequestName: approvalRequestName,
+					Conditions:          []metav1.Condition{requestCreatedCond},
+				}},
+			},
+			wantApprovalRequest: true,
+		},
+		{
+			// The API rejects a TimedWait task on the delete stage, so this only happens with a corrupted snapshot.
+			name:  "unsupported timed wait task should abort the update run",
+			tasks: []placementv1beta1.StageTask{{Type: placementv1beta1.StageTaskTypeTimedWait, WaitTime: &metav1.Duration{Duration: time.Hour}}},
+			deleteStageStatus: placementv1beta1.StageUpdatingStatus{
+				BeforeStageTaskStatus: []placementv1beta1.StageTaskStatus{{Type: placementv1beta1.StageTaskTypeTimedWait}},
+			},
+			wantErr:         errStagedUpdatedAborted,
+			wantBindingKept: true,
+			wantDeleteStageStatus: placementv1beta1.StageUpdatingStatus{
+				BeforeStageTaskStatus: []placementv1beta1.StageTaskStatus{{Type: placementv1beta1.StageTaskTypeTimedWait}},
+			},
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			ctx := context.Background()
+			scheme := runtime.NewScheme()
+			if err := placementv1beta1.AddToScheme(scheme); err != nil {
+				t.Fatalf("AddToScheme() = %v, want no error", err)
+			}
+			binding := &placementv1beta1.ClusterResourceBinding{
+				ObjectMeta: metav1.ObjectMeta{Name: "test-binding"},
+				Spec:       placementv1beta1.ResourceBindingSpec{TargetCluster: clusterName},
+			}
+			clientBuilder := fake.NewClientBuilder().WithScheme(scheme).WithStatusSubresource(&placementv1beta1.ClusterApprovalRequest{})
+			var toBeDeletedBindings []placementv1beta1.BindingObj
+			if !tt.noBinding {
+				clientBuilder = clientBuilder.WithObjects(binding)
+				toBeDeletedBindings = append(toBeDeletedBindings, binding)
+			}
+			if tt.approvalRequest != nil {
+				clientBuilder = clientBuilder.WithObjects(tt.approvalRequest.DeepCopy())
+			}
+			fakeClient := clientBuilder.Build()
+			r := &Reconciler{Client: fakeClient}
+
+			deleteStageStatus := tt.deleteStageStatus.DeepCopy()
+			deleteStageStatus.StageName = placementv1beta1.UpdateRunDeleteStageName
+			if deleteStageStatus.Clusters == nil {
+				deleteStageStatus.Clusters = []placementv1beta1.ClusterUpdatingStatus{{ClusterName: clusterName}}
+			}
+			updateRun := &placementv1beta1.ClusterStagedUpdateRun{
+				ObjectMeta: metav1.ObjectMeta{Name: updateRunName, Generation: 1},
+				Status: placementv1beta1.UpdateRunStatus{
+					UpdateStrategySnapshot: &placementv1beta1.UpdateStrategySpec{},
+					DeletionStageStatus:    deleteStageStatus,
+				},
+			}
+			if tt.tasks != nil {
+				updateRun.Status.UpdateStrategySnapshot.DeleteStage = &placementv1beta1.DeleteStageConfig{BeforeStageTasks: tt.tasks}
+			}
+			// The metrics are global; an approved approval request records one.
+			t.Cleanup(func() { deleteUpdateRunMetrics(updateRun) })
+
+			gotFinished, gotWaitTime, gotErr := r.executeDeleteStage(ctx, updateRun, toBeDeletedBindings)
+			if !errors.Is(gotErr, tt.wantErr) {
+				t.Fatalf("executeDeleteStage() error = %v, want %v", gotErr, tt.wantErr)
+			}
+			if gotFinished != tt.wantFinished {
+				t.Errorf("executeDeleteStage() finished = %v, want %v", gotFinished, tt.wantFinished)
+			}
+			if gotWaitTime != tt.wantWaitTime {
+				t.Errorf("executeDeleteStage() waitTime = %v, want %v", gotWaitTime, tt.wantWaitTime)
+			}
+
+			if !tt.noBinding {
+				err := fakeClient.Get(ctx, client.ObjectKeyFromObject(binding), &placementv1beta1.ClusterResourceBinding{})
+				if gotBindingKept := err == nil; gotBindingKept != tt.wantBindingKept || (err != nil && !apierrors.IsNotFound(err)) {
+					t.Errorf("executeDeleteStage() binding kept = %v (get error: %v), want %v", gotBindingKept, err, tt.wantBindingKept)
+				}
+			}
+			err := fakeClient.Get(ctx, client.ObjectKey{Name: approvalRequestName}, &placementv1beta1.ClusterApprovalRequest{})
+			if gotApprovalRequest := err == nil; gotApprovalRequest != tt.wantApprovalRequest || (err != nil && !apierrors.IsNotFound(err)) {
+				t.Errorf("executeDeleteStage() approval request exists = %v (get error: %v), want %v", gotApprovalRequest, err, tt.wantApprovalRequest)
+			}
+
+			wantDeleteStageStatus := tt.wantDeleteStageStatus.DeepCopy()
+			wantDeleteStageStatus.StageName = placementv1beta1.UpdateRunDeleteStageName
+			if wantDeleteStageStatus.Clusters == nil {
+				wantDeleteStageStatus.Clusters = []placementv1beta1.ClusterUpdatingStatus{{ClusterName: clusterName}}
+			}
+			cmpOpts := []cmp.Option{
+				cmpopts.IgnoreFields(metav1.Condition{}, "LastTransitionTime", "Message"),
+				cmpopts.IgnoreFields(placementv1beta1.StageUpdatingStatus{}, "StartTime", "EndTime"),
+			}
+			if diff := cmp.Diff(wantDeleteStageStatus, updateRun.Status.DeletionStageStatus, cmpOpts...); diff != "" {
+				t.Errorf("executeDeleteStage() delete stage status mismatch (-want +got):\n%s", diff)
+			}
+			if diff := cmp.Diff(tt.wantRunConditions, updateRun.Status.Conditions, cmpOpts...); diff != "" {
+				t.Errorf("executeDeleteStage() update run conditions mismatch (-want +got):\n%s", diff)
+			}
+			// The delete stage is only considered started once the tasks are completed.
+			if gotStarted, wantStarted := updateRun.Status.DeletionStageStatus.StartTime != nil, !tt.wantBindingKept; gotStarted != wantStarted {
+				t.Errorf("executeDeleteStage() delete stage started = %v, want %v", gotStarted, wantStarted)
 			}
 		})
 	}
@@ -1462,5 +1834,402 @@ func TestExecute_ZeroClustersSkipsEntireStage(t *testing.T) {
 				t.Fatalf("execute() stage status mismatch (-want +got):\n%s", diff)
 			}
 		})
+	}
+}
+
+// TestExecuteDeleteStage_MultipleClusters tests that executeDeleteStage only deletes the bindings whose deletion has
+// not started yet, and marks the clusters with no binding left as deleted.
+func TestExecuteDeleteStage_MultipleClusters(t *testing.T) {
+	ctx := context.Background()
+	scheme := runtime.NewScheme()
+	if err := placementv1beta1.AddToScheme(scheme); err != nil {
+		t.Fatalf("AddToScheme() = %v, want no error", err)
+	}
+	newCondition := func(condType any, reason string) metav1.Condition {
+		return metav1.Condition{Type: fmt.Sprint(condType), Status: metav1.ConditionTrue, Reason: reason, ObservedGeneration: 1}
+	}
+	clusterStartedCond := newCondition(placementv1beta1.ClusterUpdatingConditionStarted, condition.ClusterUpdatingStartedReason)
+	clusterSucceededCond := newCondition(placementv1beta1.ClusterUpdatingConditionSucceeded, condition.ClusterUpdatingSucceededReason)
+	deletionTime := metav1.Now()
+
+	// The deletion of the binding on cluster-1 has started already; the fake client keeps it as it has a finalizer.
+	deletingBinding := &placementv1beta1.ClusterResourceBinding{
+		ObjectMeta: metav1.ObjectMeta{Name: "binding-1", DeletionTimestamp: &deletionTime, Finalizers: []string{"test-finalizer"}},
+		Spec:       placementv1beta1.ResourceBindingSpec{TargetCluster: "cluster-1"},
+	}
+	binding := &placementv1beta1.ClusterResourceBinding{
+		ObjectMeta: metav1.ObjectMeta{Name: "binding-2"},
+		Spec:       placementv1beta1.ResourceBindingSpec{TargetCluster: "cluster-2"},
+	}
+	var deletedBindings []string
+	fakeClient := fake.NewClientBuilder().WithScheme(scheme).WithObjects(deletingBinding, binding).WithInterceptorFuncs(interceptor.Funcs{
+		Delete: func(ctx context.Context, c client.WithWatch, obj client.Object, opts ...client.DeleteOption) error {
+			deletedBindings = append(deletedBindings, obj.GetName())
+			return c.Delete(ctx, obj, opts...)
+		},
+	}).Build()
+	r := &Reconciler{Client: fakeClient}
+	updateRun := &placementv1beta1.ClusterStagedUpdateRun{
+		ObjectMeta: metav1.ObjectMeta{Name: "test-update-run", Generation: 1},
+		Status: placementv1beta1.UpdateRunStatus{
+			UpdateStrategySnapshot: &placementv1beta1.UpdateStrategySpec{},
+			DeletionStageStatus: &placementv1beta1.StageUpdatingStatus{
+				StageName: placementv1beta1.UpdateRunDeleteStageName,
+				Clusters: []placementv1beta1.ClusterUpdatingStatus{
+					{ClusterName: "cluster-1", Conditions: []metav1.Condition{clusterStartedCond}},
+					{ClusterName: "cluster-2"},
+					// The binding on cluster-3 is gone, so the cluster is deleted.
+					{ClusterName: "cluster-3", Conditions: []metav1.Condition{clusterStartedCond}},
+				},
+			},
+		},
+	}
+
+	gotFinished, gotWaitTime, err := r.executeDeleteStage(ctx, updateRun, []placementv1beta1.BindingObj{deletingBinding, binding})
+	if err != nil {
+		t.Fatalf("executeDeleteStage() error = %v, want no error", err)
+	}
+	if gotFinished || gotWaitTime != clusterUpdatingWaitTime {
+		t.Errorf("executeDeleteStage() = (%v, %v), want (false, %v)", gotFinished, gotWaitTime, clusterUpdatingWaitTime)
+	}
+	if diff := cmp.Diff([]string{"binding-2"}, deletedBindings); diff != "" {
+		t.Errorf("executeDeleteStage() deleted bindings mismatch (-want +got):\n%s", diff)
+	}
+	wantClusters := []placementv1beta1.ClusterUpdatingStatus{
+		{ClusterName: "cluster-1", Conditions: []metav1.Condition{clusterStartedCond}},
+		{ClusterName: "cluster-2", Conditions: []metav1.Condition{clusterStartedCond}},
+		{ClusterName: "cluster-3", Conditions: []metav1.Condition{clusterStartedCond, clusterSucceededCond}},
+	}
+	if diff := cmp.Diff(wantClusters, updateRun.Status.DeletionStageStatus.Clusters, cmpopts.IgnoreFields(metav1.Condition{}, "LastTransitionTime", "Message")); diff != "" {
+		t.Errorf("executeDeleteStage() delete stage clusters mismatch (-want +got):\n%s", diff)
+	}
+}
+
+// TestExecuteDeleteStage_Errors tests that executeDeleteStage reports the API server errors as retriable and aborts
+// the update run, without deleting any binding, if the delete stage status does not match the bindings.
+func TestExecuteDeleteStage_Errors(t *testing.T) {
+	const updateRunName = "test-update-run"
+	approvalRequestName := fmt.Sprintf(placementv1beta1.BeforeStageApprovalTaskNameFmt, updateRunName, placementv1beta1.UpdateRunDeleteStageTaskName)
+	errAPIServer := apierrors.NewServiceUnavailable("api server error")
+	newCondition := func(condType any, reason string) metav1.Condition {
+		return metav1.Condition{Type: fmt.Sprint(condType), Status: metav1.ConditionTrue, Reason: reason, ObservedGeneration: 1}
+	}
+	clusterStartedCond := newCondition(placementv1beta1.ClusterUpdatingConditionStarted, condition.ClusterUpdatingStartedReason)
+	clusterSucceededCond := newCondition(placementv1beta1.ClusterUpdatingConditionSucceeded, condition.ClusterUpdatingSucceededReason)
+	approvalRequest := func(conds ...metav1.Condition) *placementv1beta1.ClusterApprovalRequest {
+		return &placementv1beta1.ClusterApprovalRequest{
+			ObjectMeta: metav1.ObjectMeta{Name: approvalRequestName, Generation: 1},
+			Spec: placementv1beta1.ApprovalRequestSpec{
+				TargetUpdateRun: updateRunName,
+				TargetStage:     placementv1beta1.UpdateRunDeleteStageName,
+			},
+			Status: placementv1beta1.ApprovalRequestStatus{Conditions: conds},
+		}
+	}
+	isApprovalRequest := func(obj client.Object) bool {
+		_, ok := obj.(*placementv1beta1.ClusterApprovalRequest)
+		return ok
+	}
+
+	tests := []struct {
+		name            string
+		withApproval    bool
+		approvalRequest *placementv1beta1.ClusterApprovalRequest
+		// clusters are the clusters in the delete stage; cluster-2 is always added without any condition.
+		clusters     []placementv1beta1.ClusterUpdatingStatus
+		interceptors interceptor.Funcs
+		wantErr      error
+	}{
+		{
+			name:         "failing to create the approval request should be retriable",
+			withApproval: true,
+			clusters:     []placementv1beta1.ClusterUpdatingStatus{{ClusterName: "cluster-1"}},
+			interceptors: interceptor.Funcs{
+				Create: func(ctx context.Context, c client.WithWatch, obj client.Object, opts ...client.CreateOption) error {
+					if isApprovalRequest(obj) {
+						return errAPIServer
+					}
+					return c.Create(ctx, obj, opts...)
+				},
+			},
+			wantErr: controller.ErrAPIServerError,
+		},
+		{
+			name:            "failing to get the existing approval request should be retriable",
+			withApproval:    true,
+			approvalRequest: approvalRequest(),
+			clusters:        []placementv1beta1.ClusterUpdatingStatus{{ClusterName: "cluster-1"}},
+			interceptors: interceptor.Funcs{
+				Get: func(ctx context.Context, c client.WithWatch, key client.ObjectKey, obj client.Object, opts ...client.GetOption) error {
+					if isApprovalRequest(obj) {
+						return errAPIServer
+					}
+					return c.Get(ctx, key, obj, opts...)
+				},
+			},
+			wantErr: controller.ErrAPIServerError,
+		},
+		{
+			name:            "failing to accept the approval should be retriable",
+			withApproval:    true,
+			approvalRequest: approvalRequest(newCondition(placementv1beta1.ApprovalRequestConditionApproved, "Approved")),
+			clusters:        []placementv1beta1.ClusterUpdatingStatus{{ClusterName: "cluster-1"}},
+			interceptors: interceptor.Funcs{
+				SubResourceUpdate: func(ctx context.Context, c client.Client, subResourceName string, obj client.Object, opts ...client.SubResourceUpdateOption) error {
+					return errAPIServer
+				},
+			},
+			wantErr: controller.ErrAPIServerError,
+		},
+		{
+			name:     "failing to delete a binding should be retriable",
+			clusters: []placementv1beta1.ClusterUpdatingStatus{{ClusterName: "cluster-1"}},
+			interceptors: interceptor.Funcs{
+				Delete: func(ctx context.Context, c client.WithWatch, obj client.Object, opts ...client.DeleteOption) error {
+					return errAPIServer
+				},
+			},
+			wantErr: controller.ErrAPIServerError,
+		},
+		{
+			name:     "binding on a cluster missing from the delete stage should abort the update run",
+			clusters: []placementv1beta1.ClusterUpdatingStatus{{ClusterName: "another-cluster"}},
+			wantErr:  errStagedUpdatedAborted,
+		},
+		{
+			name:     "deleted cluster that still has a binding should abort the update run",
+			clusters: []placementv1beta1.ClusterUpdatingStatus{{ClusterName: "cluster-1", Conditions: []metav1.Condition{clusterStartedCond, clusterSucceededCond}}},
+			wantErr:  errStagedUpdatedAborted,
+		},
+		{
+			name:     "deleting cluster whose binding is not deleting should abort the update run",
+			clusters: []placementv1beta1.ClusterUpdatingStatus{{ClusterName: "cluster-1", Conditions: []metav1.Condition{clusterStartedCond}}},
+			wantErr:  errStagedUpdatedAborted,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			ctx := context.Background()
+			scheme := runtime.NewScheme()
+			if err := placementv1beta1.AddToScheme(scheme); err != nil {
+				t.Fatalf("AddToScheme() = %v, want no error", err)
+			}
+			// The binding on cluster-2 comes after the binding on cluster-1, so that an abort caused by the
+			// cluster-1 shows that no binding is deleted before all the clusters are checked.
+			bindings := []placementv1beta1.BindingObj{
+				&placementv1beta1.ClusterResourceBinding{
+					ObjectMeta: metav1.ObjectMeta{Name: "binding-1"},
+					Spec:       placementv1beta1.ResourceBindingSpec{TargetCluster: "cluster-1"},
+				},
+				&placementv1beta1.ClusterResourceBinding{
+					ObjectMeta: metav1.ObjectMeta{Name: "binding-2"},
+					Spec:       placementv1beta1.ResourceBindingSpec{TargetCluster: "cluster-2"},
+				},
+			}
+			clientBuilder := fake.NewClientBuilder().WithScheme(scheme).
+				WithStatusSubresource(&placementv1beta1.ClusterApprovalRequest{}).
+				WithObjects(bindings[0], bindings[1])
+			if tt.approvalRequest != nil {
+				clientBuilder = clientBuilder.WithObjects(tt.approvalRequest)
+			}
+			var deletedBindings []string
+			interceptors := tt.interceptors
+			if interceptors.Delete == nil {
+				interceptors.Delete = func(ctx context.Context, c client.WithWatch, obj client.Object, opts ...client.DeleteOption) error {
+					deletedBindings = append(deletedBindings, obj.GetName())
+					return c.Delete(ctx, obj, opts...)
+				}
+			}
+			r := &Reconciler{Client: clientBuilder.WithInterceptorFuncs(interceptors).Build()}
+
+			updateRun := &placementv1beta1.ClusterStagedUpdateRun{
+				ObjectMeta: metav1.ObjectMeta{Name: updateRunName, Generation: 1},
+				Status: placementv1beta1.UpdateRunStatus{
+					UpdateStrategySnapshot: &placementv1beta1.UpdateStrategySpec{},
+					DeletionStageStatus: &placementv1beta1.StageUpdatingStatus{
+						StageName: placementv1beta1.UpdateRunDeleteStageName,
+						Clusters:  append(tt.clusters, placementv1beta1.ClusterUpdatingStatus{ClusterName: "cluster-2"}),
+					},
+				},
+			}
+			if tt.withApproval {
+				updateRun.Status.UpdateStrategySnapshot.DeleteStage = &placementv1beta1.DeleteStageConfig{
+					BeforeStageTasks: []placementv1beta1.StageTask{{Type: placementv1beta1.StageTaskTypeApproval}},
+				}
+				updateRun.Status.DeletionStageStatus.BeforeStageTaskStatus = []placementv1beta1.StageTaskStatus{
+					{Type: placementv1beta1.StageTaskTypeApproval, ApprovalRequestName: approvalRequestName},
+				}
+			}
+			t.Cleanup(func() { deleteUpdateRunMetrics(updateRun) })
+
+			gotFinished, _, gotErr := r.executeDeleteStage(ctx, updateRun, bindings)
+			if !errors.Is(gotErr, tt.wantErr) {
+				t.Fatalf("executeDeleteStage() error = %v, want %v", gotErr, tt.wantErr)
+			}
+			if tt.wantErr == controller.ErrAPIServerError && errors.Is(gotErr, errStagedUpdatedAborted) {
+				t.Errorf("executeDeleteStage() error = %v, want a retriable error that does not abort the update run", gotErr)
+			}
+			if gotFinished {
+				t.Errorf("executeDeleteStage() finished = true, want false")
+			}
+			if len(deletedBindings) != 0 {
+				t.Errorf("executeDeleteStage() deleted bindings %v, want none", deletedBindings)
+			}
+		})
+	}
+}
+
+// TestExecuteDeleteStage_Namespaced tests that the approval request of the delete stage of a namespaced update run
+// is created in the namespace of the update run.
+func TestExecuteDeleteStage_Namespaced(t *testing.T) {
+	const (
+		namespace     = "test-namespace"
+		updateRunName = "test-update-run"
+	)
+	ctx := context.Background()
+	scheme := runtime.NewScheme()
+	if err := placementv1beta1.AddToScheme(scheme); err != nil {
+		t.Fatalf("AddToScheme() = %v, want no error", err)
+	}
+	approvalRequestName := fmt.Sprintf(placementv1beta1.BeforeStageApprovalTaskNameFmt, updateRunName, placementv1beta1.UpdateRunDeleteStageTaskName)
+	binding := &placementv1beta1.ResourceBinding{
+		ObjectMeta: metav1.ObjectMeta{Name: "test-binding", Namespace: namespace},
+		Spec:       placementv1beta1.ResourceBindingSpec{TargetCluster: "cluster-1"},
+	}
+	fakeClient := fake.NewClientBuilder().WithScheme(scheme).WithObjects(binding).Build()
+	r := &Reconciler{Client: fakeClient}
+	updateRun := &placementv1beta1.StagedUpdateRun{
+		ObjectMeta: metav1.ObjectMeta{Name: updateRunName, Namespace: namespace, Generation: 1},
+		Status: placementv1beta1.UpdateRunStatus{
+			UpdateStrategySnapshot: &placementv1beta1.UpdateStrategySpec{
+				DeleteStage: &placementv1beta1.DeleteStageConfig{
+					BeforeStageTasks: []placementv1beta1.StageTask{{Type: placementv1beta1.StageTaskTypeApproval}},
+				},
+			},
+			DeletionStageStatus: &placementv1beta1.StageUpdatingStatus{
+				StageName: placementv1beta1.UpdateRunDeleteStageName,
+				Clusters:  []placementv1beta1.ClusterUpdatingStatus{{ClusterName: "cluster-1"}},
+				BeforeStageTaskStatus: []placementv1beta1.StageTaskStatus{
+					{Type: placementv1beta1.StageTaskTypeApproval, ApprovalRequestName: approvalRequestName},
+				},
+			},
+		},
+	}
+
+	gotFinished, gotWaitTime, err := r.executeDeleteStage(ctx, updateRun, []placementv1beta1.BindingObj{binding})
+	if err != nil {
+		t.Fatalf("executeDeleteStage() error = %v, want no error", err)
+	}
+	if gotFinished || gotWaitTime != stageUpdatingWaitTime {
+		t.Errorf("executeDeleteStage() = (%v, %v), want (false, %v)", gotFinished, gotWaitTime, stageUpdatingWaitTime)
+	}
+	gotApprovalRequest := &placementv1beta1.ApprovalRequest{}
+	if err := fakeClient.Get(ctx, client.ObjectKey{Name: approvalRequestName, Namespace: namespace}, gotApprovalRequest); err != nil {
+		t.Fatalf("Get() approval request = %v, want no error", err)
+	}
+	wantApprovalRequest := buildApprovalRequestObject(types.NamespacedName{Name: approvalRequestName, Namespace: namespace},
+		placementv1beta1.UpdateRunDeleteStageName, updateRunName, placementv1beta1.BeforeStageTaskLabelValue)
+	if diff := cmp.Diff(wantApprovalRequest, gotApprovalRequest, cmpopts.IgnoreFields(metav1.ObjectMeta{}, "ResourceVersion")); diff != "" {
+		t.Errorf("executeDeleteStage() approval request mismatch (-want +got):\n%s", diff)
+	}
+	if got := gotApprovalRequest.Labels[placementv1beta1.TargetUpdatingStageNameLabel]; got != placementv1beta1.UpdateRunDeleteStageTaskName {
+		t.Errorf("executeDeleteStage() approval request stage label = %q, want %q", got, placementv1beta1.UpdateRunDeleteStageTaskName)
+	}
+	if err := fakeClient.Get(ctx, client.ObjectKeyFromObject(binding), &placementv1beta1.ResourceBinding{}); err != nil {
+		t.Errorf("Get() binding = %v, want the binding to be kept", err)
+	}
+}
+
+// TestExecute_DeleteStageAbort tests that an abort in the delete stage marks the delete stage as failed.
+func TestExecute_DeleteStageAbort(t *testing.T) {
+	ctx := context.Background()
+	scheme := runtime.NewScheme()
+	if err := placementv1beta1.AddToScheme(scheme); err != nil {
+		t.Fatalf("AddToScheme() = %v, want no error", err)
+	}
+	binding := &placementv1beta1.ClusterResourceBinding{
+		ObjectMeta: metav1.ObjectMeta{Name: "test-binding"},
+		Spec:       placementv1beta1.ResourceBindingSpec{TargetCluster: "cluster-1"},
+	}
+	r := &Reconciler{Client: fake.NewClientBuilder().WithScheme(scheme).WithObjects(binding).Build()}
+	// The delete stage does not include the cluster of the binding.
+	updateRun := &placementv1beta1.ClusterStagedUpdateRun{
+		ObjectMeta: metav1.ObjectMeta{Name: "test-update-run", Generation: 1},
+		Status: placementv1beta1.UpdateRunStatus{
+			UpdateStrategySnapshot: &placementv1beta1.UpdateStrategySpec{},
+			DeletionStageStatus: &placementv1beta1.StageUpdatingStatus{
+				StageName: placementv1beta1.UpdateRunDeleteStageName,
+				Clusters:  []placementv1beta1.ClusterUpdatingStatus{{ClusterName: "another-cluster"}},
+			},
+		},
+	}
+
+	_, _, err := r.execute(ctx, updateRun, 0, nil, []placementv1beta1.BindingObj{binding})
+	if !errors.Is(err, errStagedUpdatedAborted) {
+		t.Fatalf("execute() error = %v, want %v", err, errStagedUpdatedAborted)
+	}
+	wantConds := []metav1.Condition{
+		{
+			Type:               string(placementv1beta1.StageUpdatingConditionProgressing),
+			Status:             metav1.ConditionFalse,
+			ObservedGeneration: 1,
+			Reason:             condition.StageUpdatingFailedReason,
+		},
+		{
+			Type:               string(placementv1beta1.StageUpdatingConditionSucceeded),
+			Status:             metav1.ConditionFalse,
+			ObservedGeneration: 1,
+			Reason:             condition.StageUpdatingFailedReason,
+		},
+	}
+	if diff := cmp.Diff(wantConds, updateRun.Status.DeletionStageStatus.Conditions, cmpopts.IgnoreFields(metav1.Condition{}, "LastTransitionTime", "Message")); diff != "" {
+		t.Errorf("execute() delete stage conditions mismatch (-want +got):\n%s", diff)
+	}
+}
+
+// TestCheckAfterStageTasksStatus_ElapsedTimedWait tests that a timed wait task that has elapsed stays elapsed after
+// the stage transitions again, e.g., when the update run is stopped and resumed.
+func TestCheckAfterStageTasksStatus_ElapsedTimedWait(t *testing.T) {
+	updateRun := &placementv1beta1.ClusterStagedUpdateRun{
+		ObjectMeta: metav1.ObjectMeta{Name: "test-update-run", Generation: 2},
+		Status: placementv1beta1.UpdateRunStatus{
+			UpdateStrategySnapshot: &placementv1beta1.UpdateStrategySpec{
+				Stages: []placementv1beta1.StageConfig{{
+					Name: "stage-1",
+					AfterStageTasks: []placementv1beta1.StageTask{
+						{Type: placementv1beta1.StageTaskTypeTimedWait, WaitTime: &metav1.Duration{Duration: time.Hour}},
+					},
+				}},
+			},
+			StagesStatus: []placementv1beta1.StageUpdatingStatus{{
+				StageName: "stage-1",
+				Conditions: []metav1.Condition{{
+					Type:               string(placementv1beta1.StageUpdatingConditionProgressing),
+					Status:             metav1.ConditionFalse,
+					ObservedGeneration: 2,
+					Reason:             condition.StageUpdatingStoppedReason,
+					LastTransitionTime: metav1.Now(),
+				}},
+				AfterStageTaskStatus: []placementv1beta1.StageTaskStatus{{
+					Type: placementv1beta1.StageTaskTypeTimedWait,
+					Conditions: []metav1.Condition{{
+						Type:               string(placementv1beta1.StageTaskConditionWaitTimeElapsed),
+						Status:             metav1.ConditionTrue,
+						ObservedGeneration: 1,
+						Reason:             condition.AfterStageTaskWaitTimeElapsedReason,
+					}},
+				}},
+			}},
+		},
+	}
+	r := &Reconciler{}
+
+	gotPassed, gotWaitTime, err := r.checkAfterStageTasksStatus(context.Background(), 0, updateRun)
+	if err != nil {
+		t.Fatalf("checkAfterStageTasksStatus() error = %v, want no error", err)
+	}
+	if !gotPassed || gotWaitTime != 0 {
+		t.Errorf("checkAfterStageTasksStatus() = (%v, %v), want (true, 0)", gotPassed, gotWaitTime)
 	}
 }

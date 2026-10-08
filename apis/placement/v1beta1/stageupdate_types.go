@@ -262,10 +262,29 @@ func (c *ClusterStagedUpdateStrategy) SetUpdateStrategySpec(spec UpdateStrategyS
 
 // UpdateStrategySpec defines the desired state of the StagedUpdateStrategy.
 type UpdateStrategySpec struct {
-	// Stage specifies the configuration for each update stage.
+	// Stages specifies the configuration for each update stage.
 	// +kubebuilder:validation:MaxItems=31
 	// +kubebuilder:validation:Required
 	Stages []StageConfig `json:"stages"`
+
+	// DeleteStage specifies the configuration for the delete stage, which runs after all the update stages
+	// complete and removes the resources from the clusters that are no longer selected by the placement.
+	// If not specified, the delete stage starts as soon as the last update stage completes.
+	// +kubebuilder:validation:Optional
+	DeleteStage *DeleteStageConfig `json:"deleteStage,omitempty"`
+}
+
+// DeleteStageConfig describes the delete stage.
+type DeleteStageConfig struct {
+	// The collection of tasks that needs to be completed successfully before the delete stage starts removing
+	// the resources. Same as an update stage, the only task allowed is a single Approval; to wait for some time
+	// before the removal, add a TimedWait task to the afterStageTasks of the last update stage instead.
+	// The tasks are skipped if there is no cluster to remove the resources from.
+	// +kubebuilder:validation:Optional
+	// +kubebuilder:validation:MaxItems=1
+	// +kubebuilder:validation:XValidation:rule="!self.exists(e, e.type == 'Approval' && has(e.waitTime))",message="BeforeStageTaskType is Approval, waitTime is not allowed"
+	// +kubebuilder:validation:XValidation:rule="!self.exists(e, e.type == 'TimedWait')",message="BeforeStageTaskType cannot be TimedWait"
+	BeforeStageTasks []StageTask `json:"beforeStageTasks,omitempty"`
 }
 
 // ClusterStagedUpdateStrategyList contains a list of StagedUpdateStrategy.
@@ -330,11 +349,11 @@ type StageConfig struct {
 	// +kubebuilder:validation:XValidation:rule="!self.exists(e, e.type == 'TimedWait' && !has(e.waitTime))",message="AfterStageTaskType is TimedWait, waitTime is required"
 	AfterStageTasks []StageTask `json:"afterStageTasks,omitempty"`
 
-	// The collection of tasks that needs to completed successfully by each stage before starting the stage.
+	// The collection of tasks that needs to be completed successfully by each stage before starting the stage.
 	// Each task is executed in parallel and there cannot be more than one task of the same type.
 	// +kubebuilder:validation:Optional
 	// +kubebuilder:validation:MaxItems=1
-	// +kubebuilder:validation:XValidation:rule="!self.exists(e, e.type == 'Approval' && has(e.waitTime))",message="AfterStageTaskType is Approval, waitTime is not allowed"
+	// +kubebuilder:validation:XValidation:rule="!self.exists(e, e.type == 'Approval' && has(e.waitTime))",message="BeforeStageTaskType is Approval, waitTime is not allowed"
 	// +kubebuilder:validation:XValidation:rule="!self.exists(e, e.type == 'TimedWait')",message="BeforeStageTaskType cannot be TimedWait"
 	BeforeStageTasks []StageTask `json:"beforeStageTasks,omitempty"`
 }
@@ -373,7 +392,7 @@ type UpdateRunStatus struct {
 
 	// ResourceSnapshotIndexUsed records the resource snapshot index that the update run is based on.
 	// The index represents the same resource snapshots as specified in the spec field, or the latest.
-	// +kubbebuilder:validation:Optional
+	// +kubebuilder:validation:Optional
 	ResourceSnapshotIndexUsed string `json:"resourceSnapshotIndexUsed,omitempty"`
 
 	// ApplyStrategy is the apply strategy that the stagedUpdateRun is using.
@@ -548,6 +567,7 @@ const (
 	ClusterUpdatingConditionSucceeded ClusterUpdatingStatusConditionType = "Succeeded"
 )
 
+// StageTaskStatus defines the status of a pre or post update task of a stage.
 type StageTaskStatus struct {
 	// The type of the pre or post update task.
 	// +kubebuilder:validation:Enum=TimedWait;Approval
@@ -555,7 +575,7 @@ type StageTaskStatus struct {
 	Type StageTaskType `json:"type"`
 
 	// The name of the approval request object that is created for this stage.
-	// Only valid if the AfterStageTaskType is Approval.
+	// Only valid if the type of the task is Approval.
 	// +kubebuilder:validation:Optional
 	ApprovalRequestName string `json:"approvalRequestName,omitempty"`
 
