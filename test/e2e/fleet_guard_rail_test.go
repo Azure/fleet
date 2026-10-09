@@ -1749,12 +1749,19 @@ var _ = Describe("fleet Job webhook tests", Label("job-webhook"), Serial, Ordere
 			}, eventuallyDuration, eventuallyInterval).Should(Succeed())
 		})
 
-		It("preserves both reconcile labels when aksService updates a Job", func() {
+		It("injects both reconcile labels when aksService updates an existing unlabeled Job", func() {
 			job := newJob(fmt.Sprintf("job-mut-update-%d", GinkgoParallelProcess()), testNamespace, nil, nil, true)
-			Expect(sysMastersClient.Create(ctx, job)).To(Succeed())
+			Expect(notMasterUser.Create(ctx, job)).To(Succeed())
 			DeferCleanup(func() {
 				_ = hubClient.Delete(ctx, job)
 			})
+
+			Eventually(func(g Gomega) {
+				var currentJob batchv1.Job
+				g.Expect(hubClient.Get(ctx, types.NamespacedName{Name: job.Name, Namespace: job.Namespace}, &currentJob)).To(Succeed())
+				g.Expect(currentJob.Labels).NotTo(HaveKey(utils.ReconcileLabelKey))
+				g.Expect(currentJob.Spec.Template.Labels).NotTo(HaveKey(utils.ReconcileLabelKey))
+			}, eventuallyDuration, eventuallyInterval).Should(Succeed())
 
 			Eventually(func() error {
 				var currentJob batchv1.Job
