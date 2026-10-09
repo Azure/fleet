@@ -143,10 +143,24 @@ func TestValidatingHandle(t *testing.T) {
 					Namespace: "default",
 					Operation: admissionv1.Update,
 					Object:    runtime.RawExtension{Raw: deployNoReconcileLabelBytes, Object: deployNoReconcileLabel},
+					OldObject: runtime.RawExtension{Raw: deployNoReconcileLabelBytes, Object: deployNoReconcileLabel},
 					UserInfo:  regularUser,
 				},
 			},
 			wantAllowed: true,
+		},
+		"deny regular user from removing reconcile labels from both locations": {
+			req: admission.Request{
+				AdmissionRequest: admissionv1.AdmissionRequest{
+					Name:      "test-deploy",
+					Namespace: "default",
+					Operation: admissionv1.Update,
+					Object:    runtime.RawExtension{Raw: deployNoReconcileLabelBytes, Object: deployNoReconcileLabel},
+					OldObject: runtime.RawExtension{Raw: deployWithReconcileLabelOnBothBytes, Object: deployWithReconcileLabelOnBoth},
+					UserInfo:  regularUser,
+				},
+			},
+			wantAllowed: false,
 		},
 		"deny regular user from setting reconcile label in kube-system namespace": {
 			req: admission.Request{

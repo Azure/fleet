@@ -19,12 +19,14 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"strings"
 
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
 	admissionv1 "k8s.io/api/admission/v1"
 	appsv1 "k8s.io/api/apps/v1"
 	authenticationv1 "k8s.io/api/authentication/v1"
+	batchv1 "k8s.io/api/batch/v1"
 	corev1 "k8s.io/api/core/v1"
 	policyv1 "k8s.io/api/policy/v1"
 	rbacv1 "k8s.io/api/rbac/v1"
@@ -1405,6 +1407,52 @@ var _ = Describe("fleet deployment webhook tests for validating and mutating dep
 				return nil
 			}, eventuallyDuration, eventuallyInterval).Should(Succeed())
 		})
+
+		It("should deny regular user from updating or removing labels from a managed deployment", func() {
+			deploy := newDeployment(fmt.Sprintf("test-deploy-val-managed-%d", GinkgoParallelProcess()), testNS, nil, nil)
+			Expect(sysMastersClient.Create(ctx, deploy)).Should(Succeed())
+			DeferCleanup(func() {
+				_ = hubClient.Delete(ctx, deploy)
+			})
+
+			Eventually(func() error {
+				var currentDeploy appsv1.Deployment
+				if err := hubClient.Get(ctx, types.NamespacedName{Name: deploy.Name, Namespace: deploy.Namespace}, &currentDeploy); err != nil {
+					return err
+				}
+				if currentDeploy.Annotations == nil {
+					currentDeploy.Annotations = map[string]string{}
+				}
+				currentDeploy.Annotations["fleet.azure.com/e2e-update"] = "true"
+				err := notMasterUser.Update(ctx, &currentDeploy)
+				if k8sErrors.IsConflict(err) {
+					return err
+				}
+				var statusErr *k8sErrors.StatusError
+				if !errors.As(err, &statusErr) || !strings.Contains(statusErr.ErrStatus.Message, utils.ReconcileLabelKey) {
+					return fmt.Errorf("unrelated deployment update error = %v, want denial mentioning %q", err, utils.ReconcileLabelKey)
+				}
+				return nil
+			}, eventuallyDuration, eventuallyInterval).Should(Succeed())
+
+			Eventually(func() error {
+				var currentDeploy appsv1.Deployment
+				if err := hubClient.Get(ctx, types.NamespacedName{Name: deploy.Name, Namespace: deploy.Namespace}, &currentDeploy); err != nil {
+					return err
+				}
+				delete(currentDeploy.Labels, utils.ReconcileLabelKey)
+				delete(currentDeploy.Spec.Template.Labels, utils.ReconcileLabelKey)
+				err := notMasterUser.Update(ctx, &currentDeploy)
+				if k8sErrors.IsConflict(err) {
+					return err
+				}
+				var statusErr *k8sErrors.StatusError
+				if !errors.As(err, &statusErr) || !strings.Contains(statusErr.ErrStatus.Message, utils.ReconcileLabelKey) {
+					return fmt.Errorf("deployment label removal error = %v, want denial mentioning %q", err, utils.ReconcileLabelKey)
+				}
+				return nil
+			}, eventuallyDuration, eventuallyInterval).Should(Succeed())
+		})
 	})
 
 	Context("validating webhook - allow aksService user to set reconcile label", func() {
@@ -1605,6 +1653,305 @@ var _ = Describe("fleet deployment webhook tests for validating and mutating dep
 					"deployment should have 1 available replica")
 				g.Expect(d.Status.ReadyReplicas).Should(Equal(int32(1)),
 					"deployment should have 1 ready replica")
+			}, workloadEventuallyDuration, eventuallyInterval).Should(Succeed())
+		})
+	})
+})
+
+var _ = Describe("fleet Job webhook tests", Label("job-webhook"), Serial, Ordered, func() {
+	const testNamespace = "default"
+
+	newJob := func(name, namespace string, jobLabels, podTemplateLabels map[string]string, suspend bool) *batchv1.Job {
+		podLabels := map[string]string{"app": name}
+		for key, value := range podTemplateLabels {
+			podLabels[key] = value
+		}
+
+		return &batchv1.Job{
+			ObjectMeta: metav1.ObjectMeta{
+				Name:      name,
+				Namespace: namespace,
+				Labels:    jobLabels,
+			},
+			Spec: batchv1.JobSpec{
+				BackoffLimit: ptr.To(int32(0)),
+				Suspend:      ptr.To(suspend),
+				Template: corev1.PodTemplateSpec{
+					ObjectMeta: metav1.ObjectMeta{
+						Labels: podLabels,
+					},
+					Spec: corev1.PodSpec{
+						RestartPolicy: corev1.RestartPolicyNever,
+						Containers: []corev1.Container{
+							{
+								Name:    "test",
+								Image:   "alpine:3",
+								Command: []string{"sh", "-c", "echo completed"},
+							},
+						},
+					},
+				},
+			},
+		}
+	}
+
+	expectReconcileLabelDenial := func(err error) {
+		var statusErr *k8sErrors.StatusError
+		Expect(errors.As(err, &statusErr)).To(BeTrue(), "request error %T should be a StatusError", err)
+		Expect(statusErr.ErrStatus.Message).To(ContainSubstring(utils.ReconcileLabelKey))
+	}
+
+	Context("validating webhook", func() {
+		It("denies a regular user creating a Job labeled on Job metadata", func() {
+			job := newJob(
+				fmt.Sprintf("job-val-meta-%d", GinkgoParallelProcess()),
+				testNamespace,
+				map[string]string{utils.ReconcileLabelKey: utils.ReconcileLabelValue},
+				nil,
+				true,
+			)
+			expectReconcileLabelDenial(notMasterUser.Create(ctx, job))
+		})
+
+		It("denies a regular user creating a Job labeled on pod-template metadata", func() {
+			job := newJob(
+				fmt.Sprintf("job-val-template-%d", GinkgoParallelProcess()),
+				testNamespace,
+				nil,
+				map[string]string{utils.ReconcileLabelKey: utils.ReconcileLabelValue},
+				true,
+			)
+			expectReconcileLabelDenial(notMasterUser.Create(ctx, job))
+		})
+
+		It("denies a regular user updating a Job to add the reconcile label", func() {
+			job := newJob(fmt.Sprintf("job-val-update-%d", GinkgoParallelProcess()), testNamespace, nil, nil, true)
+			Expect(notMasterUser.Create(ctx, job)).To(Succeed())
+			DeferCleanup(func() {
+				_ = hubClient.Delete(ctx, job)
+			})
+
+			Eventually(func() error {
+				var currentJob batchv1.Job
+				if err := hubClient.Get(ctx, types.NamespacedName{Name: job.Name, Namespace: job.Namespace}, &currentJob); err != nil {
+					return err
+				}
+				if currentJob.Labels == nil {
+					currentJob.Labels = map[string]string{}
+				}
+				currentJob.Labels[utils.ReconcileLabelKey] = utils.ReconcileLabelValue
+
+				err := notMasterUser.Update(ctx, &currentJob)
+				if k8sErrors.IsConflict(err) {
+					return err
+				}
+				var statusErr *k8sErrors.StatusError
+				if !errors.As(err, &statusErr) {
+					return fmt.Errorf("update Job error %T, want StatusError", err)
+				}
+				if !strings.Contains(statusErr.ErrStatus.Message, utils.ReconcileLabelKey) {
+					return fmt.Errorf("update Job error %q does not mention %q", statusErr.ErrStatus.Message, utils.ReconcileLabelKey)
+				}
+				return nil
+			}, eventuallyDuration, eventuallyInterval).Should(Succeed())
+		})
+
+		It("denies a regular user updating or removing labels from a managed Job", func() {
+			job := newJob(fmt.Sprintf("job-val-managed-%d", GinkgoParallelProcess()), testNamespace, nil, nil, true)
+			Expect(sysMastersClient.Create(ctx, job)).To(Succeed())
+			DeferCleanup(func() {
+				_ = hubClient.Delete(ctx, job)
+			})
+
+			Eventually(func() error {
+				var currentJob batchv1.Job
+				if err := hubClient.Get(ctx, types.NamespacedName{Name: job.Name, Namespace: job.Namespace}, &currentJob); err != nil {
+					return err
+				}
+				if currentJob.Annotations == nil {
+					currentJob.Annotations = map[string]string{}
+				}
+				currentJob.Annotations["fleet.azure.com/e2e-update"] = "true"
+				err := notMasterUser.Update(ctx, &currentJob)
+				if k8sErrors.IsConflict(err) {
+					return err
+				}
+				var statusErr *k8sErrors.StatusError
+				if !errors.As(err, &statusErr) || !strings.Contains(statusErr.ErrStatus.Message, utils.ReconcileLabelKey) {
+					return fmt.Errorf("unrelated Job update error = %v, want denial mentioning %q", err, utils.ReconcileLabelKey)
+				}
+				return nil
+			}, eventuallyDuration, eventuallyInterval).Should(Succeed())
+
+			Eventually(func() error {
+				var currentJob batchv1.Job
+				if err := hubClient.Get(ctx, types.NamespacedName{Name: job.Name, Namespace: job.Namespace}, &currentJob); err != nil {
+					return err
+				}
+				delete(currentJob.Labels, utils.ReconcileLabelKey)
+				delete(currentJob.Spec.Template.Labels, utils.ReconcileLabelKey)
+				err := notMasterUser.Update(ctx, &currentJob)
+				if k8sErrors.IsConflict(err) {
+					return err
+				}
+				var statusErr *k8sErrors.StatusError
+				if !errors.As(err, &statusErr) || !strings.Contains(statusErr.ErrStatus.Message, utils.ReconcileLabelKey) {
+					return fmt.Errorf("Job label removal error = %v, want denial mentioning %q", err, utils.ReconcileLabelKey)
+				}
+				return nil
+			}, eventuallyDuration, eventuallyInterval).Should(Succeed())
+		})
+
+		It("allows aksService to create a labeled Job", func() {
+			job := newJob(
+				fmt.Sprintf("job-val-aks-%d", GinkgoParallelProcess()),
+				testNamespace,
+				map[string]string{utils.ReconcileLabelKey: utils.ReconcileLabelValue},
+				map[string]string{utils.ReconcileLabelKey: utils.ReconcileLabelValue},
+				true,
+			)
+			DeferCleanup(func() {
+				_ = hubClient.Delete(ctx, job)
+			})
+			Expect(sysMastersClient.Create(ctx, job)).To(Succeed())
+		})
+
+		It("allows a regular user to create an unlabeled Job", func() {
+			job := newJob(fmt.Sprintf("job-val-unlabeled-%d", GinkgoParallelProcess()), testNamespace, nil, nil, true)
+			DeferCleanup(func() {
+				_ = hubClient.Delete(ctx, job)
+			})
+			Expect(notMasterUser.Create(ctx, job)).To(Succeed())
+		})
+	})
+
+	Context("mutating webhook", func() {
+		It("injects both reconcile labels when aksService creates a Job", func() {
+			job := newJob(fmt.Sprintf("job-mut-aks-%d", GinkgoParallelProcess()), testNamespace, nil, nil, true)
+			DeferCleanup(func() {
+				_ = hubClient.Delete(ctx, job)
+			})
+			Expect(sysMastersClient.Create(ctx, job)).To(Succeed())
+
+			Eventually(func(g Gomega) {
+				var currentJob batchv1.Job
+				g.Expect(hubClient.Get(ctx, types.NamespacedName{Name: job.Name, Namespace: job.Namespace}, &currentJob)).To(Succeed())
+				g.Expect(currentJob.Labels).To(HaveKeyWithValue(utils.ReconcileLabelKey, utils.ReconcileLabelValue))
+				g.Expect(currentJob.Spec.Template.Labels).To(HaveKeyWithValue(utils.ReconcileLabelKey, utils.ReconcileLabelValue))
+			}, eventuallyDuration, eventuallyInterval).Should(Succeed())
+		})
+
+		It("injects both reconcile labels when aksService updates an existing unlabeled Job", func() {
+			job := newJob(fmt.Sprintf("job-mut-update-%d", GinkgoParallelProcess()), testNamespace, nil, nil, true)
+			Expect(notMasterUser.Create(ctx, job)).To(Succeed())
+			DeferCleanup(func() {
+				_ = hubClient.Delete(ctx, job)
+			})
+
+			Eventually(func(g Gomega) {
+				var currentJob batchv1.Job
+				g.Expect(hubClient.Get(ctx, types.NamespacedName{Name: job.Name, Namespace: job.Namespace}, &currentJob)).To(Succeed())
+				g.Expect(currentJob.Labels).NotTo(HaveKey(utils.ReconcileLabelKey))
+				g.Expect(currentJob.Spec.Template.Labels).NotTo(HaveKey(utils.ReconcileLabelKey))
+			}, eventuallyDuration, eventuallyInterval).Should(Succeed())
+
+			Eventually(func() error {
+				var currentJob batchv1.Job
+				if err := hubClient.Get(ctx, types.NamespacedName{Name: job.Name, Namespace: job.Namespace}, &currentJob); err != nil {
+					return err
+				}
+				if currentJob.Annotations == nil {
+					currentJob.Annotations = map[string]string{}
+				}
+				currentJob.Annotations["fleet.azure.com/e2e-update"] = "true"
+				return sysMastersClient.Update(ctx, &currentJob)
+			}, eventuallyDuration, eventuallyInterval).Should(Succeed())
+
+			Eventually(func(g Gomega) {
+				var currentJob batchv1.Job
+				g.Expect(hubClient.Get(ctx, types.NamespacedName{Name: job.Name, Namespace: job.Namespace}, &currentJob)).To(Succeed())
+				g.Expect(currentJob.Labels).To(HaveKeyWithValue(utils.ReconcileLabelKey, utils.ReconcileLabelValue))
+				g.Expect(currentJob.Spec.Template.Labels).To(HaveKeyWithValue(utils.ReconcileLabelKey, utils.ReconcileLabelValue))
+			}, eventuallyDuration, eventuallyInterval).Should(Succeed())
+		})
+
+		It("does not inject reconcile labels when a regular user creates a Job", func() {
+			job := newJob(fmt.Sprintf("job-mut-user-%d", GinkgoParallelProcess()), testNamespace, nil, nil, true)
+			DeferCleanup(func() {
+				_ = hubClient.Delete(ctx, job)
+			})
+			Expect(notMasterUser.Create(ctx, job)).To(Succeed())
+
+			Eventually(func(g Gomega) {
+				var currentJob batchv1.Job
+				g.Expect(hubClient.Get(ctx, types.NamespacedName{Name: job.Name, Namespace: job.Namespace}, &currentJob)).To(Succeed())
+				g.Expect(currentJob.Labels).NotTo(HaveKey(utils.ReconcileLabelKey))
+				g.Expect(currentJob.Spec.Template.Labels).NotTo(HaveKey(utils.ReconcileLabelKey))
+			}, eventuallyDuration, eventuallyInterval).Should(Succeed())
+		})
+
+		It("does not inject reconcile labels in a reserved namespace", func() {
+			job := newJob(fmt.Sprintf("job-mut-reserved-%d", GinkgoParallelProcess()), "kube-system", nil, nil, true)
+			DeferCleanup(func() {
+				_ = hubClient.Delete(ctx, job)
+			})
+			Expect(sysMastersClient.Create(ctx, job)).To(Succeed())
+
+			Eventually(func(g Gomega) {
+				var currentJob batchv1.Job
+				g.Expect(hubClient.Get(ctx, types.NamespacedName{Name: job.Name, Namespace: job.Namespace}, &currentJob)).To(Succeed())
+				g.Expect(currentJob.Labels).NotTo(HaveKey(utils.ReconcileLabelKey))
+				g.Expect(currentJob.Spec.Template.Labels).NotTo(HaveKey(utils.ReconcileLabelKey))
+			}, eventuallyDuration, eventuallyInterval).Should(Succeed())
+		})
+	})
+
+	Context("Job controller Pod creation", func() {
+		It("blocks Pod creation for an unlabeled regular-user Job", func() {
+			job := newJob(fmt.Sprintf("job-e2e-user-%d", GinkgoParallelProcess()), testNamespace, nil, nil, false)
+			DeferCleanup(func() {
+				_ = hubClient.Delete(ctx, job)
+			})
+			Expect(notMasterUser.Create(ctx, job)).To(Succeed())
+
+			Consistently(func(g Gomega) {
+				var podList corev1.PodList
+				g.Expect(hubClient.List(ctx, &podList, client.InNamespace(testNamespace), client.MatchingLabels{"app": job.Name})).To(Succeed())
+				g.Expect(podList.Items).To(BeEmpty())
+			}, consistentlyDuration, consistentlyInterval).Should(Succeed())
+		})
+
+		It("allows an aksService Job to create a labeled Pod and complete", func() {
+			job := newJob(fmt.Sprintf("job-e2e-aks-%d", GinkgoParallelProcess()), testNamespace, nil, nil, false)
+			DeferCleanup(func() {
+				_ = hubClient.Delete(ctx, job)
+			})
+			Expect(sysMastersClient.Create(ctx, job)).To(Succeed())
+
+			Eventually(func(g Gomega) {
+				var currentJob batchv1.Job
+				g.Expect(hubClient.Get(ctx, types.NamespacedName{Name: job.Name, Namespace: job.Namespace}, &currentJob)).To(Succeed())
+				g.Expect(currentJob.Labels).To(HaveKeyWithValue(utils.ReconcileLabelKey, utils.ReconcileLabelValue))
+				g.Expect(currentJob.Spec.Template.Labels).To(HaveKeyWithValue(utils.ReconcileLabelKey, utils.ReconcileLabelValue))
+			}, eventuallyDuration, eventuallyInterval).Should(Succeed())
+
+			Eventually(func(g Gomega) {
+				var podList corev1.PodList
+				g.Expect(hubClient.List(ctx, &podList, client.InNamespace(testNamespace), client.MatchingLabels{"app": job.Name})).To(Succeed())
+				g.Expect(podList.Items).NotTo(BeEmpty())
+				for i := range podList.Items {
+					g.Expect(podList.Items[i].Labels).To(HaveKeyWithValue(utils.ReconcileLabelKey, utils.ReconcileLabelValue))
+				}
+			}, workloadEventuallyDuration, eventuallyInterval).Should(Succeed())
+
+			Eventually(func(g Gomega) {
+				var currentJob batchv1.Job
+				g.Expect(hubClient.Get(ctx, types.NamespacedName{Name: job.Name, Namespace: job.Namespace}, &currentJob)).To(Succeed())
+				g.Expect(currentJob.Status.Succeeded).To(Equal(int32(1)))
+				g.Expect(currentJob.Status.Conditions).To(ContainElement(And(
+					HaveField("Type", batchv1.JobComplete),
+					HaveField("Status", corev1.ConditionTrue),
+				)))
 			}, workloadEventuallyDuration, eventuallyInterval).Should(Succeed())
 		})
 	})
