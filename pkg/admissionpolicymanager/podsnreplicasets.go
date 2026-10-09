@@ -43,6 +43,7 @@ const (
 	reconcileIfManagedLabelValue = "managed"
 
 	deploymentControllerUserName = "system:serviceaccount:kube-system:deployment-controller"
+	jobControllerUserName        = "system:serviceaccount:kube-system:job-controller"
 	replicaSetControllerUserName = "system:serviceaccount:kube-system:replicaset-controller"
 )
 
@@ -91,12 +92,14 @@ func (g *PodsAndReplicaSetsValidatingAdmissionPolicyGenerator) PoliciesWithBindi
 	// controllers (or the controller manager, just in case per controller service account is not enabled).
 	hasReconcileIfManagedLabel := RawCELExpr(fmt.Sprintf(`object.metadata.labels["%s"] == "%s"`, reconcileIfManagedLabelKey, reconcileIfManagedLabelValue))
 	isCreatedByDeploymentController := isFromUsername(deploymentControllerUserName)
+	isCreatedByJobController := isFromUsername(jobControllerUserName)
 	isCreatedByReplicaSetController := isFromUsername(replicaSetControllerUserName)
 	isCreatedByControllerManager := isFromUsername(kubeControllerManagerUserName)
 	allowIfManagedByAzure := LogicalAnd(
 		hasReconcileIfManagedLabel,
 		LogicalOr(
 			isCreatedByDeploymentController,
+			isCreatedByJobController,
 			isCreatedByReplicaSetController,
 			isCreatedByControllerManager,
 		),
