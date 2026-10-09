@@ -27,6 +27,10 @@ spec:
             capabilities:
               drop:
                 - ALL
+          resources:
+            requests:
+              cpu: 10m
+              memory: 128Mi
       {{- end }}
       containers:
         - name: addon-token-adapter
