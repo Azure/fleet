@@ -72,6 +72,8 @@ func (m *jobMutator) Handle(_ context.Context, req admission.Request) admission.
 	if job.Spec.Template.Labels == nil {
 		job.Spec.Template.Labels = map[string]string{}
 	}
+	// Kubernetes permits pod-template metadata updates for suspended Jobs that
+	// have never started, but rejects them as immutable after a Job has started.
 	job.Spec.Template.Labels[utils.ReconcileLabelKey] = utils.ReconcileLabelValue
 
 	marshaled, err := json.Marshal(job)

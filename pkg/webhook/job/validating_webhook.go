@@ -33,7 +33,7 @@ import (
 	"go.goms.io/fleet/pkg/utils"
 )
 
-const deniedReconcileLabelFmt = "the %s label is reserved for aksService and cannot be set by user %q"
+const deniedReconcileLabelFmt = "resources with the %s label are reserved for aksService and cannot be modified by user %q"
 
 // ValidationPath is the webhook service path for validating Job resources.
 var ValidationPath = fmt.Sprintf(utils.ValidationPathFmt, batchv1.SchemeGroupVersion.Group, batchv1.SchemeGroupVersion.Version, "job")
@@ -67,17 +67,28 @@ func (v *jobValidator) Handle(_ context.Context, req admission.Request) admissio
 
 	hasLabelOnJob := utils.HasReconcileLabel(job.Labels)
 	hasLabelOnPodTemplate := utils.HasReconcileLabel(job.Spec.Template.Labels)
-	if !hasLabelOnJob && !hasLabelOnPodTemplate {
-		return admission.Allowed("job does not have the reconcile label, no validation needed")
-	}
-
-	if utils.IsAKSService(req.UserInfo) {
+	if hasLabelOnJob || hasLabelOnPodTemplate {
+		if !utils.IsAKSService(req.UserInfo) {
+			klog.V(2).InfoS("denied non-aksService user from modifying job with reconcile label",
+				"user", req.UserInfo.Username, "groups", req.UserInfo.Groups, "namespacedName", namespacedName)
+			return admission.Denied(fmt.Sprintf(deniedReconcileLabelFmt, utils.ReconcileLabelKey, req.UserInfo.Username))
+		}
 		klog.V(2).InfoS("aksService user allowed to set reconcile label",
 			"namespacedName", namespacedName)
 		return admission.Allowed("aksService user is allowed to set the reconcile label")
 	}
 
-	klog.V(2).InfoS("denied non-aksService user from setting reconcile label",
-		"user", req.UserInfo.Username, "groups", req.UserInfo.Groups, "namespacedName", namespacedName)
-	return admission.Denied(fmt.Sprintf(deniedReconcileLabelFmt, utils.ReconcileLabelKey, req.UserInfo.Username))
+	if req.Operation == admissionv1.Update && !utils.IsAKSService(req.UserInfo) {
+		var oldJob batchv1.Job
+		if err := v.decoder.DecodeRaw(req.OldObject, &oldJob); err != nil {
+			return admission.Errored(http.StatusBadRequest, err)
+		}
+		if utils.HasReconcileLabel(oldJob.Labels) || utils.HasReconcileLabel(oldJob.Spec.Template.Labels) {
+			klog.V(2).InfoS("denied non-aksService user from removing reconcile label",
+				"user", req.UserInfo.Username, "groups", req.UserInfo.Groups, "namespacedName", namespacedName)
+			return admission.Denied(fmt.Sprintf(deniedReconcileLabelFmt, utils.ReconcileLabelKey, req.UserInfo.Username))
+		}
+	}
+
+	return admission.Allowed("job does not have the reconcile label, no validation needed")
 }

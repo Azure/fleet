@@ -1407,6 +1407,52 @@ var _ = Describe("fleet deployment webhook tests for validating and mutating dep
 				return nil
 			}, eventuallyDuration, eventuallyInterval).Should(Succeed())
 		})
+
+		It("should deny regular user from updating or removing labels from a managed deployment", func() {
+			deploy := newDeployment(fmt.Sprintf("test-deploy-val-managed-%d", GinkgoParallelProcess()), testNS, nil, nil)
+			Expect(sysMastersClient.Create(ctx, deploy)).Should(Succeed())
+			DeferCleanup(func() {
+				_ = hubClient.Delete(ctx, deploy)
+			})
+
+			Eventually(func() error {
+				var currentDeploy appsv1.Deployment
+				if err := hubClient.Get(ctx, types.NamespacedName{Name: deploy.Name, Namespace: deploy.Namespace}, &currentDeploy); err != nil {
+					return err
+				}
+				if currentDeploy.Annotations == nil {
+					currentDeploy.Annotations = map[string]string{}
+				}
+				currentDeploy.Annotations["fleet.azure.com/e2e-update"] = "true"
+				err := notMasterUser.Update(ctx, &currentDeploy)
+				if k8sErrors.IsConflict(err) {
+					return err
+				}
+				var statusErr *k8sErrors.StatusError
+				if !errors.As(err, &statusErr) || !strings.Contains(statusErr.ErrStatus.Message, utils.ReconcileLabelKey) {
+					return fmt.Errorf("unrelated deployment update error = %v, want denial mentioning %q", err, utils.ReconcileLabelKey)
+				}
+				return nil
+			}, eventuallyDuration, eventuallyInterval).Should(Succeed())
+
+			Eventually(func() error {
+				var currentDeploy appsv1.Deployment
+				if err := hubClient.Get(ctx, types.NamespacedName{Name: deploy.Name, Namespace: deploy.Namespace}, &currentDeploy); err != nil {
+					return err
+				}
+				delete(currentDeploy.Labels, utils.ReconcileLabelKey)
+				delete(currentDeploy.Spec.Template.Labels, utils.ReconcileLabelKey)
+				err := notMasterUser.Update(ctx, &currentDeploy)
+				if k8sErrors.IsConflict(err) {
+					return err
+				}
+				var statusErr *k8sErrors.StatusError
+				if !errors.As(err, &statusErr) || !strings.Contains(statusErr.ErrStatus.Message, utils.ReconcileLabelKey) {
+					return fmt.Errorf("deployment label removal error = %v, want denial mentioning %q", err, utils.ReconcileLabelKey)
+				}
+				return nil
+			}, eventuallyDuration, eventuallyInterval).Should(Succeed())
+		})
 	})
 
 	Context("validating webhook - allow aksService user to set reconcile label", func() {
@@ -1705,6 +1751,52 @@ var _ = Describe("fleet Job webhook tests", Label("job-webhook"), Serial, Ordere
 				}
 				if !strings.Contains(statusErr.ErrStatus.Message, utils.ReconcileLabelKey) {
 					return fmt.Errorf("update Job error %q does not mention %q", statusErr.ErrStatus.Message, utils.ReconcileLabelKey)
+				}
+				return nil
+			}, eventuallyDuration, eventuallyInterval).Should(Succeed())
+		})
+
+		It("denies a regular user updating or removing labels from a managed Job", func() {
+			job := newJob(fmt.Sprintf("job-val-managed-%d", GinkgoParallelProcess()), testNamespace, nil, nil, true)
+			Expect(sysMastersClient.Create(ctx, job)).To(Succeed())
+			DeferCleanup(func() {
+				_ = hubClient.Delete(ctx, job)
+			})
+
+			Eventually(func() error {
+				var currentJob batchv1.Job
+				if err := hubClient.Get(ctx, types.NamespacedName{Name: job.Name, Namespace: job.Namespace}, &currentJob); err != nil {
+					return err
+				}
+				if currentJob.Annotations == nil {
+					currentJob.Annotations = map[string]string{}
+				}
+				currentJob.Annotations["fleet.azure.com/e2e-update"] = "true"
+				err := notMasterUser.Update(ctx, &currentJob)
+				if k8sErrors.IsConflict(err) {
+					return err
+				}
+				var statusErr *k8sErrors.StatusError
+				if !errors.As(err, &statusErr) || !strings.Contains(statusErr.ErrStatus.Message, utils.ReconcileLabelKey) {
+					return fmt.Errorf("unrelated Job update error = %v, want denial mentioning %q", err, utils.ReconcileLabelKey)
+				}
+				return nil
+			}, eventuallyDuration, eventuallyInterval).Should(Succeed())
+
+			Eventually(func() error {
+				var currentJob batchv1.Job
+				if err := hubClient.Get(ctx, types.NamespacedName{Name: job.Name, Namespace: job.Namespace}, &currentJob); err != nil {
+					return err
+				}
+				delete(currentJob.Labels, utils.ReconcileLabelKey)
+				delete(currentJob.Spec.Template.Labels, utils.ReconcileLabelKey)
+				err := notMasterUser.Update(ctx, &currentJob)
+				if k8sErrors.IsConflict(err) {
+					return err
+				}
+				var statusErr *k8sErrors.StatusError
+				if !errors.As(err, &statusErr) || !strings.Contains(statusErr.ErrStatus.Message, utils.ReconcileLabelKey) {
+					return fmt.Errorf("Job label removal error = %v, want denial mentioning %q", err, utils.ReconcileLabelKey)
 				}
 				return nil
 			}, eventuallyDuration, eventuallyInterval).Should(Succeed())
