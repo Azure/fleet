@@ -17,7 +17,9 @@ limitations under the License.
 package workgenerator
 
 import (
+	"cmp"
 	"context"
+	"slices"
 
 	"k8s.io/apimachinery/pkg/api/equality"
 	"k8s.io/apimachinery/pkg/api/meta"
@@ -246,6 +248,17 @@ func countResourcesInWorksByProcessingResults(works []placementv1alpha1.Work) (
 			}
 		}
 	}
+
+	// Sort the failed resources to ensure deterministic status reporting.
+	slices.SortFunc(failed, func(a, b placementv1alpha1.FailedResource) int {
+		return cmp.Or(
+			cmp.Compare(a.ObjectRef.APIGroup, b.ObjectRef.APIGroup),
+			cmp.Compare(a.ObjectRef.APIVersion, b.ObjectRef.APIVersion),
+			cmp.Compare(a.ObjectRef.Kind, b.ObjectRef.Kind),
+			cmp.Compare(a.ObjectRef.Namespace, b.ObjectRef.Namespace),
+			cmp.Compare(a.ObjectRef.Name, b.ObjectRef.Name),
+		)
+	})
 	return total, synced, available, failed
 }
 
