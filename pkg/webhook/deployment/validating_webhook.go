@@ -38,7 +38,7 @@ import (
 )
 
 const (
-	deniedReconcileLabelFmt = "the %s label is reserved for aksService and cannot be set by user %q"
+	deniedReconcileLabelFmt = "resources with the %s label are reserved for aksService and cannot be modified by user %q"
 )
 
 // ValidationPath is the webhook service path for validating Deployment resources.
@@ -77,19 +77,28 @@ func (v *deploymentValidator) Handle(_ context.Context, req admission.Request) a
 	hasLabelOnDeploy := utils.HasReconcileLabel(deploy.Labels)
 	hasLabelOnPodTemplate := utils.HasReconcileLabel(deploy.Spec.Template.Labels)
 
-	if !hasLabelOnDeploy && !hasLabelOnPodTemplate {
-		return admission.Allowed("deployment does not have the reconcile label, no validation needed")
-	}
-
-	// The reconcile label is present — only aksService with system:masters is
-	// allowed to set it.
-	if utils.IsAKSService(req.UserInfo) {
+	if hasLabelOnDeploy || hasLabelOnPodTemplate {
+		if !utils.IsAKSService(req.UserInfo) {
+			klog.V(2).InfoS("denied non-aksService user from modifying deployment with reconcile label",
+				"user", req.UserInfo.Username, "groups", req.UserInfo.Groups, "namespacedName", namespacedName)
+			return admission.Denied(fmt.Sprintf(deniedReconcileLabelFmt, utils.ReconcileLabelKey, req.UserInfo.Username))
+		}
 		klog.V(2).InfoS("aksService user allowed to set reconcile label",
 			"namespacedName", namespacedName)
 		return admission.Allowed("aksService user is allowed to set the reconcile label")
 	}
 
-	klog.V(2).InfoS("denied non-aksService user from setting reconcile label",
-		"user", req.UserInfo.Username, "groups", req.UserInfo.Groups, "namespacedName", namespacedName)
-	return admission.Denied(fmt.Sprintf(deniedReconcileLabelFmt, utils.ReconcileLabelKey, req.UserInfo.Username))
+	if req.Operation == admissionv1.Update && !utils.IsAKSService(req.UserInfo) {
+		var oldDeploy appsv1.Deployment
+		if err := v.decoder.DecodeRaw(req.OldObject, &oldDeploy); err != nil {
+			return admission.Errored(http.StatusBadRequest, err)
+		}
+		if utils.HasReconcileLabel(oldDeploy.Labels) || utils.HasReconcileLabel(oldDeploy.Spec.Template.Labels) {
+			klog.V(2).InfoS("denied non-aksService user from removing reconcile label",
+				"user", req.UserInfo.Username, "groups", req.UserInfo.Groups, "namespacedName", namespacedName)
+			return admission.Denied(fmt.Sprintf(deniedReconcileLabelFmt, utils.ReconcileLabelKey, req.UserInfo.Username))
+		}
+	}
+
+	return admission.Allowed("deployment does not have the reconcile label, no validation needed")
 }

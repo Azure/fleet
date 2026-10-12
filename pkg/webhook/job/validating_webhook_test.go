@@ -106,9 +106,13 @@ func TestValidatingHandle(t *testing.T) {
 			req:         newAdmissionRequest("test-job", "default", admissionv1.Create, unlabeledJob, regularUser),
 			wantAllowed: true,
 		},
-		"allow update that removes labels from both locations": {
-			req:         newAdmissionRequest("test-job", "default", admissionv1.Update, unlabeledJob, regularUser),
+		"allow regular user update when old and new jobs are unlabeled": {
+			req:         newUpdateAdmissionRequest("test-job", "default", unlabeledJob, unlabeledJob, regularUser),
 			wantAllowed: true,
+		},
+		"deny regular user update that removes labels from both locations": {
+			req:         newUpdateAdmissionRequest("test-job", "default", unlabeledJob, bothLabeled, regularUser),
+			wantAllowed: false,
 		},
 		"allow aksService user to create with label on job metadata": {
 			req:         newAdmissionRequest("test-job", "default", admissionv1.Create, jobMetadataLabeled, aksServiceUser),
@@ -175,6 +179,11 @@ func TestValidatingHandle(t *testing.T) {
 			wantAllowed: false,
 			wantErrCode: http.StatusBadRequest,
 		},
+		"error on malformed old object": {
+			req:         newUpdateAdmissionRequest("test-job", "default", unlabeledJob, []byte("not valid json"), regularUser),
+			wantAllowed: false,
+			wantErrCode: http.StatusBadRequest,
+		},
 	}
 
 	for testName, tc := range testCases {
@@ -197,4 +206,10 @@ func TestValidatingHandle(t *testing.T) {
 			}
 		})
 	}
+}
+
+func newUpdateAdmissionRequest(name, namespace string, raw, oldRaw []byte, userInfo authenticationv1.UserInfo) admission.Request {
+	req := newAdmissionRequest(name, namespace, admissionv1.Update, raw, userInfo)
+	req.OldObject = runtime.RawExtension{Raw: oldRaw}
+	return req
 }
