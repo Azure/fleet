@@ -110,7 +110,7 @@ var _ = BeforeSuite(func() {
 
 	// The field indexes must be set up before the manager starts.
 	By("Setting up the field indexes")
-	Expect(fieldindexers.SetupWithHubControllerManager(ctx, mgr)).Should(Succeed())
+	Expect(fieldindexers.SetupWithHubAgentControllerManager(ctx, mgr)).Should(Succeed())
 
 	By("Setting up the work generator")
 	Expect(New(mgr.GetClient(), workerCount).SetupWithManager(mgr, maxConcurrentReconciles)).Should(Succeed())
