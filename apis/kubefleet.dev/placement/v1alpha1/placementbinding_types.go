@@ -30,9 +30,11 @@ const (
 const (
 	PlacementBindingSynchronizedCondReasonAllResourcesSynchronized         = "AllResourcesSynchronized"
 	PlacementBindingSynchronizedCondReasonFailedToSynchronizeSomeResources = "FailedToSynchronizeSomeResources"
+	PlacementBindingSynchronizedCondReasonWaitingForSynchronization        = "WaitingForSynchronization"
 
-	PlacementBindingAvailableCondReasonAllResourcesAvailable    = "AllResourcesAvailable"
-	PlacementBindingAvailableCondReasonSomeResourcesUnavailable = "SomeResourcesUnavailable"
+	PlacementBindingAvailableCondReasonAllResourcesAvailable       = "AllResourcesAvailable"
+	PlacementBindingAvailableCondReasonSomeResourcesUnavailable    = "SomeResourcesUnavailable"
+	PlacementBindingAvailableCondReasonWaitingForAvailabilityCheck = "WaitingForAvailabilityCheck"
 )
 
 // PlacementBinding is the KubeFleet API that binds the resources selected by a placement
@@ -163,6 +165,13 @@ type PlacementBindingStatus struct {
 	// +kubebuilder:validation:Optional
 	// +kubebuilder:validation:MaxItems=50
 	FailedResources []FailedResource `json:"failedResources,omitempty"`
+
+	// The name of the placement resource snapshot that KubeFleet has last processed for this binding.
+	// This field helps KubeFleet track the processing progress; it also reveals whether the reported status
+	// is up to date.
+	//
+	// +kubebuilder:validation:Optional
+	LastProcessedResourceSnapshotName *string `json:"lastProcessedResourceSnapshotName,omitempty"`
 }
 
 type FailedResource struct {

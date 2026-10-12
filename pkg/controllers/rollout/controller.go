@@ -29,7 +29,7 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/types"
 	"k8s.io/apimachinery/pkg/util/intstr"
-	"k8s.io/client-go/tools/record"
+	"k8s.io/client-go/tools/events"
 	"k8s.io/client-go/util/workqueue"
 	"k8s.io/klog/v2"
 	runtime "sigs.k8s.io/controller-runtime"
@@ -54,7 +54,7 @@ type Reconciler struct {
 	UncachedReader client.Reader
 	// the max number of concurrent reconciles per controller.
 	MaxConcurrentReconciles int
-	recorder                record.EventRecorder
+	recorder                events.EventRecorder
 	// the informer contains the cache for all the resources we need.
 	// to check the resource scope
 	InformerManager informer.Manager
@@ -691,7 +691,7 @@ func (r *Reconciler) updateBindings(ctx context.Context, bindings []toBeUpdatedB
 // The rollout controller watches resource snapshots and resource bindings.
 // It reconciles on the CRP when a new cluster resource binding is created or an existing cluster resource binding is created/updated.
 func (r *Reconciler) SetupWithManagerForClusterResourcePlacement(mgr runtime.Manager) error {
-	r.recorder = mgr.GetEventRecorderFor("cluster-resource-placement-rollout-controller")
+	r.recorder = mgr.GetEventRecorder("cluster-resource-placement-rollout-controller")
 	return runtime.NewControllerManagedBy(mgr).Named("cluster-resource-placement-rollout-controller").
 		WithOptions(ctrl.Options{MaxConcurrentReconciles: r.MaxConcurrentReconciles}). // set the max number of concurrent reconciles
 		Watches(&placementv1beta1.ClusterResourceSnapshot{}, resourceSnapshotObjHandlerFuncs()).
@@ -736,7 +736,7 @@ func (r *Reconciler) SetupWithManagerForClusterResourcePlacement(mgr runtime.Man
 // The rollout controller watches resource snapshots and resource bindings.
 // It reconciles on the RP when a new resource binding is created or an existing resource binding is created/updated.
 func (r *Reconciler) SetupWithManagerForResourcePlacement(mgr runtime.Manager) error {
-	r.recorder = mgr.GetEventRecorderFor("resource-placement-rollout-controller")
+	r.recorder = mgr.GetEventRecorder("resource-placement-rollout-controller")
 	return runtime.NewControllerManagedBy(mgr).Named("resource-placement-rollout-controller").
 		WithOptions(ctrl.Options{MaxConcurrentReconciles: r.MaxConcurrentReconciles}). // set the max number of concurrent reconciles
 		Watches(&placementv1beta1.ResourceSnapshot{}, resourceSnapshotObjHandlerFuncs()).

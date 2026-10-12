@@ -107,7 +107,7 @@ func TestInformerPopulator_discoverAndCreateInformers(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			// Create fake discovery client
-			fakeClient := fake.NewSimpleClientset()
+			fakeClient := fake.NewClientset()
 			fakeDiscovery, ok := fakeClient.Discovery().(*fakediscovery.FakeDiscovery)
 			if !ok {
 				t.Fatal("Failed to cast to FakeDiscovery")
@@ -166,7 +166,7 @@ func TestInformerPopulator_discoverAndCreateInformers(t *testing.T) {
 
 func TestInformerPopulator_Start(t *testing.T) {
 	// Create fake discovery client with some resources
-	fakeClient := fake.NewSimpleClientset()
+	fakeClient := fake.NewClientset()
 	fakeDiscovery, ok := fakeClient.Discovery().(*fakediscovery.FakeDiscovery)
 	if !ok {
 		t.Fatal("Failed to cast to FakeDiscovery")
@@ -230,7 +230,7 @@ func TestInformerPopulator_Integration(t *testing.T) {
 	// This test verifies the integration between InformerPopulator and the informer manager
 
 	// Create fake discovery with multiple resource types
-	fakeClient := fake.NewSimpleClientset()
+	fakeClient := fake.NewClientset()
 	fakeDiscovery, ok := fakeClient.Discovery().(*fakediscovery.FakeDiscovery)
 	if !ok {
 		t.Fatal("Failed to cast to FakeDiscovery")
@@ -297,7 +297,7 @@ func TestInformerPopulator_Integration(t *testing.T) {
 func TestInformerPopulator_PeriodicDiscovery(t *testing.T) {
 	// This test verifies that the populator continues to discover resources periodically
 
-	fakeClient := fake.NewSimpleClientset()
+	fakeClient := fake.NewClientset()
 	fakeDiscovery, ok := fakeClient.Discovery().(*fakediscovery.FakeDiscovery)
 	if !ok {
 		t.Fatal("Failed to cast to FakeDiscovery")

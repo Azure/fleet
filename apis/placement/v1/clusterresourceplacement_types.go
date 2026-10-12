@@ -969,7 +969,8 @@ type RollingUpdateConfig struct {
 	// Defaults to 25%.
 	// +kubebuilder:default="25%"
 	// +kubebuilder:validation:XIntOrString
-	// +kubebuilder:validation:Pattern="^((100|[0-9]{1,2})%|[0-9]+)$"
+	// +kubebuilder:validation:Pattern="^((100|[0-9]{1,2})%|[0-9]{1,9})$"
+	// +kubebuilder:validation:XValidation:rule="type(self) == int ? self >= 0 : true",message="maxUnavailable must be a non-negative integer or a percentage"
 	// +kubebuilder:validation:Optional
 	MaxUnavailable *intstr.IntOrString `json:"maxUnavailable,omitempty"`
 
@@ -983,7 +984,8 @@ type RollingUpdateConfig struct {
 	// Defaults to 25%.
 	// +kubebuilder:default="25%"
 	// +kubebuilder:validation:XIntOrString
-	// +kubebuilder:validation:Pattern="^((100|[0-9]{1,2})%|[0-9]+)$"
+	// +kubebuilder:validation:Pattern="^((100|[0-9]{1,2})%|[0-9]{1,9})$"
+	// +kubebuilder:validation:XValidation:rule="type(self) == int ? self >= 0 : true",message="maxSurge must be a non-negative integer or a percentage"
 	// +kubebuilder:validation:Optional
 	MaxSurge *intstr.IntOrString `json:"maxSurge,omitempty"`
 

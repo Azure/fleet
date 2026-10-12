@@ -32,7 +32,7 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/types"
-	"k8s.io/client-go/tools/record"
+	"k8s.io/client-go/tools/events"
 	"k8s.io/utils/ptr"
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client"
@@ -740,7 +740,7 @@ func TestGetOrCreateClusterSchedulingPolicySnapshot(t *testing.T) {
 			r := Reconciler{
 				Client:   fakeClient,
 				Scheme:   scheme,
-				Recorder: record.NewFakeRecorder(10),
+				Recorder: events.NewFakeRecorder(10),
 			}
 			limit := int32(defaulter.DefaultRevisionHistoryLimitValue)
 			if tc.revisionHistoryLimit != nil {
@@ -1043,7 +1043,7 @@ func TestGetOrCreateClusterSchedulingPolicySnapshot_failure(t *testing.T) {
 			r := Reconciler{
 				Client:   fakeClient,
 				Scheme:   scheme,
-				Recorder: record.NewFakeRecorder(10),
+				Recorder: events.NewFakeRecorder(10),
 			}
 			_, err := r.getOrCreateSchedulingPolicySnapshot(ctx, crp, 1)
 			if err == nil { // if error is nil
@@ -1291,7 +1291,7 @@ func TestHandleDelete(t *testing.T) {
 				Client:         fakeClient,
 				Scheme:         scheme,
 				UncachedReader: fakeClient,
-				Recorder:       record.NewFakeRecorder(10),
+				Recorder:       events.NewFakeRecorder(10),
 			}
 			got, err := r.handleDelete(ctx, crp)
 			if err != nil {

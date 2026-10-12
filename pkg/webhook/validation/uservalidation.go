@@ -6,6 +6,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"reflect"
+	"slices"
 	"strings"
 
 	authenticationv1 "k8s.io/api/authentication/v1"
@@ -13,7 +14,6 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/types"
 	"k8s.io/klog/v2"
-	"k8s.io/utils/strings/slices"
 	clusterinventory "sigs.k8s.io/cluster-inventory-api/apis/v1alpha1"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/webhook/admission"
@@ -94,8 +94,9 @@ func ValidateFleetMemberClusterUpdate(currentMC, oldMC clusterv1beta1.MemberClus
 	}
 
 	isLabelUpdated := isMapFieldUpdated(currentMC.GetLabels(), oldMC.GetLabels())
-	if isLabelUpdated && !isUserInGroup(userInfo, mastersGroup) && shouldDenyLabelModification(currentMC.GetLabels(), oldMC.GetLabels(), denyModifyMemberClusterLabels) {
-		// allow any user to modify kubernetes-fleet.io/* labels, but restricts other label modifications given denyModifyMemberClusterLabels is true.
+	if isLabelUpdated && !isUserInGroup(userInfo, mastersGroup) && shouldDenyLabelModification(currentMC.GetLabels(), oldMC.GetLabels(), denyModifyMemberClusterLabels, isUserAuthenticatedServiceAccount(userInfo)) {
+		// allow any user to modify kubernetes-fleet.io/* labels and service accounts to modify kubefleet.dev/* labels,
+		// but restricts other label modifications given denyModifyMemberClusterLabels is true.
 		klog.V(2).InfoS(DeniedModifyMemberClusterLabels, "user", userInfo.Username, "groups", userInfo.Groups, "operation", req.Operation, "GVK", req.RequestKind, "subResource", req.SubResource, "namespacedName", namespacedName)
 		return admission.Denied(DeniedModifyMemberClusterLabels)
 	}
@@ -160,22 +161,29 @@ func isUserInGroup(userInfo authenticationv1.UserInfo, groupName string) bool {
 	return slices.Contains(userInfo.Groups, groupName)
 }
 
-// shouldDenyLabelModification returns true if any labels (besides kubernetes-fleet.io/* labels) are being modified and denyModifyMemberClusterLabels is true.
-func shouldDenyLabelModification(currentLabels, oldLabels map[string]string, denyModifyMemberClusterLabels bool) bool {
+// shouldDenyLabelModification returns true if any labels besides the ones fleet reserves are being
+// modified and denyModifyMemberClusterLabels is true. kubernetes-fleet.io/* labels are exempt for
+// every user; kubefleet.dev/* labels only for service accounts, so that the hub agent (which is not
+// in system:masters) can seed the cluster alias while a plain user under the guard cannot move an
+// alias, which is a scheduling label, from one cluster to another.
+func shouldDenyLabelModification(currentLabels, oldLabels map[string]string, denyModifyMemberClusterLabels, isServiceAccount bool) bool {
 	if !denyModifyMemberClusterLabels {
 		return false
+	}
+	exempt := func(k string) bool {
+		return strings.HasPrefix(k, placementv1beta1.FleetPrefix) || (isServiceAccount && strings.HasPrefix(k, placementv1beta1.KubeFleetPrefix))
 	}
 	for k, v := range currentLabels {
 		oldV, exists := oldLabels[k]
 		if !exists || oldV != v {
-			if !strings.HasPrefix(k, placementv1beta1.FleetPrefix) {
+			if !exempt(k) {
 				return true
 			}
 		}
 	}
 	for k := range oldLabels {
 		if _, exists := currentLabels[k]; !exists {
-			if !strings.HasPrefix(k, placementv1beta1.FleetPrefix) {
+			if !exempt(k) {
 				return true
 			}
 		}

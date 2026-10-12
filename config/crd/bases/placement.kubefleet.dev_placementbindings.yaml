@@ -560,6 +560,12 @@ spec:
                   type: object
                 maxItems: 50
                 type: array
+              lastProcessedResourceSnapshotName:
+                description: |-
+                  The name of the placement resource snapshot that KubeFleet has last processed for this binding.
+                  This field helps KubeFleet track the processing progress; it also reveals whether the reported status
+                  is up to date.
+                type: string
               selectedResources:
                 description: The number of resources that are included in the currently
                   associated resource snapshot(s).

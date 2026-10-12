@@ -27,7 +27,7 @@ import (
 	apiErrors "k8s.io/apimachinery/pkg/api/errors"
 	"k8s.io/apimachinery/pkg/types"
 	utilruntime "k8s.io/apimachinery/pkg/util/runtime"
-	"k8s.io/client-go/tools/record"
+	"k8s.io/client-go/tools/events"
 	"k8s.io/klog/v2"
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client"
@@ -73,7 +73,7 @@ type Scheduler struct {
 	workerNumber int
 
 	// eventRecorder is the event recorder in use by the scheduler.
-	eventRecorder record.EventRecorder
+	eventRecorder events.EventRecorder
 }
 
 // NewScheduler creates a scheduler.
@@ -92,7 +92,7 @@ func NewScheduler(
 		uncachedReader: manager.GetAPIReader(),
 		manager:        manager,
 		workerNumber:   workerNumber,
-		eventRecorder:  manager.GetEventRecorderFor(name),
+		eventRecorder:  manager.GetEventRecorder(name),
 	}
 }
 

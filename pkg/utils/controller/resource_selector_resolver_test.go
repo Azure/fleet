@@ -42,10 +42,10 @@ import (
 	testinformer "go.goms.io/fleet/test/utils/informer"
 )
 
-func makeIPFamilyPolicyTypePointer(policyType corev1.IPFamilyPolicyType) *corev1.IPFamilyPolicyType {
+func makeIPFamilyPolicyTypePointer(policyType corev1.IPFamilyPolicy) *corev1.IPFamilyPolicy {
 	return &policyType
 }
-func makeServiceInternalTrafficPolicyPointer(policyType corev1.ServiceInternalTrafficPolicyType) *corev1.ServiceInternalTrafficPolicyType {
+func makeServiceInternalTrafficPolicyPointer(policyType corev1.ServiceInternalTrafficPolicy) *corev1.ServiceInternalTrafficPolicy {
 	return &policyType
 }
 
@@ -172,7 +172,7 @@ func TestGenerateResourceContent(t *testing.T) {
 					LoadBalancerIP:           "192.168.1.3",
 					LoadBalancerSourceRanges: []string{"192.168.1.1"},
 					ExternalName:             "svc-spec-externalName",
-					ExternalTrafficPolicy:    corev1.ServiceExternalTrafficPolicyType("svc-spec-externalTrafficPolicy"),
+					ExternalTrafficPolicy:    corev1.ServiceExternalTrafficPolicy("svc-spec-externalTrafficPolicy"),
 					PublishNotReadyAddresses: false,
 					SessionAffinityConfig:    &corev1.SessionAffinityConfig{ClientIP: &corev1.ClientIPConfig{TimeoutSeconds: ptr.To(int32(60))}},
 					IPFamilies: []corev1.IPFamily{
@@ -229,7 +229,7 @@ func TestGenerateResourceContent(t *testing.T) {
 					LoadBalancerIP:           "192.168.1.3",
 					LoadBalancerSourceRanges: []string{"192.168.1.1"},
 					ExternalName:             "svc-spec-externalName",
-					ExternalTrafficPolicy:    corev1.ServiceExternalTrafficPolicyType("svc-spec-externalTrafficPolicy"),
+					ExternalTrafficPolicy:    corev1.ServiceExternalTrafficPolicy("svc-spec-externalTrafficPolicy"),
 					PublishNotReadyAddresses: false,
 					SessionAffinityConfig:    &corev1.SessionAffinityConfig{ClientIP: &corev1.ClientIPConfig{TimeoutSeconds: ptr.To(int32(60))}},
 					IPFamilies: []corev1.IPFamily{

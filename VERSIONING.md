@@ -146,6 +146,8 @@ installs need no separate step: KubeFleet ships its CRDs under
 
 ## See also
 
+- [RELEASING.md](RELEASING.md) — how a release is cut and how to recover a
+  failed release run.
 - [SECURITY.md](SECURITY.md) — supported versions and security-patch policy.
 - [CONTRIBUTING.md](CONTRIBUTING.md) — PR conventions and release-note labels.
 - [Kubernetes version skew policy](https://kubernetes.io/releases/version-skew-policy/)

@@ -99,7 +99,7 @@ func TestChangeDetector_discoverResources(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			// Create fake discovery client
-			fakeClient := fake.NewSimpleClientset()
+			fakeClient := fake.NewClientset()
 			fakeDiscovery, ok := fakeClient.Discovery().(*fakediscovery.FakeDiscovery)
 			if !ok {
 				t.Fatal("Failed to cast to FakeDiscovery")
@@ -211,10 +211,22 @@ func TestChangeDetector_dynamicResourceFilter(t *testing.T) {
 			want: false,
 		},
 		{
-			// Tombstones from informer cache deletions are not unwrapped by ClusterWideKeyFunc,
-			// so the filter rejects them. The downstream delete handler unwraps tombstones separately.
-			name: "tombstone object is filtered out",
+			// A relist-detected deletion arrives as a tombstone wrapping the object's final state.
+			// The filter must judge the wrapped object, not the tombstone: rejecting tombstones
+			// wholesale would silently drop every such deletion before the delete handler -- which
+			// is what unwraps them for use -- ever saw it.
+			name: "tombstone wrapping a watched object passes the filter",
 			obj:  cache.DeletedFinalStateUnknown{Key: "default/cm", Obj: unstructuredConfigMap("default", "cm")},
+			want: true,
+		},
+		{
+			name: "tombstone wrapping an object in a skipped namespace is filtered out",
+			obj:  cache.DeletedFinalStateUnknown{Key: "kube-system/cm", Obj: unstructuredConfigMap("kube-system", "cm")},
+			want: false,
+		},
+		{
+			name: "tombstone wrapping garbage is filtered out",
+			obj:  cache.DeletedFinalStateUnknown{Key: "default/cm", Obj: "not-a-runtime-object"},
 			want: false,
 		},
 		{

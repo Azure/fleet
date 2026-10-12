@@ -192,3 +192,8 @@ func (m *FakeManager) AddEventHandlerToInformer(_ schema.GroupVersionResource, _
 func (m *FakeManager) CreateInformerForResource(_ informer.APIResourceMeta) {
 	// No-op for testing
 }
+
+func (m *FakeManager) IsInformerSet(_ schema.GroupVersionKind) bool {
+	// For testing, we can assume that the informer is always set for the given resource.
+	return true
+}

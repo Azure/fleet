@@ -33,7 +33,7 @@ import (
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/types"
 	utilerrors "k8s.io/apimachinery/pkg/util/errors"
-	"k8s.io/client-go/tools/record"
+	"k8s.io/client-go/tools/events"
 	"k8s.io/klog/v2"
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client"
@@ -64,7 +64,7 @@ type Reconciler struct {
 	// It's only needed by v1beta1 APIs.
 	UncachedReader client.Reader
 
-	Recorder record.EventRecorder
+	Recorder events.EventRecorder
 
 	Scheme *runtime.Scheme
 
@@ -137,7 +137,7 @@ func (r *Reconciler) handleDelete(ctx context.Context, placementObj fleetv1beta1
 		return ctrl.Result{}, err
 	}
 	klog.V(2).InfoS("Removed placement-cleanup finalizer", "placement", placementKObj)
-	r.Recorder.Event(placementObj, corev1.EventTypeNormal, "PlacementCleanupFinalizerRemoved", "Deleted the snapshots and removed the placement cleanup finalizer")
+	r.Recorder.Eventf(placementObj, nil, corev1.EventTypeNormal, "PlacementCleanupFinalizerRemoved", "RemoveFinalizer", "Deleted the snapshots and removed the placement cleanup finalizer")
 	return ctrl.Result{}, nil
 }
 
@@ -246,7 +246,7 @@ func (r *Reconciler) handleUpdate(ctx context.Context, placementObj fleetv1beta1
 		if !condition.IsConditionStatusTrue(oldCond, oldPlacement.GetGeneration()) &&
 			condition.IsConditionStatusTrue(newCond, placementObj.GetGeneration()) {
 			klog.V(2).InfoS("Placement resource condition status has been changed to true", "placement", placementKObj, "generation", placementObj.GetGeneration(), "condition", conditionType)
-			r.Recorder.Event(placementObj, corev1.EventTypeNormal, i.EventReasonForTrue(), i.EventMessageForTrue())
+			r.Recorder.Eventf(placementObj, nil, corev1.EventTypeNormal, i.EventReasonForTrue(), "UpdatePlacementStatus", i.EventMessageForTrue())
 		}
 	}
 
@@ -255,7 +255,7 @@ func (r *Reconciler) handleUpdate(ctx context.Context, placementObj fleetv1beta1
 	if isRolloutCompleted(placementObj) {
 		if !isRolloutCompleted(oldPlacement) {
 			klog.V(2).InfoS("Placement has finished the rollout process and reached the desired status", "placement", placementKObj, "generation", placementObj.GetGeneration())
-			r.Recorder.Event(placementObj, corev1.EventTypeNormal, "PlacementRolloutCompleted", "Placement has finished the rollout process and reached the desired status")
+			r.Recorder.Eventf(placementObj, nil, corev1.EventTypeNormal, "PlacementRolloutCompleted", "UpdatePlacementStatus", "Placement has finished the rollout process and reached the desired status")
 		}
 		if createResourceSnapshotRes.RequeueAfter > 0 {
 			klog.V(2).InfoS("Requeue the request to handle the new resource snapshot", "placement", placementKObj, "generation", placementObj.GetGeneration())

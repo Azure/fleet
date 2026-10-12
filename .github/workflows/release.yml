@@ -1,4 +1,14 @@
-name: Release Images
+name: Release
+
+# One workflow owns the whole release. Every artifact a tag produces - images,
+# the CRD bundle, the Helm charts - is built by a job in this graph, and the
+# GitHub Release stays a draft until all of them have succeeded.
+#
+# This replaces the previous split between release.yml and chart.yml, which had
+# no ordering between them: a chart publish could fail (or simply never run)
+# while the release was already public, leaving a release that advertised charts
+# nobody could pull, and images the charts pointed at could be published after
+# the charts that referenced them.
 
 on:
   push:
@@ -11,50 +21,73 @@ on:
         required: true
         type: string
 
-permissions:
-  contents: read
-  packages: write
-
-# Serialize releases per ref so concurrent tag pushes can't race on image
-# pushes to the same ${REGISTRY}/${IMAGE}:${TAG}. Different tags can still
-# run in parallel. We never want cancel-in-progress here: aborting a
-# half-pushed image is worse than letting it finish.
+# Serialize per release tag: a re-run must not race the original run on the same
+# registry paths or the same draft release. Distinct tags still run in parallel.
+# Never cancel-in-progress - aborting a half-pushed image or a half-uploaded
+# release asset leaves more mess than letting the run finish.
 concurrency:
-  group: release-images-${{ github.ref }}
+  group: release-${{ inputs.tag || github.ref_name }}
   cancel-in-progress: false
 
+# Least privilege by default; each job widens only what it needs.
+permissions:
+  contents: read
+
 env:
-  REGISTRY: ghcr.io
   HUB_AGENT_IMAGE_NAME: hub-agent
   MEMBER_AGENT_IMAGE_NAME: member-agent
   REFRESH_TOKEN_IMAGE_NAME: refresh-token
-  GO_VERSION: "1.26.6"
 
 jobs:
-  export-registry:
+  # Validates the tag shape and derives every value the rest of the graph keys
+  # off (registry path, tag, version, prerelease). A malformed tag fails here,
+  # before anything is published.
+  setup:
     uses: ./.github/workflows/setup-release.yml
     with:
       tag: ${{ inputs.tag || github.ref_name }}
 
-  build-and-publish:
-    needs: export-registry
-    env:
-      REGISTRY: ${{ needs.export-registry.outputs.registry }}
-      TAG: ${{ needs.export-registry.outputs.tag }}
+  # Create the release up front, as a draft, so the producer jobs have somewhere
+  # to upload while the release stays invisible to consumers. publish-release
+  # flips it at the end; until then a failed run leaves only a draft.
+  create-draft-release:
+    needs: setup
     runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    env:
+      TAG: ${{ needs.setup.outputs.tag }}
+      PRERELEASE: ${{ needs.setup.outputs.prerelease }}
+      GH_TOKEN: ${{ github.token }}
+      GH_REPO: ${{ github.repository }}
     steps:
-      - name: Set up Go ${{ env.GO_VERSION }}
-        uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7
-        with:
-          go-version: ${{ env.GO_VERSION }}
-
       - name: Checkout code
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
-          ref: ${{ needs.export-registry.outputs.tag }}
+          ref: ${{ needs.setup.outputs.tag }}
+
+      - name: Create or reuse the draft release
+        run: ./hack/release/create-draft-release.sh
+
+  publish-images:
+    needs: [setup, create-draft-release]
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      packages: write
+    env:
+      REGISTRY: ${{ needs.setup.outputs.registry }}
+      TAG: ${{ needs.setup.outputs.tag }}
+      VERSION: ${{ needs.setup.outputs.version }}
+      PRERELEASE: ${{ needs.setup.outputs.prerelease }}
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: ${{ needs.setup.outputs.tag }}
 
       - name: Login to ghcr.io
-        uses: docker/login-action@dbcb813823bdd20940b903addbd779551569679f
+        uses: docker/login-action@dbcb813823bdd20940b903addbd779551569679f # v4.6.0
         with:
           registry: ghcr.io
           username: ${{ github.actor }}
@@ -66,12 +99,10 @@ jobs:
       # published under the long form ("v0.4.0-rc.1") for testers only: the
       # short-tag namespace is deliberately reserved for stable releases that
       # consumers can safely pin to, so RC tags get no short alias.
-      - name: Build and push images with tag ${{ env.TAG }}
-        env:
-          VERSION: ${{ needs.export-registry.outputs.version }}
+      - name: Build and push images with tag ${{ needs.setup.outputs.tag }}
         run: |
           set -euo pipefail
-          if [[ "${TAG}" == *-rc.* ]]; then
+          if [ "${PRERELEASE}" = "true" ]; then
             make push
           else
             make push IMAGE_EXTRA_TAG="${VERSION}"
@@ -82,18 +113,16 @@ jobs:
       # architecture would otherwise go unnoticed until a consumer on the other
       # architecture failed to pull. Stable releases also carry the short alias.
       - name: Verify images are multi-arch
-        env:
-          VERSION: ${{ needs.export-registry.outputs.version }}
         run: |
           set -euo pipefail
           tags="${TAG}"
-          if [[ "${TAG}" != *-rc.* ]]; then
+          if [ "${PRERELEASE}" != "true" ]; then
             tags="${tags} ${VERSION}"
           fi
           echo "✅ Verifying published images:"
-          for IMAGE in ${{ env.HUB_AGENT_IMAGE_NAME }} ${{ env.MEMBER_AGENT_IMAGE_NAME }} ${{ env.REFRESH_TOKEN_IMAGE_NAME }}; do
+          for IMAGE in "${HUB_AGENT_IMAGE_NAME}" "${MEMBER_AGENT_IMAGE_NAME}" "${REFRESH_TOKEN_IMAGE_NAME}"; do
             for tag in ${tags}; do
-              ref="${{ env.REGISTRY }}/${IMAGE}:${tag}"
+              ref="${REGISTRY}/${IMAGE}:${tag}"
               echo "  - ${ref}"
               manifest="$(docker buildx imagetools inspect "${ref}")"
               for platform in linux/amd64 linux/arm64; do
@@ -106,51 +135,216 @@ jobs:
   # Publish the raw CRDs as a standalone release asset so consumers can install
   # them without pulling a Helm chart. The bundle carries the unmodified CRDs the
   # charts install (no downstream-specific labels), split into crds/hub and
-  # crds/member so each set can be applied to the right cluster. Runs after the
-  # images are published so a release is only created once the build succeeds.
+  # crds/member so each set can be applied to the right cluster.
   publish-crds:
-    needs: [export-registry, build-and-publish]
+    needs: [setup, create-draft-release]
     runs-on: ubuntu-latest
     permissions:
       contents: write
     env:
-      TAG: ${{ needs.export-registry.outputs.tag }}
+      TAG: ${{ needs.setup.outputs.tag }}
     steps:
       - name: Checkout code
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
-          ref: ${{ needs.export-registry.outputs.tag }}
+          ref: ${{ needs.setup.outputs.tag }}
 
       - name: Package CRDs
         run: make crd-package TAG="${TAG}"
 
-      - name: Create or update the release and upload the CRD bundle
+      # --clobber makes the upload idempotent so a re-run replaces the asset
+      # rather than failing on a name collision. The token is scoped to this
+      # step so it is not in the environment of the packaging step above.
+      - name: Upload the CRD bundle to the draft release
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
           set -euo pipefail
-          created_draft=""
-          if ! gh release view "${TAG}" >/dev/null 2>&1; then
-            # Any semver pre-release suffix (-rc.N, -alpha, -beta, ...) is a prerelease.
-            prerelease=""
-            case "${TAG}" in *-*) prerelease="--prerelease" ;; esac
-            # Create as a draft first so a partially uploaded release is never public.
-            # --verify-tag: `gh release create` creates the tag itself when it is
-            # missing, pointing at the default branch's head. A tag that does not
-            # exist at all already fails earlier, at build-and-publish's checkout,
-            # so this guards the narrower case where the ref resolved to something
-            # that is not the tag - the release would then point at a different
-            # commit than the images were built from.
-            gh release create "${TAG}" --title "${TAG}" --generate-notes --draft --verify-tag ${prerelease}
-            created_draft="true"
-          fi
           gh release upload "${TAG}" \
             "_crd-package/kubefleet-crds-${TAG}.tgz" \
             "_crd-package/kubefleet-crds-${TAG}.tgz.sha256" \
             --clobber
-          # Only publish releases this job created; never flip a maintainer's existing release.
-          if [ "${created_draft}" = "true" ]; then
-            gh release edit "${TAG}" --draft=false
-          elif [ "$(gh release view "${TAG}" --json isDraft --jq .isDraft)" = "true" ]; then
-            echo "::warning::Release ${TAG} already existed as a draft; the CRD bundle was uploaded but the release was left unpublished. Publish it manually."
-          fi
+
+  # Charts are published only for stable releases: an RC must be installable by
+  # testers from its images, but must never land in the public chart index that
+  # `helm repo update` resolves. Charts wait on publish-images because a chart
+  # whose appVersion points at images that do not exist yet is broken on arrival.
+  publish-charts-oci:
+    needs: [setup, publish-images]
+    if: ${{ needs.setup.outputs.prerelease == 'false' }}
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      packages: write
+    env:
+      REGISTRY: ${{ needs.setup.outputs.registry }}
+      TAG: ${{ needs.setup.outputs.tag }}
+      CHART_VERSION: ${{ needs.setup.outputs.version }}
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: ${{ needs.setup.outputs.tag }}
+
+      - name: Login to GitHub Container Registry
+        uses: docker/login-action@dbcb813823bdd20940b903addbd779551569679f # v4.6.0
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      # Pin Helm rather than inheriting whatever the runner image ships, so the
+      # version that packages a release is the same one code-lint.yml lints the
+      # charts with.
+      - name: Set up Helm
+        uses: azure/setup-helm@9bc31f4ebc9c6b171d7bfbaa5d006ae7abdb4310 # v5
+        with:
+          version: v3.17.0
+
+      - name: Package and push Helm charts to GHCR
+        run: |
+          set -euo pipefail
+          make helm-push REGISTRY="${REGISTRY}/charts" TAG="${TAG}" CHART_VERSION="${CHART_VERSION}"
+
+      - name: Verify chart appVersion matches release tag
+        run: |
+          set -euo pipefail
+          rm -rf .helm-verify
+          mkdir -p .helm-verify
+
+          for chart in hub-agent member-agent; do
+            helm pull "oci://${REGISTRY}/charts/${chart}" --version "${CHART_VERSION}" --destination .helm-verify >/dev/null
+            packaged=".helm-verify/${chart}-${CHART_VERSION}.tgz"
+            actual_app_version="$(tar -xOf "${packaged}" "${chart}/Chart.yaml" | awk -F': ' '/^appVersion:/ {gsub(/"/, "", $2); print $2}')"
+            if [ "${actual_app_version}" != "${TAG}" ]; then
+              echo "::error::${chart} appVersion (${actual_app_version}) does not match release tag (${TAG})"
+              exit 1
+            fi
+            echo "✅ ${chart} appVersion=${actual_app_version} matches release tag=${TAG}"
+          done
+
+          rm -rf .helm-verify
+
+  publish-charts-pages:
+    needs: [setup, publish-images]
+    if: ${{ needs.setup.outputs.prerelease == 'false' }}
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    env:
+      TAG: ${{ needs.setup.outputs.tag }}
+      CHART_VERSION: ${{ needs.setup.outputs.version }}
+    # helm-gh-pages rewrites the whole gh-pages branch, so this job serializes
+    # across every release rather than per tag like the rest of the workflow.
+    #
+    # Only one run may be *pending* on a group by default, so a third overlapping
+    # release cancels the one already waiting and strands it as a draft until
+    # someone re-runs the job. `queue: max` is the real fix, but actionlint (this
+    # repo's lint gate, pinned at 1.7.12) rejects the key as unknown - support is
+    # merged upstream but unreleased. Until it ships, RELEASING.md documents the
+    # symptom and its one-click recovery.
+    concurrency:
+      group: helm-chart-publish-gh-pages
+      cancel-in-progress: false
+    steps:
+      # This job hands a contents:write token to a third-party Docker action
+      # whose base image is a floating tag (see the note in RELEASING.md and the
+      # follow-up issue). Auditing egress at least records what it reaches out
+      # to until that action is replaced.
+      - name: Harden Runner
+        uses: step-security/harden-runner@e14015d583714f6e62063499dc959a02595150a1 # v2.21.1
+        with:
+          egress-policy: audit
+
+      - name: Checkout code
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: ${{ needs.setup.outputs.tag }}
+          fetch-depth: 0
+
+      # chart_version/app_version are what make the index carry the release
+      # being cut. Without them the action packages charts/*/Chart.yaml
+      # verbatim, and those are pinned at 0.1.0/v0.1.0 in-tree - so every
+      # release republished "hub-agent 0.1.0" pointing at image tag v0.1.0,
+      # overwriting the previous entry. The OCI path already overrides both
+      # (see make helm-push); this brings the index in line with it.
+      - name: Publish Helm chart to GitHub Pages
+        uses: stefanprodan/helm-gh-pages@0ad2bb377311d61ac04ad9eb6f252fb68e207260 # v1.7.0
+        with:
+          token: ${{ secrets.GITHUB_TOKEN }}
+          charts_dir: charts
+          target_dir: charts
+          chart_version: ${{ needs.setup.outputs.version }}
+          app_version: ${{ needs.setup.outputs.tag }}
+          linting: on
+
+      # Unknown action inputs are a warning, not an error, so a rename or typo
+      # in the two above would silently reinstate the 0.1.0 bug with a green
+      # build. Check the branch the action just wrote rather than trusting that
+      # it accepted them; the published index is not queryable until Pages
+      # redeploys, but the commit is there immediately.
+      - name: Verify the published index carries this release
+        run: |
+          set -euo pipefail
+          git fetch --depth=1 origin gh-pages
+          for chart in hub-agent member-agent; do
+            packaged="charts/${chart}-${CHART_VERSION}.tgz"
+            if ! git cat-file -e "FETCH_HEAD:${packaged}" 2>/dev/null; then
+              echo "::error::gh-pages has no ${packaged}; the chart index was not updated for this release."
+              exit 1
+            fi
+            app_version="$(git cat-file blob "FETCH_HEAD:${packaged}" \
+              | tar -xzO "${chart}/Chart.yaml" \
+              | awk -F': ' '/^appVersion:/ {gsub(/"/, "", $2); print $2}')"
+            if [ "${app_version}" != "${TAG}" ]; then
+              echo "::error::gh-pages ${chart} appVersion (${app_version}) does not match release tag (${TAG})"
+              exit 1
+            fi
+            echo "✅ gh-pages carries ${packaged} with appVersion=${app_version}"
+          done
+
+  # The atomic commit point: the release becomes visible only after every
+  # producer that was supposed to run has succeeded.
+  #
+  # The condition has to override the implicit `success()` on `needs`, because
+  # the chart jobs are legitimately skipped for release candidates and a skipped
+  # dependency would otherwise skip this job too. It uses `!cancelled()` rather
+  # than `always()`: `always()` runs even when the workflow is cancelled, so a
+  # maintainer hitting Cancel after the producers had finished would still get a
+  # published release.
+  #
+  # Every producer is then required explicitly. `skipped` is only acceptable for
+  # the chart jobs, and only on a pre-release - otherwise anything that made
+  # their `if:` evaluate false would silently publish a stable release with no
+  # charts, which is the exact failure this workflow exists to prevent.
+  publish-release:
+    needs:
+      - setup
+      - create-draft-release
+      - publish-images
+      - publish-crds
+      - publish-charts-oci
+      - publish-charts-pages
+    if: >-
+      ${{ !cancelled()
+          && needs.publish-images.result == 'success'
+          && needs.publish-crds.result == 'success'
+          && (needs.setup.outputs.prerelease == 'true'
+              || (needs.publish-charts-oci.result == 'success'
+                  && needs.publish-charts-pages.result == 'success')) }}
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    env:
+      TAG: ${{ needs.setup.outputs.tag }}
+      PRERELEASE: ${{ needs.setup.outputs.prerelease }}
+      GH_TOKEN: ${{ github.token }}
+      GH_REPO: ${{ github.repository }}
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: ${{ needs.setup.outputs.tag }}
+
+      - name: Verify the release assets, then publish
+        run: ./hack/release/publish-release.sh

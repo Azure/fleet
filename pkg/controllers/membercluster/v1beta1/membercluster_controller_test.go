@@ -27,14 +27,13 @@ import (
 	"github.com/crossplane/crossplane-runtime/v2/pkg/test"
 	"github.com/google/go-cmp/cmp"
 	"github.com/google/go-cmp/cmp/cmpopts"
-	"github.com/stretchr/testify/assert"
 	corev1 "k8s.io/api/core/v1"
 	rbacv1 "k8s.io/api/rbac/v1"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	"k8s.io/apimachinery/pkg/api/resource"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime/schema"
-	"k8s.io/client-go/tools/record"
+	"k8s.io/client-go/tools/events"
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 
@@ -71,22 +70,47 @@ func TestEnsureMemberNameLabel(t *testing.T) {
 		wantLabels    map[string]string
 		wantErr       string
 	}{
-		"label already present with correct value": {
+		"name and alias labels already present with correct values": {
 			r: &Reconciler{
 				Client: &test.MockClient{
-					MockUpdate: test.NewMockUpdateFn(fmt.Errorf("update should not be called when label is already correct")),
+					MockUpdate: test.NewMockUpdateFn(fmt.Errorf("update should not be called when the labels are already correct")),
 				},
 			},
 			memberCluster: &clusterv1beta1.MemberCluster{
 				ObjectMeta: metav1.ObjectMeta{
 					Name: "mc1",
 					Labels: map[string]string{
-						placementv1beta1.MemberNameLabel: "mc1",
+						placementv1beta1.MemberNameLabel:   "mc1",
+						placementv1beta1.ClusterAliasLabel: "mc1",
 					},
 				},
 			},
 			wantLabels: map[string]string{
-				placementv1beta1.MemberNameLabel: "mc1",
+				placementv1beta1.MemberNameLabel:   "mc1",
+				placementv1beta1.ClusterAliasLabel: "mc1",
+			},
+		},
+		// The alias is the admin's to rename: unlike the name label, a different value is left
+		// alone rather than reasserted, since the alias exists precisely so that a selector can
+		// follow a role while the cluster behind it changes.
+		"an alias renamed by an admin is not reverted": {
+			r: &Reconciler{
+				Client: &test.MockClient{
+					MockUpdate: test.NewMockUpdateFn(fmt.Errorf("update should not be called when the alias was deliberately renamed")),
+				},
+			},
+			memberCluster: &clusterv1beta1.MemberCluster{
+				ObjectMeta: metav1.ObjectMeta{
+					Name: "mc1",
+					Labels: map[string]string{
+						placementv1beta1.MemberNameLabel:   "mc1",
+						placementv1beta1.ClusterAliasLabel: "bravelion",
+					},
+				},
+			},
+			wantLabels: map[string]string{
+				placementv1beta1.MemberNameLabel:   "mc1",
+				placementv1beta1.ClusterAliasLabel: "bravelion",
 			},
 		},
 		"no labels at all": {
@@ -103,7 +127,8 @@ func TestEnsureMemberNameLabel(t *testing.T) {
 				},
 			},
 			wantLabels: map[string]string{
-				placementv1beta1.MemberNameLabel: "mc1",
+				placementv1beta1.MemberNameLabel:   "mc1",
+				placementv1beta1.ClusterAliasLabel: "mc1",
 			},
 		},
 		"labels exist but name label is missing": {
@@ -123,8 +148,9 @@ func TestEnsureMemberNameLabel(t *testing.T) {
 				},
 			},
 			wantLabels: map[string]string{
-				"existing-label":                 "value",
-				placementv1beta1.MemberNameLabel: "mc1",
+				"existing-label":                   "value",
+				placementv1beta1.MemberNameLabel:   "mc1",
+				placementv1beta1.ClusterAliasLabel: "mc1",
 			},
 		},
 		"label present with wrong value": {
@@ -144,7 +170,31 @@ func TestEnsureMemberNameLabel(t *testing.T) {
 				},
 			},
 			wantLabels: map[string]string{
-				placementv1beta1.MemberNameLabel: "mc1",
+				placementv1beta1.MemberNameLabel:   "mc1",
+				placementv1beta1.ClusterAliasLabel: "mc1",
+			},
+		},
+		// The day-2 scenario: a member cluster labeled by the controller before the alias existed.
+		// Only the alias branch has anything to do, and it alone must drive the update.
+		"name label correct, alias absent, alias alone drives the update": {
+			r: &Reconciler{
+				Client: &test.MockClient{
+					MockUpdate: func(ctx context.Context, obj client.Object, opts ...client.UpdateOption) error {
+						return nil
+					},
+				},
+			},
+			memberCluster: &clusterv1beta1.MemberCluster{
+				ObjectMeta: metav1.ObjectMeta{
+					Name: "mc1",
+					Labels: map[string]string{
+						placementv1beta1.MemberNameLabel: "mc1",
+					},
+				},
+			},
+			wantLabels: map[string]string{
+				placementv1beta1.MemberNameLabel:   "mc1",
+				placementv1beta1.ClusterAliasLabel: "mc1",
 			},
 		},
 		"update error": {
@@ -202,7 +252,7 @@ func TestReconcileEnsureMemberNameLabelError(t *testing.T) {
 				return updateErr
 			},
 		},
-		recorder: record.NewFakeRecorder(10),
+		recorder: events.NewFakeRecorder(10),
 	}
 	result, err := r.Reconcile(context.Background(), ctrl.Request{
 		NamespacedName: client.ObjectKey{Name: "mc1"},
@@ -233,11 +283,11 @@ func TestSyncNamespace(t *testing.T) {
 						return nil
 					},
 				},
-				recorder: utils.NewFakeRecorder(1),
+				recorder: events.NewFakeRecorder(1),
 			},
 			memberCluster:       &clusterv1beta1.MemberCluster{ObjectMeta: metav1.ObjectMeta{Name: "mc1"}},
 			wantedNamespaceName: namespace1,
-			wantedEvent:         utils.GetEventString(&clusterv1beta1.MemberCluster{ObjectMeta: metav1.ObjectMeta{Name: "mc1"}}, corev1.EventTypeNormal, eventReasonNamespaceCreated, "Namespace was created"),
+			wantedEvent:         utils.GetEventString(corev1.EventTypeNormal, eventReasonNamespaceCreated, "Namespace was created"),
 			wantedError:         "",
 		},
 		"namespace exists without label": {
@@ -257,11 +307,11 @@ func TestSyncNamespace(t *testing.T) {
 						return nil
 					},
 				},
-				recorder: utils.NewFakeRecorder(1),
+				recorder: events.NewFakeRecorder(1),
 			},
 			memberCluster:       &clusterv1beta1.MemberCluster{ObjectMeta: metav1.ObjectMeta{Name: "mc1"}},
 			wantedNamespaceName: namespace1,
-			wantedEvent:         utils.GetEventString(&clusterv1beta1.MemberCluster{ObjectMeta: metav1.ObjectMeta{Name: "mc1"}}, corev1.EventTypeNormal, eventReasonNamespacePatched, "Namespace was patched"),
+			wantedEvent:         utils.GetEventString(corev1.EventTypeNormal, eventReasonNamespacePatched, "Namespace was patched"),
 			wantedError:         "",
 		},
 		"namespace exists with label": {
@@ -338,16 +388,22 @@ func TestSyncNamespace(t *testing.T) {
 		t.Run(testName, func(t *testing.T) {
 			got, err := tt.r.syncNamespace(context.Background(), tt.memberCluster)
 			if tt.r.recorder != nil {
-				fakeRecorder := tt.r.recorder.(*record.FakeRecorder)
+				fakeRecorder := tt.r.recorder.(*events.FakeRecorder)
 				event := <-fakeRecorder.Events
-				assert.Equal(t, tt.wantedEvent, event)
+				if event != tt.wantedEvent {
+					t.Errorf("emitted event %v, want %v", event, tt.wantedEvent)
+				}
 			}
 			if tt.wantedError == "" {
-				assert.Equal(t, err, nil, utils.TestCaseMsg, testName)
-			} else {
-				assert.Contains(t, err.Error(), tt.wantedError, utils.TestCaseMsg, testName)
+				if err != nil {
+					t.Errorf("syncNamespace() error = %v, want nil", err)
+				}
+			} else if err == nil || !strings.Contains(err.Error(), tt.wantedError) {
+				t.Errorf("syncNamespace() error = %v, want error containing %q", err, tt.wantedError)
 			}
-			assert.Equalf(t, tt.wantedNamespaceName, got, utils.TestCaseMsg, testName)
+			if got != tt.wantedNamespaceName {
+				t.Errorf("syncNamespace() = %q, want %q", got, tt.wantedNamespaceName)
+			}
 		})
 	}
 }
@@ -355,8 +411,8 @@ func TestSyncNamespace(t *testing.T) {
 func TestSyncRole(t *testing.T) {
 	expectedMemberCluster1 := clusterv1beta1.MemberCluster{ObjectMeta: metav1.ObjectMeta{Name: "mc2"}}
 	expectedMemberCluster2 := clusterv1beta1.MemberCluster{ObjectMeta: metav1.ObjectMeta{Name: "mc3"}}
-	expectedEvent1 := utils.GetEventString(&expectedMemberCluster1, corev1.EventTypeNormal, eventReasonRoleUpdated, "role was updated")
-	expectedEvent2 := utils.GetEventString(&expectedMemberCluster2, corev1.EventTypeNormal, eventReasonRoleCreated, "role was created")
+	expectedEvent1 := utils.GetEventString(corev1.EventTypeNormal, eventReasonRoleUpdated, "role was updated")
+	expectedEvent2 := utils.GetEventString(corev1.EventTypeNormal, eventReasonRoleCreated, "role was created")
 
 	tests := map[string]struct {
 		r              *Reconciler
@@ -380,7 +436,7 @@ func TestSyncRole(t *testing.T) {
 								Name:      "fleet-role-mc1",
 								Namespace: namespace1,
 							},
-							Rules: []rbacv1.PolicyRule{utils.FleetClusterRule, utils.FleetPlacementRule, utils.FleetNetworkRule, utils.EventRule},
+							Rules: []rbacv1.PolicyRule{utils.FleetClusterRule, utils.FleetPlacementRule, utils.FleetNetworkRule, utils.EventRule, utils.EventsK8sIoRule},
 						}
 						return nil
 					},
@@ -408,7 +464,7 @@ func TestSyncRole(t *testing.T) {
 						return nil
 					},
 				},
-				recorder: utils.NewFakeRecorder(1),
+				recorder: events.NewFakeRecorder(1),
 			},
 			memberCluster:  &expectedMemberCluster1,
 			namespaceName:  namespace2,
@@ -426,7 +482,7 @@ func TestSyncRole(t *testing.T) {
 						return nil
 					},
 				},
-				recorder: utils.NewFakeRecorder(1),
+				recorder: events.NewFakeRecorder(1),
 			},
 			memberCluster:  &expectedMemberCluster2,
 			namespaceName:  namespace3,
@@ -491,16 +547,22 @@ func TestSyncRole(t *testing.T) {
 		t.Run(testName, func(t *testing.T) {
 			got, err := tt.r.syncRole(context.Background(), tt.memberCluster, tt.namespaceName)
 			if tt.r.recorder != nil {
-				fakeRecorder := tt.r.recorder.(*record.FakeRecorder)
+				fakeRecorder := tt.r.recorder.(*events.FakeRecorder)
 				event := <-fakeRecorder.Events
-				assert.Equal(t, tt.wantedEvent, event)
+				if event != tt.wantedEvent {
+					t.Errorf("emitted event %v, want %v", event, tt.wantedEvent)
+				}
 			}
 			if tt.wantedError == "" {
-				assert.Equal(t, err, nil, utils.TestCaseMsg, testName)
-			} else {
-				assert.Contains(t, err.Error(), tt.wantedError, utils.TestCaseMsg, testName)
+				if err != nil {
+					t.Errorf("syncRole() error = %v, want nil", err)
+				}
+			} else if err == nil || !strings.Contains(err.Error(), tt.wantedError) {
+				t.Errorf("syncRole() error = %v, want error containing %q", err, tt.wantedError)
 			}
-			assert.Equalf(t, tt.wantedRoleName, got, utils.TestCaseMsg, testName)
+			if got != tt.wantedRoleName {
+				t.Errorf("syncRole() = %q, want %q", got, tt.wantedRoleName)
+			}
 		})
 	}
 }
@@ -540,8 +602,8 @@ func TestSyncRoleBinding(t *testing.T) {
 		ObjectMeta: metav1.ObjectMeta{Name: "mc3"},
 		Spec:       clusterv1beta1.MemberClusterSpec{Identity: identity},
 	}
-	expectedEvent1 := utils.GetEventString(&expectedMemberCluster1, corev1.EventTypeNormal, eventReasonRoleBindingUpdated, "role binding was updated")
-	expectedEvent2 := utils.GetEventString(&expectedMemberCluster2, corev1.EventTypeNormal, eventReasonRoleBindingCreated, "role binding was created")
+	expectedEvent1 := utils.GetEventString(corev1.EventTypeNormal, eventReasonRoleBindingUpdated, "role binding was updated")
+	expectedEvent2 := utils.GetEventString(corev1.EventTypeNormal, eventReasonRoleBindingCreated, "role binding was created")
 
 	tests := map[string]struct {
 		r             *Reconciler
@@ -644,7 +706,7 @@ func TestSyncRoleBinding(t *testing.T) {
 						return nil
 					},
 					MockUpdate: updateMock},
-				recorder: utils.NewFakeRecorder(1),
+				recorder: events.NewFakeRecorder(1),
 			},
 			memberCluster: &expectedMemberCluster1,
 			namespaceName: namespace2,
@@ -659,7 +721,7 @@ func TestSyncRoleBinding(t *testing.T) {
 						return apierrors.NewNotFound(schema.GroupResource{Group: "", Resource: "Namespace"}, "namespace")
 					},
 					MockCreate: createMock},
-				recorder: utils.NewFakeRecorder(1),
+				recorder: events.NewFakeRecorder(1),
 			},
 			memberCluster: &expectedMemberCluster2,
 			namespaceName: namespace3,
@@ -721,14 +783,18 @@ func TestSyncRoleBinding(t *testing.T) {
 		t.Run(testName, func(t *testing.T) {
 			err := tt.r.syncRoleBinding(context.Background(), tt.memberCluster, tt.namespaceName, tt.roleName)
 			if tt.r.recorder != nil {
-				fakeRecorder := tt.r.recorder.(*record.FakeRecorder)
+				fakeRecorder := tt.r.recorder.(*events.FakeRecorder)
 				event := <-fakeRecorder.Events
-				assert.Equal(t, tt.wantedEvent, event)
+				if event != tt.wantedEvent {
+					t.Errorf("emitted event %v, want %v", event, tt.wantedEvent)
+				}
 			}
 			if tt.wantedError == "" {
-				assert.Equal(t, err, nil, utils.TestCaseMsg, testName)
-			} else {
-				assert.Contains(t, err.Error(), tt.wantedError, utils.TestCaseMsg, testName)
+				if err != nil {
+					t.Errorf("syncRoleBinding() error = %v, want nil", err)
+				}
+			} else if err == nil || !strings.Contains(err.Error(), tt.wantedError) {
+				t.Errorf("syncRoleBinding() error = %v, want error containing %q", err, tt.wantedError)
 			}
 		})
 	}
@@ -764,8 +830,8 @@ func TestSyncInternalMemberCluster(t *testing.T) {
 		Spec:       clusterv1beta1.MemberClusterSpec{HeartbeatPeriodSeconds: 30},
 	}
 
-	expectedEvent1 := utils.GetEventString(&expectedLeavingMemberCluster, corev1.EventTypeNormal, eventReasonIMCSpecUpdated, "internal member cluster spec updated")
-	expectedEvent2 := utils.GetEventString(&expectedMemberCluster2, corev1.EventTypeNormal, eventReasonIMCCreated, "Internal member cluster was created")
+	expectedEvent1 := utils.GetEventString(corev1.EventTypeNormal, eventReasonIMCSpecUpdated, "internal member cluster spec updated")
+	expectedEvent2 := utils.GetEventString(corev1.EventTypeNormal, eventReasonIMCCreated, "Internal member cluster was created")
 
 	tests := map[string]struct {
 		r                               *Reconciler
@@ -780,7 +846,7 @@ func TestSyncInternalMemberCluster(t *testing.T) {
 			r: &Reconciler{
 				Client: &test.MockClient{
 					MockUpdate: updateMock},
-				recorder: utils.NewFakeRecorder(1),
+				recorder: events.NewFakeRecorder(1),
 			},
 			memberCluster: &expectedLeavingMemberCluster,
 			namespaceName: namespace1,
@@ -827,7 +893,7 @@ func TestSyncInternalMemberCluster(t *testing.T) {
 			r: &Reconciler{
 				Client: &test.MockClient{
 					MockCreate: createMock},
-				recorder: utils.NewFakeRecorder(1),
+				recorder: events.NewFakeRecorder(1),
 			},
 			memberCluster:                   &expectedMemberCluster2,
 			namespaceName:                   "fleet-mc4",
@@ -853,24 +919,30 @@ func TestSyncInternalMemberCluster(t *testing.T) {
 		t.Run(testName, func(t *testing.T) {
 			got, err := tt.r.syncInternalMemberCluster(context.Background(), tt.memberCluster, tt.namespaceName, tt.internalMemberCluster)
 			if tt.r.recorder != nil {
-				fakeRecorder := tt.r.recorder.(*record.FakeRecorder)
+				fakeRecorder := tt.r.recorder.(*events.FakeRecorder)
 				event := <-fakeRecorder.Events
-				assert.Equal(t, tt.wantedEvent, event)
+				if event != tt.wantedEvent {
+					t.Errorf("emitted event %v, want %v", event, tt.wantedEvent)
+				}
 			}
 			if tt.wantedInternalMemberClusterSpec != nil {
-				assert.Equal(t, *tt.wantedInternalMemberClusterSpec, got.Spec, utils.TestCaseMsg, testName)
+				if diff := cmp.Diff(got.Spec, *tt.wantedInternalMemberClusterSpec); diff != "" {
+					t.Errorf("syncInternalMemberCluster() spec mismatch (-got, +want):\n%s", diff)
+				}
 			}
 			if tt.wantedError == "" {
-				assert.Equal(t, err, nil, utils.TestCaseMsg, testName)
-			} else {
-				assert.Contains(t, err.Error(), tt.wantedError, utils.TestCaseMsg, testName)
+				if err != nil {
+					t.Errorf("syncInternalMemberCluster() error = %v, want nil", err)
+				}
+			} else if err == nil || !strings.Contains(err.Error(), tt.wantedError) {
+				t.Errorf("syncInternalMemberCluster() error = %v, want error containing %q", err, tt.wantedError)
 			}
 		})
 	}
 }
 
 func TestMarkMemberClusterJoined(t *testing.T) {
-	recorder := utils.NewFakeRecorder(1)
+	recorder := events.NewFakeRecorder(1)
 	memberCluster := &clusterv1beta1.MemberCluster{
 		TypeMeta: metav1.TypeMeta{
 			Kind:       clusterv1beta1.InternalMemberClusterKind,
@@ -881,8 +953,10 @@ func TestMarkMemberClusterJoined(t *testing.T) {
 
 	// check that the correct event is emitted
 	event := <-recorder.Events
-	expected := utils.GetEventString(memberCluster, corev1.EventTypeNormal, reasonMemberClusterJoined, "member cluster joined")
-	assert.Equal(t, expected, event)
+	expected := utils.GetEventString(corev1.EventTypeNormal, reasonMemberClusterJoined, "member cluster joined")
+	if event != expected {
+		t.Errorf("markMemberClusterJoined() emitted event %v, want %v", event, expected)
+	}
 
 	// Check expected conditions.
 	expectedConditions := []metav1.Condition{
@@ -891,7 +965,9 @@ func TestMarkMemberClusterJoined(t *testing.T) {
 
 	for i := range expectedConditions {
 		actualCondition := memberCluster.GetCondition(expectedConditions[i].Type)
-		assert.Equal(t, "", cmp.Diff(&expectedConditions[i], actualCondition, cmpopts.IgnoreTypes(time.Time{})))
+		if diff := cmp.Diff(actualCondition, &expectedConditions[i], cmpopts.IgnoreTypes(time.Time{})); diff != "" {
+			t.Errorf("markMemberClusterJoined() condition mismatch (-got, +want):\n%s", diff)
+		}
 	}
 }
 
@@ -907,7 +983,7 @@ func TestSyncInternalMemberClusterStatus(t *testing.T) {
 	}{
 		"copy with Joined condition": {
 			r: &Reconciler{
-				recorder: utils.NewFakeRecorder(1),
+				recorder: events.NewFakeRecorder(1),
 				agents: map[clusterv1beta1.AgentType]bool{
 					clusterv1beta1.MemberAgent:              true,
 					clusterv1beta1.ServiceExportImportAgent: true,
@@ -1077,7 +1153,7 @@ func TestSyncInternalMemberClusterStatus(t *testing.T) {
 		},
 		"copy with Left condition": {
 			r: &Reconciler{
-				recorder: utils.NewFakeRecorder(2),
+				recorder: events.NewFakeRecorder(2),
 				agents: map[clusterv1beta1.AgentType]bool{
 					clusterv1beta1.MemberAgent:              true,
 					clusterv1beta1.ServiceExportImportAgent: true,
@@ -1183,7 +1259,7 @@ func TestSyncInternalMemberClusterStatus(t *testing.T) {
 		},
 		"copy with Unknown condition": {
 			r: &Reconciler{
-				recorder: utils.NewFakeRecorder(1),
+				recorder: events.NewFakeRecorder(1),
 				agents: map[clusterv1beta1.AgentType]bool{
 					clusterv1beta1.MemberAgent:              true,
 					clusterv1beta1.ServiceExportImportAgent: true,
@@ -1283,7 +1359,7 @@ func TestSyncInternalMemberClusterStatus(t *testing.T) {
 		},
 		"No Agent Status": {
 			r: &Reconciler{
-				recorder: utils.NewFakeRecorder(1),
+				recorder: events.NewFakeRecorder(1),
 				agents: map[clusterv1beta1.AgentType]bool{
 					clusterv1beta1.MemberAgent: true,
 				},
@@ -1330,7 +1406,7 @@ func TestSyncInternalMemberClusterStatus(t *testing.T) {
 		},
 		"Internal member cluster is nil": {
 			r: &Reconciler{
-				recorder: utils.NewFakeRecorder(1),
+				recorder: events.NewFakeRecorder(1),
 				agents: map[clusterv1beta1.AgentType]bool{
 					clusterv1beta1.MemberAgent: true,
 				},
@@ -1341,7 +1417,7 @@ func TestSyncInternalMemberClusterStatus(t *testing.T) {
 		},
 		"other agent type reported in the status and should be ignored": {
 			r: &Reconciler{
-				recorder: utils.NewFakeRecorder(1),
+				recorder: events.NewFakeRecorder(1),
 				agents: map[clusterv1beta1.AgentType]bool{
 					clusterv1beta1.MemberAgent:              true,
 					clusterv1beta1.ServiceExportImportAgent: true,
@@ -1465,7 +1541,7 @@ func TestSyncInternalMemberClusterStatus(t *testing.T) {
 		},
 		"less agent type reported in the status": {
 			r: &Reconciler{
-				recorder: utils.NewFakeRecorder(1),
+				recorder: events.NewFakeRecorder(1),
 				agents: map[clusterv1beta1.AgentType]bool{
 					clusterv1beta1.MemberAgent:              true,
 					clusterv1beta1.ServiceExportImportAgent: true,
@@ -1541,7 +1617,7 @@ func TestSyncInternalMemberClusterStatus(t *testing.T) {
 		},
 		"condition is not reported in the status": {
 			r: &Reconciler{
-				recorder: utils.NewFakeRecorder(1),
+				recorder: events.NewFakeRecorder(1),
 				agents: map[clusterv1beta1.AgentType]bool{
 					clusterv1beta1.MemberAgent:              true,
 					clusterv1beta1.ServiceExportImportAgent: true,
@@ -1625,7 +1701,7 @@ func TestSyncInternalMemberClusterStatus(t *testing.T) {
 		},
 		"agent type is not reported in the status": {
 			r: &Reconciler{
-				recorder: utils.NewFakeRecorder(1),
+				recorder: events.NewFakeRecorder(1),
 				agents: map[clusterv1beta1.AgentType]bool{
 					clusterv1beta1.MemberAgent:              true,
 					clusterv1beta1.ServiceExportImportAgent: true,
@@ -1743,7 +1819,7 @@ func TestUpdateMemberClusterStatus(t *testing.T) {
 					count++
 					return nil
 				}},
-				recorder: utils.NewFakeRecorder(1),
+				recorder: events.NewFakeRecorder(1),
 			},
 			memberCluster: &clusterv1beta1.MemberCluster{},
 			wantedError:   "",
@@ -1760,7 +1836,7 @@ func TestUpdateMemberClusterStatus(t *testing.T) {
 					}
 					return apierrors.NewServerTimeout(schema.GroupResource{}, "", 1)
 				}},
-				recorder: utils.NewFakeRecorder(10),
+				recorder: events.NewFakeRecorder(10),
 			},
 			memberCluster: &clusterv1beta1.MemberCluster{Spec: clusterv1beta1.MemberClusterSpec{HeartbeatPeriodSeconds: int32(5)}},
 			wantedError:   "",
@@ -1774,7 +1850,7 @@ func TestUpdateMemberClusterStatus(t *testing.T) {
 					count++
 					return apierrors.NewServerTimeout(schema.GroupResource{}, "", 1)
 				}},
-				recorder: utils.NewFakeRecorder(10),
+				recorder: events.NewFakeRecorder(10),
 			},
 			memberCluster: &clusterv1beta1.MemberCluster{},
 			wantedError:   "The  operation against  could not be completed at this time, please try again.",
@@ -1788,7 +1864,7 @@ func TestUpdateMemberClusterStatus(t *testing.T) {
 					count++
 					return errors.New("random update error")
 				}},
-				recorder: utils.NewFakeRecorder(1),
+				recorder: events.NewFakeRecorder(1),
 			},
 			memberCluster: &clusterv1beta1.MemberCluster{},
 			wantedError:   "random update error",
@@ -1803,11 +1879,15 @@ func TestUpdateMemberClusterStatus(t *testing.T) {
 			count = -1
 			err := tt.r.updateMemberClusterStatus(context.Background(), tt.memberCluster)
 			if tt.wantedError == "" {
-				assert.Equal(t, err, nil, utils.TestCaseMsg, testName)
-			} else {
-				assert.Contains(t, err.Error(), tt.wantedError, utils.TestCaseMsg, testName)
+				if err != nil {
+					t.Errorf("updateMemberClusterStatus() error = %v, want nil", err)
+				}
+			} else if err == nil || !strings.Contains(err.Error(), tt.wantedError) {
+				t.Errorf("updateMemberClusterStatus() error = %v, want error containing %q", err, tt.wantedError)
 			}
-			assert.Equal(t, tt.verifyNumberOfRetry(), true, utils.TestCaseMsg, testName)
+			if !tt.verifyNumberOfRetry() {
+				t.Error("updateMemberClusterStatus() retried an unexpected number of times")
+			}
 		})
 	}
 }
@@ -1827,7 +1907,7 @@ func TestHandleDelete(t *testing.T) {
 	}{
 		"do nothing when the mc has no finalizer": {
 			r: &Reconciler{Client: &test.MockClient{},
-				recorder: utils.NewFakeRecorder(1),
+				recorder: events.NewFakeRecorder(1),
 			},
 			memberCluster: &clusterv1beta1.MemberCluster{},
 			wantResult:    ctrl.Result{},
@@ -1850,7 +1930,7 @@ func TestHandleDelete(t *testing.T) {
 					}
 					return nil
 				}},
-				recorder: utils.NewFakeRecorder(1),
+				recorder: events.NewFakeRecorder(1),
 			},
 			memberCluster: memberClusterWithFinalizer.DeepCopy(),
 			wantResult:    ctrl.Result{},
@@ -1871,7 +1951,7 @@ func TestHandleDelete(t *testing.T) {
 					}
 					return nil
 				}},
-				recorder: utils.NewFakeRecorder(1),
+				recorder: events.NewFakeRecorder(1),
 			},
 			memberCluster: memberClusterWithFinalizer.DeepCopy(),
 			wantResult:    ctrl.Result{RequeueAfter: time.Second},
@@ -1892,7 +1972,7 @@ func TestHandleDelete(t *testing.T) {
 					}
 					return nil
 				}},
-				recorder: utils.NewFakeRecorder(1),
+				recorder: events.NewFakeRecorder(1),
 			},
 			memberCluster: memberClusterWithFinalizer.DeepCopy(),
 			wantResult:    ctrl.Result{RequeueAfter: time.Second},
@@ -1931,7 +2011,7 @@ func TestHandleDelete(t *testing.T) {
 						return nil
 					},
 				},
-				recorder: utils.NewFakeRecorder(1),
+				recorder: events.NewFakeRecorder(1),
 			},
 			memberCluster: memberClusterWithFinalizer.DeepCopy(),
 			wantResult:    ctrl.Result{Requeue: true},

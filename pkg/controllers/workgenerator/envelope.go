@@ -121,9 +121,11 @@ func (r *Reconciler) createOrUpdateEnvelopeCRWorkObj(
 			"resourceBinding", klog.KObj(binding),
 			"resourceSnapshot", klog.KObj(resourceSnapshot),
 			"envelope", envelopeReader.GetEnvelopeObjRef())
-		r.recorder.Eventf(binding, corev1.EventTypeWarning, "DuplicateEnvelopeWorks",
-			"Multiple Work objects (%v) found for envelope %v in namespace %s; delete all but the oldest to recover",
-			workNames, envelopeReader.GetEnvelopeObjRef(), fmt.Sprintf(utils.NamespaceNameFormat, binding.GetBindingSpec().TargetCluster))
+		// events.k8s.io rejects notes longer than 1024 bytes, so cap the name list;
+		// the full list is on the log line above.
+		r.recorder.Eventf(binding, nil, corev1.EventTypeWarning, "DuplicateEnvelopeWorks", "GenerateWork",
+			"%d Work objects (%.512s) found for envelope %v in namespace %s; delete all but the oldest to recover",
+			len(workNames), strings.Join(workNames, ", "), envelopeReader.GetEnvelopeObjRef(), fmt.Sprintf(utils.NamespaceNameFormat, binding.GetBindingSpec().TargetCluster))
 		return nil, false, controller.NewUnexpectedBehaviorError(wrappedErr)
 	case len(workList.Items) == 1:
 		klog.V(2).InfoS("Found existing work object for the envelope; updating it",

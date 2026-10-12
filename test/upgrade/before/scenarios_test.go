@@ -26,6 +26,8 @@ import (
 	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/api/meta"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
+	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/types"
 	"k8s.io/apimachinery/pkg/util/intstr"
 	"k8s.io/utils/ptr"
@@ -626,7 +628,10 @@ var _ = Describe("CRP stuck in the rollout process (blocked by apply op failure)
 			configMap.Data["custom"] = "foo"
 			// Unset this field as required by the server.
 			configMap.ObjectMeta.ManagedFields = nil
-			Expect(memberCluster.KubeClient.Patch(ctx, configMap, client.Apply, &client.PatchOptions{FieldManager: "handover", Force: ptr.To(true)})).To(Succeed(), "Failed to update config map %s", appConfigMapName)
+			unstructuredMap, err := runtime.DefaultUnstructuredConverter.ToUnstructured(configMap)
+			Expect(err).To(BeNil(), "Failed to convert config map %s to unstructured", appConfigMapName)
+			applyConfig := client.ApplyConfigurationFromUnstructured(&unstructured.Unstructured{Object: unstructuredMap})
+			Expect(memberCluster.KubeClient.Apply(ctx, applyConfig, &client.ApplyOptions{FieldManager: "handover", Force: ptr.To(true)})).To(Succeed(), "Failed to update config map %s", appConfigMapName)
 		}
 	})
 

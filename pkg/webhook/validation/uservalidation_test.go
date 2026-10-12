@@ -396,6 +396,74 @@ func TestValidateFleetMemberClusterUpdate(t *testing.T) {
 			wantResponse: admission.Allowed(fmt.Sprintf(ResourceAllowedFormat, "nonSystemMastersUser", utils.GenerateGroupString([]string{"someGroup"}),
 				admissionv1.Update, &utils.MCMetaGVK, "", types.NamespacedName{Name: "test-mc"})),
 		},
+		// The hub agent seeds kubefleet.dev/cluster-alias and is not in system:masters, so the
+		// kubefleet.dev/ prefix must pass this guard for service accounts.
+		"allow label creation by service accounts for kubefleet.dev/* labels": {
+			denyModifyMemberClusterLabels: true,
+			oldMC: &clusterv1beta1.MemberCluster{
+				ObjectMeta: metav1.ObjectMeta{
+					Name: "test-mc",
+					Annotations: map[string]string{
+						"fleet.azure.com/cluster-resource-id": "test-cluster-resource-id",
+					},
+				},
+			},
+			newMC: &clusterv1beta1.MemberCluster{
+				ObjectMeta: metav1.ObjectMeta{
+					Name:   "test-mc",
+					Labels: map[string]string{"kubefleet.dev/cluster-alias": "test-mc"},
+					Annotations: map[string]string{
+						"fleet.azure.com/cluster-resource-id": "test-cluster-resource-id",
+					},
+				},
+			},
+			req: admission.Request{
+				AdmissionRequest: admissionv1.AdmissionRequest{
+					Name: "test-mc",
+					UserInfo: authenticationv1.UserInfo{
+						Username: "system:serviceaccount:fleet-system:hub-agent-sa",
+						Groups:   []string{"system:serviceaccounts"},
+					},
+					RequestKind: &utils.MCMetaGVK,
+					Operation:   admissionv1.Update,
+				},
+			},
+			wantResponse: admission.Allowed(fmt.Sprintf(ResourceAllowedFormat, "system:serviceaccount:fleet-system:hub-agent-sa", utils.GenerateGroupString([]string{"system:serviceaccounts"}),
+				admissionv1.Update, &utils.MCMetaGVK, "", types.NamespacedName{Name: "test-mc"})),
+		},
+		"deny label modification by non-system:masters user for kubefleet.dev/* labels": {
+			denyModifyMemberClusterLabels: true,
+			oldMC: &clusterv1beta1.MemberCluster{
+				ObjectMeta: metav1.ObjectMeta{
+					Name:   "test-mc",
+					Labels: map[string]string{"kubefleet.dev/cluster-alias": "test-mc"},
+					Annotations: map[string]string{
+						"fleet.azure.com/cluster-resource-id": "test-cluster-resource-id",
+					},
+				},
+			},
+			newMC: &clusterv1beta1.MemberCluster{
+				ObjectMeta: metav1.ObjectMeta{
+					Name:   "test-mc",
+					Labels: map[string]string{"kubefleet.dev/cluster-alias": "prod-primary"},
+					Annotations: map[string]string{
+						"fleet.azure.com/cluster-resource-id": "test-cluster-resource-id",
+					},
+				},
+			},
+			req: admission.Request{
+				AdmissionRequest: admissionv1.AdmissionRequest{
+					Name: "test-mc",
+					UserInfo: authenticationv1.UserInfo{
+						Username: "nonSystemMastersUser",
+						Groups:   []string{"someGroup"},
+					},
+					RequestKind: &utils.MCMetaGVK,
+					Operation:   admissionv1.Update,
+				},
+			},
+			wantResponse: admission.Denied(DeniedModifyMemberClusterLabels),
+		},
 		"allow label deletion by any user for kubernetes-fleet.io/* labels": {
 			denyModifyMemberClusterLabels: true,
 			oldMC: &clusterv1beta1.MemberCluster{

@@ -588,9 +588,11 @@ spec:
                       - kind
                       - name
                       type: object
+                    minItems: 1
                     type: array
                 required:
                 - controllerName
+                - objectRefs
                 type: object
               conditions:
                 description: A list of conditions that describe the workload placement.

@@ -34,7 +34,6 @@ import (
 	"k8s.io/apimachinery/pkg/runtime/serializer"
 	"k8s.io/apimachinery/pkg/util/yaml"
 	"k8s.io/client-go/kubernetes/scheme"
-	"k8s.io/client-go/tools/record"
 )
 
 var (
@@ -50,18 +49,9 @@ const (
 	TestCaseMsg string = "\nTest case:  %s"
 )
 
-// NewFakeRecorder makes a new fake event recorder that prints the object.
-func NewFakeRecorder(bufferSize int) *record.FakeRecorder {
-	recorder := record.NewFakeRecorder(bufferSize)
-	recorder.IncludeObject = true
-	return recorder
-}
-
-// GetEventString get the exact string literal of the event created by the fake event library.
-func GetEventString(object runtime.Object, eventtype, reason, messageFmt string, args ...interface{}) string {
-	return fmt.Sprintf(eventtype+" "+reason+" "+messageFmt, args...) +
-		fmt.Sprintf(" involvedObject{kind=%s,apiVersion=%s}",
-			object.GetObjectKind().GroupVersionKind().Kind, object.GetObjectKind().GroupVersionKind().GroupVersion())
+// GetEventString gets the exact string literal of the event created by the fake event library.
+func GetEventString(eventtype, reason, messageFmt string, args ...any) string {
+	return fmt.Sprintf(eventtype+" "+reason+" "+messageFmt, args...)
 }
 
 // GetObjectFromRawExtension returns an object decoded from the raw byte array.
@@ -114,7 +104,7 @@ type NotFoundMatcher struct {
 }
 
 // Match matches the api error.
-func (matcher NotFoundMatcher) Match(actual interface{}) (success bool, err error) {
+func (matcher NotFoundMatcher) Match(actual any) (success bool, err error) {
 	if actual == nil {
 		return false, nil
 	}
@@ -123,12 +113,12 @@ func (matcher NotFoundMatcher) Match(actual interface{}) (success bool, err erro
 }
 
 // FailureMessage builds an error message.
-func (matcher NotFoundMatcher) FailureMessage(actual interface{}) (message string) {
+func (matcher NotFoundMatcher) FailureMessage(actual any) (message string) {
 	return format.Message(actual, "to be not found")
 }
 
 // NegatedFailureMessage builds an error message.
-func (matcher NotFoundMatcher) NegatedFailureMessage(actual interface{}) (message string) {
+func (matcher NotFoundMatcher) NegatedFailureMessage(actual any) (message string) {
 	return format.Message(actual, "to be found")
 }
 
@@ -137,7 +127,7 @@ type AlreadyExistMatcher struct {
 }
 
 // Match matches error.
-func (matcher AlreadyExistMatcher) Match(actual interface{}) (success bool, err error) {
+func (matcher AlreadyExistMatcher) Match(actual any) (success bool, err error) {
 	if actual == nil {
 		return false, nil
 	}
@@ -146,12 +136,12 @@ func (matcher AlreadyExistMatcher) Match(actual interface{}) (success bool, err 
 }
 
 // FailureMessage builds an error message.
-func (matcher AlreadyExistMatcher) FailureMessage(actual interface{}) (message string) {
+func (matcher AlreadyExistMatcher) FailureMessage(actual any) (message string) {
 	return format.Message(actual, "to be already exist")
 }
 
 // NegatedFailureMessage builds an error message.
-func (matcher AlreadyExistMatcher) NegatedFailureMessage(actual interface{}) (message string) {
+func (matcher AlreadyExistMatcher) NegatedFailureMessage(actual any) (message string) {
 	return format.Message(actual, "not to be already exist")
 }
 

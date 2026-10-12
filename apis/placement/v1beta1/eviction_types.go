@@ -37,7 +37,7 @@ import (
 //
 // Beware that an eviction alone does not guarantee that a placement will not re-appear; i.e.,
 // after an eviction, the Fleet scheduler might still pick the previous target cluster for
-// placement. To prevent this, considering adding proper taints to the target cluster before running
+// placement. To prevent this, consider adding proper taints to the target cluster before running
 // an eviction that will exclude it from future placements; this is especially true in scenarios
 // where one would like to perform a cluster replacement.
 //

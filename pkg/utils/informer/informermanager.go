@@ -30,6 +30,14 @@ import (
 	ctrlcache "sigs.k8s.io/controller-runtime/pkg/cache"
 )
 
+// Note (chenyu1): many methods in this utility, such as IsInformerSynced and Lister, will implicitly create an informer
+// for the queried resource if one does not exist already. This might have side effects as such informers
+// will not start until the manager's Start() method is called, provided that such resources have support
+// for LIST/WATCH ops. Normally this is fine as the resource watcher is configured to periodically register
+// all applicable resources in the informer manager, but the gaps between the synchronization might lead to
+// unexpected behaviors (hopefully temporary). For newer code that needs to integrate with the informer manager,
+// consider calling IsInformerSet first to check if an informer has been set up, before calling other methods.
+
 // InformerManager manages dynamic shared informer for all resources, include Kubernetes resource and
 // custom resources defined by CustomResourceDefinition.
 type Manager interface {
@@ -41,6 +49,9 @@ type Manager interface {
 
 	// IsInformerSynced checks if the resource's informer is synced.
 	IsInformerSynced(resource schema.GroupVersionResource) bool
+
+	// IsInformerSet returns if an informer has been set up for the given resource.
+	IsInformerSet(gvk schema.GroupVersionKind) bool
 
 	// Start will run all informers, the informers will keep running until the channel closed.
 	// It is intended to be called after create new informer(s), and it's safe to call multi times.
@@ -151,6 +162,14 @@ func (s *informerManagerImpl) AddStaticResource(resource APIResourceMeta, handle
 func (s *informerManagerImpl) IsInformerSynced(resource schema.GroupVersionResource) bool {
 	// TODO: use a lazy initialized sync map to reduce the number of informer sync look ups
 	return s.informerFactory.ForResource(resource).Informer().HasSynced()
+}
+
+func (s *informerManagerImpl) IsInformerSet(gvk schema.GroupVersionKind) bool {
+	s.resourcesLock.RLock()
+	defer s.resourcesLock.RUnlock()
+
+	_, ok := s.apiResources[gvk]
+	return ok
 }
 
 func (s *informerManagerImpl) Lister(resource schema.GroupVersionResource) cache.GenericLister {
