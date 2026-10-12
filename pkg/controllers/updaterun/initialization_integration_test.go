@@ -697,7 +697,12 @@ var _ = Describe("Updaterun initialization tests", func() {
 		})
 
 		It("Should generate the cluster update stage in the status as expected", func() {
-			By("Creating a clusterStagedUpdateStrategy")
+			By("Creating a clusterStagedUpdateStrategy with a before stage approval task for the delete stage")
+			updateStrategy.Spec.DeleteStage = &placementv1beta1.DeleteStageConfig{
+				BeforeStageTasks: []placementv1beta1.StageTask{
+					{Type: placementv1beta1.StageTaskTypeApproval},
+				},
+			}
 			Expect(k8sClient.Create(ctx, updateStrategy)).To(Succeed())
 
 			By("Creating a new clusterStagedUpdateRun")
@@ -1102,12 +1107,21 @@ func validateFailedInitCondition(ctx context.Context, updateRun *placementv1beta
 }
 
 // populateStageTaskStatuses populates the BeforeStageTaskStatus and AfterStageTaskStatus
-// for all stages in the status based on the strategy configuration.
+// for all stages, including the delete stage, in the status based on the strategy configuration.
 func populateStageTaskStatuses(
 	status *placementv1beta1.UpdateRunStatus,
 	updateRunName string,
-	stages []placementv1beta1.StageConfig,
+	strategy *placementv1beta1.UpdateStrategySpec,
 ) {
+	stages := strategy.Stages
+	if strategy.DeleteStage != nil && status.DeletionStageStatus != nil {
+		status.DeletionStageStatus.BeforeStageTaskStatus = buildTaskStatuses(
+			strategy.DeleteStage.BeforeStageTasks,
+			placementv1beta1.BeforeStageApprovalTaskNameFmt,
+			updateRunName,
+			placementv1beta1.UpdateRunDeleteStageTaskName,
+		)
+	}
 	for i := range status.StagesStatus {
 		status.StagesStatus[i].BeforeStageTaskStatus = buildTaskStatuses(
 			stages[i].BeforeStageTasks,
@@ -1170,7 +1184,7 @@ func generateInitializedStatus(
 			generateTrueCondition(updateRun, placementv1beta1.StagedUpdateRunConditionInitialized),
 		},
 	}
-	populateStageTaskStatuses(status, updateRun.Name, updateStrategy.Spec.Stages)
+	populateStageTaskStatuses(status, updateRun.Name, &updateStrategy.Spec)
 	return status
 }
 

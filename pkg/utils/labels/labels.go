@@ -41,8 +41,11 @@ func ExtractResourceSnapshotIndexFromWork(work client.Object) (int, error) {
 func ExtractIndex(object client.Object, labelKey string) (int, error) {
 	indexStr := object.GetLabels()[labelKey]
 	v, err := strconv.Atoi(indexStr)
-	if err != nil || v < 0 {
+	if err != nil {
 		return -1, fmt.Errorf("invalid resource index %q, error: %w", indexStr, err)
+	}
+	if v < 0 {
+		return -1, fmt.Errorf("invalid resource index %q: must be a non-negative integer", indexStr)
 	}
 	return v, nil
 }
@@ -57,8 +60,11 @@ func ParsePolicyIndexFromLabel(policySnapshot client.Object) (int, error) {
 
 	indexLabel := labels[fleetv1beta1.PolicyIndexLabel]
 	v, err := strconv.Atoi(indexLabel)
-	if err != nil || v < 0 {
+	if err != nil {
 		return -1, fmt.Errorf("invalid policy index %q, error: %w", indexLabel, err)
+	}
+	if v < 0 {
+		return -1, fmt.Errorf("invalid policy index %q: must be a non-negative integer", indexLabel)
 	}
 	return v, nil
 }

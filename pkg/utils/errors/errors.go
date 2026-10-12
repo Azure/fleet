@@ -206,6 +206,21 @@ func Args(err error, kvs ...interface{}) []interface{} {
 	return compositeKVs
 }
 
+// Category returns the error category of the given error. It will return ErrCategoryUncategorized
+// if the error is nil, is not an *Error with a category, or does not wrap an *Error with a category.
+func Category(err error) ErrCategory {
+	var kferr *Error
+	// Note: errors.As returns false for nil errors, and might yield a typed nil *Error.
+	if !errors.As(err, &kferr) || kferr == nil {
+		return ErrCategoryUncategorized
+	}
+	if kferr.category != "" {
+		return kferr.category
+	}
+	// Each recursive call descends further down the error chain, so it always terminates.
+	return Category(kferr.wrapped)
+}
+
 // CallerFrameOverview is a simple struct that summarizes a single call frame.
 type CallerFrameOverview struct {
 	Function string

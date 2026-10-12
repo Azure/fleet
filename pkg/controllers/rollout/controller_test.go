@@ -1235,7 +1235,204 @@ func TestPickBindingsToRoll(t *testing.T) {
 		wantWaitTime                time.Duration
 		wantErr                     error
 	}{
-		// TODO: add more tests
+		"test scheduled binding to bound, latest resources and nil overrides - rollout allowed": {
+			allBindingsFunc: func() []*placementv1beta1.ClusterResourceBinding {
+				return []*placementv1beta1.ClusterResourceBinding{
+					generateClusterResourceBinding(placementv1beta1.BindingStateScheduled, "snapshot-1", cluster1),
+				}
+			},
+			latestResourceSnapshotName: "snapshot-1",
+			crp: clusterResourcePlacementForTest("test",
+				createPlacementPolicyForTest(placementv1beta1.PickAllPlacementType, 0),
+				createPlacementRolloutStrategyForTest(placementv1beta1.RollingUpdateRolloutStrategyType, generateDefaultRollingUpdateConfig(), nil)),
+			wantTobeUpdatedBindings: []int{0},
+			wantDesiredBindingsSpec: []placementv1beta1.ResourceBindingSpec{
+				{
+					State:                placementv1beta1.BindingStateBound,
+					TargetCluster:        cluster1,
+					ResourceSnapshotName: "snapshot-1",
+				},
+			},
+			wantNeedRoll: true,
+			wantWaitTime: 0,
+		},
+		"test scheduled binding to bound with PickFixed placement type - rollout allowed": {
+			allBindingsFunc: func() []*placementv1beta1.ClusterResourceBinding {
+				return []*placementv1beta1.ClusterResourceBinding{
+					generateClusterResourceBinding(placementv1beta1.BindingStateScheduled, "snapshot-1", cluster1),
+				}
+			},
+			latestResourceSnapshotName: "snapshot-2",
+			crp: clusterResourcePlacementForTest("test",
+				&placementv1beta1.PlacementPolicy{
+					PlacementType: placementv1beta1.PickFixedPlacementType,
+					ClusterNames:  []string{cluster1},
+				},
+				createPlacementRolloutStrategyForTest(placementv1beta1.RollingUpdateRolloutStrategyType, generateDefaultRollingUpdateConfig(), nil)),
+			wantTobeUpdatedBindings: []int{0},
+			wantDesiredBindingsSpec: []placementv1beta1.ResourceBindingSpec{
+				{
+					State:                placementv1beta1.BindingStateBound,
+					TargetCluster:        cluster1,
+					ResourceSnapshotName: "snapshot-2",
+				},
+			},
+			wantNeedRoll: true,
+			wantWaitTime: 0,
+		},
+		"test multiple scheduled bindings with maxSurge set to zero and no ready bindings - rollout allowed": {
+			allBindingsFunc: func() []*placementv1beta1.ClusterResourceBinding {
+				return []*placementv1beta1.ClusterResourceBinding{
+					generateClusterResourceBinding(placementv1beta1.BindingStateScheduled, "snapshot-1", cluster1),
+					generateClusterResourceBinding(placementv1beta1.BindingStateScheduled, "snapshot-1", cluster2),
+				}
+			},
+			latestResourceSnapshotName: "snapshot-1",
+			crp: clusterResourcePlacementForTest("test",
+				createPlacementPolicyForTest(placementv1beta1.PickNPlacementType, 2),
+				createPlacementRolloutStrategyForTest(placementv1beta1.RollingUpdateRolloutStrategyType, &placementv1beta1.RollingUpdateConfig{
+					MaxUnavailable: &intstr.IntOrString{
+						Type:   intstr.String,
+						StrVal: "20%",
+					},
+					MaxSurge: &intstr.IntOrString{
+						Type:   intstr.Int,
+						IntVal: 0,
+					},
+					UnavailablePeriodSeconds: ptr.To(1),
+				}, nil)),
+			// maxSurge bounds how far the can-be-ready set may exceed the target. Scheduled bindings
+			// are not counted as can-be-ready, so with nothing ready yet the budget is the full
+			// target number and both bindings are allowed to roll.
+			wantTobeUpdatedBindings: []int{0, 1},
+			wantDesiredBindingsSpec: []placementv1beta1.ResourceBindingSpec{
+				{
+					State:                placementv1beta1.BindingStateBound,
+					TargetCluster:        cluster1,
+					ResourceSnapshotName: "snapshot-1",
+				},
+				{
+					State:                placementv1beta1.BindingStateBound,
+					TargetCluster:        cluster2,
+					ResourceSnapshotName: "snapshot-1",
+				},
+			},
+			wantNeedRoll: true,
+			wantWaitTime: 0,
+		},
+		"test scheduled binding with maxSurge set to zero and target met by ready bound bindings - rollout blocked": {
+			allBindingsFunc: func() []*placementv1beta1.ClusterResourceBinding {
+				return []*placementv1beta1.ClusterResourceBinding{
+					generateReadyClusterResourceBinding(placementv1beta1.BindingStateBound, "snapshot-1", cluster1),
+					generateReadyClusterResourceBinding(placementv1beta1.BindingStateBound, "snapshot-1", cluster2),
+					generateClusterResourceBinding(placementv1beta1.BindingStateScheduled, "snapshot-1", cluster3),
+				}
+			},
+			latestResourceSnapshotName: "snapshot-1",
+			crp: clusterResourcePlacementForTest("test",
+				createPlacementPolicyForTest(placementv1beta1.PickNPlacementType, 2),
+				createPlacementRolloutStrategyForTest(placementv1beta1.RollingUpdateRolloutStrategyType, &placementv1beta1.RollingUpdateConfig{
+					MaxUnavailable: &intstr.IntOrString{
+						Type:   intstr.String,
+						StrVal: "20%",
+					},
+					MaxSurge: &intstr.IntOrString{
+						Type:   intstr.Int,
+						IntVal: 0,
+					},
+					UnavailablePeriodSeconds: ptr.To(1),
+				}, nil)),
+			// The two ready bound bindings already fill the target, so with maxSurge zero there is
+			// no room to bring the scheduled binding up and it stays unselected this round.
+			wantTobeUpdatedBindings:     []int{},
+			wantStaleUnselectedBindings: []int{2},
+			wantUpToDateBoundBindings:   []int{0, 1},
+			wantDesiredBindingsSpec: []placementv1beta1.ResourceBindingSpec{
+				{
+					State:                placementv1beta1.BindingStateBound,
+					TargetCluster:        cluster1,
+					ResourceSnapshotName: "snapshot-1",
+				},
+				{
+					State:                placementv1beta1.BindingStateBound,
+					TargetCluster:        cluster2,
+					ResourceSnapshotName: "snapshot-1",
+				},
+				{
+					State:                placementv1beta1.BindingStateBound,
+					TargetCluster:        cluster3,
+					ResourceSnapshotName: "snapshot-1",
+				},
+			},
+			wantNeedRoll: true,
+			wantWaitTime: 0,
+		},
+		"test multiple scheduled bindings with percentage maxSurge - surge budget rounds up": {
+			allBindingsFunc: func() []*placementv1beta1.ClusterResourceBinding {
+				return []*placementv1beta1.ClusterResourceBinding{
+					generateReadyClusterResourceBinding(placementv1beta1.BindingStateBound, "snapshot-1", cluster1),
+					generateReadyClusterResourceBinding(placementv1beta1.BindingStateBound, "snapshot-1", cluster2),
+					generateReadyClusterResourceBinding(placementv1beta1.BindingStateBound, "snapshot-1", cluster3),
+					generateClusterResourceBinding(placementv1beta1.BindingStateScheduled, "snapshot-1", cluster4),
+					generateClusterResourceBinding(placementv1beta1.BindingStateScheduled, "snapshot-1", cluster5),
+					generateClusterResourceBinding(placementv1beta1.BindingStateScheduled, "snapshot-1", cluster6),
+				}
+			},
+			latestResourceSnapshotName: "snapshot-1",
+			crp: clusterResourcePlacementForTest("test",
+				createPlacementPolicyForTest(placementv1beta1.PickNPlacementType, 3),
+				createPlacementRolloutStrategyForTest(placementv1beta1.RollingUpdateRolloutStrategyType, &placementv1beta1.RollingUpdateConfig{
+					MaxUnavailable: &intstr.IntOrString{
+						Type:   intstr.String,
+						StrVal: "20%",
+					},
+					MaxSurge: &intstr.IntOrString{
+						Type:   intstr.String,
+						StrVal: "50%",
+					},
+					UnavailablePeriodSeconds: ptr.To(1),
+				}, nil)),
+			// 50% of the target of 3 rounds up to 2, so the can-be-ready ceiling is 5. The three
+			// ready bound bindings already count towards it, leaving room for exactly two of the
+			// three scheduled bindings; the third stays unselected this round.
+			wantTobeUpdatedBindings:     []int{3, 4},
+			wantStaleUnselectedBindings: []int{5},
+			wantUpToDateBoundBindings:   []int{0, 1, 2},
+			wantDesiredBindingsSpec: []placementv1beta1.ResourceBindingSpec{
+				{
+					State:                placementv1beta1.BindingStateBound,
+					TargetCluster:        cluster1,
+					ResourceSnapshotName: "snapshot-1",
+				},
+				{
+					State:                placementv1beta1.BindingStateBound,
+					TargetCluster:        cluster2,
+					ResourceSnapshotName: "snapshot-1",
+				},
+				{
+					State:                placementv1beta1.BindingStateBound,
+					TargetCluster:        cluster3,
+					ResourceSnapshotName: "snapshot-1",
+				},
+				{
+					State:                placementv1beta1.BindingStateBound,
+					TargetCluster:        cluster4,
+					ResourceSnapshotName: "snapshot-1",
+				},
+				{
+					State:                placementv1beta1.BindingStateBound,
+					TargetCluster:        cluster5,
+					ResourceSnapshotName: "snapshot-1",
+				},
+				{
+					State:                placementv1beta1.BindingStateBound,
+					TargetCluster:        cluster6,
+					ResourceSnapshotName: "snapshot-1",
+				},
+			},
+			wantNeedRoll: true,
+			wantWaitTime: 0,
+		},
 		"test scheduled binding to bound, outdated resources and nil overrides - rollout allowed": {
 			allBindingsFunc: func() []*placementv1beta1.ClusterResourceBinding {
 				return []*placementv1beta1.ClusterResourceBinding{

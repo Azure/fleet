@@ -89,30 +89,37 @@ func emitUpdateRunStatusMetric(updateRun placementv1beta1.UpdateRunObj) {
 	updateRunStatus := updateRun.GetUpdateRunStatus()
 	succeedCond := meta.FindStatusCondition(updateRunStatus.Conditions, string(placementv1beta1.StagedUpdateRunConditionSucceeded))
 	if succeedCond != nil && succeedCond.ObservedGeneration == generation {
-		failureType := determineFailureType(succeedCond)
-		hubmetrics.FleetUpdateRunStatusLastTimestampSeconds.WithLabelValues(updateRun.GetNamespace(), updateRun.GetName(), string(state),
-			string(placementv1beta1.StagedUpdateRunConditionSucceeded), string(succeedCond.Status), succeedCond.Reason, string(failureType)).SetToCurrentTime()
+		setUpdateRunStatusMetric(updateRun, state, succeedCond)
 		return
 	}
 
 	progressingCond := meta.FindStatusCondition(updateRunStatus.Conditions, string(placementv1beta1.StagedUpdateRunConditionProgressing))
 	if progressingCond != nil && progressingCond.ObservedGeneration == generation {
-		failureType := determineFailureType(progressingCond)
-		hubmetrics.FleetUpdateRunStatusLastTimestampSeconds.WithLabelValues(updateRun.GetNamespace(), updateRun.GetName(), string(state),
-			string(placementv1beta1.StagedUpdateRunConditionProgressing), string(progressingCond.Status), progressingCond.Reason, string(failureType)).SetToCurrentTime()
+		setUpdateRunStatusMetric(updateRun, state, progressingCond)
 		return
 	}
 
 	initializedCond := meta.FindStatusCondition(updateRunStatus.Conditions, string(placementv1beta1.StagedUpdateRunConditionInitialized))
 	if initializedCond != nil && initializedCond.ObservedGeneration == generation {
-		failureType := determineFailureType(initializedCond)
-		hubmetrics.FleetUpdateRunStatusLastTimestampSeconds.WithLabelValues(updateRun.GetNamespace(), updateRun.GetName(), string(state),
-			string(placementv1beta1.StagedUpdateRunConditionInitialized), string(initializedCond.Status), initializedCond.Reason, string(failureType)).SetToCurrentTime()
+		setUpdateRunStatusMetric(updateRun, state, initializedCond)
 		return
 	}
 
 	// We should rarely reach here, it can only happen when updating updateRun status fails.
 	klog.V(2).InfoS("There's no valid status condition on updateRun, status updating failed possibly", "updateRun", klog.KObj(updateRun))
+}
+
+func setUpdateRunStatusMetric(updateRun placementv1beta1.UpdateRunObj, state placementv1beta1.State, cond *metav1.Condition) {
+	failureType := determineFailureType(cond)
+	hubmetrics.FleetUpdateRunStatusLastTimestampSeconds.WithLabelValues(
+		updateRun.GetNamespace(),
+		updateRun.GetName(),
+		string(state),
+		cond.Type,
+		string(cond.Status),
+		cond.Reason,
+		string(failureType),
+	).Set(float64(cond.LastTransitionTime.UnixNano()) / float64(time.Second))
 }
 
 // recordApprovalRequestLatency records the time from approval request creation to user approval.

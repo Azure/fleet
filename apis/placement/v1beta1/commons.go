@@ -186,6 +186,11 @@ const (
 	// UpdateRunDeleteStageName is the name of delete stage in the staged update run.
 	UpdateRunDeleteStageName = FleetPrefix + "deleteStage"
 
+	// UpdateRunDeleteStageTaskName refers to the delete stage in the names and the labels of the objects created
+	// for its tasks, where UpdateRunDeleteStageName is not a valid value. It cannot collide with the name of an
+	// update stage, as that cannot have a hyphen.
+	UpdateRunDeleteStageTaskName = "delete-stage"
+
 	// IsLatestUpdateRunApprovalLabel indicates if the approval is the latest approval on a staged run.
 	IsLatestUpdateRunApprovalLabel = FleetPrefix + "isLatestUpdateRunApproval"
 

@@ -235,8 +235,47 @@ spec:
           spec:
             description: The desired state of StagedUpdateStrategy.
             properties:
+              deleteStage:
+                description: |-
+                  DeleteStage specifies the configuration for the delete stage, which runs after all the update stages
+                  complete and removes the resources from the clusters that are no longer selected by the placement.
+                  If not specified, the delete stage starts as soon as the last update stage completes.
+                properties:
+                  beforeStageTasks:
+                    description: |-
+                      The collection of tasks that needs to be completed successfully before the delete stage starts removing
+                      the resources. Same as an update stage, the only task allowed is a single Approval; to wait for some time
+                      before the removal, add a TimedWait task to the afterStageTasks of the last update stage instead.
+                      The tasks are skipped if there is no cluster to remove the resources from.
+                    items:
+                      description: StageTask is the pre or post stage task that needs
+                        to be completed before starting or moving to the next stage.
+                      properties:
+                        type:
+                          description: The type of the before or after stage task.
+                          enum:
+                          - TimedWait
+                          - Approval
+                          type: string
+                        waitTime:
+                          description: |-
+                            The time to wait after all the clusters in the current stage complete the update before moving to the next stage.
+                            Only hours (h), minutes (m), and seconds (s) units are accepted.
+                          pattern: ^(?:(?:0|[1-9][0-9]*)(\.[0-9]+)?(?:s|m|h))+$
+                          type: string
+                      required:
+                      - type
+                      type: object
+                    maxItems: 1
+                    type: array
+                    x-kubernetes-validations:
+                    - message: BeforeStageTaskType is Approval, waitTime is not allowed
+                      rule: '!self.exists(e, e.type == ''Approval'' && has(e.waitTime))'
+                    - message: BeforeStageTaskType cannot be TimedWait
+                      rule: '!self.exists(e, e.type == ''TimedWait'')'
+                type: object
               stages:
-                description: Stage specifies the configuration for each update stage.
+                description: Stages specifies the configuration for each update stage.
                 items:
                   description: |-
                     StageConfig describes a single update stage.
@@ -276,7 +315,7 @@ spec:
                         rule: '!self.exists(e, e.type == ''TimedWait'' && !has(e.waitTime))'
                     beforeStageTasks:
                       description: |-
-                        The collection of tasks that needs to completed successfully by each stage before starting the stage.
+                        The collection of tasks that needs to be completed successfully by each stage before starting the stage.
                         Each task is executed in parallel and there cannot be more than one task of the same type.
                       items:
                         description: StageTask is the pre or post stage task that
@@ -301,7 +340,8 @@ spec:
                       maxItems: 1
                       type: array
                       x-kubernetes-validations:
-                      - message: AfterStageTaskType is Approval, waitTime is not allowed
+                      - message: BeforeStageTaskType is Approval, waitTime is not
+                          allowed
                         rule: '!self.exists(e, e.type == ''Approval'' && has(e.waitTime))'
                       - message: BeforeStageTaskType cannot be TimedWait
                         rule: '!self.exists(e, e.type == ''TimedWait'')'

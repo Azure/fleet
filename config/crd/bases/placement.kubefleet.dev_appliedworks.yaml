@@ -1,0 +1,103 @@
+---
+apiVersion: apiextensions.k8s.io/v1
+kind: CustomResourceDefinition
+metadata:
+  annotations:
+    controller-gen.kubebuilder.io/version: v0.20.0
+  name: appliedworks.placement.kubefleet.dev
+spec:
+  group: placement.kubefleet.dev
+  names:
+    categories:
+    - kubefleet
+    - kubefleet-placement
+    kind: AppliedWork
+    listKind: AppliedWorkList
+    plural: appliedworks
+    singular: appliedwork
+  scope: Cluster
+  versions:
+  - name: v1alpha1
+    schema:
+      openAPIV3Schema:
+        description: |-
+          AppliedWork is the KubeFleet API that serves as owners for manifests applied to a member cluster via
+          a work object.
+        properties:
+          apiVersion:
+            description: |-
+              APIVersion defines the versioned schema of this representation of an object.
+              Servers should convert recognized schemas to the latest internal value, and
+              may reject unrecognized values.
+              More info: https://git.k8s.io/community/contributors/devel/sig-architecture/api-conventions.md#resources
+            type: string
+          kind:
+            description: |-
+              Kind is a string value representing the REST resource this object represents.
+              Servers may infer this from the endpoint the client submits requests to.
+              Cannot be updated.
+              In CamelCase.
+              More info: https://git.k8s.io/community/contributors/devel/sig-architecture/api-conventions.md#types-kinds
+            type: string
+          metadata:
+            type: object
+          spec:
+            description: Spec represents the desired configuration of AppliedWork.
+            properties:
+              workName:
+                description: The name of the corresponding work object. Note that
+                  the object is on the KubeFleet hub cluster.
+                type: string
+              workNamespace:
+                description: The namespace of the corresponding work object. Note
+                  that the object is on the KubeFleet hub cluster.
+                type: string
+            required:
+            - workName
+            - workNamespace
+            type: object
+          status:
+            description: Status represents the current status of AppliedWork.
+            properties:
+              appliedResources:
+                description: A list of applied manifests. This list is populated for
+                  informational purposes only.
+                items:
+                  properties:
+                    apiGroup:
+                      type: string
+                    apiVersion:
+                      type: string
+                    kind:
+                      type: string
+                    name:
+                      description: The name of the manifest.
+                      type: string
+                    namespace:
+                      description: The namespace of the manifest.
+                      type: string
+                    ordinal:
+                      description: The ordinal of the manifest.
+                      type: integer
+                    resource:
+                      type: string
+                    uid:
+                      description: The UID of the applied manifest.
+                      type: string
+                  required:
+                  - apiVersion
+                  - kind
+                  - name
+                  - ordinal
+                  - resource
+                  - uid
+                  type: object
+                type: array
+            type: object
+        required:
+        - spec
+        type: object
+    served: true
+    storage: true
+    subresources:
+      status: {}

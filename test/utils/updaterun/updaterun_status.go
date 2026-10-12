@@ -75,11 +75,11 @@ func ClusterStagedUpdateRunStatusSucceededActual(
 
 		if execute {
 			wantStatus.StagesStatus = buildStageUpdatingStatuses(wantStrategySpec, wantSelectedClusters, wantCROs, wantROs, updateRun)
-			wantStatus.DeletionStageStatus = buildDeletionStageStatus(wantUnscheduledClusters, updateRun)
+			wantStatus.DeletionStageStatus = buildDeletionStageStatus(wantStrategySpec, wantUnscheduledClusters, updateRun)
 			wantStatus.Conditions = updateRunSucceedConditions(updateRun.Generation)
 		} else {
 			wantStatus.StagesStatus = buildStageUpdatingStatusesForInitialized(wantStrategySpec, wantSelectedClusters, wantCROs, wantROs, updateRun)
-			wantStatus.DeletionStageStatus = buildDeletionStatusWithoutConditions(wantUnscheduledClusters, updateRun)
+			wantStatus.DeletionStageStatus = buildDeletionStatusWithoutConditions(wantStrategySpec, wantUnscheduledClusters, updateRun)
 			wantStatus.Conditions = updateRunInitializedConditions(updateRun.Generation)
 		}
 		if diff := cmp.Diff(updateRun.Status, wantStatus, updateRunStatusCmpOption...); diff != "" {
@@ -120,11 +120,11 @@ func StagedUpdateRunStatusSucceededActual(
 
 		if execute {
 			wantStatus.StagesStatus = buildStageUpdatingStatuses(wantStrategySpec, wantSelectedClusters, wantCROs, wantROs, updateRun)
-			wantStatus.DeletionStageStatus = buildDeletionStageStatus(wantUnscheduledClusters, updateRun)
+			wantStatus.DeletionStageStatus = buildDeletionStageStatus(wantStrategySpec, wantUnscheduledClusters, updateRun)
 			wantStatus.Conditions = updateRunSucceedConditions(updateRun.Generation)
 		} else {
 			wantStatus.StagesStatus = buildStageUpdatingStatusesForInitialized(wantStrategySpec, wantSelectedClusters, wantCROs, wantROs, updateRun)
-			wantStatus.DeletionStageStatus = buildDeletionStatusWithoutConditions(wantUnscheduledClusters, updateRun)
+			wantStatus.DeletionStageStatus = buildDeletionStatusWithoutConditions(wantStrategySpec, wantUnscheduledClusters, updateRun)
 			wantStatus.Conditions = updateRunInitializedConditions(updateRun.Generation)
 		}
 		if diff := cmp.Diff(updateRun.Status, wantStatus, updateRunStatusCmpOption...); diff != "" {
@@ -150,20 +150,8 @@ func buildStageUpdatingStatusesForInitialized(
 			stagesStatus[i].Clusters[j].ClusterResourceOverrideSnapshots = wantCROs[wantSelectedClusters[i][j]]
 			stagesStatus[i].Clusters[j].ResourceOverrideSnapshots = wantROs[wantSelectedClusters[i][j]]
 		}
-		stagesStatus[i].BeforeStageTaskStatus = make([]placementv1beta1.StageTaskStatus, len(stage.BeforeStageTasks))
-		for j, task := range stage.BeforeStageTasks {
-			stagesStatus[i].BeforeStageTaskStatus[j].Type = task.Type
-			if task.Type == placementv1beta1.StageTaskTypeApproval {
-				stagesStatus[i].BeforeStageTaskStatus[j].ApprovalRequestName = fmt.Sprintf(placementv1beta1.BeforeStageApprovalTaskNameFmt, updateRun.GetName(), stage.Name)
-			}
-		}
-		stagesStatus[i].AfterStageTaskStatus = make([]placementv1beta1.StageTaskStatus, len(stage.AfterStageTasks))
-		for j, task := range stage.AfterStageTasks {
-			stagesStatus[i].AfterStageTaskStatus[j].Type = task.Type
-			if task.Type == placementv1beta1.StageTaskTypeApproval {
-				stagesStatus[i].AfterStageTaskStatus[j].ApprovalRequestName = fmt.Sprintf(placementv1beta1.AfterStageApprovalTaskNameFmt, updateRun.GetName(), stage.Name)
-			}
-		}
+		stagesStatus[i].BeforeStageTaskStatus = buildStageTaskStatuses(stage.BeforeStageTasks, placementv1beta1.BeforeStageApprovalTaskNameFmt, stage.Name, updateRun, false)
+		stagesStatus[i].AfterStageTaskStatus = buildStageTaskStatuses(stage.AfterStageTasks, placementv1beta1.AfterStageApprovalTaskNameFmt, stage.Name, updateRun, false)
 	}
 	return stagesStatus
 }
@@ -185,28 +173,10 @@ func buildStageUpdatingStatuses(
 			stagesStatus[i].Clusters[j].ResourceOverrideSnapshots = wantROs[wantSelectedClusters[i][j]]
 			stagesStatus[i].Clusters[j].Conditions = updateRunClusterRolloutSucceedConditions(updateRun.GetGeneration())
 		}
-		stagesStatus[i].BeforeStageTaskStatus = make([]placementv1beta1.StageTaskStatus, len(stage.BeforeStageTasks))
-		for j, task := range stage.BeforeStageTasks {
-			stagesStatus[i].BeforeStageTaskStatus[j].Type = task.Type
-			if task.Type == placementv1beta1.StageTaskTypeApproval {
-				stagesStatus[i].BeforeStageTaskStatus[j].ApprovalRequestName = fmt.Sprintf(placementv1beta1.BeforeStageApprovalTaskNameFmt, updateRun.GetName(), stage.Name)
-			}
-			// Skip populating task conditions if the stage has 0 clusters (stage is skipped).
-			if len(wantSelectedClusters[i]) > 0 {
-				stagesStatus[i].BeforeStageTaskStatus[j].Conditions = updateRunStageTaskSucceedConditions(updateRun.GetGeneration(), task.Type)
-			}
-		}
-		stagesStatus[i].AfterStageTaskStatus = make([]placementv1beta1.StageTaskStatus, len(stage.AfterStageTasks))
-		for j, task := range stage.AfterStageTasks {
-			stagesStatus[i].AfterStageTaskStatus[j].Type = task.Type
-			if task.Type == placementv1beta1.StageTaskTypeApproval {
-				stagesStatus[i].AfterStageTaskStatus[j].ApprovalRequestName = fmt.Sprintf(placementv1beta1.AfterStageApprovalTaskNameFmt, updateRun.GetName(), stage.Name)
-			}
-			// Skip populating task conditions if the stage has 0 clusters (stage is skipped).
-			if len(wantSelectedClusters[i]) > 0 {
-				stagesStatus[i].AfterStageTaskStatus[j].Conditions = updateRunStageTaskSucceedConditions(updateRun.GetGeneration(), task.Type)
-			}
-		}
+		// Skip populating task conditions if the stage has 0 clusters (stage is skipped).
+		stageExecuted := len(wantSelectedClusters[i]) > 0
+		stagesStatus[i].BeforeStageTaskStatus = buildStageTaskStatuses(stage.BeforeStageTasks, placementv1beta1.BeforeStageApprovalTaskNameFmt, stage.Name, updateRun, stageExecuted)
+		stagesStatus[i].AfterStageTaskStatus = buildStageTaskStatuses(stage.AfterStageTasks, placementv1beta1.AfterStageApprovalTaskNameFmt, stage.Name, updateRun, stageExecuted)
 		// Use skipped conditions if the stage has 0 clusters.
 		if len(wantSelectedClusters[i]) == 0 {
 			stagesStatus[i].Conditions = updateRunStageSkippedNoClustersConditions(updateRun.GetGeneration())
@@ -217,21 +187,53 @@ func buildStageUpdatingStatuses(
 	return stagesStatus
 }
 
+// buildStageTaskStatuses builds the statuses of the before or after stage tasks of a stage, which have their
+// conditions set if the tasks are completed.
+func buildStageTaskStatuses(
+	tasks []placementv1beta1.StageTask,
+	approvalRequestNameFmt, stageName string,
+	updateRun placementv1beta1.UpdateRunObj,
+	completed bool,
+) []placementv1beta1.StageTaskStatus {
+	taskStatuses := make([]placementv1beta1.StageTaskStatus, len(tasks))
+	for i, task := range tasks {
+		taskStatuses[i].Type = task.Type
+		if task.Type == placementv1beta1.StageTaskTypeApproval {
+			taskStatuses[i].ApprovalRequestName = fmt.Sprintf(approvalRequestNameFmt, updateRun.GetName(), stageName)
+		}
+		if completed {
+			taskStatuses[i].Conditions = updateRunStageTaskSucceedConditions(updateRun.GetGeneration(), task.Type)
+		}
+	}
+	return taskStatuses
+}
+
 func buildDeletionStageStatus(
+	wantStrategySpec *placementv1beta1.UpdateStrategySpec,
 	wantUnscheduledClusters []string,
 	updateRun placementv1beta1.UpdateRunObj,
 ) *placementv1beta1.StageUpdatingStatus {
-	deleteStageStatus := buildDeletionStatusWithoutConditions(wantUnscheduledClusters, updateRun)
+	deleteStageStatus := buildDeletionStatusWithoutConditions(wantStrategySpec, wantUnscheduledClusters, updateRun)
 	deleteStageStatus.Conditions = updateRunStageRolloutSucceedConditions(updateRun.GetGeneration())
+	// The tasks are skipped if the delete stage has 0 clusters.
+	if len(wantUnscheduledClusters) > 0 {
+		for i := range deleteStageStatus.BeforeStageTaskStatus {
+			deleteStageStatus.BeforeStageTaskStatus[i].Conditions = updateRunStageTaskSucceedConditions(updateRun.GetGeneration(), deleteStageStatus.BeforeStageTaskStatus[i].Type)
+		}
+	}
 	return deleteStageStatus
 }
 
 func buildDeletionStatusWithoutConditions(
+	wantStrategySpec *placementv1beta1.UpdateStrategySpec,
 	wantUnscheduledClusters []string,
 	updateRun placementv1beta1.UpdateRunObj,
 ) *placementv1beta1.StageUpdatingStatus {
 	deleteStageStatus := &placementv1beta1.StageUpdatingStatus{
-		StageName: "kubernetes-fleet.io/deleteStage",
+		StageName: placementv1beta1.UpdateRunDeleteStageName,
+	}
+	if wantStrategySpec.DeleteStage != nil {
+		deleteStageStatus.BeforeStageTaskStatus = buildStageTaskStatuses(wantStrategySpec.DeleteStage.BeforeStageTasks, placementv1beta1.BeforeStageApprovalTaskNameFmt, placementv1beta1.UpdateRunDeleteStageTaskName, updateRun, false)
 	}
 	deleteStageStatus.Clusters = make([]placementv1beta1.ClusterUpdatingStatus, len(wantUnscheduledClusters))
 	for i := range deleteStageStatus.Clusters {

@@ -1,0 +1,222 @@
+---
+apiVersion: apiextensions.k8s.io/v1
+kind: CustomResourceDefinition
+metadata:
+  annotations:
+    controller-gen.kubebuilder.io/version: v0.20.0
+  name: stagedupdatestrategies.rollout.kubefleet.dev
+spec:
+  group: rollout.kubefleet.dev
+  names:
+    categories:
+    - kubefleet
+    - kubefleet-rollout
+    kind: StagedUpdateStrategy
+    listKind: StagedUpdateStrategyList
+    plural: stagedupdatestrategies
+    singular: stagedupdatestrategy
+  scope: Namespaced
+  versions:
+  - name: v1alpha1
+    schema:
+      openAPIV3Schema:
+        description: |-
+          StagedUpdateStrategy is the KubeFleet API that defines how to perform a staged rollout of resource changes
+          for a placement policy; the API dictates how clusters are grouped into stages, how the rollout is performed
+          within each stage, and which tasks to execute before and after each stage.
+        properties:
+          apiVersion:
+            description: |-
+              APIVersion defines the versioned schema of this representation of an object.
+              Servers should convert recognized schemas to the latest internal value, and
+              may reject unrecognized values.
+              More info: https://git.k8s.io/community/contributors/devel/sig-architecture/api-conventions.md#resources
+            type: string
+          kind:
+            description: |-
+              Kind is a string value representing the REST resource this object represents.
+              Servers may infer this from the endpoint the client submits requests to.
+              Cannot be updated.
+              In CamelCase.
+              More info: https://git.k8s.io/community/contributors/devel/sig-architecture/api-conventions.md#types-kinds
+            type: string
+          metadata:
+            type: object
+          spec:
+            description: The specification of the StagedUpdateStrategy API object.
+            properties:
+              stages:
+                description: The stages that KubeFleet rolls out resource changes
+                  to, in the order they are listed.
+                items:
+                  properties:
+                    afterStageTasks:
+                      description: |-
+                        A list of tasks to execute after the stage rollout is completed. The tasks run in parallel; a staged update will only
+                        proceed to the next stage after all tasks are completed.
+                      items:
+                        properties:
+                          type:
+                            description: The type of the stage task. Currently, the
+                              supported task types are TimedWait and Approval.
+                            enum:
+                            - TimedWait
+                            - Approval
+                            type: string
+                          waitTime:
+                            description: |-
+                              The time to wait in a TimedWait task.
+
+                              Specify the time period using hours (h), minutes (m), and seconds (s) units, e.g., "1h30m" for 1 hour and 30 minutes.
+                            pattern: ^(?:(?:0|[1-9][0-9]*)(\.[0-9]+)?(?:s|m|h))+$
+                            type: string
+                        required:
+                        - type
+                        type: object
+                      maxItems: 2
+                      type: array
+                      x-kubernetes-validations:
+                      - message: afterStageTasks cannot have more than one Approval
+                          task
+                        rule: self.filter(e, e.type == 'Approval').size() <= 1
+                      - message: afterStageTasks cannot have more than one TimedWait
+                          task
+                        rule: self.filter(e, e.type == 'TimedWait').size() <= 1
+                      - message: waitTime does not apply to an Approval task in afterStageTasks
+                        rule: '!self.exists(e, e.type == ''Approval'' && has(e.waitTime))'
+                      - message: waitTime is required for a TimedWait task in afterStageTasks
+                        rule: '!self.exists(e, e.type == ''TimedWait'' && !has(e.waitTime))'
+                    beforeStageTasks:
+                      description: |-
+                        A list of tasks to execute before the stage rollout starts. The tasks run in parallel; the current stage will only start
+                        after all tasks are completed.
+                      items:
+                        properties:
+                          type:
+                            description: The type of the stage task. Currently, the
+                              supported task types are TimedWait and Approval.
+                            enum:
+                            - TimedWait
+                            - Approval
+                            type: string
+                          waitTime:
+                            description: |-
+                              The time to wait in a TimedWait task.
+
+                              Specify the time period using hours (h), minutes (m), and seconds (s) units, e.g., "1h30m" for 1 hour and 30 minutes.
+                            pattern: ^(?:(?:0|[1-9][0-9]*)(\.[0-9]+)?(?:s|m|h))+$
+                            type: string
+                        required:
+                        - type
+                        type: object
+                      maxItems: 1
+                      type: array
+                      x-kubernetes-validations:
+                      - message: waitTime does not apply to an Approval task in beforeStageTasks
+                        rule: '!self.exists(e, e.type == ''Approval'' && has(e.waitTime))'
+                      - message: beforeStageTasks cannot include a TimedWait task
+                        rule: '!self.exists(e, e.type == ''TimedWait'')'
+                    labelSelector:
+                      description: |-
+                        The label selector that selects clusters to be included in the stage.
+
+                        Note that if a cluster is selected by multiple stages, it will only be included in the first stage that selects it.
+
+                        If set to nil, the stage includes no clusters at all. If set to an empty selector, the stage includes all applicable clusters.
+                      properties:
+                        matchExpressions:
+                          description: matchExpressions is a list of label selector
+                            requirements. The requirements are ANDed.
+                          items:
+                            description: |-
+                              A label selector requirement is a selector that contains values, a key, and an operator that
+                              relates the key and values.
+                            properties:
+                              key:
+                                description: key is the label key that the selector
+                                  applies to.
+                                type: string
+                              operator:
+                                description: |-
+                                  operator represents a key's relationship to a set of values.
+                                  Valid operators are In, NotIn, Exists and DoesNotExist.
+                                type: string
+                              values:
+                                description: |-
+                                  values is an array of string values. If the operator is In or NotIn,
+                                  the values array must be non-empty. If the operator is Exists or DoesNotExist,
+                                  the values array must be empty. This array is replaced during a strategic
+                                  merge patch.
+                                items:
+                                  type: string
+                                type: array
+                                x-kubernetes-list-type: atomic
+                            required:
+                            - key
+                            - operator
+                            type: object
+                          type: array
+                          x-kubernetes-list-type: atomic
+                        matchLabels:
+                          additionalProperties:
+                            type: string
+                          description: |-
+                            matchLabels is a map of {key,value} pairs. A single {key,value} in the matchLabels
+                            map is equivalent to an element of matchExpressions, whose key field is "key", the
+                            operator is "In", and the values array contains only "value". The requirements are ANDed.
+                          type: object
+                      type: object
+                      x-kubernetes-map-type: atomic
+                    maxConcurrency:
+                      anyOf:
+                      - type: integer
+                      - type: string
+                      default: 1
+                      description: |-
+                        The maximum number of clusters that can be rolled out concurrently within this stage.
+
+                        This field accepts either an integer value (e.g., 5), or a percentage value (e.g., "50%"). For percentage values,
+                        the concurrency number is calculated based on the total number of clusters in the stage, with fractional results rounded down.
+
+                        A minimum concurrency of 1 is enforced.
+
+                        Defaults to 1.
+                      pattern: ^(100|[1-9][0-9]?)%$
+                      x-kubernetes-int-or-string: true
+                      x-kubernetes-validations:
+                      - message: maxConcurrency must be at least 1
+                        rule: self == null || type(self) != int || self >= 1
+                    name:
+                      description: |-
+                        The name of the stage. It must be unique within the staged update strategy and may only consist of
+                        lowercase alphanumeric characters.
+                      maxLength: 63
+                      pattern: ^[a-z0-9]+$
+                      type: string
+                    sortingLabelKey:
+                      description: |-
+                        The label key used to sort clusters in the stage. KubeFleet rolls out resource changes to clusters in the stage
+                        based on the sorted order.
+
+                        Specifically, KubeFleet will read the value of the label key for each cluster in the stage, and sort clusters in ascending
+                        order based on the label value, interpreted as an integer. If the label is missing on any cluster, an error will be raised.
+
+                        If this field is not set, KubeFleet will sort clusters in the stage based on the ascending lexical order of their names.
+                      type: string
+                  required:
+                  - name
+                  type: object
+                maxItems: 31
+                minItems: 1
+                type: array
+                x-kubernetes-validations:
+                - message: stage names must be unique
+                  rule: self.all(s, self.exists_one(t, t.name == s.name))
+            required:
+            - stages
+            type: object
+        required:
+        - spec
+        type: object
+    served: true
+    storage: true

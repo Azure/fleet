@@ -986,6 +986,35 @@ func TestRemoveWaitTimeFromUpdateRunStatus(t *testing.T) {
 				},
 			},
 		},
+		"should remove waitTime from the Approval task of the delete stage BeforeStageTasks": {
+			inputUpdateRun: &placementv1beta1.ClusterStagedUpdateRun{
+				Status: placementv1beta1.UpdateRunStatus{
+					UpdateStrategySnapshot: &placementv1beta1.UpdateStrategySpec{
+						DeleteStage: &placementv1beta1.DeleteStageConfig{
+							BeforeStageTasks: []placementv1beta1.StageTask{
+								{
+									Type:     placementv1beta1.StageTaskTypeApproval,
+									WaitTime: &waitTime,
+								},
+							},
+						},
+					},
+				},
+			},
+			wantUpdateRun: &placementv1beta1.ClusterStagedUpdateRun{
+				Status: placementv1beta1.UpdateRunStatus{
+					UpdateStrategySnapshot: &placementv1beta1.UpdateStrategySpec{
+						DeleteStage: &placementv1beta1.DeleteStageConfig{
+							BeforeStageTasks: []placementv1beta1.StageTask{
+								{
+									Type: placementv1beta1.StageTaskTypeApproval,
+								},
+							},
+						},
+					},
+				},
+			},
+		},
 		"should handle multiple stages": {
 			inputUpdateRun: &placementv1beta1.ClusterStagedUpdateRun{
 				Status: placementv1beta1.UpdateRunStatus{

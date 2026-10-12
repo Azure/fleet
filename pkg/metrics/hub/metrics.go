@@ -40,10 +40,10 @@ const (
 )
 
 var (
-	// FleetPlacementStatusLastTimeStampSeconds is a prometheus metric which keeps track of the last placement status.
+	// FleetPlacementStatusLastTimeStampSeconds is a prometheus metric which keeps track of the last placement status transition.
 	FleetPlacementStatusLastTimeStampSeconds = prometheus.NewGaugeVec(prometheus.GaugeOpts{
 		Name: "fleet_workload_placement_status_last_timestamp_seconds",
-		Help: "Last update timestamp of placement status in seconds",
+		Help: "Last placement status timestamp in seconds; this is the condition transition timestamp when available, or the placement creation timestamp when the selected condition is missing",
 	}, []string{"namespace", "name", "generation", "conditionType", "status", "reason"})
 
 	// FleetEvictionStatus is prometheus metrics which holds the
@@ -54,12 +54,12 @@ var (
 	}, []string{"name", "isCompleted", "isValid"})
 
 	// FleetUpdateRunStatusLastTimestampSeconds is a prometheus metric which holds the
-	// last update timestamp of update run status in seconds.
+	// last condition transition timestamp of update run status in seconds.
 	// The failure_type label indicates whether a failure is a user_error (customer configuration issue),
 	// internal_error (requires investigation), or none (no failure).
 	FleetUpdateRunStatusLastTimestampSeconds = prometheus.NewGaugeVec(prometheus.GaugeOpts{
 		Name: "fleet_workload_update_run_status_last_timestamp_seconds",
-		Help: "Last update timestamp of update run status in seconds",
+		Help: "Last transition timestamp of update run status in seconds",
 	}, []string{"namespace", "name", "state", "condition", "status", "reason", "failureType"})
 
 	// FleetUpdateRunApprovalRequestLatencySeconds tracks how long users take to approve approval requests.

@@ -64,6 +64,15 @@ func TestValidate(t *testing.T) {
 			opt:  newTestOptions(nil),
 			want: field.ErrorList{},
 		},
+		"use certificate auth and use kubeconfig together": {
+			opt: newTestOptions(func(option *Options) {
+				option.HubConnectivityOpts.UseCertificateAuth = true
+				option.HubConnectivityOpts.UseKubeConfig = true
+			}),
+			want: field.ErrorList{
+				field.Invalid(newPath.Child("HubConnectivityOpts").Child("UseKubeConfig"), true, "UseCertificateAuth and UseKubeConfig must not both be set"),
+			},
+		},
 		"hub burst less than hub QPS": {
 			opt: newTestOptions(func(option *Options) {
 				option.CtrlManagerOptions.HubManagerOpts.QPS = 200

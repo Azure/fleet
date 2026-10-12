@@ -285,6 +285,17 @@ func (r *Reconciler) generateStagesByStrategy(
 	// Remove waitTime from the updateRun status for BeforeStageTask and AfterStageTask for type Approval.
 	removeWaitTimeFromUpdateRunStatus(updateRun)
 
+	var deleteStageTasks []placementv1beta1.StageTask
+	if updateStrategySpec.DeleteStage != nil {
+		deleteStageTasks = updateStrategySpec.DeleteStage.BeforeStageTasks
+	}
+	if err := validateBeforeStageTask(deleteStageTasks); err != nil {
+		klog.ErrorS(err, "Failed to validate the before stage tasks of the delete stage", "updateStrategy", strategyKey, "updateRun", updateRunRef)
+		// no more retries here.
+		invalidBeforeStageErr := controller.NewUserError(fmt.Errorf("the before stage tasks are invalid, updateStrategy: `%s`, stage: %s, err: %s", strategyKey, placementv1beta1.UpdateRunDeleteStageName, err.Error()))
+		return fmt.Errorf("%w: %s", errValidationFailed, invalidBeforeStageErr.Error())
+	}
+
 	// Compute the update stages.
 	if err := r.computeRunStageStatus(ctx, scheduledBindings, updateRun); err != nil {
 		return err
@@ -305,6 +316,9 @@ func (r *Reconciler) generateStagesByStrategy(
 		StageName: placementv1beta1.UpdateRunDeleteStageName,
 		Clusters:  toBeDeletedClusters,
 	}
+	// Create the before stage tasks of the delete stage.
+	updateRunStatus.DeletionStageStatus.BeforeStageTaskStatus = buildStageTaskStatuses(deleteStageTasks,
+		fmt.Sprintf(placementv1beta1.BeforeStageApprovalTaskNameFmt, updateRun.GetName(), placementv1beta1.UpdateRunDeleteStageTaskName))
 	return nil
 }
 
@@ -415,21 +429,11 @@ func (r *Reconciler) computeRunStageStatus(
 		}
 
 		// Create the before stage tasks.
-		curStageUpdatingStatus.BeforeStageTaskStatus = make([]placementv1beta1.StageTaskStatus, len(stage.BeforeStageTasks))
-		for i, task := range stage.BeforeStageTasks {
-			curStageUpdatingStatus.BeforeStageTaskStatus[i].Type = task.Type
-			if task.Type == placementv1beta1.StageTaskTypeApproval {
-				curStageUpdatingStatus.BeforeStageTaskStatus[i].ApprovalRequestName = fmt.Sprintf(placementv1beta1.BeforeStageApprovalTaskNameFmt, updateRun.GetName(), stage.Name)
-			}
-		}
+		curStageUpdatingStatus.BeforeStageTaskStatus = buildStageTaskStatuses(stage.BeforeStageTasks,
+			fmt.Sprintf(placementv1beta1.BeforeStageApprovalTaskNameFmt, updateRun.GetName(), stage.Name))
 		// Create the after stage tasks.
-		curStageUpdatingStatus.AfterStageTaskStatus = make([]placementv1beta1.StageTaskStatus, len(stage.AfterStageTasks))
-		for i, task := range stage.AfterStageTasks {
-			curStageUpdatingStatus.AfterStageTaskStatus[i].Type = task.Type
-			if task.Type == placementv1beta1.StageTaskTypeApproval {
-				curStageUpdatingStatus.AfterStageTaskStatus[i].ApprovalRequestName = fmt.Sprintf(placementv1beta1.AfterStageApprovalTaskNameFmt, updateRun.GetName(), stage.Name)
-			}
-		}
+		curStageUpdatingStatus.AfterStageTaskStatus = buildStageTaskStatuses(stage.AfterStageTasks,
+			fmt.Sprintf(placementv1beta1.AfterStageApprovalTaskNameFmt, updateRun.GetName(), stage.Name))
 		stagesStatus = append(stagesStatus, curStageUpdatingStatus)
 	}
 	updateRunStatus.StagesStatus = stagesStatus
@@ -450,6 +454,19 @@ func (r *Reconciler) computeRunStageStatus(
 		return fmt.Errorf("%w: %s, total %d, showing up to 10: %s", errValidationFailed, missingErr.Error(), len(missingClusters), strings.Join(missingClusters[:min(10, len(missingClusters))], ", "))
 	}
 	return nil
+}
+
+// buildStageTaskStatuses builds the statuses of the given tasks of a stage, where approvalRequestName is the name of
+// the approval request of the Approval task.
+func buildStageTaskStatuses(tasks []placementv1beta1.StageTask, approvalRequestName string) []placementv1beta1.StageTaskStatus {
+	taskStatuses := make([]placementv1beta1.StageTaskStatus, len(tasks))
+	for i, task := range tasks {
+		taskStatuses[i].Type = task.Type
+		if task.Type == placementv1beta1.StageTaskTypeApproval {
+			taskStatuses[i].ApprovalRequestName = approvalRequestName
+		}
+	}
+	return taskStatuses
 }
 
 // validateBeforeStageTask validates the beforeStageTasks in the stage defined in the UpdateStrategy.

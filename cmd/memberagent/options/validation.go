@@ -28,6 +28,11 @@ func (o *Options) Validate() field.ErrorList {
 	errs := field.ErrorList{}
 	newPath := field.NewPath("Options")
 
+	// Cross-field validation for hub connectivity options.
+	if o.HubConnectivityOpts.UseCertificateAuth && o.HubConnectivityOpts.UseKubeConfig {
+		errs = append(errs, field.Invalid(newPath.Child("HubConnectivityOpts").Child("UseKubeConfig"), o.HubConnectivityOpts.UseKubeConfig, "UseCertificateAuth and UseKubeConfig must not both be set"))
+	}
+
 	// Cross-field validation for controller manager options.
 	if float64(o.CtrlManagerOptions.HubManagerOpts.Burst) < o.CtrlManagerOptions.HubManagerOpts.QPS {
 		errs = append(errs, field.Invalid(newPath.Child("HubManagerOpts").Child("Burst"), o.CtrlManagerOptions.HubManagerOpts.Burst, "The burst limit for hub cluster client-side throttling must be greater than or equal to its QPS limit"))
