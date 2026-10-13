@@ -19,24 +19,24 @@ func TestHelmChartTemplatesRenderValidYAML(t *testing.T) {
 	// Maximal configuration to activate all conditional template paths
 	values := map[string]interface{}{
 		"memberagent": map[string]interface{}{
-			"repository": "mcr.microsoft.com/aks/fleet/member-agent",
+			"repository": "mcr.microsoft.com/aks/v2/fleet/member-agent",
 			"tag":        "v1.0.0",
 		},
 		"mcscontrollermanager": map[string]interface{}{
-			"repository": "mcr.microsoft.com/aks/fleet/mcs-controller-manager",
+			"repository": "mcr.microsoft.com/aks/v2/fleet/mcs-controller-manager",
 			"tag":        "v1.0.0",
 		},
 		"membernetcontrollermanager": map[string]interface{}{
-			"repository": "mcr.microsoft.com/aks/fleet/member-net-controller-manager",
+			"repository": "mcr.microsoft.com/aks/v2/fleet/member-net-controller-manager",
 			"tag":        "v1.0.0",
 		},
 		"refreshtoken": map[string]interface{}{
-			"repository": "mcr.microsoft.com/aks/fleet/refresh-token",
+			"repository": "mcr.microsoft.com/aks/v2/fleet/refresh-token",
 			"tag":        "v1.0.0",
 		},
 		"crdinstaller": map[string]interface{}{
 			"enabled":      true,
-			"repository":   "mcr.microsoft.com/aks/fleet/crd-installer",
+			"repository":   "mcr.microsoft.com/aks/v2/fleet/crd-installer",
 			"tag":          "v1.0.0",
 			"logVerbosity": 2,
 		},
