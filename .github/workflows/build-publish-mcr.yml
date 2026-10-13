@@ -34,9 +34,6 @@ jobs:
       fleet_networking_version: ${{ steps.vars.outputs.fleet_networking_version }}
       arc_helmchart_version: ${{ steps.vars.outputs.arc_helmchart_version }}
     steps:
-      - uses: actions/checkout@v6
-        with:
-          fetch-depth: 0
       - name: 'Set output variables'
         id: vars
         run: |
@@ -61,16 +58,28 @@ jobs:
             echo "${base}-${revision}"
           }
 
+          # Release tags are read from the upstream repositories rather than the checkout, which on a fork
+          # carries no tags.
+          latest_github_tag() {
+            local repo="$1" tag
+            tag=$(curl -sf --retry 3 --retry-delay 5 --retry-all-errors --max-time 30 \
+              "https://api.github.com/repos/${repo}/tags" | jq -r '.[0].name // empty')
+            if [ -z "$tag" ]; then
+              echo "Failed to resolve the latest tag of ${repo}." >&2
+              return 1
+            fi
+            echo "$tag"
+          }
+
           FLEET_RELEASE_TAG="${{ inputs.releaseTag }}"
           if [ -z "$FLEET_RELEASE_TAG" ]; then
-            FLEET_RELEASE_TAG=$(git describe --tags "$(git rev-list --tags --max-count=1)")
+            FLEET_RELEASE_TAG=$(latest_github_tag "Azure/fleet")
             echo "The user input release tag is empty, will use the latest tag $FLEET_RELEASE_TAG."
           fi
 
           FLEET_NETWORKING_RELEASE_TAG="${{ inputs.fleetNetworkingReleaseTag }}"
           if [ -z "$FLEET_NETWORKING_RELEASE_TAG" ]; then
-            FLEET_NETWORKING_RELEASE_TAG=$(curl -sf --retry 3 --retry-delay 5 --retry-all-errors --max-time 30 \
-              "https://api.github.com/repos/Azure/fleet-networking/tags" | jq -r '.[0].name')
+            FLEET_NETWORKING_RELEASE_TAG=$(latest_github_tag "Azure/fleet-networking")
             echo "The user input fleet-networking release tag is empty, will use the latest tag $FLEET_NETWORKING_RELEASE_TAG."
           fi
 
