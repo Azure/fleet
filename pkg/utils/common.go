@@ -520,18 +520,6 @@ func IsFleetMemberNamespace(namespace string) bool {
 	return strings.HasPrefix(namespace, FleetMemberNamespacePrefix)
 }
 
-// ShouldPropagateNamespace decides if we should propagate the resources in the namespace.
-func ShouldPropagateNamespace(namespace string, skippedNamespaces map[string]bool) bool {
-	if IsReservedNamespace(namespace) {
-		return false
-	}
-
-	if skippedNamespaces[namespace] {
-		return false
-	}
-	return true
-}
-
 // GenerateGroupString generates a string which prints groups in which a user belongs,
 // it compresses the string to just display three groups if length of groups is more than 10.
 func GenerateGroupString(groups []string) string {

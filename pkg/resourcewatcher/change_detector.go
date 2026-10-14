@@ -29,10 +29,10 @@ import (
 	"k8s.io/klog/v2"
 	"sigs.k8s.io/controller-runtime/pkg/manager"
 
-	"go.goms.io/fleet/pkg/utils"
-	"go.goms.io/fleet/pkg/utils/controller"
-	"go.goms.io/fleet/pkg/utils/informer"
-	"go.goms.io/fleet/pkg/utils/keys"
+	"github.com/kubefleet-dev/kubefleet/pkg/utils/controller"
+	"github.com/kubefleet-dev/kubefleet/pkg/utils/informer"
+	"github.com/kubefleet-dev/kubefleet/pkg/utils/keys"
+	"github.com/kubefleet-dev/kubefleet/pkg/utils/resourceeligibility"
 )
 
 // make sure that our ChangeDetector implements controller runtime interfaces
@@ -70,11 +70,8 @@ type ChangeDetector struct {
 	// InformerManager manages all the dynamic informers created by the discovery client
 	InformerManager informer.Manager
 
-	// ResourceConfig contains all the API resources that we won't select based on the allowed or skipped propagating APIs option.
-	ResourceConfig *utils.ResourceConfig
-
-	// SkippedNamespaces contains all the namespaces that we won't select
-	SkippedNamespaces map[string]bool
+	// ResourceEligibilityChecker determines if a given namespace, GVK (GVR) is eligible for placement.
+	ResourceEligibilityChecker resourceeligibility.Checker
 
 	// ConcurrentPlacementWorker is the number of `placement` reconcilers that are
 	// allowed to sync concurrently.
@@ -138,7 +135,7 @@ func (d *ChangeDetector) discoverAPIResourcesLoop(ctx context.Context, period ti
 
 // discoverResources goes through all the api resources in the cluster and adds event handlers to informers
 func (d *ChangeDetector) discoverResources(dynamicResourceEventHandler cache.ResourceEventHandler) {
-	resourcesToWatch := discoverWatchableResources(d.DiscoveryClient, d.RESTMapper, d.ResourceConfig)
+	resourcesToWatch := discoverWatchableResources(d.DiscoveryClient, d.ResourceEligibilityChecker)
 
 	// On the leader, add event handlers to informers that were already created by InformerPopulator
 	// The informers exist on all pods, but only the leader adds handlers and processes events
@@ -168,8 +165,8 @@ func (d *ChangeDetector) dynamicResourceFilter(obj any) bool {
 	}
 
 	cwKey, _ := key.(keys.ClusterWideKey)
-	if !utils.ShouldPropagateNamespace(cwKey.Namespace, d.SkippedNamespaces) {
-		klog.V(5).InfoS("Skip watching resource in namespace", "namespace", cwKey.Namespace,
+	if d.ResourceEligibilityChecker != nil && !d.ResourceEligibilityChecker.AllowsNamespace(cwKey.Namespace) {
+		klog.V(5).InfoS("Skip watching resource in namespace due to placement eligibility", "namespace", cwKey.Namespace,
 			"group", cwKey.Group, "version", cwKey.Version, "kind", cwKey.Kind, "object", cwKey.Name)
 		return false
 	}

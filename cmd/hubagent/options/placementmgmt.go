@@ -25,7 +25,7 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/klog/v2"
 
-	"go.goms.io/fleet/pkg/utils"
+	"github.com/kubefleet-dev/kubefleet/pkg/utils/resourceeligibility"
 )
 
 // PlacementManagementOptions is a set of options the KubeFleet hub agent exposes for
@@ -36,22 +36,24 @@ type PlacementManagementOptions struct {
 	// This option is no longer in use and is only kept for compatibility reasons.
 	WorkPendingGracePeriod metav1.Duration
 
-	// A list of APIs that are block-listed for resource placement. Any resources under such APIs will be ignored
-	// by the KubeFleet hub agent and will not be selected for resource placement.
+	// A list of APIs that are deny-listed for resource placement. Any resources under such APIs will be blocked/denied
+	// for placement by the KubeFleet hub agent.
 	//
-	// The list is a collection of GVKs separated by semicolons. A GVK can be of the format GROUP,
-	// GROUP/VERSION, or GROUP/VERSION/KINDS, where KINDS is a comma separated array of Kind values. If you would
-	// like to skip specific versions and/or kinds in the core API group, use the format VERSION, or
-	// VERSION/KINDS instead. Below are some examples:
+	// The list is a collection of GVKs separated by semicolons. A GVK can be of the format [API-GROUP],
+	// [API-GROUP]/[API-VERSION], or [API-GROUP]/[API-VERSION]/[KINDS], where [KINDS] is a comma separated array of
+	// Kind values. If you would like to skip specific versions and/or kinds in the core API group, use the format
+	// [API-VERSION], or [API-VERSION]/[KINDS] instead. Below are some examples:
 	//
 	// * networking.k8s.io: skip all resources in the networking.k8s.io API group for placement;
 	// * networking.k8s.io/v1beta1: skip all resources in the networking.k8s.io/v1beta1 group version for placement;
 	// * networking.k8s.io/v1beta1/Ingress,IngressClass: skip the Ingress and IngressClass resources
 	//   in the networking.k8s.io/v1beta1 group version for placement;
-	// * v1beta1: skip all resources of version v1beta1 in the core API group for placement;
+	// * v1: skip all resources of version v1 in the core API group for placement;
 	// * v1/ConfigMap: skip ConfigMap resources of version v1 in the core API group for placement;
-	// * networking.k8s.io/v1beta1/Ingress; v1beta1: skip the Ingress resource in the networking.k8s.io/v1beta1 group version
-	//   and all resources of version v1beta1 in the core API group for placement.
+	// * networking.k8s.io/v1beta1/Ingress;v1/ConfigMap: skip the Ingress resource in the networking.k8s.io/v1beta1
+	//   group version and the ConfigMap resource of version v1 in the core API group for placement.
+	//
+	// You can leave the [API-VERSION] and/or [KINDS] parts empty to deny all versions and/or kinds in an API group.
 	//
 	// This option is mutually exclusive with the AllowedPropagatingAPIs option. KubeFleet comes with a built-in
 	// block list of APIs for resource placement that covers most KubeFleet APIs and a select few of critical Kubernetes
@@ -60,19 +62,21 @@ type PlacementManagementOptions struct {
 	// A list of APIs that are allow-listed for resource placement. If specified, only resources under such APIs
 	// will be selected for resource placement by the KubeFleet hub agent.
 	//
-	// The list is a collection of GVKs separated by semicolons. A GVK can be of the format GROUP,
-	// GROUP/VERSION, or GROUP/VERSION/KINDS, where KINDS is a comma separated array of Kind values. If you would
-	// like to skip specific versions and/or kinds in the core API group, use the format VERSION, or
-	// VERSION/KINDS instead. Below are some examples:
+	// The list is a collection of GVKs separated by semicolons. A GVK can be of the format [API-GROUP],
+	// [API-GROUP]/[API-VERSION], or [API-GROUP]/[API-VERSION]/[KINDS], where [KINDS] is a comma separated array of
+	// Kind values. If you would like to allow specific versions and/or kinds in the core API group, use the format
+	// [API-VERSION], or [API-VERSION]/[KINDS] instead. Below are some examples:
 	//
 	// * networking.k8s.io: allow all resources in the networking.k8s.io API group for placement only;
 	// * networking.k8s.io/v1beta1: allow all resources in the networking.k8s.io/v1beta1 group version for placement only;
 	// * networking.k8s.io/v1beta1/Ingress,IngressClass: allow the Ingress and IngressClass resources
 	//   in the networking.k8s.io/v1beta1 group version for placement only;
-	// * v1beta1: allow all resources of version v1beta1 in the core API group for placement only;
+	// * v1: allow all resources of version v1 in the core API group for placement only;
 	// * v1/ConfigMap: allow ConfigMap resources of version v1 in the core API group for placement only;
 	// * networking.k8s.io/v1beta1/Ingress; v1beta1: only allow the Ingress resource in the networking.k8s.io/v1beta1
 	//   group version and all resources of version v1beta1 in the core API group for placement.
+	//
+	// You can leave the [API-VERSION] and/or [KINDS] parts empty to allow all versions and/or kinds in an API group.
 	//
 	// This option is mutually exclusive with the SkippedPropagatingAPIs option.
 	AllowedPropagatingAPIs string
@@ -80,9 +84,9 @@ type PlacementManagementOptions struct {
 	// A list of namespace names that are block-listed for resource placement. The KubeFleet hub agent
 	// will ignore the namespaces and any resources within them when selecting resources for placement.
 	//
-	// This list is a collection of names separated by commas, such as `internals,monitoring`. KubeFleet
+	// This list is a collection of names separated by semicolons, such as `internals;monitoring`. KubeFleet
 	// also blocks a number of reserved namespace names for placement by default; such namespaces include
-	// those that are prefixed with `kube-`, and `fleet-system`.
+	// `default` and those that are prefixed with `kube-` or `fleet-`.
 	SkippedPropagatingNamespaces string
 
 	// The number of concurrent workers that help process resource changes for the placement APIs.
@@ -141,7 +145,7 @@ func (o *PlacementManagementOptions) AddFlags(flags *flag.FlagSet) {
 		&o.SkippedPropagatingNamespaces,
 		"skipped-propagating-namespaces",
 		"",
-		"A list of comma-separated namespace names that are block-listed for resource placement. The KubeFleet hub agent will ignore the namespaces and any resources within them when selecting resources for placement.",
+		"A list of semicolon-separated namespace names that are block-listed for resource placement, such as `internals;monitoring`. The KubeFleet hub agent will ignore the namespaces and any resources within them when selecting resources for placement. KubeFleet also blocks the `default` namespace and any namespace prefixed with `kube-` or `fleet-` by default.",
 	)
 
 	flags.Var(
@@ -203,8 +207,7 @@ func (v *SkippedPropagatingAPIsValueWithValidation) String() string {
 }
 
 func (v *SkippedPropagatingAPIsValueWithValidation) Set(s string) error {
-	rc := utils.NewResourceConfig(false)
-	if err := rc.Parse(s); err != nil {
+	if _, err := resourceeligibility.ParseGVKs(s); err != nil {
 		return fmt.Errorf("invalid list of skipped for propagation APIs: %w", err)
 	}
 	*v = SkippedPropagatingAPIsValueWithValidation(s)
@@ -223,9 +226,13 @@ func (v *AllowedPropagatingAPIsValueWithValidation) String() string {
 }
 
 func (v *AllowedPropagatingAPIsValueWithValidation) Set(s string) error {
-	rc := utils.NewResourceConfig(true)
-	if err := rc.Parse(s); err != nil {
+	gvks, err := resourceeligibility.ParseGVKs(s)
+	if err != nil {
 		return fmt.Errorf("invalid list of allowed for propagation APIs: %w", err)
+	}
+	if len(gvks) == 0 {
+		// An empty allow list would block every resource from placement.
+		return fmt.Errorf("invalid list of allowed for propagation APIs: the list cannot be empty")
 	}
 	*v = AllowedPropagatingAPIsValueWithValidation(s)
 	return nil

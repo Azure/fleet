@@ -27,9 +27,9 @@ import (
 	"k8s.io/client-go/kubernetes/fake"
 	"k8s.io/client-go/restmapper"
 
-	"go.goms.io/fleet/pkg/utils"
-	testinformer "go.goms.io/fleet/test/utils/informer"
-	testresource "go.goms.io/fleet/test/utils/resource"
+	"github.com/kubefleet-dev/kubefleet/pkg/utils/resourceeligibility"
+	testinformer "github.com/kubefleet-dev/kubefleet/test/utils/informer"
+	testresource "github.com/kubefleet-dev/kubefleet/test/utils/resource"
 )
 
 const (
@@ -38,6 +38,16 @@ const (
 	// testSleep is how long to sleep to allow periodic operations
 	testSleep = 150 * time.Millisecond
 )
+
+// fakeDiscoveryWithPreferredResources serves Resources from ServerPreferredResources, which the
+// embedded FakeDiscovery always answers with nil.
+type fakeDiscoveryWithPreferredResources struct {
+	*fakediscovery.FakeDiscovery
+}
+
+func (f *fakeDiscoveryWithPreferredResources) ServerPreferredResources() ([]*metav1.APIResourceList, error) {
+	return f.Resources, nil
+}
 
 func TestInformerPopulator_NeedLeaderElection(t *testing.T) {
 	populator := &InformerPopulator{}
@@ -52,7 +62,7 @@ func TestInformerPopulator_discoverAndCreateInformers(t *testing.T) {
 	tests := []struct {
 		name                    string
 		discoveryResources      []*metav1.APIResourceList
-		resourceConfig          *utils.ResourceConfig
+		eligibilityChecker      resourceeligibility.Checker
 		expectedInformerCreated bool
 		expectedResourceCount   int
 	}{
@@ -66,7 +76,7 @@ func TestInformerPopulator_discoverAndCreateInformers(t *testing.T) {
 					},
 				},
 			},
-			resourceConfig:          nil, // Allow all resources
+			eligibilityChecker:      nil, // Allow all resources
 			expectedInformerCreated: true,
 			expectedResourceCount:   1,
 		},
@@ -80,12 +90,12 @@ func TestInformerPopulator_discoverAndCreateInformers(t *testing.T) {
 					},
 				},
 			},
-			resourceConfig:          nil,
+			eligibilityChecker:      nil,
 			expectedInformerCreated: false,
 			expectedResourceCount:   0,
 		},
 		{
-			name: "respects resource config filtering",
+			name: "respects eligibility checker filtering",
 			discoveryResources: []*metav1.APIResourceList{
 				{
 					GroupVersion: "v1",
@@ -94,10 +104,11 @@ func TestInformerPopulator_discoverAndCreateInformers(t *testing.T) {
 					},
 				},
 			},
-			resourceConfig: func() *utils.ResourceConfig {
-				rc := utils.NewResourceConfig(false) // Skip mode
-				_ = rc.Parse("v1/Secret")            // Skip secrets
-				return rc
+			eligibilityChecker: func() resourceeligibility.Checker {
+				// Only the GVK check runs during discovery, which does not use the RESTMapper.
+				c := resourceeligibility.New(nil, resourceeligibility.DefaultForV0APIs(nil))
+				_ = c.SetGVKCheckList(resourceeligibility.GVKEligibilityModeDenyList, []schema.GroupVersionKind{{Version: "v1", Kind: "Secret"}}) // Skip secrets
+				return c
 			}(),
 			expectedInformerCreated: false,
 			expectedResourceCount:   0,
@@ -150,16 +161,21 @@ func TestInformerPopulator_discoverAndCreateInformers(t *testing.T) {
 
 			// Track calls to CreateInformerForResource
 			populator := &InformerPopulator{
-				DiscoveryClient: fakeDiscovery,
-				RESTMapper:      restMapper,
-				InformerManager: fakeInformerManager,
-				ResourceConfig:  tt.resourceConfig,
+				DiscoveryClient:            &fakeDiscoveryWithPreferredResources{FakeDiscovery: fakeDiscovery},
+				RESTMapper:                 restMapper,
+				InformerManager:            fakeInformerManager,
+				ResourceEligibilityChecker: tt.eligibilityChecker,
 			}
 
 			// Run discovery
 			populator.discoverAndCreateInformers()
 
-			// Note: FakeManager doesn't track calls, so we verify no panics occurred
+			if got := len(fakeInformerManager.CreatedInformers); got != tt.expectedResourceCount {
+				t.Errorf("discoverAndCreateInformers() created %v informers, want %v", got, tt.expectedResourceCount)
+			}
+			if got := len(fakeInformerManager.CreatedInformers) > 0; got != tt.expectedInformerCreated {
+				t.Errorf("discoverAndCreateInformers() informer created = %v, want %v", got, tt.expectedInformerCreated)
+			}
 		})
 	}
 }
@@ -197,10 +213,10 @@ func TestInformerPopulator_Start(t *testing.T) {
 	}
 
 	populator := &InformerPopulator{
-		DiscoveryClient: fakeDiscovery,
-		RESTMapper:      restMapper,
-		InformerManager: fakeInformerManager,
-		ResourceConfig:  nil,
+		DiscoveryClient:            fakeDiscovery,
+		RESTMapper:                 restMapper,
+		InformerManager:            fakeInformerManager,
+		ResourceEligibilityChecker: nil,
 	}
 
 	// Create a context that will cancel after a short time
@@ -269,11 +285,10 @@ func TestInformerPopulator_Integration(t *testing.T) {
 	}
 	restMapper := restmapper.NewDiscoveryRESTMapper(groupResources)
 
-	// Create resource config that skips secrets
-	resourceConfig := utils.NewResourceConfig(false)
-	err := resourceConfig.Parse("v1/Secret")
-	if err != nil {
-		t.Fatalf("Failed to parse resource config: %v", err)
+	// Create an eligibility checker that skips secrets
+	eligibilityChecker := resourceeligibility.New(restMapper, resourceeligibility.DefaultForV0APIs(restMapper))
+	if err := eligibilityChecker.SetGVKCheckList(resourceeligibility.GVKEligibilityModeDenyList, []schema.GroupVersionKind{{Version: "v1", Kind: "Secret"}}); err != nil {
+		t.Fatalf("Failed to set the GVK deny list: %v", err)
 	}
 
 	fakeInformerManager := &testinformer.FakeManager{
@@ -282,10 +297,10 @@ func TestInformerPopulator_Integration(t *testing.T) {
 	}
 
 	populator := &InformerPopulator{
-		DiscoveryClient: fakeDiscovery,
-		RESTMapper:      restMapper,
-		InformerManager: fakeInformerManager,
-		ResourceConfig:  resourceConfig,
+		DiscoveryClient:            fakeDiscovery,
+		RESTMapper:                 restMapper,
+		InformerManager:            fakeInformerManager,
+		ResourceEligibilityChecker: eligibilityChecker,
 	}
 
 	// Run discovery
@@ -328,10 +343,10 @@ func TestInformerPopulator_PeriodicDiscovery(t *testing.T) {
 	}
 
 	populator := &InformerPopulator{
-		DiscoveryClient: fakeDiscovery,
-		RESTMapper:      restMapper,
-		InformerManager: fakeInformerManager,
-		ResourceConfig:  nil,
+		DiscoveryClient:            fakeDiscovery,
+		RESTMapper:                 restMapper,
+		InformerManager:            fakeInformerManager,
+		ResourceEligibilityChecker: nil,
 	}
 
 	// Override the discovery period for testing

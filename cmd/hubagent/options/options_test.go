@@ -586,6 +586,13 @@ func TestPlacementManagementOptions(t *testing.T) {
 			wantErrMsgSubStr: "invalid list of allowed for propagation APIs",
 		},
 		{
+			name:             "allowed propagating APIs with no entries",
+			flagSetName:      "allowedPropagatingAPIsEmpty",
+			args:             []string{"--allowed-propagating-apis=   "},
+			wantErred:        true,
+			wantErrMsgSubStr: "the list cannot be empty",
+		},
+		{
 			name:             "concurrent resource change syncs parse error",
 			flagSetName:      "concurrentResourceChangeSyncsParseError",
 			args:             []string{"--concurrent-resource-change-syncs=abc"},

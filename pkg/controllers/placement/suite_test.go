@@ -37,14 +37,14 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/manager"
 	metricsserver "sigs.k8s.io/controller-runtime/pkg/metrics/server"
 
-	placementv1beta1 "go.goms.io/fleet/apis/placement/v1beta1"
-	"go.goms.io/fleet/cmd/hubagent/options"
-	"go.goms.io/fleet/pkg/controllers/bindingwatcher"
-	"go.goms.io/fleet/pkg/controllers/placementwatcher"
-	"go.goms.io/fleet/pkg/controllers/schedulingpolicysnapshot"
-	"go.goms.io/fleet/pkg/utils"
-	"go.goms.io/fleet/pkg/utils/controller"
-	"go.goms.io/fleet/pkg/utils/informer"
+	placementv1beta1 "github.com/kubefleet-dev/kubefleet/apis/placement/v1beta1"
+	"github.com/kubefleet-dev/kubefleet/cmd/hubagent/options"
+	"github.com/kubefleet-dev/kubefleet/pkg/controllers/bindingwatcher"
+	"github.com/kubefleet-dev/kubefleet/pkg/controllers/placementwatcher"
+	"github.com/kubefleet-dev/kubefleet/pkg/controllers/schedulingpolicysnapshot"
+	"github.com/kubefleet-dev/kubefleet/pkg/utils/controller"
+	"github.com/kubefleet-dev/kubefleet/pkg/utils/informer"
+	"github.com/kubefleet-dev/kubefleet/pkg/utils/resourceeligibility"
 )
 
 var (
@@ -112,12 +112,9 @@ var _ = BeforeSuite(func() {
 	Expect(err).Should(Succeed(), "failed to create manager")
 
 	resourceSelectorResolver := controller.ResourceSelectorResolver{
-		RestMapper:      mgr.GetRESTMapper(),
-		InformerManager: informer.NewInformerManager(dynamicClient, 5*time.Minute, ctx.Done()),
-		ResourceConfig:  utils.NewResourceConfig(false),
-		SkippedNamespaces: map[string]bool{
-			"default": true,
-		},
+		RestMapper:                 mgr.GetRESTMapper(),
+		InformerManager:            informer.NewInformerManager(dynamicClient, 5*time.Minute, ctx.Done()),
+		ResourceEligibilityChecker: resourceeligibility.DefaultForV0APIs(mgr.GetRESTMapper()),
 	}
 	resourceSnapshotResolver := controller.NewResourceSnapshotResolver(mgr.GetClient(), mgr.GetScheme())
 	reconciler := &Reconciler{

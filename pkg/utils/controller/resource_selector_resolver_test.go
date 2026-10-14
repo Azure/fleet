@@ -37,9 +37,10 @@ import (
 	"k8s.io/kubectl/pkg/util/deployment"
 	"k8s.io/utils/ptr"
 
-	fleetv1beta1 "go.goms.io/fleet/apis/placement/v1beta1"
-	"go.goms.io/fleet/pkg/utils"
-	testinformer "go.goms.io/fleet/test/utils/informer"
+	fleetv1beta1 "github.com/kubefleet-dev/kubefleet/apis/placement/v1beta1"
+	"github.com/kubefleet-dev/kubefleet/pkg/utils"
+	"github.com/kubefleet-dev/kubefleet/pkg/utils/resourceeligibility"
+	testinformer "github.com/kubefleet-dev/kubefleet/test/utils/informer"
 )
 
 func makeIPFamilyPolicyTypePointer(policyType corev1.IPFamilyPolicy) *corev1.IPFamilyPolicy {
@@ -474,13 +475,13 @@ func TestGatherSelectedResource(t *testing.T) {
 	kubeSystemNamespace.SetGroupVersionKind(utils.NamespaceGVK)
 
 	tests := []struct {
-		name            string
-		placementName   types.NamespacedName
-		selectors       []fleetv1beta1.ResourceSelectorTerm
-		resourceConfig  *utils.ResourceConfig
-		informerManager *testinformer.FakeManager
-		want            []*unstructured.Unstructured
-		wantError       error
+		name                       string
+		placementName              types.NamespacedName
+		selectors                  []fleetv1beta1.ResourceSelectorTerm
+		resourceEligibilityChecker resourceeligibility.Checker
+		informerManager            *testinformer.FakeManager
+		want                       []*unstructured.Unstructured
+		wantError                  error
 	}{
 		{
 			name:          "should handle empty selectors",
@@ -499,8 +500,12 @@ func TestGatherSelectedResource(t *testing.T) {
 					Name:    "test-deployment",
 				},
 			},
-			resourceConfig: utils.NewResourceConfig(true), // make this allow list - nothing is allowed
-			want:           nil,
+			resourceEligibilityChecker: func() resourceeligibility.Checker {
+				c := resourceeligibility.New(newFakeRESTMapper(), nil)
+				_ = c.SetGVKCheckList(resourceeligibility.GVKEligibilityModeAllowList, nil)
+				return c
+			}(), // make this allow list - nothing is allowed
+			want: nil,
 		},
 		{
 			name:          "should skip disabled resources for resource placement",
@@ -513,8 +518,12 @@ func TestGatherSelectedResource(t *testing.T) {
 					Name:    "test-deployment",
 				},
 			},
-			resourceConfig: utils.NewResourceConfig(true), // make this allow list - nothing is allowed
-			want:           nil,
+			resourceEligibilityChecker: func() resourceeligibility.Checker {
+				c := resourceeligibility.New(newFakeRESTMapper(), nil)
+				_ = c.SetGVKCheckList(resourceeligibility.GVKEligibilityModeAllowList, nil)
+				return c
+			}(), // make this allow list - nothing is allowed
+			want: nil,
 		},
 		{
 			name:          "should return error for cluster-scoped resource",
@@ -527,7 +536,7 @@ func TestGatherSelectedResource(t *testing.T) {
 					Name:    "test-clusterrole",
 				},
 			},
-			resourceConfig: utils.NewResourceConfig(false), // default deny list
+			resourceEligibilityChecker: resourceeligibility.DefaultForV0APIs(newFakeRESTMapper()), // default deny list
 			informerManager: &testinformer.FakeManager{
 				IsClusterScopedResource: false,
 				Listers:                 map[schema.GroupVersionResource]*testinformer.FakeLister{},
@@ -546,7 +555,7 @@ func TestGatherSelectedResource(t *testing.T) {
 					Name:    "test-deployment",
 				},
 			},
-			resourceConfig: utils.NewResourceConfig(false), // default deny list
+			resourceEligibilityChecker: resourceeligibility.DefaultForV0APIs(newFakeRESTMapper()), // default deny list
 			informerManager: func() *testinformer.FakeManager {
 				return &testinformer.FakeManager{
 					IsClusterScopedResource: true,
@@ -569,7 +578,7 @@ func TestGatherSelectedResource(t *testing.T) {
 					Name:    "test-deployment",
 				},
 			},
-			resourceConfig: utils.NewResourceConfig(false), // default deny list
+			resourceEligibilityChecker: resourceeligibility.DefaultForV0APIs(newFakeRESTMapper()), // default deny list
 			informerManager: func() *testinformer.FakeManager {
 				return &testinformer.FakeManager{
 					IsClusterScopedResource: true,
@@ -594,7 +603,7 @@ func TestGatherSelectedResource(t *testing.T) {
 					Name:    "test-deployment",
 				},
 			},
-			resourceConfig: utils.NewResourceConfig(false), // default deny list
+			resourceEligibilityChecker: resourceeligibility.DefaultForV0APIs(newFakeRESTMapper()), // default deny list
 			informerManager: func() *testinformer.FakeManager {
 				return &testinformer.FakeManager{
 					IsClusterScopedResource: true,
@@ -618,7 +627,7 @@ func TestGatherSelectedResource(t *testing.T) {
 					Kind:    "Deployment",
 				},
 			},
-			resourceConfig: utils.NewResourceConfig(false), // default deny list
+			resourceEligibilityChecker: resourceeligibility.DefaultForV0APIs(newFakeRESTMapper()), // default deny list
 			informerManager: func() *testinformer.FakeManager {
 				return &testinformer.FakeManager{
 					IsClusterScopedResource: true,
@@ -649,7 +658,7 @@ func TestGatherSelectedResource(t *testing.T) {
 					Name:    "test-deleting-deployment", // deleting deployment
 				},
 			},
-			resourceConfig: utils.NewResourceConfig(false), // default deny list
+			resourceEligibilityChecker: resourceeligibility.DefaultForV0APIs(newFakeRESTMapper()), // default deny list
 			informerManager: func() *testinformer.FakeManager {
 				return &testinformer.FakeManager{
 					IsClusterScopedResource: true,
@@ -676,7 +685,7 @@ func TestGatherSelectedResource(t *testing.T) {
 					},
 				},
 			},
-			resourceConfig: utils.NewResourceConfig(false), // default deny list
+			resourceEligibilityChecker: resourceeligibility.DefaultForV0APIs(newFakeRESTMapper()), // default deny list
 			informerManager: func() *testinformer.FakeManager {
 				return &testinformer.FakeManager{
 					IsClusterScopedResource: true,
@@ -707,7 +716,7 @@ func TestGatherSelectedResource(t *testing.T) {
 					},
 				},
 			},
-			resourceConfig: utils.NewResourceConfig(false), // default deny list
+			resourceEligibilityChecker: resourceeligibility.DefaultForV0APIs(newFakeRESTMapper()), // default deny list
 			informerManager: func() *testinformer.FakeManager {
 				return &testinformer.FakeManager{
 					IsClusterScopedResource: true,
@@ -736,7 +745,7 @@ func TestGatherSelectedResource(t *testing.T) {
 					Name:    "test-deployment", // same deployment selected twice
 				},
 			},
-			resourceConfig: utils.NewResourceConfig(false), // default deny list
+			resourceEligibilityChecker: resourceeligibility.DefaultForV0APIs(newFakeRESTMapper()), // default deny list
 			informerManager: func() *testinformer.FakeManager {
 				return &testinformer.FakeManager{
 					IsClusterScopedResource: true,
@@ -764,7 +773,7 @@ func TestGatherSelectedResource(t *testing.T) {
 					Name:    "test-configmap",
 				},
 			},
-			resourceConfig: utils.NewResourceConfig(false), // default deny list
+			resourceEligibilityChecker: resourceeligibility.DefaultForV0APIs(newFakeRESTMapper()), // default deny list
 			informerManager: func() *testinformer.FakeManager {
 				return &testinformer.FakeManager{
 					IsClusterScopedResource: true,
@@ -789,7 +798,7 @@ func TestGatherSelectedResource(t *testing.T) {
 					Name:    "test-deployment",
 				},
 			},
-			resourceConfig: utils.NewResourceConfig(false), // default deny list
+			resourceEligibilityChecker: resourceeligibility.DefaultForV0APIs(newFakeRESTMapper()), // default deny list
 			informerManager: &testinformer.FakeManager{
 				IsClusterScopedResource: true,
 				Listers:                 map[schema.GroupVersionResource]*testinformer.FakeLister{},
@@ -814,7 +823,7 @@ func TestGatherSelectedResource(t *testing.T) {
 					Name:    "test-ns",
 				},
 			},
-			resourceConfig: utils.NewResourceConfig(false), // default deny list
+			resourceEligibilityChecker: resourceeligibility.DefaultForV0APIs(newFakeRESTMapper()), // default deny list
 			informerManager: func() *testinformer.FakeManager {
 				return &testinformer.FakeManager{
 					IsClusterScopedResource: false,
@@ -845,7 +854,7 @@ func TestGatherSelectedResource(t *testing.T) {
 					Name:    "test-ns",
 				},
 			},
-			resourceConfig: utils.NewResourceConfig(false), // default deny list
+			resourceEligibilityChecker: resourceeligibility.DefaultForV0APIs(newFakeRESTMapper()), // default deny list
 			informerManager: func() *testinformer.FakeManager {
 				return &testinformer.FakeManager{
 					IsClusterScopedResource: false,
@@ -874,7 +883,7 @@ func TestGatherSelectedResource(t *testing.T) {
 					SelectionScope: fleetv1beta1.NamespaceWithResources,
 				},
 			},
-			resourceConfig: utils.NewResourceConfig(false), // default deny list
+			resourceEligibilityChecker: resourceeligibility.DefaultForV0APIs(newFakeRESTMapper()), // default deny list
 			informerManager: func() *testinformer.FakeManager {
 				return &testinformer.FakeManager{
 					IsClusterScopedResource: false,
@@ -905,10 +914,10 @@ func TestGatherSelectedResource(t *testing.T) {
 					SelectionScope: fleetv1beta1.NamespaceWithResources,
 				},
 			},
-			resourceConfig: func() *utils.ResourceConfig {
-				cfg := utils.NewResourceConfig(false)
-				cfg.AddGroupVersionKind(utils.DeploymentGVK)
-				return cfg
+			resourceEligibilityChecker: func() resourceeligibility.Checker {
+				c := resourceeligibility.New(newFakeRESTMapper(), resourceeligibility.DefaultForV0APIs(newFakeRESTMapper()))
+				_ = c.SetGVKCheckList(resourceeligibility.GVKEligibilityModeDenyList, []schema.GroupVersionKind{utils.DeploymentGVK})
+				return c
 			}(),
 			informerManager: func() *testinformer.FakeManager {
 				return &testinformer.FakeManager{
@@ -935,7 +944,7 @@ func TestGatherSelectedResource(t *testing.T) {
 					SelectionScope: fleetv1beta1.NamespaceWithResources,
 				},
 			},
-			resourceConfig: utils.NewResourceConfig(false), // default deny list
+			resourceEligibilityChecker: resourceeligibility.DefaultForV0APIs(newFakeRESTMapper()), // default deny list
 			informerManager: func() *testinformer.FakeManager {
 				return &testinformer.FakeManager{
 					IsClusterScopedResource: false,
@@ -962,7 +971,7 @@ func TestGatherSelectedResource(t *testing.T) {
 					SelectionScope: fleetv1beta1.NamespaceOnly,
 				},
 			},
-			resourceConfig: utils.NewResourceConfig(false), // default deny list
+			resourceEligibilityChecker: resourceeligibility.DefaultForV0APIs(newFakeRESTMapper()), // default deny list
 			informerManager: func() *testinformer.FakeManager {
 				return &testinformer.FakeManager{
 					IsClusterScopedResource: false,
@@ -988,7 +997,7 @@ func TestGatherSelectedResource(t *testing.T) {
 					SelectionScope: fleetv1beta1.NamespaceOnly,
 				},
 			},
-			resourceConfig: utils.NewResourceConfig(false), // default deny list
+			resourceEligibilityChecker: resourceeligibility.DefaultForV0APIs(newFakeRESTMapper()), // default deny list
 			informerManager: func() *testinformer.FakeManager {
 				return &testinformer.FakeManager{
 					IsClusterScopedResource: false,
@@ -1015,7 +1024,7 @@ func TestGatherSelectedResource(t *testing.T) {
 					SelectionScope: fleetv1beta1.NamespaceOnly,
 				},
 			},
-			resourceConfig: utils.NewResourceConfig(false), // default deny list
+			resourceEligibilityChecker: resourceeligibility.DefaultForV0APIs(newFakeRESTMapper()), // default deny list
 			informerManager: func() *testinformer.FakeManager {
 				return &testinformer.FakeManager{
 					IsClusterScopedResource: false,
@@ -1045,7 +1054,7 @@ func TestGatherSelectedResource(t *testing.T) {
 					SelectionScope: fleetv1beta1.NamespaceWithResources,
 				},
 			},
-			resourceConfig: utils.NewResourceConfig(false), // default deny list
+			resourceEligibilityChecker: resourceeligibility.DefaultForV0APIs(newFakeRESTMapper()), // default deny list
 			informerManager: func() *testinformer.FakeManager {
 				return &testinformer.FakeManager{
 					IsClusterScopedResource: false,
@@ -1071,7 +1080,7 @@ func TestGatherSelectedResource(t *testing.T) {
 					SelectionScope: fleetv1beta1.NamespaceWithResources,
 				},
 			},
-			resourceConfig: utils.NewResourceConfig(false), // default deny list
+			resourceEligibilityChecker: resourceeligibility.DefaultForV0APIs(newFakeRESTMapper()), // default deny list
 			informerManager: func() *testinformer.FakeManager {
 				return &testinformer.FakeManager{
 					IsClusterScopedResource: true,
@@ -1097,7 +1106,7 @@ func TestGatherSelectedResource(t *testing.T) {
 					SelectionScope: fleetv1beta1.NamespaceWithResources,
 				},
 			},
-			resourceConfig: utils.NewResourceConfig(false), // default deny list
+			resourceEligibilityChecker: resourceeligibility.DefaultForV0APIs(newFakeRESTMapper()), // default deny list
 			informerManager: func() *testinformer.FakeManager {
 				return &testinformer.FakeManager{
 					IsClusterScopedResource: true,
@@ -1122,7 +1131,7 @@ func TestGatherSelectedResource(t *testing.T) {
 					SelectionScope: fleetv1beta1.NamespaceWithResources,
 				},
 			},
-			resourceConfig: utils.NewResourceConfig(false), // default deny list
+			resourceEligibilityChecker: resourceeligibility.DefaultForV0APIs(newFakeRESTMapper()), // default deny list
 			informerManager: func() *testinformer.FakeManager {
 				return &testinformer.FakeManager{
 					IsClusterScopedResource: true,
@@ -1148,7 +1157,7 @@ func TestGatherSelectedResource(t *testing.T) {
 					SelectionScope: fleetv1beta1.NamespaceWithResources,
 				},
 			},
-			resourceConfig: utils.NewResourceConfig(false), // default deny list
+			resourceEligibilityChecker: resourceeligibility.DefaultForV0APIs(newFakeRESTMapper()), // default deny list
 			informerManager: func() *testinformer.FakeManager {
 				return &testinformer.FakeManager{
 					IsClusterScopedResource: true,
@@ -1175,7 +1184,7 @@ func TestGatherSelectedResource(t *testing.T) {
 					Name:    "kube-root-ca.crt",
 				},
 			},
-			resourceConfig: utils.NewResourceConfig(false), // default deny list
+			resourceEligibilityChecker: resourceeligibility.DefaultForV0APIs(newFakeRESTMapper()), // default deny list
 			informerManager: func() *testinformer.FakeManager {
 				return &testinformer.FakeManager{
 					IsClusterScopedResource: true,
@@ -1196,7 +1205,7 @@ func TestGatherSelectedResource(t *testing.T) {
 					Kind:    "ConfigMap",
 				},
 			},
-			resourceConfig: utils.NewResourceConfig(false), // default deny list
+			resourceEligibilityChecker: resourceeligibility.DefaultForV0APIs(newFakeRESTMapper()), // default deny list
 			informerManager: func() *testinformer.FakeManager {
 				return &testinformer.FakeManager{
 					IsClusterScopedResource: true,
@@ -1218,7 +1227,7 @@ func TestGatherSelectedResource(t *testing.T) {
 					Name:    "test-deployment",
 				},
 			},
-			resourceConfig: utils.NewResourceConfig(false), // default deny list
+			resourceEligibilityChecker: resourceeligibility.DefaultForV0APIs(newFakeRESTMapper()), // default deny list
 			informerManager: func() *testinformer.FakeManager {
 				return &testinformer.FakeManager{
 					IsClusterScopedResource: true,
@@ -1241,7 +1250,7 @@ func TestGatherSelectedResource(t *testing.T) {
 					Name:    "test-cluster-role",
 				},
 			},
-			resourceConfig: utils.NewResourceConfig(false), // default deny list
+			resourceEligibilityChecker: resourceeligibility.DefaultForV0APIs(newFakeRESTMapper()), // default deny list
 			informerManager: func() *testinformer.FakeManager {
 				return &testinformer.FakeManager{
 					IsClusterScopedResource: false,
@@ -1265,7 +1274,7 @@ func TestGatherSelectedResource(t *testing.T) {
 					SelectionScope: fleetv1beta1.NamespaceWithResources,
 				},
 			},
-			resourceConfig: utils.NewResourceConfig(false), // default deny list
+			resourceEligibilityChecker: resourceeligibility.DefaultForV0APIs(newFakeRESTMapper()), // default deny list
 			informerManager: func() *testinformer.FakeManager {
 				return &testinformer.FakeManager{
 					IsClusterScopedResource: true,
@@ -1293,7 +1302,7 @@ func TestGatherSelectedResource(t *testing.T) {
 					Name:    "test-endpoints",
 				},
 			},
-			resourceConfig: utils.NewResourceConfig(false), // default deny list
+			resourceEligibilityChecker: resourceeligibility.DefaultForV0APIs(newFakeRESTMapper()), // endpoints are only denied for the v1 APIs
 			informerManager: func() *testinformer.FakeManager {
 				return &testinformer.FakeManager{
 					IsClusterScopedResource: true,
@@ -1320,7 +1329,7 @@ func TestGatherSelectedResource(t *testing.T) {
 					Kind:    "Endpoints",
 				},
 			},
-			resourceConfig: utils.NewResourceConfig(false), // default deny list
+			resourceEligibilityChecker: resourceeligibility.DefaultForV0APIs(newFakeRESTMapper()), // endpoints are only denied for the v1 APIs
 			informerManager: func() *testinformer.FakeManager {
 				return &testinformer.FakeManager{
 					IsClusterScopedResource: true,
@@ -1361,7 +1370,7 @@ func TestGatherSelectedResource(t *testing.T) {
 					Name:    "test-configmap",
 				},
 			},
-			resourceConfig: utils.NewResourceConfig(false), // default deny list
+			resourceEligibilityChecker: resourceeligibility.DefaultForV0APIs(newFakeRESTMapper()), // default deny list
 			informerManager: func() *testinformer.FakeManager {
 				return &testinformer.FakeManager{
 					Listers: map[schema.GroupVersionResource]*testinformer.FakeLister{
@@ -1397,7 +1406,7 @@ func TestGatherSelectedResource(t *testing.T) {
 					},
 				},
 			},
-			resourceConfig: utils.NewResourceConfig(false), // default deny list
+			resourceEligibilityChecker: resourceeligibility.DefaultForV0APIs(newFakeRESTMapper()), // default deny list
 			informerManager: func() *testinformer.FakeManager {
 				// Create a deployment with matching labels for this test
 				deploymentWithLabels := testDeployment.DeepCopy()
@@ -1447,7 +1456,7 @@ func TestGatherSelectedResource(t *testing.T) {
 					Name:    "test-deployment",
 				},
 			},
-			resourceConfig: utils.NewResourceConfig(false), // default deny list
+			resourceEligibilityChecker: resourceeligibility.DefaultForV0APIs(newFakeRESTMapper()), // default deny list
 			informerManager: func() *testinformer.FakeManager {
 				return &testinformer.FakeManager{
 					IsClusterScopedResource: true,
@@ -1479,7 +1488,7 @@ func TestGatherSelectedResource(t *testing.T) {
 					SelectionScope: fleetv1beta1.NamespaceWithResourceSelectors,
 				},
 			},
-			resourceConfig: utils.NewResourceConfig(false), // default deny list
+			resourceEligibilityChecker: resourceeligibility.DefaultForV0APIs(newFakeRESTMapper()), // default deny list
 			informerManager: func() *testinformer.FakeManager {
 				return &testinformer.FakeManager{
 					Listers: map[schema.GroupVersionResource]*testinformer.FakeLister{
@@ -1511,7 +1520,7 @@ func TestGatherSelectedResource(t *testing.T) {
 					Name:    "test-configmap",
 				},
 			},
-			resourceConfig: utils.NewResourceConfig(false), // default deny list
+			resourceEligibilityChecker: resourceeligibility.DefaultForV0APIs(newFakeRESTMapper()), // default deny list
 			informerManager: func() *testinformer.FakeManager {
 				return &testinformer.FakeManager{
 					Listers: map[schema.GroupVersionResource]*testinformer.FakeLister{
@@ -1524,14 +1533,70 @@ func TestGatherSelectedResource(t *testing.T) {
 			// Should error because no namespaces match the selector
 			wantError: ErrUserError,
 		},
+		{
+			name:          "should skip a tracked resource whose kind is no longer registered",
+			placementName: types.NamespacedName{Name: "test-placement"},
+			selectors: []fleetv1beta1.ResourceSelectorTerm{
+				{
+					Group:          "",
+					Version:        "v1",
+					Kind:           "Namespace",
+					Name:           "test-ns",
+					SelectionScope: fleetv1beta1.NamespaceWithResources,
+				},
+			},
+			resourceEligibilityChecker: resourceeligibility.DefaultForV0APIs(newFakeRESTMapper()), // default deny list
+			informerManager: func() *testinformer.FakeManager {
+				return &testinformer.FakeManager{
+					Listers: map[schema.GroupVersionResource]*testinformer.FakeLister{
+						utils.NamespaceGVR:  {Objects: []runtime.Object{testNamespace, prodNamespace}},
+						utils.DeploymentGVR: {Objects: []runtime.Object{testDeployment}},
+					},
+					// The informer manager keeps tracking a GVR after its CRD is uninstalled.
+					NamespaceScopedResources: []schema.GroupVersionResource{
+						utils.DeploymentGVR,
+						{Group: "example.com", Version: "v1", Resource: "widgets"},
+					},
+				}
+			}(),
+			want: []*unstructured.Unstructured{testNamespace, testDeployment},
+		},
+		{
+			name:          "should return error when the RESTMapper fails to resolve a tracked resource",
+			placementName: types.NamespacedName{Name: "test-placement"},
+			selectors: []fleetv1beta1.ResourceSelectorTerm{
+				{
+					Group:          "",
+					Version:        "v1",
+					Kind:           "Namespace",
+					Name:           "test-ns",
+					SelectionScope: fleetv1beta1.NamespaceWithResources,
+				},
+			},
+			resourceEligibilityChecker: resourceeligibility.DefaultForV0APIs(&fakeRESTMapper{kindsForErr: errors.New("mapper failure")}),
+			informerManager: func() *testinformer.FakeManager {
+				return &testinformer.FakeManager{
+					Listers: map[schema.GroupVersionResource]*testinformer.FakeLister{
+						utils.NamespaceGVR:  {Objects: []runtime.Object{testNamespace, prodNamespace}},
+						utils.DeploymentGVR: {Objects: []runtime.Object{testDeployment}},
+					},
+					NamespaceScopedResources: []schema.GroupVersionResource{utils.DeploymentGVR},
+				}
+			}(),
+			wantError: ErrUnexpectedBehavior,
+		},
 	}
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
+			checker := tt.resourceEligibilityChecker
+			if checker == nil {
+				checker = resourceeligibility.New(newFakeRESTMapper(), nil)
+			}
 			rsr := &ResourceSelectorResolver{
-				ResourceConfig:  tt.resourceConfig,
-				InformerManager: tt.informerManager,
-				RestMapper:      newFakeRESTMapper(),
+				ResourceEligibilityChecker: checker,
+				InformerManager:            tt.informerManager,
+				RestMapper:                 newFakeRESTMapper(),
 			}
 
 			got, err := rsr.gatherSelectedResource(tt.placementName, tt.selectors)
@@ -1551,6 +1616,8 @@ func TestGatherSelectedResource(t *testing.T) {
 // fakeRESTMapper is a minimal RESTMapper implementation for testing
 type fakeRESTMapper struct {
 	mappings map[schema.GroupKind]*meta.RESTMapping
+	// kindsForErr, when set, is returned by KindsFor for every resource.
+	kindsForErr error
 }
 
 // newFakeRESTMapper creates a new fakeRESTMapper with default mappings
@@ -1615,10 +1682,17 @@ func (f *fakeRESTMapper) KindFor(resource schema.GroupVersionResource) (schema.G
 	case resource.Group == "" && resource.Resource == "endpoints":
 		return schema.GroupVersionKind{Group: "", Version: "v1", Kind: "Endpoints"}, nil
 	}
-	return schema.GroupVersionKind{}, errors.New("kind not found")
+	// Mirrors the real RESTMapper, which reports unknown resources as a no-match error.
+	return schema.GroupVersionKind{}, &meta.NoKindMatchError{
+		GroupKind:        schema.GroupKind{Group: resource.Group, Kind: resource.Resource},
+		SearchedVersions: []string{resource.Version},
+	}
 }
 
 func (f *fakeRESTMapper) KindsFor(resource schema.GroupVersionResource) ([]schema.GroupVersionKind, error) {
+	if f.kindsForErr != nil {
+		return nil, f.kindsForErr
+	}
 	kind, err := f.KindFor(resource)
 	if err != nil {
 		return nil, err
@@ -2192,13 +2266,12 @@ func TestFetchSelectedNamespace(t *testing.T) {
 	skippedNs.SetGroupVersionKind(utils.NamespaceGVK)
 
 	tests := []struct {
-		name              string
-		selector          fleetv1beta1.ResourceSelectorTerm
-		skippedNamespaces map[string]bool
-		informerManager   *testinformer.FakeManager
-		want              string
-		wantFound         bool
-		wantErr           bool
+		name            string
+		selector        fleetv1beta1.ResourceSelectorTerm
+		informerManager *testinformer.FakeManager
+		want            string
+		wantFound       bool
+		wantErr         bool
 	}{
 		{
 			name: "select namespace by name",
@@ -2208,7 +2281,6 @@ func TestFetchSelectedNamespace(t *testing.T) {
 				Kind:    "Namespace",
 				Name:    "test-ns-1",
 			},
-			skippedNamespaces: nil,
 			informerManager: &testinformer.FakeManager{
 				Listers: map[schema.GroupVersionResource]*testinformer.FakeLister{
 					utils.NamespaceGVR: {Objects: []runtime.Object{testNs1, testNs2}},
@@ -2225,7 +2297,6 @@ func TestFetchSelectedNamespace(t *testing.T) {
 				Kind:    "Namespace",
 				Name:    "kube-system", // Use name-based selection instead of label selector
 			},
-			skippedNamespaces: map[string]bool{"kube-system": true},
 			informerManager: &testinformer.FakeManager{
 				Listers: map[schema.GroupVersionResource]*testinformer.FakeLister{
 					utils.NamespaceGVR: {Objects: []runtime.Object{testNs1, testNs2, skippedNs}},
@@ -2242,7 +2313,6 @@ func TestFetchSelectedNamespace(t *testing.T) {
 				Kind:    "Namespace",
 				Name:    "non-existent",
 			},
-			skippedNamespaces: nil,
 			informerManager: &testinformer.FakeManager{
 				Listers: map[schema.GroupVersionResource]*testinformer.FakeLister{
 					utils.NamespaceGVR: {Objects: []runtime.Object{testNs1, testNs2}},
@@ -2256,10 +2326,9 @@ func TestFetchSelectedNamespace(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			rsr := &ResourceSelectorResolver{
-				SkippedNamespaces: tt.skippedNamespaces,
-				ResourceConfig:    utils.NewResourceConfig(false),
-				InformerManager:   tt.informerManager,
-				RestMapper:        newFakeRESTMapper(),
+				ResourceEligibilityChecker: resourceeligibility.DefaultForV0APIs(newFakeRESTMapper()),
+				InformerManager:            tt.informerManager,
+				RestMapper:                 newFakeRESTMapper(),
 			}
 
 			gotNamespace, gotFound, err := rsr.fetchSelectedNamespace(tt.selector, "test-placement")
@@ -2302,13 +2371,13 @@ func TestGatherSelectedResource_ErrorCases(t *testing.T) {
 	testDeployment.SetGroupVersionKind(utils.DeploymentGVK)
 
 	tests := []struct {
-		name            string
-		placementName   types.NamespacedName
-		selectors       []fleetv1beta1.ResourceSelectorTerm
-		resourceConfig  *utils.ResourceConfig
-		informerManager *testinformer.FakeManager
-		wantError       error
-		wantErrMsg      string
+		name                       string
+		placementName              types.NamespacedName
+		selectors                  []fleetv1beta1.ResourceSelectorTerm
+		resourceEligibilityChecker resourceeligibility.Checker
+		informerManager            *testinformer.FakeManager
+		wantError                  error
+		wantErrMsg                 string
 	}{
 		{
 			name:          "ResourcePlacement trying to select namespace should fail",
@@ -2321,7 +2390,7 @@ func TestGatherSelectedResource_ErrorCases(t *testing.T) {
 					Name:    "test-ns",
 				},
 			},
-			resourceConfig: utils.NewResourceConfig(false),
+			resourceEligibilityChecker: resourceeligibility.DefaultForV0APIs(newFakeRESTMapper()),
 			informerManager: &testinformer.FakeManager{
 				Listers: map[schema.GroupVersionResource]*testinformer.FakeLister{
 					utils.NamespaceGVR: {Objects: []runtime.Object{testNamespace}},
@@ -2341,7 +2410,7 @@ func TestGatherSelectedResource_ErrorCases(t *testing.T) {
 					Name:    "test-deployment",
 				},
 			},
-			resourceConfig: utils.NewResourceConfig(false),
+			resourceEligibilityChecker: resourceeligibility.DefaultForV0APIs(newFakeRESTMapper()),
 			informerManager: &testinformer.FakeManager{
 				IsClusterScopedResource: true,
 				APIResources: map[schema.GroupVersionKind]bool{
@@ -2380,7 +2449,7 @@ func TestGatherSelectedResource_ErrorCases(t *testing.T) {
 					Name:    "test-deployment",
 				},
 			},
-			resourceConfig: utils.NewResourceConfig(false),
+			resourceEligibilityChecker: resourceeligibility.DefaultForV0APIs(newFakeRESTMapper()),
 			informerManager: &testinformer.FakeManager{
 				IsClusterScopedResource: true,
 				APIResources: map[schema.GroupVersionKind]bool{
@@ -2400,10 +2469,14 @@ func TestGatherSelectedResource_ErrorCases(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
+			checker := tt.resourceEligibilityChecker
+			if checker == nil {
+				checker = resourceeligibility.New(newFakeRESTMapper(), nil)
+			}
 			rsr := &ResourceSelectorResolver{
-				ResourceConfig:  tt.resourceConfig,
-				InformerManager: tt.informerManager,
-				RestMapper:      newFakeRESTMapper(),
+				ResourceEligibilityChecker: checker,
+				InformerManager:            tt.informerManager,
+				RestMapper:                 newFakeRESTMapper(),
 			}
 
 			_, err := rsr.gatherSelectedResource(tt.placementName, tt.selectors)
@@ -2508,7 +2581,7 @@ func TestShouldPropagateObj(t *testing.T) {
 				},
 			},
 			enableWorkload: false,
-			want:           true, // ShouldPropagateObj doesn't filter Pods - they're filtered by NewResourceConfig
+			want:           true, // ShouldPropagateObj doesn't filter Pods - they're filtered by the resource eligibility checker
 		},
 		{
 			name: "controllerrevision owned by daemonset should NOT propagate",

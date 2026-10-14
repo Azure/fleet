@@ -22,6 +22,10 @@ import (
 	"strings"
 	"sync"
 
+	"go.goms.io/fleet/pkg/clients/azure/compute"
+	"go.goms.io/fleet/pkg/clients/httputil"
+	"go.goms.io/fleet/pkg/propertychecker/azure"
+	"go.goms.io/fleet/pkg/scheduler/framework/plugins/clusteraffinity"
 	"k8s.io/apimachinery/pkg/runtime/schema"
 	"k8s.io/client-go/discovery"
 	"k8s.io/client-go/dynamic"
@@ -30,39 +34,36 @@ import (
 	clusterinventory "sigs.k8s.io/cluster-inventory-api/apis/v1alpha1"
 	ctrl "sigs.k8s.io/controller-runtime"
 
-	clusterv1beta1 "go.goms.io/fleet/apis/cluster/v1beta1"
-	placementv1beta1 "go.goms.io/fleet/apis/placement/v1beta1"
-	"go.goms.io/fleet/cmd/hubagent/options"
-	"go.goms.io/fleet/pkg/clients/azure/compute"
-	"go.goms.io/fleet/pkg/clients/httputil"
-	"go.goms.io/fleet/pkg/controllers/bindingwatcher"
-	"go.goms.io/fleet/pkg/controllers/clusterinventory/clusterprofile"
-	"go.goms.io/fleet/pkg/controllers/clusterresourceplacementeviction"
-	"go.goms.io/fleet/pkg/controllers/clusterresourceplacementstatuswatcher"
-	"go.goms.io/fleet/pkg/controllers/overrider"
-	"go.goms.io/fleet/pkg/controllers/placement"
-	"go.goms.io/fleet/pkg/controllers/placementwatcher"
-	"go.goms.io/fleet/pkg/controllers/resourcechange"
-	"go.goms.io/fleet/pkg/controllers/rollout"
-	"go.goms.io/fleet/pkg/controllers/schedulingpolicysnapshot"
-	"go.goms.io/fleet/pkg/controllers/updaterun"
-	"go.goms.io/fleet/pkg/controllers/workgenerator"
-	"go.goms.io/fleet/pkg/propertychecker/azure"
-	"go.goms.io/fleet/pkg/resourcewatcher"
-	"go.goms.io/fleet/pkg/scheduler"
-	"go.goms.io/fleet/pkg/scheduler/clustereligibilitychecker"
-	"go.goms.io/fleet/pkg/scheduler/framework"
-	"go.goms.io/fleet/pkg/scheduler/framework/plugins/clusteraffinity"
-	"go.goms.io/fleet/pkg/scheduler/profile"
-	"go.goms.io/fleet/pkg/scheduler/queue"
-	schedulerbindingwatcher "go.goms.io/fleet/pkg/scheduler/watchers/binding"
-	"go.goms.io/fleet/pkg/scheduler/watchers/membercluster"
-	schedulerplacementwatcher "go.goms.io/fleet/pkg/scheduler/watchers/placement"
-	schedulerspswatcher "go.goms.io/fleet/pkg/scheduler/watchers/schedulingpolicysnapshot"
-	"go.goms.io/fleet/pkg/utils"
-	"go.goms.io/fleet/pkg/utils/controller"
-	"go.goms.io/fleet/pkg/utils/informer"
-	"go.goms.io/fleet/pkg/utils/validator"
+	clusterv1beta1 "github.com/kubefleet-dev/kubefleet/apis/cluster/v1beta1"
+	placementv1beta1 "github.com/kubefleet-dev/kubefleet/apis/placement/v1beta1"
+	"github.com/kubefleet-dev/kubefleet/cmd/hubagent/options"
+	"github.com/kubefleet-dev/kubefleet/pkg/controllers/bindingwatcher"
+	"github.com/kubefleet-dev/kubefleet/pkg/controllers/clusterinventory/clusterprofile"
+	"github.com/kubefleet-dev/kubefleet/pkg/controllers/clusterresourceplacementeviction"
+	"github.com/kubefleet-dev/kubefleet/pkg/controllers/clusterresourceplacementstatuswatcher"
+	"github.com/kubefleet-dev/kubefleet/pkg/controllers/overrider"
+	"github.com/kubefleet-dev/kubefleet/pkg/controllers/placement"
+	"github.com/kubefleet-dev/kubefleet/pkg/controllers/placementwatcher"
+	"github.com/kubefleet-dev/kubefleet/pkg/controllers/resourcechange"
+	"github.com/kubefleet-dev/kubefleet/pkg/controllers/rollout"
+	"github.com/kubefleet-dev/kubefleet/pkg/controllers/schedulingpolicysnapshot"
+	"github.com/kubefleet-dev/kubefleet/pkg/controllers/updaterun"
+	"github.com/kubefleet-dev/kubefleet/pkg/controllers/workgenerator"
+	"github.com/kubefleet-dev/kubefleet/pkg/resourcewatcher"
+	"github.com/kubefleet-dev/kubefleet/pkg/scheduler"
+	"github.com/kubefleet-dev/kubefleet/pkg/scheduler/clustereligibilitychecker"
+	"github.com/kubefleet-dev/kubefleet/pkg/scheduler/framework"
+	"github.com/kubefleet-dev/kubefleet/pkg/scheduler/profile"
+	"github.com/kubefleet-dev/kubefleet/pkg/scheduler/queue"
+	schedulerbindingwatcher "github.com/kubefleet-dev/kubefleet/pkg/scheduler/watchers/binding"
+	"github.com/kubefleet-dev/kubefleet/pkg/scheduler/watchers/membercluster"
+	schedulerplacementwatcher "github.com/kubefleet-dev/kubefleet/pkg/scheduler/watchers/placement"
+	schedulerspswatcher "github.com/kubefleet-dev/kubefleet/pkg/scheduler/watchers/schedulingpolicysnapshot"
+	"github.com/kubefleet-dev/kubefleet/pkg/utils"
+	"github.com/kubefleet-dev/kubefleet/pkg/utils/controller"
+	"github.com/kubefleet-dev/kubefleet/pkg/utils/informer"
+	"github.com/kubefleet-dev/kubefleet/pkg/utils/resourceeligibility"
+	"github.com/kubefleet-dev/kubefleet/pkg/utils/validator"
 )
 
 const (
@@ -132,28 +133,37 @@ func SetupControllers(ctx context.Context, wg *sync.WaitGroup, mgr ctrl.Manager,
 	}
 
 	discoverClient := discovery.NewDiscoveryClientForConfigOrDie(config)
-	// AllowedPropagatingAPIs and SkippedPropagatingAPIs are mutually exclusive.
-	// If none of them are set, the resourceConfig by default stores a list of skipped propagation APIs.
-	resourceConfig := utils.NewResourceConfig(opts.PlacementMgmtOpts.AllowedPropagatingAPIs != "")
-	if err = resourceConfig.Parse(opts.PlacementMgmtOpts.AllowedPropagatingAPIs); err != nil {
-		// The program will never go here because the parameters have been checked.
-		return err
-	}
-	if err = resourceConfig.Parse(opts.PlacementMgmtOpts.SkippedPropagatingAPIs); err != nil {
-		// The program will never go here because the parameters have been checked
-		return err
-	}
 
-	// setup namespaces we skip propagation
-	skippedNamespaces := make(map[string]bool)
-	skippedNamespaces["default"] = true
-	optionalSkipNS := strings.Split(opts.PlacementMgmtOpts.SkippedPropagatingNamespaces, ";")
-	for _, ns := range optionalSkipNS {
-		if len(ns) > 0 {
-			klog.InfoS("user specified a namespace to skip", "namespace", ns)
-			skippedNamespaces[ns] = true
+	customResourceEligibilityChecker := resourceeligibility.New(mgr.GetRESTMapper(), nil)
+	if opts.PlacementMgmtOpts.AllowedPropagatingAPIs == "" {
+		// Set up a deny list for placement eligible GVKs.
+		gvks, err := resourceeligibility.ParseGVKs(opts.PlacementMgmtOpts.SkippedPropagatingAPIs)
+		if err != nil {
+			// Normally this branch would never run as the input has been validated beforehand.
+			return err
+		}
+		if err := customResourceEligibilityChecker.SetGVKCheckList(resourceeligibility.GVKEligibilityModeDenyList, gvks); err != nil {
+			return err
+		}
+	} else {
+		// Set up an allow list for placement eligible GVKs.
+		gvks, err := resourceeligibility.ParseGVKs(opts.PlacementMgmtOpts.AllowedPropagatingAPIs)
+		if err != nil {
+			// Normally this branch would never run as the input has been validated beforehand.
+			return err
+		}
+		if err := customResourceEligibilityChecker.SetGVKCheckList(resourceeligibility.GVKEligibilityModeAllowList, gvks); err != nil {
+			return err
 		}
 	}
+
+	// Set up a namespace deny list for namespaces.
+	userDefinedSkippedNSNames := strings.Split(opts.PlacementMgmtOpts.SkippedPropagatingNamespaces, ";")
+	customResourceEligibilityChecker.SetNamespaceCheckList(resourceeligibility.NamespaceEligibilityModeDenyList, userDefinedSkippedNSNames, nil)
+
+	// Build the composite resource eligibility checker for v0 APIs.
+	defaultResourceEligibilityCheckerForV0APIs := resourceeligibility.DefaultForV0APIs(mgr.GetRESTMapper())
+	customResourceEligibilityChecker.Wraps(defaultResourceEligibilityCheckerForV0APIs)
 
 	// the manager for all the dynamically created informers
 	dynamicInformerManager := informer.NewInformerManager(dynamicClient, opts.CtrlMgrOpts.ResyncPeriod.Duration, ctx.Done())
@@ -162,11 +172,10 @@ func SetupControllers(ctx context.Context, wg *sync.WaitGroup, mgr ctrl.Manager,
 
 	// Set up  a custom controller to reconcile placement objects
 	resourceSelectorResolver := controller.ResourceSelectorResolver{
-		RestMapper:        mgr.GetRESTMapper(),
-		InformerManager:   dynamicInformerManager,
-		ResourceConfig:    resourceConfig,
-		SkippedNamespaces: skippedNamespaces,
-		EnableWorkload:    opts.WebhookAndAdmissionPolicyOpts.EnableWorkload,
+		RestMapper:                 mgr.GetRESTMapper(),
+		InformerManager:            dynamicInformerManager,
+		ResourceEligibilityChecker: customResourceEligibilityChecker,
+		EnableWorkload:             opts.WebhookAndAdmissionPolicyOpts.EnableWorkload,
 	}
 	resourceSnapshotResolver := controller.NewResourceSnapshotResolver(mgr.GetClient(), mgr.GetScheme())
 	resourceSnapshotResolver.Config = controller.NewResourceSnapshotConfig(opts.PlacementMgmtOpts.ResourceSnapshotCreationMinimumInterval, opts.PlacementMgmtOpts.ResourceChangesCollectionDuration)
@@ -526,10 +535,10 @@ func SetupControllers(ctx context.Context, wg *sync.WaitGroup, mgr ctrl.Manager,
 	// This ensures all pods have synced informer caches for webhook validation
 	klog.Info("Setting up informer populator")
 	informerPopulator := &resourcewatcher.InformerPopulator{
-		DiscoveryClient: discoverClient,
-		RESTMapper:      mgr.GetRESTMapper(),
-		InformerManager: dynamicInformerManager,
-		ResourceConfig:  resourceConfig,
+		DiscoveryClient:            discoverClient,
+		RESTMapper:                 mgr.GetRESTMapper(),
+		InformerManager:            dynamicInformerManager,
+		ResourceEligibilityChecker: customResourceEligibilityChecker,
 	}
 
 	if err := mgr.Add(informerPopulator); err != nil {
@@ -546,8 +555,7 @@ func SetupControllers(ctx context.Context, wg *sync.WaitGroup, mgr ctrl.Manager,
 		ResourcePlacementController:               resourcePlacementController,
 		ResourceChangeController:                  resourceChangeController,
 		InformerManager:                           dynamicInformerManager,
-		ResourceConfig:                            resourceConfig,
-		SkippedNamespaces:                         skippedNamespaces,
+		ResourceEligibilityChecker:                customResourceEligibilityChecker,
 		ConcurrentPlacementWorker:                 int(math.Ceil(float64(opts.PlacementMgmtOpts.MaxConcurrentClusterPlacement) / 10)),
 		ConcurrentResourceChangeWorker:            opts.PlacementMgmtOpts.ConcurrentResourceChangeSyncs,
 		EnableWorkload:                            opts.WebhookAndAdmissionPolicyOpts.EnableWorkload,

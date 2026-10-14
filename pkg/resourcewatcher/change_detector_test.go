@@ -28,16 +28,17 @@ import (
 	"k8s.io/client-go/restmapper"
 	"k8s.io/client-go/tools/cache"
 
-	"go.goms.io/fleet/pkg/utils"
-	testinformer "go.goms.io/fleet/test/utils/informer"
-	testresource "go.goms.io/fleet/test/utils/resource"
+	"github.com/kubefleet-dev/kubefleet/pkg/utils"
+	"github.com/kubefleet-dev/kubefleet/pkg/utils/resourceeligibility"
+	testinformer "github.com/kubefleet-dev/kubefleet/test/utils/informer"
+	testresource "github.com/kubefleet-dev/kubefleet/test/utils/resource"
 )
 
 func TestChangeDetector_discoverResources(t *testing.T) {
 	tests := []struct {
 		name               string
 		discoveryResources []*metav1.APIResourceList
-		resourceConfig     *utils.ResourceConfig
+		eligibilityChecker resourceeligibility.Checker
 	}{
 		{
 			name: "discovers and adds handlers for watchable resources",
@@ -50,7 +51,7 @@ func TestChangeDetector_discoverResources(t *testing.T) {
 					},
 				},
 			},
-			resourceConfig: nil, // Allow all resources
+			eligibilityChecker: nil, // Allow all resources
 		},
 		{
 			name: "skips resources without list/watch verbs",
@@ -62,10 +63,10 @@ func TestChangeDetector_discoverResources(t *testing.T) {
 					},
 				},
 			},
-			resourceConfig: nil,
+			eligibilityChecker: nil,
 		},
 		{
-			name: "respects resource config filtering",
+			name: "respects eligibility checker filtering",
 			discoveryResources: []*metav1.APIResourceList{
 				{
 					GroupVersion: "v1",
@@ -75,10 +76,11 @@ func TestChangeDetector_discoverResources(t *testing.T) {
 					},
 				},
 			},
-			resourceConfig: func() *utils.ResourceConfig {
-				rc := utils.NewResourceConfig(false) // Skip mode
-				_ = rc.Parse("v1/Secret")            // Skip secrets
-				return rc
+			eligibilityChecker: func() resourceeligibility.Checker {
+				// Only the GVK check runs during discovery, which does not use the RESTMapper.
+				c := resourceeligibility.New(nil, resourceeligibility.DefaultForV0APIs(nil))
+				_ = c.SetGVKCheckList(resourceeligibility.GVKEligibilityModeDenyList, []schema.GroupVersionKind{{Version: "v1", Kind: "Secret"}}) // Skip secrets
+				return c
 			}(),
 		},
 		{
@@ -92,7 +94,7 @@ func TestChangeDetector_discoverResources(t *testing.T) {
 					},
 				},
 			},
-			resourceConfig: nil,
+			eligibilityChecker: nil,
 		},
 	}
 
@@ -144,10 +146,10 @@ func TestChangeDetector_discoverResources(t *testing.T) {
 
 			// Create ChangeDetector with the interface type
 			detector := &ChangeDetector{
-				DiscoveryClient: fakeDiscovery,
-				RESTMapper:      restMapper,
-				InformerManager: fakeInformerManager,
-				ResourceConfig:  tt.resourceConfig,
+				DiscoveryClient:            fakeDiscovery,
+				RESTMapper:                 restMapper,
+				InformerManager:            fakeInformerManager,
+				ResourceEligibilityChecker: tt.eligibilityChecker,
 			}
 
 			// Test discoverResources which discovers resources and adds handlers
@@ -194,11 +196,19 @@ func TestChangeDetector_dynamicResourceFilter(t *testing.T) {
 		}
 	}
 
+	// Mirrors the namespace deny list the hub agent builds in production, minus the "default"
+	// namespace so that the other cases can place objects in it.
+	newChecker := func(skippedNSNames ...string) resourceeligibility.Checker {
+		c := resourceeligibility.New(nil, nil)
+		c.SetNamespaceCheckList(resourceeligibility.NamespaceEligibilityModeDenyList, skippedNSNames, []string{utils.KubeNSNamePrefix, utils.FleetNSNamePrefix})
+		return c
+	}
+
 	tests := []struct {
-		name              string
-		obj               any
-		skippedNamespaces map[string]bool
-		want              bool
+		name               string
+		obj                any
+		eligibilityChecker resourceeligibility.Checker
+		want               bool
 	}{
 		{
 			name: "non-runtime object is filtered out",
@@ -240,10 +250,10 @@ func TestChangeDetector_dynamicResourceFilter(t *testing.T) {
 			want: false,
 		},
 		{
-			name:              "object in user-skipped namespace is filtered out",
-			obj:               unstructuredConfigMap("skip-me", "cm"),
-			skippedNamespaces: map[string]bool{"skip-me": true},
-			want:              false,
+			name:               "object in user-skipped namespace is filtered out",
+			obj:                unstructuredConfigMap("skip-me", "cm"),
+			eligibilityChecker: newChecker("skip-me"),
+			want:               false,
 		},
 		{
 			name: "unstructured ConfigMap kube-root-ca.crt is filtered out by ShouldPropagateObj",
@@ -256,8 +266,8 @@ func TestChangeDetector_dynamicResourceFilter(t *testing.T) {
 			want: true,
 		},
 		{
-			// Cluster-scoped objects have an empty namespace; ShouldPropagateNamespace returns true
-			// for "" (no reserved prefix match, not in skip-list).
+			// Cluster-scoped objects have an empty namespace, which matches no reserved prefix and
+			// no deny list entry.
 			name: "cluster-scoped unstructured object is allowed",
 			obj:  unstructuredClusterRole("admin"),
 			want: true,
@@ -277,9 +287,13 @@ func TestChangeDetector_dynamicResourceFilter(t *testing.T) {
 			fakeInformerManager := &testinformer.FakeManager{
 				APIResources: make(map[schema.GroupVersionKind]bool),
 			}
+			checker := tt.eligibilityChecker
+			if checker == nil {
+				checker = newChecker()
+			}
 			detector := &ChangeDetector{
-				InformerManager:   fakeInformerManager,
-				SkippedNamespaces: tt.skippedNamespaces,
+				InformerManager:            fakeInformerManager,
+				ResourceEligibilityChecker: checker,
 			}
 
 			got := detector.dynamicResourceFilter(tt.obj)
