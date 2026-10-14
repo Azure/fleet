@@ -112,8 +112,8 @@ type bundleProcessingWave struct {
 	bundles []*manifestProcessingBundle
 }
 
-// organizeBundlesIntoProcessingWaves organizes the list of bundles into different
-// waves of bundles for parallel processing based on their GVR information.
+// organizeBundlesIntoProcessingWaves organizes the list of manifests (their processing states) into different
+// waves for parallel processing based on their GVR information.
 func organizeBundlesIntoProcessingWaves(bundles []*manifestProcessingBundle, workRef klog.ObjectRef) []*bundleProcessingWave {
 	// Pre-allocate the map; 7 is the total count of default wave numbers, though
 	// not all wave numbers might be used.

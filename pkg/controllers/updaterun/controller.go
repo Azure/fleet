@@ -492,21 +492,26 @@ func handleApprovalRequestDelete(obj client.Object, q workqueue.TypedRateLimitin
 	})
 }
 
+// removeWaitTimeFromUpdateRunStatus removes waitTime from the Approval tasks in the updateRun status.
 func removeWaitTimeFromUpdateRunStatus(updateRun placementv1beta1.UpdateRunObj) {
-	// Remove waitTime from the updateRun status for BeforeStageTask and AfterStageTask for type Approval.
-	updateRunStatus := updateRun.GetUpdateRunStatus()
-	if updateRunStatus.UpdateStrategySnapshot != nil {
-		for i := range updateRunStatus.UpdateStrategySnapshot.Stages {
-			for j := range updateRunStatus.UpdateStrategySnapshot.Stages[i].BeforeStageTasks {
-				if updateRunStatus.UpdateStrategySnapshot.Stages[i].BeforeStageTasks[j].Type == placementv1beta1.StageTaskTypeApproval {
-					updateRunStatus.UpdateStrategySnapshot.Stages[i].BeforeStageTasks[j].WaitTime = nil
-				}
-			}
-			for j := range updateRunStatus.UpdateStrategySnapshot.Stages[i].AfterStageTasks {
-				if updateRunStatus.UpdateStrategySnapshot.Stages[i].AfterStageTasks[j].Type == placementv1beta1.StageTaskTypeApproval {
-					updateRunStatus.UpdateStrategySnapshot.Stages[i].AfterStageTasks[j].WaitTime = nil
-				}
-			}
+	strategy := updateRun.GetUpdateRunStatus().UpdateStrategySnapshot
+	if strategy == nil {
+		return
+	}
+	for i := range strategy.Stages {
+		removeWaitTimeFromApprovalTasks(strategy.Stages[i].BeforeStageTasks)
+		removeWaitTimeFromApprovalTasks(strategy.Stages[i].AfterStageTasks)
+	}
+	if strategy.DeleteStage != nil {
+		removeWaitTimeFromApprovalTasks(strategy.DeleteStage.BeforeStageTasks)
+	}
+}
+
+// removeWaitTimeFromApprovalTasks removes waitTime from the tasks of type Approval.
+func removeWaitTimeFromApprovalTasks(tasks []placementv1beta1.StageTask) {
+	for i := range tasks {
+		if tasks[i].Type == placementv1beta1.StageTaskTypeApproval {
+			tasks[i].WaitTime = nil
 		}
 	}
 }

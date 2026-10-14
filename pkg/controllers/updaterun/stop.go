@@ -109,7 +109,7 @@ func (r *Reconciler) stopUpdatingStage(
 			// If cluster update has been running for more than "updateRunStuckThreshold", mark the update run as stuck.
 			timeElapsed := time.Since(clusterStartedCond.LastTransitionTime.Time)
 			if timeElapsed > updateRunStuckThreshold {
-				klog.V(2).InfoS("Time waiting for cluster update to finish passes threshold, mark the update run as stuck", "time elapsed", timeElapsed, "threshold", updateRunStuckThreshold, "cluster", clusterStatus.ClusterName, "stage", updatingStageStatus.StageName, "updateRun", updateRunRef)
+				klog.V(2).InfoS("Time waiting for cluster update to finish passes threshold, mark the update run as stuck", "timeElapsed", timeElapsed, "threshold", updateRunStuckThreshold, "cluster", clusterStatus.ClusterName, "stage", updatingStageStatus.StageName, "updateRun", updateRunRef)
 				stuckClusterNames = append(stuckClusterNames, clusterStatus.ClusterName)
 			}
 		}
@@ -142,51 +142,11 @@ func (r *Reconciler) stopDeleteStage(
 ) (bool, error) {
 	updateRunRef := klog.KObj(updateRun)
 	updateRunStatus := updateRun.GetUpdateRunStatus()
-	existingDeleteStageStatus := updateRunStatus.DeletionStageStatus
-	existingDeleteStageClusterMap := make(map[string]*placementv1beta1.ClusterUpdatingStatus, len(existingDeleteStageStatus.Clusters))
-	for i := range existingDeleteStageStatus.Clusters {
-		existingDeleteStageClusterMap[existingDeleteStageStatus.Clusters[i].ClusterName] = &existingDeleteStageStatus.Clusters[i]
-	}
 	// Mark the delete stage as stopping in case it's not.
-	markStageUpdatingStopping(existingDeleteStageStatus, updateRun.GetGeneration())
-
-	for _, binding := range toBeDeletedBindings {
-		bindingSpec := binding.GetBindingSpec()
-		curCluster, exist := existingDeleteStageClusterMap[bindingSpec.TargetCluster]
-		if !exist {
-			// This is unexpected because we already checked in validation.
-			missingErr := controller.NewUnexpectedBehaviorError(fmt.Errorf("the to be deleted cluster `%s` is not in the deleting stage during stopping", bindingSpec.TargetCluster))
-			klog.ErrorS(missingErr, "The cluster in the deleting stage does not include all the to be deleted binding", "updateRun", updateRunRef)
-			return false, fmt.Errorf("%w: %s", errStagedUpdatedAborted, missingErr.Error())
-		}
-		// In validation, we already check the binding must exist in the status.
-		delete(existingDeleteStageClusterMap, bindingSpec.TargetCluster)
-		// Make sure the cluster is not marked as deleted as the binding is still there.
-		if condition.IsConditionStatusTrue(meta.FindStatusCondition(curCluster.Conditions, string(placementv1beta1.ClusterUpdatingConditionSucceeded)), updateRun.GetGeneration()) {
-			// The cluster status is marked as deleted.
-			unexpectedErr := controller.NewUnexpectedBehaviorError(fmt.Errorf("the deleted cluster `%s` in the deleting stage still has a binding", bindingSpec.TargetCluster))
-			klog.ErrorS(unexpectedErr, "The cluster in the deleting stage is not removed yet but marked as deleted", "cluster", curCluster.ClusterName, "updateRun", updateRunRef)
-			return false, fmt.Errorf("%w: %s", errStagedUpdatedAborted, unexpectedErr.Error())
-		}
-		if condition.IsConditionStatusTrue(meta.FindStatusCondition(curCluster.Conditions, string(placementv1beta1.ClusterUpdatingConditionStarted)), updateRun.GetGeneration()) {
-			// The cluster status is marked as being deleted.
-			if binding.GetDeletionTimestamp().IsZero() {
-				// The cluster is marked as deleting but the binding is not deleting.
-				unexpectedErr := controller.NewUnexpectedBehaviorError(fmt.Errorf("the cluster `%s` in the deleting stage is marked as deleting but its corresponding binding is not deleting", curCluster.ClusterName))
-				klog.ErrorS(unexpectedErr, "The binding should be deleting before we mark a cluster deleting", "clusterStatus", curCluster, "updateRun", updateRunRef)
-				return false, fmt.Errorf("%w: %s", errStagedUpdatedAborted, unexpectedErr.Error())
-			}
-			continue
-		}
-	}
-
-	// The rest of the clusters in the stage are not in the toBeDeletedBindings so it should be marked as delete succeeded.
-	for _, clusterStatus := range existingDeleteStageClusterMap {
-		// Make sure the cluster is marked as deleted.
-		if !condition.IsConditionStatusTrue(meta.FindStatusCondition(clusterStatus.Conditions, string(placementv1beta1.ClusterUpdatingConditionStarted)), updateRun.GetGeneration()) {
-			markClusterUpdatingStarted(clusterStatus, updateRun.GetGeneration())
-		}
-		markClusterUpdatingSucceeded(clusterStatus, updateRun.GetGeneration())
+	markStageUpdatingStopping(updateRunStatus.DeletionStageStatus, updateRun.GetGeneration())
+	// The clusters whose deletion has not started are left as they are.
+	if _, err := syncDeleteStageClusterStatuses(updateRun, toBeDeletedBindings); err != nil {
+		return false, err
 	}
 
 	klog.V(2).InfoS("The delete stage is stopping", "numberOfDeletingClusters", len(toBeDeletedBindings), "updateRun", updateRunRef)
@@ -204,7 +164,7 @@ func (r *Reconciler) stopDeleteStage(
 	if allDeletingClustersDeleted {
 		markStageUpdatingStopped(updateRunStatus.DeletionStageStatus, updateRun.GetGeneration())
 	}
-	return len(toBeDeletedBindings) == 0, nil
+	return allDeletingClustersDeleted, nil
 }
 
 // markUpdateRunStopping marks the update run as stopping in memory.
@@ -216,11 +176,11 @@ func markUpdateRunStopping(updateRun placementv1beta1.UpdateRunObj) {
 		Status:             metav1.ConditionUnknown,
 		ObservedGeneration: updateRun.GetGeneration(),
 		Reason:             condition.UpdateRunStoppingReason,
-		Message:            "The update run is the process of stopping, waiting for all the updating/deleting clusters to finish updating before completing the stop process",
+		Message:            "The update run is in the process of stopping, waiting for all the updating/deleting clusters to finish updating before completing the stop process",
 	})
 }
 
-// markStageUpdatingStopping marks the stage updating status as pausing in memory.
+// markStageUpdatingStopping marks the stage updating status as stopping in memory.
 func markStageUpdatingStopping(stageUpdatingStatus *placementv1beta1.StageUpdatingStatus, generation int64) {
 	meta.SetStatusCondition(&stageUpdatingStatus.Conditions, metav1.Condition{
 		Type:               string(placementv1beta1.StageUpdatingConditionProgressing),
@@ -242,6 +202,8 @@ func markStageUpdatingStopped(stageUpdatingStatus *placementv1beta1.StageUpdatin
 	})
 }
 
+// checkIfErrorStagedUpdateAborted marks the updating stage, or the delete stage if there is no updating stage,
+// as failed in memory if the error aborts the update run.
 func checkIfErrorStagedUpdateAborted(err error, updateRun placementv1beta1.UpdateRunObj, updatingStageStatus *placementv1beta1.StageUpdatingStatus) {
 	if errors.Is(err, errStagedUpdatedAborted) {
 		if updatingStageStatus != nil {

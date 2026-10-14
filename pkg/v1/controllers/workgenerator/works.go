@@ -121,12 +121,16 @@ func areWorksUpToDate(placementBinding placementv1alpha1.PlacementBindingAccesso
 	return true, nil
 }
 
+// refreshWorks creates, updates, and deletes the work objects for a placement binding as needed. Besides the
+// created/updated work objects, it also reports whether any work object has been created or has had its spec
+// changed; metadata-only changes (e.g., re-linking a work object to a new placement resource snapshot with
+// the same content) are not counted.
 func (r *Reconciler) refreshWorks(ctx context.Context,
 	placementBinding placementv1alpha1.PlacementBindingAccessor,
 	sortedPlacementResourceSnapshots []placementv1alpha1.PlacementResourceSnapshotAccessor,
 	works []placementv1alpha1.Work,
 ) ([]*placementv1alpha1.Work, bool, error) {
-	writtenToStorage := false
+	workSpecsChanged := false
 	worksToDelete := []*placementv1alpha1.Work{}
 
 	// Build an index of work objects by their names.
@@ -196,14 +200,14 @@ func (r *Reconciler) refreshWorks(ctx context.Context,
 
 	// Create the primary work object first. This is needed as the controller needs its object UID to set
 	// owner references on the secondary work objects.
-	createdOrUpdatedWorks, primaryWorkObjWrittenToStorage, err := r.createOrUpdateWorkObjects(ctx,
+	createdOrUpdatedWorks, primaryWorkSpecChanged, err := r.createOrUpdateWorkObjects(ctx,
 		[]*placementv1alpha1.Work{primaryWorkToCreateOrUpdate}, placementBinding)
 	if err != nil {
 		return nil, false, errors.Wraps(err, "failed to create or update work object for primary placement resource snapshot",
 			"primaryPlacementResourceSnapshot", klog.KObj(primaryPlacementResourceSnapshot))
 	}
 	ownerWorkObjRef := metav1.NewControllerRef(createdOrUpdatedWorks[0], workGVK)
-	writtenToStorage = primaryWorkObjWrittenToStorage
+	workSpecsChanged = primaryWorkSpecChanged
 
 	// Set the owner reference on all secondary work objects.
 	for idx := range additionalWorksToCreateOrUpdate {
@@ -212,16 +216,16 @@ func (r *Reconciler) refreshWorks(ctx context.Context,
 	}
 
 	// Issue the create or update ops for the secondary work objects in parallel.
-	additionalCreatedOrUpdatedWorks, additionalCreatedOrUpdated, err := r.createOrUpdateWorkObjects(ctx, additionalWorksToCreateOrUpdate, placementBinding)
+	additionalCreatedOrUpdatedWorks, additionalWorkSpecsChanged, err := r.createOrUpdateWorkObjects(ctx, additionalWorksToCreateOrUpdate, placementBinding)
 	if err != nil {
 		return nil, false, errors.Wraps(err, "failed to create or update additional work objects for secondary placement resource snapshots")
 	}
 	createdOrUpdatedWorks = append(createdOrUpdatedWorks, additionalCreatedOrUpdatedWorks...)
-	if !writtenToStorage {
-		writtenToStorage = additionalCreatedOrUpdated
+	if !workSpecsChanged {
+		workSpecsChanged = additionalWorkSpecsChanged
 	}
 
-	return createdOrUpdatedWorks, writtenToStorage, nil
+	return createdOrUpdatedWorks, workSpecsChanged, nil
 }
 
 func buildWorkObjectFor(
@@ -321,7 +325,7 @@ func (r *Reconciler) createOrUpdateWorkObjects(
 
 	createdOrUpdatedWorks := make([]*placementv1alpha1.Work, len(worksToCreateOrUpdate))
 	errFlag := parallelizer.NewErrorFlag()
-	createdOrUpdated := atomic.Bool{}
+	specsChanged := atomic.Bool{}
 	r.parallelizer.ParallelizeUntil(childCtx, len(worksToCreateOrUpdate), func(idx int) {
 		work := worksToCreateOrUpdate[idx]
 
@@ -331,7 +335,15 @@ func (r *Reconciler) createOrUpdateWorkObjects(
 				Name:      work.GetName(),
 			},
 		}
+		specChanged := false
 		resOp, err := controllerutil.CreateOrUpdate(childCtx, r.hubClient, createdOrUpdatedWork, func() error {
+			// Check if the spec of the work object has changed; this is used to track if the controller
+			// here performs a metadata-only change, which can happen upon same-content rollouts.
+			//
+			// Note that this is different from the comparison automatically performed by
+			// the CreateOrUpdate method.
+			specChanged = !equality.Semantic.DeepEqual(createdOrUpdatedWork.Spec, work.Spec)
+
 			// Work objects are considered to be fully internal KubeFleet resources; for this reason
 			// here the control loop chooses to overwrite the spec, labels, annotations, and owner references of
 			// the work object with the latest values instead of attempting to do a merge.
@@ -350,9 +362,9 @@ func (r *Reconciler) createOrUpdateWorkObjects(
 		}
 
 		createdOrUpdatedWorks[idx] = createdOrUpdatedWork
-		if resOp != controllerutil.OperationResultNone {
-			// The work object has been created or updated.
-			createdOrUpdated.CompareAndSwap(false, true)
+		if specChanged {
+			// The work object has been created or has its spec updated. Metadata-only changes are ignored.
+			specsChanged.CompareAndSwap(false, true)
 		}
 		klog.V(2).InfoS("Successfully created or updated work object",
 			"work", klog.KObj(createdOrUpdatedWork), "resOp", resOp,
@@ -361,7 +373,7 @@ func (r *Reconciler) createOrUpdateWorkObjects(
 	if err := errFlag.Lower(); err != nil {
 		return nil, false, err
 	}
-	return createdOrUpdatedWorks, createdOrUpdated.Load(), nil
+	return createdOrUpdatedWorks, specsChanged.Load(), nil
 }
 
 func (r *Reconciler) deleteWorkObjects(

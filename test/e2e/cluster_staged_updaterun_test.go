@@ -691,6 +691,123 @@ var _ = Describe("test CRP rollout with staged update run", func() {
 		})
 	})
 
+	Context("Test cluster shrink with before-stage tasks for the delete stage", Ordered, func() {
+		var strategy *placementv1beta1.ClusterStagedUpdateStrategy
+		updateRunNames := []string{}
+
+		BeforeAll(func() {
+			// Create a test namespace and a configMap inside it on the hub cluster.
+			createWorkResources()
+
+			// Create the CRP with external rollout strategy and pick fixed policy.
+			crp := &placementv1beta1.ClusterResourcePlacement{
+				ObjectMeta: metav1.ObjectMeta{
+					Name: crpName,
+					// Add a custom finalizer; this would allow us to better observe
+					// the behavior of the controllers.
+					Finalizers: []string{customDeletionBlockerFinalizer},
+				},
+				Spec: placementv1beta1.PlacementSpec{
+					ResourceSelectors: workResourceSelector(),
+					Policy: &placementv1beta1.PlacementPolicy{
+						PlacementType: placementv1beta1.PickFixedPlacementType,
+						ClusterNames:  []string{allMemberClusterNames[0], allMemberClusterNames[1]}, // member-cluster-1 and member-cluster-2
+					},
+					Strategy: placementv1beta1.RolloutStrategy{
+						Type: placementv1beta1.ExternalRolloutStrategyType,
+					},
+				},
+			}
+			Expect(hubClient.Create(ctx, crp)).To(Succeed(), "Failed to create CRP")
+
+			// Create the clusterStagedUpdateStrategy with a single stage and a gated delete stage.
+			strategy = &placementv1beta1.ClusterStagedUpdateStrategy{
+				ObjectMeta: metav1.ObjectMeta{
+					Name: strategyName,
+				},
+				Spec: updateStrategySpecWithDeleteStageTasks(),
+			}
+			Expect(hubClient.Create(ctx, strategy)).To(Succeed(), "Failed to create ClusterStagedUpdateStrategy")
+
+			for i := 0; i < 2; i++ {
+				updateRunNames = append(updateRunNames, fmt.Sprintf(clusterStagedUpdateRunNameWithSubIndexTemplate, GinkgoParallelProcess(), i))
+			}
+		})
+
+		AfterAll(func() {
+			// Remove the custom deletion blocker finalizer from the CRP.
+			ensureCRPAndRelatedResourcesDeleted(crpName, allMemberClusters)
+
+			// Remove all the clusterStagedUpdateRuns.
+			for _, name := range updateRunNames {
+				ensureClusterStagedUpdateRunDeletion(name)
+			}
+
+			// Delete the clusterStagedUpdateStrategy.
+			ensureClusterUpdateRunStrategyDeletion(strategyName)
+		})
+
+		It("Should successfully schedule the crp", func() {
+			validateLatestClusterSchedulingPolicySnapshot(crpName, policySnapshotIndex1st, 2)
+		})
+
+		It("Should create a cluster staged update run successfully", func() {
+			createClusterStagedUpdateRunWithAutoCreatedSnapshot(updateRunNames[0], crpName, strategyName, placementv1beta1.StateRun)
+		})
+
+		It("Should rollout resources to member-cluster-1 and member-cluster-2 and complete the cluster staged update run without the delete stage tasks as there is no cluster to delete", func() {
+			csurSucceededActual := testutilsupdaterun.ClusterStagedUpdateRunStatusSucceededActual(ctx, hubClient, updateRunNames[0], resourceSnapshotIndex1st, policySnapshotIndex1st, 2, defaultApplyStrategy, &strategy.Spec, [][]string{{allMemberClusterNames[0], allMemberClusterNames[1]}}, nil, nil, nil, true)
+			Eventually(csurSucceededActual, updateRunEventuallyDuration, eventuallyInterval).Should(Succeed(), "Failed to validate updateRun %s succeeded", updateRunNames[0])
+			checkIfPlacedWorkResourcesOnMemberClustersInUpdateRun([]*framework.Cluster{allMemberClusters[0], allMemberClusters[1]})
+		})
+
+		It("Update the crp to only keep member-cluster-3", func() {
+			Eventually(func() error {
+				crp := &placementv1beta1.ClusterResourcePlacement{}
+				if err := hubClient.Get(ctx, client.ObjectKey{Name: crpName}, crp); err != nil {
+					return fmt.Errorf("failed to get the crp: %w", err)
+				}
+				crp.Spec.Policy.ClusterNames = []string{allMemberClusterNames[2]}
+				return hubClient.Update(ctx, crp)
+			}, eventuallyDuration, eventuallyInterval).Should(Succeed(), "Failed to update the crp to only keep member-cluster-3")
+		})
+
+		It("Should successfully schedule the crp", func() {
+			validateLatestClusterSchedulingPolicySnapshot(crpName, policySnapshotIndex2nd, 1)
+		})
+
+		It("Should create a cluster staged update run successfully", func() {
+			createClusterStagedUpdateRunSucceed(updateRunNames[1], crpName, resourceSnapshotIndex1st, strategyName, placementv1beta1.StateRun)
+		})
+
+		It("Should rollout resources to member-cluster-3 and keep them on member-cluster-1 and member-cluster-2 until the delete stage tasks complete", func() {
+			checkIfPlacedWorkResourcesOnMemberClustersInUpdateRun([]*framework.Cluster{allMemberClusters[2]})
+
+			By("Validating the approval request of the delete stage is created")
+			Eventually(func() error {
+				appReq := &placementv1beta1.ClusterApprovalRequest{}
+				return hubClient.Get(ctx, client.ObjectKey{Name: fmt.Sprintf(placementv1beta1.BeforeStageApprovalTaskNameFmt, updateRunNames[1], placementv1beta1.UpdateRunDeleteStageTaskName)}, appReq)
+			}, updateRunEventuallyDuration, eventuallyInterval).Should(Succeed(), "Failed to get the approval request of the delete stage")
+
+			By("Validating the resources are kept while the delete stage waits for the approval")
+			checkIfPlacedWorkResourcesOnMemberClustersConsistently(allMemberClusters)
+		})
+
+		It("Should remove resources on member-cluster-1 and member-cluster-2 after approval and complete the cluster staged update run successfully", func() {
+			validateAndApproveClusterApprovalRequests(updateRunNames[1], placementv1beta1.UpdateRunDeleteStageTaskName, placementv1beta1.BeforeStageApprovalTaskNameFmt, placementv1beta1.BeforeStageTaskLabelValue)
+
+			csurSucceededActual := testutilsupdaterun.ClusterStagedUpdateRunStatusSucceededActual(ctx, hubClient, updateRunNames[1], resourceSnapshotIndex1st, policySnapshotIndex2nd, 1, defaultApplyStrategy, &strategy.Spec, [][]string{{allMemberClusterNames[2]}}, []string{allMemberClusterNames[0], allMemberClusterNames[1]}, nil, nil, true)
+			Eventually(csurSucceededActual, 2*updateRunEventuallyDuration, eventuallyInterval).Should(Succeed(), "Failed to validate updateRun %s succeeded", updateRunNames[1])
+			checkIfRemovedWorkResourcesFromMemberClusters([]*framework.Cluster{allMemberClusters[0], allMemberClusters[1]})
+			checkIfPlacedWorkResourcesOnMemberClustersConsistently([]*framework.Cluster{allMemberClusters[2]})
+		})
+
+		It("Should update crp status as completed with member-cluster-3 only", func() {
+			crpStatusUpdatedActual := crpStatusWithExternalStrategyActual(workResourceIdentifiers(), resourceSnapshotIndex1st, true, []string{allMemberClusterNames[2]}, []string{resourceSnapshotIndex1st}, []bool{true}, nil, nil)
+			Eventually(crpStatusUpdatedActual, eventuallyDuration, eventuallyInterval).Should(Succeed(), "Failed to keep CRP %s status as expected", crpName)
+		})
+	})
+
 	Context("Test cluster scale out and shrink using pickN policy with staged update run", Ordered, func() {
 		var strategy *placementv1beta1.ClusterStagedUpdateStrategy
 		updateRunNames := []string{}
@@ -1995,6 +2112,27 @@ var _ = Describe("Test member cluster join and leave flow with updateRun", Label
 		})
 	})
 })
+
+// updateStrategySpecWithDeleteStageTasks returns an update strategy that updates all the clusters in one stage
+// and waits for an approval before the delete stage.
+func updateStrategySpecWithDeleteStageTasks() placementv1beta1.UpdateStrategySpec {
+	return placementv1beta1.UpdateStrategySpec{
+		Stages: []placementv1beta1.StageConfig{
+			{
+				Name:           "all",
+				LabelSelector:  &metav1.LabelSelector{},
+				MaxConcurrency: ptr.To(intstr.FromString("100%")),
+			},
+		},
+		DeleteStage: &placementv1beta1.DeleteStageConfig{
+			BeforeStageTasks: []placementv1beta1.StageTask{
+				{
+					Type: placementv1beta1.StageTaskTypeApproval,
+				},
+			},
+		},
+	}
+}
 
 func createClusterStagedUpdateStrategySucceed(strategyName string) *placementv1beta1.ClusterStagedUpdateStrategy {
 	strategy := &placementv1beta1.ClusterStagedUpdateStrategy{

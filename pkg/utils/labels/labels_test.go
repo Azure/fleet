@@ -20,6 +20,7 @@ import (
 	"testing"
 
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"sigs.k8s.io/controller-runtime/pkg/client"
 
 	clusterv1beta1 "go.goms.io/fleet/apis/cluster/v1beta1"
 	fleetv1beta1 "go.goms.io/fleet/apis/placement/v1beta1"
@@ -27,6 +28,8 @@ import (
 
 const (
 	snapshotName = "test-snapshot"
+
+	nonIntegerIndex = "abc"
 )
 
 func TestExtractResourceIndexFromClusterResourceSnapshot(t *testing.T) {
@@ -262,6 +265,136 @@ func TestExtractLabelFromMemberCluster(t *testing.T) {
 
 			if value != tt.wantValue {
 				t.Errorf("ExtractLabelFromMemberCluster() = %v, want %v", value, tt.wantValue)
+			}
+		})
+	}
+}
+
+func TestExtractIndex_ErrorMessage(t *testing.T) {
+	testCases := []struct {
+		name       string
+		labelValue string
+		wantErrMsg string
+	}{
+		{
+			name:       "not an integer",
+			labelValue: nonIntegerIndex,
+			wantErrMsg: `invalid resource index "abc", error: strconv.Atoi: parsing "abc": invalid syntax`,
+		},
+		{
+			name:       "negative integer",
+			labelValue: "-1",
+			wantErrMsg: `invalid resource index "-1": must be a non-negative integer`,
+		},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			snapshot := &fleetv1beta1.ClusterResourceSnapshot{
+				ObjectMeta: metav1.ObjectMeta{
+					Name:   snapshotName,
+					Labels: map[string]string{fleetv1beta1.ResourceIndexLabel: tc.labelValue},
+				},
+			}
+			_, err := ExtractIndex(snapshot, fleetv1beta1.ResourceIndexLabel)
+			if err == nil {
+				t.Fatalf("ExtractIndex() error = nil, want %q", tc.wantErrMsg)
+			}
+			if err.Error() != tc.wantErrMsg {
+				t.Errorf("ExtractIndex() error = %q, want %q", err.Error(), tc.wantErrMsg)
+			}
+		})
+	}
+}
+
+func TestParsePolicyIndexFromLabel(t *testing.T) {
+	testCases := []struct {
+		name           string
+		policySnapshot client.Object
+		wantIndex      int
+		wantErrMsg     string
+	}{
+		{
+			name: "valid index on a cluster-scoped snapshot",
+			policySnapshot: &fleetv1beta1.ClusterSchedulingPolicySnapshot{
+				ObjectMeta: metav1.ObjectMeta{
+					Name:   snapshotName,
+					Labels: map[string]string{fleetv1beta1.PolicyIndexLabel: "3"},
+				},
+			},
+			wantIndex: 3,
+		},
+		{
+			name: "valid index on a namespaced snapshot",
+			policySnapshot: &fleetv1beta1.SchedulingPolicySnapshot{
+				ObjectMeta: metav1.ObjectMeta{
+					Name:      snapshotName,
+					Namespace: "test-namespace",
+					Labels:    map[string]string{fleetv1beta1.PolicyIndexLabel: "0"},
+				},
+			},
+			wantIndex: 0,
+		},
+		{
+			name: "no labels",
+			policySnapshot: &fleetv1beta1.ClusterSchedulingPolicySnapshot{
+				ObjectMeta: metav1.ObjectMeta{Name: snapshotName},
+			},
+			wantIndex:  -1,
+			wantErrMsg: "no labels found on policy snapshot",
+		},
+		{
+			name: "index label missing",
+			policySnapshot: &fleetv1beta1.ClusterSchedulingPolicySnapshot{
+				ObjectMeta: metav1.ObjectMeta{
+					Name:   snapshotName,
+					Labels: map[string]string{"other": "label"},
+				},
+			},
+			wantIndex:  -1,
+			wantErrMsg: `invalid policy index "", error: strconv.Atoi: parsing "": invalid syntax`,
+		},
+		{
+			name: "not an integer",
+			policySnapshot: &fleetv1beta1.ClusterSchedulingPolicySnapshot{
+				ObjectMeta: metav1.ObjectMeta{
+					Name:   snapshotName,
+					Labels: map[string]string{fleetv1beta1.PolicyIndexLabel: nonIntegerIndex},
+				},
+			},
+			wantIndex:  -1,
+			wantErrMsg: `invalid policy index "abc", error: strconv.Atoi: parsing "abc": invalid syntax`,
+		},
+		{
+			name: "negative integer",
+			policySnapshot: &fleetv1beta1.ClusterSchedulingPolicySnapshot{
+				ObjectMeta: metav1.ObjectMeta{
+					Name:   snapshotName,
+					Labels: map[string]string{fleetv1beta1.PolicyIndexLabel: "-1"},
+				},
+			},
+			wantIndex:  -1,
+			wantErrMsg: `invalid policy index "-1": must be a non-negative integer`,
+		},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			gotIndex, err := ParsePolicyIndexFromLabel(tc.policySnapshot)
+			if gotIndex != tc.wantIndex {
+				t.Errorf("ParsePolicyIndexFromLabel() index = %d, want %d", gotIndex, tc.wantIndex)
+			}
+			if tc.wantErrMsg == "" {
+				if err != nil {
+					t.Fatalf("ParsePolicyIndexFromLabel() error = %v, want nil", err)
+				}
+				return
+			}
+			if err == nil {
+				t.Fatalf("ParsePolicyIndexFromLabel() error = nil, want %q", tc.wantErrMsg)
+			}
+			if err.Error() != tc.wantErrMsg {
+				t.Errorf("ParsePolicyIndexFromLabel() error = %q, want %q", err.Error(), tc.wantErrMsg)
 			}
 		})
 	}

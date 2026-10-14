@@ -58,6 +58,18 @@ func TestHubConnectivityOptions(t *testing.T) {
 				UseInsecureTLSClient: true,
 			},
 		},
+		{
+			name:        "use kubeconfig specified",
+			flagSetName: "useKubeconfigSpecified",
+			args: []string{
+				"--use-kubeconfig=true",
+			},
+			wantHubConnectOpts: HubConnectivityOptions{
+				UseCertificateAuth:   false,
+				UseInsecureTLSClient: false,
+				UseKubeConfig:        true,
+			},
+		},
 	}
 
 	for _, tc := range testCases {

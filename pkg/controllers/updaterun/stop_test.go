@@ -613,7 +613,61 @@ func TestStopDeleteStage(t *testing.T) {
 			},
 		},
 		{
-			name: "cluster not marked as deleting and binding not deleting",
+			name: "deleted cluster and cluster not marked as deleting should stop without deleting the remaining binding",
+			updateRun: &placementv1beta1.ClusterStagedUpdateRun{
+				ObjectMeta: metav1.ObjectMeta{
+					Name:       "test-updaterun",
+					Generation: 1,
+				},
+				Status: placementv1beta1.UpdateRunStatus{
+					DeletionStageStatus: &placementv1beta1.StageUpdatingStatus{
+						StageName: "deletion",
+						Clusters: []placementv1beta1.ClusterUpdatingStatus{
+							{
+								ClusterName: "cluster-1",
+								Conditions: []metav1.Condition{
+									{
+										Type:               string(placementv1beta1.ClusterUpdatingConditionStarted),
+										Status:             metav1.ConditionTrue,
+										ObservedGeneration: 1,
+										Reason:             condition.ClusterUpdatingStartedReason,
+									},
+									{
+										Type:               string(placementv1beta1.ClusterUpdatingConditionSucceeded),
+										Status:             metav1.ConditionTrue,
+										ObservedGeneration: 1,
+										Reason:             condition.ClusterUpdatingSucceededReason,
+									},
+								},
+							},
+							{
+								ClusterName: "cluster-2",
+							},
+						},
+					},
+				},
+			},
+			toBeDeletedBindings: []placementv1beta1.BindingObj{
+				&placementv1beta1.ClusterResourceBinding{
+					ObjectMeta: metav1.ObjectMeta{
+						// No DeletionTimestamp set
+					},
+					Spec: placementv1beta1.ResourceBindingSpec{
+						TargetCluster: "cluster-2",
+					},
+				},
+			},
+			wantFinished: true,
+			wantError:    nil,
+			wantProgressCond: metav1.Condition{
+				Type:               string(placementv1beta1.StageUpdatingConditionProgressing),
+				Status:             metav1.ConditionFalse,
+				ObservedGeneration: 1,
+				Reason:             condition.StageUpdatingStoppedReason,
+			},
+		},
+		{
+			name: "cluster waiting on delete stage tasks should stop without deleting its binding",
 			updateRun: &placementv1beta1.ClusterStagedUpdateRun{
 				ObjectMeta: metav1.ObjectMeta{
 					Name:       "test-updaterun",
@@ -640,13 +694,118 @@ func TestStopDeleteStage(t *testing.T) {
 					},
 				},
 			},
-			wantFinished: false,
+			wantFinished: true,
 			wantError:    nil,
 			wantProgressCond: metav1.Condition{
 				Type:               string(placementv1beta1.StageUpdatingConditionProgressing),
 				Status:             metav1.ConditionFalse,
 				ObservedGeneration: 1,
 				Reason:             condition.StageUpdatingStoppedReason,
+			},
+		},
+		{
+			name: "deleting cluster and cluster not marked as deleting should not finish",
+			updateRun: &placementv1beta1.ClusterStagedUpdateRun{
+				ObjectMeta: metav1.ObjectMeta{
+					Name:       "test-updaterun",
+					Generation: 1,
+				},
+				Status: placementv1beta1.UpdateRunStatus{
+					DeletionStageStatus: &placementv1beta1.StageUpdatingStatus{
+						StageName: "deletion",
+						Clusters: []placementv1beta1.ClusterUpdatingStatus{
+							{
+								ClusterName: "cluster-1",
+								Conditions: []metav1.Condition{
+									{
+										Type:               string(placementv1beta1.ClusterUpdatingConditionStarted),
+										Status:             metav1.ConditionTrue,
+										ObservedGeneration: 1,
+										LastTransitionTime: now,
+										Reason:             condition.ClusterUpdatingStartedReason,
+									},
+								},
+							},
+							{
+								ClusterName: "cluster-2",
+							},
+						},
+					},
+				},
+			},
+			toBeDeletedBindings: []placementv1beta1.BindingObj{
+				&placementv1beta1.ClusterResourceBinding{
+					ObjectMeta: metav1.ObjectMeta{
+						DeletionTimestamp: &deletionTime,
+					},
+					Spec: placementv1beta1.ResourceBindingSpec{
+						TargetCluster: "cluster-1",
+					},
+				},
+				&placementv1beta1.ClusterResourceBinding{
+					Spec: placementv1beta1.ResourceBindingSpec{
+						TargetCluster: "cluster-2",
+					},
+				},
+			},
+			wantFinished: false,
+			wantError:    nil,
+			wantProgressCond: metav1.Condition{
+				Type:               string(placementv1beta1.StageUpdatingConditionProgressing),
+				Status:             metav1.ConditionUnknown,
+				ObservedGeneration: 1,
+				Reason:             condition.StageUpdatingStoppingReason,
+			},
+		},
+		{
+			name: "deleted cluster that still has a binding - should abort",
+			updateRun: &placementv1beta1.ClusterStagedUpdateRun{
+				ObjectMeta: metav1.ObjectMeta{
+					Name:       "test-updaterun",
+					Generation: 1,
+				},
+				Status: placementv1beta1.UpdateRunStatus{
+					DeletionStageStatus: &placementv1beta1.StageUpdatingStatus{
+						StageName: "deletion",
+						Clusters: []placementv1beta1.ClusterUpdatingStatus{
+							{
+								ClusterName: "cluster-1",
+								Conditions: []metav1.Condition{
+									{
+										Type:               string(placementv1beta1.ClusterUpdatingConditionStarted),
+										Status:             metav1.ConditionTrue,
+										ObservedGeneration: 1,
+										Reason:             condition.ClusterUpdatingStartedReason,
+									},
+									{
+										Type:               string(placementv1beta1.ClusterUpdatingConditionSucceeded),
+										Status:             metav1.ConditionTrue,
+										ObservedGeneration: 1,
+										Reason:             condition.ClusterUpdatingSucceededReason,
+									},
+								},
+							},
+						},
+					},
+				},
+			},
+			toBeDeletedBindings: []placementv1beta1.BindingObj{
+				&placementv1beta1.ClusterResourceBinding{
+					ObjectMeta: metav1.ObjectMeta{
+						DeletionTimestamp: &deletionTime,
+					},
+					Spec: placementv1beta1.ResourceBindingSpec{
+						TargetCluster: "cluster-1",
+					},
+				},
+			},
+			wantFinished: false,
+			wantError:    errors.New("the deleted cluster `cluster-1` in the deleting stage still has a binding"),
+			wantProgressCond: metav1.Condition{
+				Type:               string(placementv1beta1.StageUpdatingConditionProgressing),
+				Status:             metav1.ConditionUnknown,
+				ObservedGeneration: 1,
+				Reason:             condition.StageUpdatingStoppingReason,
 			},
 		},
 		{
@@ -729,13 +888,13 @@ func TestStopDeleteStage(t *testing.T) {
 
 			// Verify error expectation.
 			if (tt.wantError != nil) != (gotErr != nil) {
-				t.Fatalf("stopUpdatingStage() want error: %v, got error: %v", tt.wantError, gotErr)
+				t.Fatalf("stopDeleteStage() want error: %v, got error: %v", tt.wantError, gotErr)
 			}
 
 			// Verify error message contains expected substring.
 			if tt.wantError != nil && gotErr != nil {
 				if !strings.Contains(gotErr.Error(), tt.wantError.Error()) {
-					t.Fatalf("stopUpdatingStage() want error: %v, got error: %v", tt.wantError, gotErr)
+					t.Fatalf("stopDeleteStage() want error: %v, got error: %v", tt.wantError, gotErr)
 				}
 			}
 

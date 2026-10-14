@@ -880,6 +880,199 @@ var _ = Describe("UpdateRun execution tests - double stages", func() {
 		})
 
 	})
+
+	Context("Cluster staged update run should wait for the before-stage tasks of the delete stage", Ordered, func() {
+		var wantApprovalRequest *placementv1beta1.ClusterApprovalRequest
+
+		// Wait for a few rounds of reconciliation, which is every stageUpdatingWaitTime while waiting for the tasks.
+		validateToBeDeletedBindingsExistConsistently := func() {
+			Consistently(func() error {
+				for i := numTargetClusters; i < numTargetClusters+numUnscheduledClusters; i++ {
+					binding := &placementv1beta1.ClusterResourceBinding{}
+					if err := k8sClient.Get(ctx, types.NamespacedName{Name: resourceBindings[i].Name}, binding); err != nil {
+						return fmt.Errorf("failed to get binding %s: %w", resourceBindings[i].Name, err)
+					}
+					if !binding.DeletionTimestamp.IsZero() {
+						return fmt.Errorf("binding %s is being deleted", binding.Name)
+					}
+				}
+				return nil
+			}, 3*stageUpdatingWaitTime, interval).Should(Succeed(), "failed to validate the to-be-deleted bindings are kept")
+		}
+
+		BeforeAll(func() {
+			By("Reassigning the strategy to have 1 stage selecting all clusters and the delete stage with a before-stage approval task")
+			sortingKey := "index"
+			updateStrategy.Spec.Stages = []placementv1beta1.StageConfig{
+				{
+					Name:            "stage1",
+					LabelSelector:   &metav1.LabelSelector{}, // Empty label selector selects all clusters.
+					SortingLabelKey: &sortingKey,
+				},
+			}
+			updateStrategy.Spec.DeleteStage = &placementv1beta1.DeleteStageConfig{
+				BeforeStageTasks: []placementv1beta1.StageTask{
+					{
+						Type: placementv1beta1.StageTaskTypeApproval,
+					},
+				},
+			}
+			Expect(k8sClient.Update(ctx, updateStrategy)).To(Succeed())
+
+			By("Creating a new clusterStagedUpdateRun")
+			Expect(k8sClient.Create(ctx, updateRun)).To(Succeed())
+
+			By("Validating the initialization succeeded and the execution has started")
+			initialized := generateInitializedStatus(
+				crp, updateRun, testResourceSnapshotIndex, policySnapshot, updateStrategy, 10,
+				generateTenClusterSingleStageStatus(clusterResourceOverride)[:1], generateTenClusterDeletionStageStatus(),
+			)
+			wantStatus = generateExecutionStartedStatus(updateRun, initialized)
+			validateClusterStagedUpdateRunStatus(ctx, updateRun, wantStatus, "")
+
+			// Build wantStatus based on the current updateRun status after initialization.
+			wantStatus = updateRun.Status.DeepCopy()
+		})
+
+		It("Should complete the 1st stage and wait for the before-stage tasks of the delete stage", func() {
+			By("Marking all bindings in the 1st stage as available and validating all clusters have completed")
+			for i := 0; i < numTargetClusters; i++ {
+				binding := resourceBindings[numTargetClusters-1-i]
+				validateBindingState(ctx, binding, resourceSnapshot.Name, updateRun, &updateRun.Status.StagesStatus[0].Clusters[i])
+				meta.SetStatusCondition(&binding.Status.Conditions, generateTrueCondition(binding, placementv1beta1.ResourceBindingAvailable))
+				Expect(k8sClient.Status().Update(ctx, binding)).Should(Succeed(), "failed to update the binding status")
+
+				meta.SetStatusCondition(&wantStatus.StagesStatus[0].Clusters[i].Conditions, generateTrueCondition(updateRun, placementv1beta1.ClusterUpdatingConditionStarted))
+				meta.SetStatusCondition(&wantStatus.StagesStatus[0].Clusters[i].Conditions, generateTrueCondition(updateRun, placementv1beta1.ClusterUpdatingConditionSucceeded))
+			}
+
+			By("Validating the 1st stage has completed and the delete stage is waiting for the approval")
+			wantStatus.StagesStatus[0].Conditions[0] = generateFalseConditionWithReason(updateRun, placementv1beta1.StageUpdatingConditionProgressing, condition.StageUpdatingSucceededReason)
+			wantStatus.StagesStatus[0].Conditions = append(wantStatus.StagesStatus[0].Conditions, generateTrueCondition(updateRun, placementv1beta1.StageUpdatingConditionSucceeded))
+			wantStatus.DeletionStageStatus.Conditions = append(wantStatus.DeletionStageStatus.Conditions, generateFalseCondition(updateRun, placementv1beta1.StageUpdatingConditionProgressing))
+			wantStatus.DeletionStageStatus.BeforeStageTaskStatus[0].Conditions = append(wantStatus.DeletionStageStatus.BeforeStageTaskStatus[0].Conditions,
+				generateTrueCondition(updateRun, placementv1beta1.StageTaskConditionApprovalRequestCreated))
+			meta.SetStatusCondition(&wantStatus.Conditions, generateFalseCondition(updateRun, placementv1beta1.StagedUpdateRunConditionProgressing))
+			validateClusterStagedUpdateRunStatus(ctx, updateRun, wantStatus, "")
+
+			By("Validating the delete stage has not started")
+			Expect(updateRun.Status.DeletionStageStatus.StartTime).Should(BeNil())
+
+			By("Validating the approvalRequest has been created")
+			wantApprovalRequest = &placementv1beta1.ClusterApprovalRequest{
+				ObjectMeta: metav1.ObjectMeta{
+					Name: fmt.Sprintf(placementv1beta1.BeforeStageApprovalTaskNameFmt, updateRun.Name, placementv1beta1.UpdateRunDeleteStageTaskName),
+					Labels: map[string]string{
+						placementv1beta1.TargetUpdatingStageNameLabel:   placementv1beta1.UpdateRunDeleteStageTaskName,
+						placementv1beta1.TargetUpdateRunLabel:           updateRun.Name,
+						placementv1beta1.TaskTypeLabel:                  placementv1beta1.BeforeStageTaskLabelValue,
+						placementv1beta1.IsLatestUpdateRunApprovalLabel: "true",
+					},
+				},
+				Spec: placementv1beta1.ApprovalRequestSpec{
+					TargetUpdateRun: updateRun.Name,
+					TargetStage:     updateRun.Status.DeletionStageStatus.StageName,
+				},
+			}
+			Expect(updateRun.Status.DeletionStageStatus.BeforeStageTaskStatus[0].ApprovalRequestName).Should(Equal(wantApprovalRequest.Name))
+			validateApprovalRequestCreated(wantApprovalRequest)
+
+			By("Validating the to-be-deleted bindings are not deleted")
+			validateToBeDeletedBindingsExistConsistently()
+
+			By("Checking update run status metrics are emitted")
+			validateUpdateRunMetricsEmitted(generateProgressingMetric(placementv1beta1.StateRun, updateRun), generateWaitingMetric(placementv1beta1.StateRun, updateRun))
+		})
+
+		It("Should recreate the approvalRequest of the delete stage if it is deleted", func() {
+			By("Deleting the approvalRequest")
+			approvalRequest := &placementv1beta1.ClusterApprovalRequest{}
+			Expect(k8sClient.Get(ctx, types.NamespacedName{Name: wantApprovalRequest.Name}, approvalRequest)).Should(Succeed())
+			oldUID := approvalRequest.UID
+			Expect(k8sClient.Delete(ctx, approvalRequest)).Should(Succeed())
+
+			By("Validating the approvalRequest has been recreated")
+			Eventually(func() error {
+				if err := k8sClient.Get(ctx, types.NamespacedName{Name: wantApprovalRequest.Name}, approvalRequest); err != nil {
+					return err
+				}
+				if approvalRequest.UID == oldUID {
+					return fmt.Errorf("approvalRequest %s is not deleted yet", approvalRequest.Name)
+				}
+				return nil
+			}, timeout, interval).Should(Succeed(), "failed to validate the approvalRequest is recreated")
+			validateApprovalRequestCreated(wantApprovalRequest)
+
+			By("Validating the to-be-deleted bindings are not deleted")
+			validateToBeDeletedBindingsExistConsistently()
+			validateClusterStagedUpdateRunStatus(ctx, updateRun, wantStatus, "")
+		})
+
+		It("Should stop the update run without deleting the bindings when state is Stop", func() {
+			By("Updating updateRun state to Stop")
+			updateRun = updateClusterStagedUpdateRunState(updateRun.Name, placementv1beta1.StateStop)
+			// Update the test's want status to match the new generation.
+			updateAllStatusConditionsGeneration(wantStatus, updateRun.Generation)
+
+			By("Validating the update run has stopped")
+			meta.SetStatusCondition(&wantStatus.DeletionStageStatus.Conditions, generateFalseConditionWithReason(updateRun, placementv1beta1.StageUpdatingConditionProgressing, condition.StageUpdatingStoppedReason))
+			meta.SetStatusCondition(&wantStatus.Conditions, generateFalseConditionWithReason(updateRun, placementv1beta1.StagedUpdateRunConditionProgressing, condition.UpdateRunStoppedReason))
+			validateClusterStagedUpdateRunStatus(ctx, updateRun, wantStatus, "")
+
+			By("Approving the approvalRequest")
+			approveClusterApprovalRequest(ctx, wantApprovalRequest.Name)
+
+			By("Validating the to-be-deleted bindings are not deleted")
+			validateToBeDeletedBindingsExistConsistently()
+			validateClusterStagedUpdateRunStatus(ctx, updateRun, wantStatus, "")
+		})
+
+		It("Should delete all the clusterResourceBindings and complete the update run when state is Run", func() {
+			By("Updating updateRun state to Run")
+			updateRun = updateClusterStagedUpdateRunState(updateRun.Name, placementv1beta1.StateRun)
+			// Update the test's want status to match the new generation.
+			updateAllStatusConditionsGeneration(wantStatus, updateRun.Generation)
+
+			By("Validating the approvalRequest has ApprovalAccepted status")
+			validateApprovalRequestAccepted(ctx, wantApprovalRequest.Name)
+
+			By("Validating the to-be-deleted bindings are all deleted")
+			Eventually(func() error {
+				for i := numTargetClusters; i < numTargetClusters+numUnscheduledClusters; i++ {
+					binding := &placementv1beta1.ClusterResourceBinding{}
+					err := k8sClient.Get(ctx, types.NamespacedName{Name: resourceBindings[i].Name}, binding)
+					if err == nil {
+						return fmt.Errorf("binding %s is not deleted", binding.Name)
+					}
+					if !apierrors.IsNotFound(err) {
+						return fmt.Errorf("get binding %s does not return a not-found error: %w", binding.Name, err)
+					}
+				}
+				return nil
+			}, timeout, interval).Should(Succeed(), "failed to validate the deletion of the to-be-deleted bindings")
+
+			By("Validating the delete stage and the clusterStagedUpdateRun has completed")
+			wantStatus.DeletionStageStatus.BeforeStageTaskStatus[0].Conditions = append(wantStatus.DeletionStageStatus.BeforeStageTaskStatus[0].Conditions,
+				generateTrueCondition(updateRun, placementv1beta1.StageTaskConditionApprovalRequestApproved))
+			for i := range wantStatus.DeletionStageStatus.Clusters {
+				wantStatus.DeletionStageStatus.Clusters[i].Conditions = append(wantStatus.DeletionStageStatus.Clusters[i].Conditions,
+					generateTrueCondition(updateRun, placementv1beta1.ClusterUpdatingConditionStarted),
+					generateTrueCondition(updateRun, placementv1beta1.ClusterUpdatingConditionSucceeded))
+			}
+			meta.SetStatusCondition(&wantStatus.DeletionStageStatus.Conditions, generateFalseConditionWithReason(updateRun, placementv1beta1.StageUpdatingConditionProgressing, condition.StageUpdatingSucceededReason))
+			wantStatus.DeletionStageStatus.Conditions = append(wantStatus.DeletionStageStatus.Conditions, generateTrueCondition(updateRun, placementv1beta1.StageUpdatingConditionSucceeded))
+			meta.SetStatusCondition(&wantStatus.Conditions, generateFalseConditionWithReason(updateRun, placementv1beta1.StagedUpdateRunConditionProgressing, condition.UpdateRunSucceededReason))
+			wantStatus.Conditions = append(wantStatus.Conditions, generateTrueCondition(updateRun, placementv1beta1.StagedUpdateRunConditionSucceeded))
+			validateClusterStagedUpdateRunStatus(ctx, updateRun, wantStatus, "")
+
+			By("Validating the delete stage has startTime and endTime set")
+			Expect(updateRun.Status.DeletionStageStatus.StartTime).ShouldNot(BeNil())
+			Expect(updateRun.Status.DeletionStageStatus.EndTime).ShouldNot(BeNil())
+
+			By("Checking update run metrics are emitted")
+			validateUpdateRunApprovalStageTaskMetric(generateApprovalStageTaskMetric(updateRun, placementv1beta1.BeforeStageTaskLabelValue, 1))
+		})
+	})
 })
 
 var _ = Describe("UpdateRun execution tests - single stage", func() {
@@ -1173,7 +1366,7 @@ var _ = Describe("UpdateRun execution tests - single stage", func() {
 			validateUpdateRunMetricsEmitted(generateWaitingMetric(placementv1beta1.StateRun, updateRun), generateProgressingMetric(placementv1beta1.StateRun, updateRun))
 		})
 
-		It("Should Should complete the 1st stage and complete the updateRun after the 3rd cluster succeeds", func() {
+		It("Should complete the 1st stage and complete the updateRun after the 3rd cluster succeeds", func() {
 			By("Validating the 3rd clusterResourceBinding is updated to Bound")
 			binding := resourceBindings[2] // cluster-2
 			validateBindingState(ctx, binding, resourceSnapshot.Name, updateRun, &updateRun.Status.StagesStatus[0].Clusters[2])
@@ -1959,7 +2152,7 @@ var _ = Describe("UpdateRun execution tests - single stage", func() {
 			By("Validating the 1st stage has endTime set")
 			Expect(updateRun.Status.StagesStatus[0].EndTime).ShouldNot(BeNil())
 
-			By("Checking update run  metrics are emitted")
+			By("Checking update run metrics are emitted")
 			validateUpdateRunMetricsEmitted(generateInitializationSucceededMetric(placementv1beta1.StateInitialize, updateRun), generateProgressingMetric(placementv1beta1.StateRun, updateRun), generateSucceededMetric(placementv1beta1.StateRun, updateRun))
 			validateUpdateRunStageMetricsEmitted(generateStageClusterUpdatingMetric(updateRun))
 		})

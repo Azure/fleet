@@ -687,6 +687,126 @@ var _ = Describe("test RP rollout with staged update run", Label("resourceplacem
 		})
 	})
 
+	Context("Test cluster shrink with before-stage tasks for the delete stage", Ordered, func() {
+		var strategy *placementv1beta1.StagedUpdateStrategy
+		updateRunNames := []string{}
+
+		It("should wait for namespace collection to sync on all member clusters", func() {
+			waitForNamespaceCollectionOnClusters(appNamespace().Name, allMemberClusterNames)
+		})
+
+		BeforeAll(func() {
+			// Create the RP with external rollout strategy and pick fixed policy.
+			rp := &placementv1beta1.ResourcePlacement{
+				ObjectMeta: metav1.ObjectMeta{
+					Name:      rpName,
+					Namespace: testNamespace,
+					// Add a custom finalizer; this would allow us to better observe
+					// the behavior of the controllers.
+					Finalizers: []string{customDeletionBlockerFinalizer},
+				},
+				Spec: placementv1beta1.PlacementSpec{
+					ResourceSelectors: configMapSelector(),
+					Policy: &placementv1beta1.PlacementPolicy{
+						PlacementType: placementv1beta1.PickFixedPlacementType,
+						ClusterNames:  []string{allMemberClusterNames[0], allMemberClusterNames[1]}, // member-cluster-1 and member-cluster-2
+					},
+					Strategy: placementv1beta1.RolloutStrategy{
+						Type: placementv1beta1.ExternalRolloutStrategyType,
+					},
+				},
+			}
+			Expect(hubClient.Create(ctx, rp)).To(Succeed(), "Failed to create RP")
+
+			// Create the stagedUpdateStrategy with a single stage and a gated delete stage.
+			strategy = &placementv1beta1.StagedUpdateStrategy{
+				ObjectMeta: metav1.ObjectMeta{
+					Name:      strategyName,
+					Namespace: testNamespace,
+				},
+				Spec: updateStrategySpecWithDeleteStageTasks(),
+			}
+			Expect(hubClient.Create(ctx, strategy)).To(Succeed(), "Failed to create StagedUpdateStrategy")
+
+			for i := 0; i < 2; i++ {
+				updateRunNames = append(updateRunNames, fmt.Sprintf(stagedUpdateRunNameWithSubIndexTemplate, GinkgoParallelProcess(), i))
+			}
+		})
+
+		AfterAll(func() {
+			// Remove the custom deletion blocker finalizer from the RP.
+			ensureRPAndRelatedResourcesDeleted(types.NamespacedName{Name: rpName, Namespace: testNamespace}, allMemberClusters)
+
+			// Remove all the stagedUpdateRuns.
+			for _, name := range updateRunNames {
+				ensureStagedUpdateRunDeletion(name, testNamespace)
+			}
+
+			// Delete the stagedUpdateStrategy.
+			ensureStagedUpdateRunStrategyDeletion(strategyName, testNamespace)
+		})
+
+		It("Should successfully schedule the rp", func() {
+			validateLatestSchedulingPolicySnapshot(rpName, testNamespace, policySnapshotIndex1st, 2)
+		})
+
+		It("Should create a staged update run successfully", func() {
+			createStagedUpdateRunWithAutoCreatedSnapshot(updateRunNames[0], testNamespace, rpName, strategyName, placementv1beta1.StateRun)
+		})
+
+		It("Should rollout resources to member-cluster-1 and member-cluster-2 and complete the staged update run without the delete stage tasks as there is no cluster to delete", func() {
+			surSucceededActual := testutilsupdaterun.StagedUpdateRunStatusSucceededActual(ctx, hubClient, updateRunNames[0], testNamespace, resourceSnapshotIndex1st, policySnapshotIndex1st, 2, defaultApplyStrategy, &strategy.Spec, [][]string{{allMemberClusterNames[0], allMemberClusterNames[1]}}, nil, nil, nil, true)
+			Eventually(surSucceededActual, updateRunEventuallyDuration, eventuallyInterval).Should(Succeed(), "Failed to validate updateRun %s/%s succeeded", testNamespace, updateRunNames[0])
+			checkIfPlacedWorkResourcesOnMemberClustersInUpdateRun([]*framework.Cluster{allMemberClusters[0], allMemberClusters[1]})
+		})
+
+		It("Update the rp to only keep member-cluster-3", func() {
+			Eventually(func() error {
+				rp := &placementv1beta1.ResourcePlacement{}
+				if err := hubClient.Get(ctx, client.ObjectKey{Name: rpName, Namespace: testNamespace}, rp); err != nil {
+					return fmt.Errorf("failed to get the rp: %w", err)
+				}
+				rp.Spec.Policy.ClusterNames = []string{allMemberClusterNames[2]}
+				return hubClient.Update(ctx, rp)
+			}, eventuallyDuration, eventuallyInterval).Should(Succeed(), "Failed to update the rp to only keep member-cluster-3")
+		})
+
+		It("Should successfully schedule the rp", func() {
+			validateLatestSchedulingPolicySnapshot(rpName, testNamespace, policySnapshotIndex2nd, 1)
+		})
+
+		It("Should create a staged update run successfully", func() {
+			createStagedUpdateRunSucceed(updateRunNames[1], testNamespace, rpName, resourceSnapshotIndex1st, strategyName, placementv1beta1.StateRun)
+		})
+
+		It("Should rollout resources to member-cluster-3 and keep them on member-cluster-1 and member-cluster-2 until the delete stage tasks complete", func() {
+			checkIfPlacedWorkResourcesOnMemberClustersInUpdateRun([]*framework.Cluster{allMemberClusters[2]})
+
+			By("Validating the approval request of the delete stage is created")
+			Eventually(func() error {
+				appReq := &placementv1beta1.ApprovalRequest{}
+				return hubClient.Get(ctx, client.ObjectKey{Name: fmt.Sprintf(placementv1beta1.BeforeStageApprovalTaskNameFmt, updateRunNames[1], placementv1beta1.UpdateRunDeleteStageTaskName), Namespace: testNamespace}, appReq)
+			}, updateRunEventuallyDuration, eventuallyInterval).Should(Succeed(), "Failed to get the approval request of the delete stage")
+
+			By("Validating the resources are kept while the delete stage waits for the approval")
+			checkIfPlacedWorkResourcesOnMemberClustersConsistently(allMemberClusters)
+		})
+
+		It("Should remove resources on member-cluster-1 and member-cluster-2 after approval and complete the staged update run successfully", func() {
+			validateAndApproveNamespacedApprovalRequests(updateRunNames[1], testNamespace, placementv1beta1.UpdateRunDeleteStageTaskName, placementv1beta1.BeforeStageApprovalTaskNameFmt, placementv1beta1.BeforeStageTaskLabelValue)
+
+			surSucceededActual := testutilsupdaterun.StagedUpdateRunStatusSucceededActual(ctx, hubClient, updateRunNames[1], testNamespace, resourceSnapshotIndex1st, policySnapshotIndex2nd, 1, defaultApplyStrategy, &strategy.Spec, [][]string{{allMemberClusterNames[2]}}, []string{allMemberClusterNames[0], allMemberClusterNames[1]}, nil, nil, true)
+			Eventually(surSucceededActual, 2*updateRunEventuallyDuration, eventuallyInterval).Should(Succeed(), "Failed to validate updateRun %s/%s succeeded", testNamespace, updateRunNames[1])
+			checkIfRemovedConfigMapFromMemberClusters([]*framework.Cluster{allMemberClusters[0], allMemberClusters[1]})
+			checkIfPlacedWorkResourcesOnMemberClustersConsistently([]*framework.Cluster{allMemberClusters[2]})
+		})
+
+		It("Should update rp status as completed with member-cluster-3 only", func() {
+			rpStatusUpdatedActual := rpStatusWithExternalStrategyActual(appConfigMapIdentifiers(), resourceSnapshotIndex1st, true, []string{allMemberClusterNames[2]}, []string{resourceSnapshotIndex1st}, []bool{true}, nil, nil)
+			Eventually(rpStatusUpdatedActual, eventuallyDuration, eventuallyInterval).Should(Succeed(), "Failed to keep RP %s/%s status as expected", testNamespace, rpName)
+		})
+	})
+
 	Context("Test cluster scale out and shrink using pickN policy with namespaced staged update run", Ordered, func() {
 		var strategy *placementv1beta1.StagedUpdateStrategy
 		updateRunNames := []string{}

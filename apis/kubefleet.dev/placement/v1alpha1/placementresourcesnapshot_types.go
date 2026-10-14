@@ -41,7 +41,7 @@ const (
 	// might truncate the name and add a hash suffix as needed.
 	//
 	// This label is set on all placement resource snapshots.
-	PlacementResourceSnapshotOwnedByLabelKey = "placement.kubefleet.dev/placement-resource-snapshot-owned-by"
+	PlacementResourceSnapshotOwnedByLabelKey = "placement.kubefleet.dev/owned-by-placement-policy"
 	// PlacementResourceSnapshotIndexLabelKey is a label key that denotes the index of a placement resource snapshot.
 	// Its value is the index integer formatted as a string.
 	//
