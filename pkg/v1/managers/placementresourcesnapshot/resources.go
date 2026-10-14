@@ -44,8 +44,14 @@ const (
 	// resource snapshot to be ~1.2 MiB, or ~1.26 MB, which should be safe in most cases. Note that the padding
 	// space is not just reserved for safety reasons, but also to accommodate the additional fields in
 	// the placement resource snapshot object, such as metadata and labels.
-	maxPerSnapshotResourceDataSizeBytes = 1258291 // 1.2 MiB, or ~1.26 MB.
-	maxPerSnapshotResourceCnt           = 50
+	DefaultMaxPerSnapshotResourceDataSizeBytes = 1258291 // 1.2 MiB, or ~1.26 MB.
+	DefaultMaxPerSnapshotResourceCnt           = 50
+
+	// The minimum and maximum limits for the size and count of resources in a single placement resource snapshot.
+	MinPerSnapshotResourceDataSizeBytes = 2000 // 2 KB.
+	MinPerSnapshotResourceCnt           = 2
+	MaxPerSnapshotResourceDataSizeBytes = 1468000 // 1.4 MiB, or ~1.47 MB.
+	MaxPerSnapshotResourceCnt           = 100
 )
 
 const (
@@ -380,7 +386,7 @@ func resourceUniqueId(resource *placementv1alpha1.SnapshottedResource) string {
 		resource.Identifier.Name)
 }
 
-func splitResourcesIntoSizeControlledGroups(resources []placementv1alpha1.SnapshottedResource) ([][]placementv1alpha1.SnapshottedResource, error) {
+func (m *Manager) splitResourcesIntoSizeControlledGroups(resources []placementv1alpha1.SnapshottedResource) ([][]placementv1alpha1.SnapshottedResource, error) {
 	if len(resources) == 0 {
 		// Return one single empty group.
 		return [][]placementv1alpha1.SnapshottedResource{{}}, nil
@@ -398,16 +404,16 @@ func splitResourcesIntoSizeControlledGroups(resources []placementv1alpha1.Snapsh
 			resourceSize += len(info)
 		}
 
-		if resourceSize > maxPerSnapshotResourceDataSizeBytes {
+		if resourceSize > m.maxPerSnapshotResourceDataSizeBytes {
 			// A single resource exceeds the per-snapshot size limit; it can never fit into any group.
 			return nil, errors.NewUserError(nil, "a single selected resource is too large to fit in a placement resource snapshot",
 				"resource", resource.Identifier,
-				"resourceSizeBytes", resourceSize, "maxPerSnapshotResourceDataSizeBytes", maxPerSnapshotResourceDataSizeBytes)
+				"resourceSizeBytes", resourceSize, "maxPerSnapshotResourceDataSizeBytes", m.maxPerSnapshotResourceDataSizeBytes)
 		}
 
 		// Start a new group if adding this resource would exceed either the size or the count limit.
 		if len(currentGroup) > 0 &&
-			(currentSize+resourceSize > maxPerSnapshotResourceDataSizeBytes || len(currentGroup) >= maxPerSnapshotResourceCnt) {
+			(currentSize+resourceSize > m.maxPerSnapshotResourceDataSizeBytes || len(currentGroup) >= m.maxPerSnapshotResourceCnt) {
 			groups = append(groups, currentGroup)
 			currentGroup = nil
 			currentSize = 0

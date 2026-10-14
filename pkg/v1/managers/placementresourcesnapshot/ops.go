@@ -127,29 +127,21 @@ func (m *Manager) retrieveLatestSnapshot(ctx context.Context, placementPolicy pl
 	// Retrieve the primary resource snapshots associated with the placement policy.
 	var snapshots []placementv1alpha1.PlacementResourceSnapshotAccessor
 	fieldMatchers := client.MatchingFields{
-		fieldindexers.PlacementResourceSnapshotOwnedByAndSubIndexedCustomFieldName: fmt.Sprintf(fieldindexers.PlacementResourceSnapshotOwnedByAndSubIndexedCustomFieldValFmt, placementPolicyOwnerLabelVal(placementPolicy), "0"),
+		fieldindexers.PlacementResourceSnapshotOwnedByAndSubIndexedCustomFieldName: fmt.Sprintf(
+			fieldindexers.PlacementResourceSnapshotOwnedByAndSubIndexedCustomFieldValFmt, placementPolicyOwnerLabelVal(placementPolicy), "0"),
 	}
 	if placementPolicy.GetNamespace() == "" {
 		// The placement policy is cluster-scoped; list cluster placement resource snapshots.
-		placementResourceSnapshotList := &placementv1alpha1.ClusterPlacementResourceSnapshotList{}
-		if err := m.hubClient.List(ctx, placementResourceSnapshotList, fieldMatchers); err != nil {
-			return nil, errors.NewAPIServerError(err, "failed to list cluster placement resource snapshots", true)
-		}
-		snapshots = make([]placementv1alpha1.PlacementResourceSnapshotAccessor, len(placementResourceSnapshotList.Items))
-		for i := range placementResourceSnapshotList.Items {
-			snapshots[i] = &placementResourceSnapshotList.Items[i]
-		}
+		snapshots, err = m.listPlacementResourceSnapshots(ctx, true, []client.ListOption{fieldMatchers})
 	} else {
 		// The placement policy is namespace-scoped; list placement resource snapshots in the same namespace.
-		placementResourceSnapshotList := &placementv1alpha1.PlacementResourceSnapshotList{}
-		if err := m.hubClient.List(ctx, placementResourceSnapshotList,
-			client.InNamespace(placementPolicy.GetNamespace()), fieldMatchers); err != nil {
-			return nil, errors.NewAPIServerError(err, "failed to list placement resource snapshots", true)
-		}
-		snapshots = make([]placementv1alpha1.PlacementResourceSnapshotAccessor, len(placementResourceSnapshotList.Items))
-		for i := range placementResourceSnapshotList.Items {
-			snapshots[i] = &placementResourceSnapshotList.Items[i]
-		}
+		snapshots, err = m.listPlacementResourceSnapshots(ctx, false, []client.ListOption{
+			client.InNamespace(placementPolicy.GetNamespace()),
+			fieldMatchers,
+		})
+	}
+	if err != nil {
+		return nil, err
 	}
 
 	if len(snapshots) == 0 {
@@ -180,6 +172,9 @@ func (m *Manager) retrieveLatestSnapshot(ctx context.Context, placementPolicy pl
 		return nil, errors.NewUnexpectedError(nil, "failed to sort primary placement resource snapshots", "errs", sortErrs)
 	}
 
+	// Enqueue the outdated primary resource snapshots for GC.
+	m.enqueueOldResourceSnapshotsForGC(snapshots, placementPolicy)
+
 	latestPrimarySnapshot := snapshots[len(snapshots)-1]
 	// Check if there are snapshots with the same index.
 	subIndexedSnapshotCntStr := latestPrimarySnapshot.GetLabels()[placementv1alpha1.SubIndexedPlacementResourceSnapshotCountLabelKey]
@@ -207,26 +202,18 @@ func (m *Manager) retrieveLatestSnapshot(ctx context.Context, placementPolicy pl
 	var subIndexedSnapshots []placementv1alpha1.PlacementResourceSnapshotAccessor
 	if placementPolicy.GetNamespace() == "" {
 		// The placement policy is cluster-scoped; list cluster placement resource snapshots.
-		placementResourceSnapshotList := &placementv1alpha1.ClusterPlacementResourceSnapshotList{}
-		if err := m.hubClient.List(ctx, placementResourceSnapshotList, fieldMatchers); err != nil {
-			return nil, errors.NewAPIServerError(err, "failed to list cluster placement resource snapshots", true)
-		}
-		subIndexedSnapshots = make([]placementv1alpha1.PlacementResourceSnapshotAccessor, len(placementResourceSnapshotList.Items))
-		for i := range placementResourceSnapshotList.Items {
-			subIndexedSnapshots[i] = &placementResourceSnapshotList.Items[i]
-		}
+		subIndexedSnapshots, err = m.listPlacementResourceSnapshots(ctx, true, []client.ListOption{fieldMatchers})
 	} else {
 		// The placement policy is namespace-scoped; list placement resource snapshots in the same namespace.
-		placementResourceSnapshotList := &placementv1alpha1.PlacementResourceSnapshotList{}
-		if err := m.hubClient.List(ctx, placementResourceSnapshotList,
-			client.InNamespace(placementPolicy.GetNamespace()), fieldMatchers); err != nil {
-			return nil, errors.NewAPIServerError(err, "failed to list placement resource snapshots", true)
-		}
-		subIndexedSnapshots = make([]placementv1alpha1.PlacementResourceSnapshotAccessor, len(placementResourceSnapshotList.Items))
-		for i := range placementResourceSnapshotList.Items {
-			subIndexedSnapshots[i] = &placementResourceSnapshotList.Items[i]
-		}
+		subIndexedSnapshots, err = m.listPlacementResourceSnapshots(ctx, false, []client.ListOption{
+			client.InNamespace(placementPolicy.GetNamespace()),
+			fieldMatchers,
+		})
 	}
+	if err != nil {
+		return nil, err
+	}
+
 	// Sort the sub-indexed snapshots by their sub-indices.
 	sortErrs = nil
 	sort.Slice(subIndexedSnapshots, func(i, j int) bool {
@@ -379,7 +366,7 @@ func (m *Manager) createResourceSnapshotAnyway(
 
 	// Split the resources into size-controlled groups. Each group corresponds to a placement resource snapshot
 	// that will be created.
-	resGroups, err := splitResourcesIntoSizeControlledGroups(currentResources)
+	resGroups, err := m.splitResourcesIntoSizeControlledGroups(currentResources)
 	if err != nil {
 		return nil, errors.Wraps(err, "failed to split the selected resources into size-controlled groups")
 	}
@@ -447,27 +434,19 @@ func (m *Manager) cleanUpOrphanedSecondarySnapshots(
 	}
 
 	var snapshots []placementv1alpha1.PlacementResourceSnapshotAccessor
+	var err error
 	if placementPolicy.GetNamespace() == "" {
 		// The placement policy is cluster-scoped; list cluster placement resource snapshots.
-		placementResourceSnapshotList := &placementv1alpha1.ClusterPlacementResourceSnapshotList{}
-		if err := m.hubClient.List(ctx, placementResourceSnapshotList, fieldMatchers); err != nil {
-			return false, errors.NewAPIServerError(err, "failed to list cluster placement resource snapshots", true)
-		}
-		snapshots = make([]placementv1alpha1.PlacementResourceSnapshotAccessor, len(placementResourceSnapshotList.Items))
-		for i := range placementResourceSnapshotList.Items {
-			snapshots[i] = &placementResourceSnapshotList.Items[i]
-		}
+		snapshots, err = m.listPlacementResourceSnapshots(ctx, true, []client.ListOption{fieldMatchers})
 	} else {
 		// The placement policy is namespace-scoped; list placement resource snapshots in the same namespace.
-		placementResourceSnapshotList := &placementv1alpha1.PlacementResourceSnapshotList{}
-		if err := m.hubClient.List(ctx, placementResourceSnapshotList,
-			client.InNamespace(placementPolicy.GetNamespace()), fieldMatchers); err != nil {
-			return false, errors.NewAPIServerError(err, "failed to list placement resource snapshots", true)
-		}
-		snapshots = make([]placementv1alpha1.PlacementResourceSnapshotAccessor, len(placementResourceSnapshotList.Items))
-		for i := range placementResourceSnapshotList.Items {
-			snapshots[i] = &placementResourceSnapshotList.Items[i]
-		}
+		snapshots, err = m.listPlacementResourceSnapshots(ctx, false, []client.ListOption{
+			client.InNamespace(placementPolicy.GetNamespace()),
+			fieldMatchers,
+		})
+	}
+	if err != nil {
+		return false, err
 	}
 
 	if len(snapshots) == 0 {

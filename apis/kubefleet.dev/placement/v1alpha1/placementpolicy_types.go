@@ -121,7 +121,7 @@ type PlacementPolicySpec struct {
 	// failure recovery purposes; one can inspect them to see the past state of the selected resources,
 	// or roll back to a previous revision if the latest revision is not working as expected.
 	//
-	// It is also possible to manually request a new resource revision to be created.
+	// The limit is a soft constraint; KubeFleet may retain more revisions than the specified limit as necessary.
 	//
 	// The default value is 3.
 	//

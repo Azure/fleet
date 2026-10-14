@@ -54,6 +54,10 @@ const (
 	// WorkOwnedByBindingCustomFieldName is the name of the custom field that indexes Work objects by their owner
 	// placement bindings.
 	WorkOwnedByBindingCustomFieldName = "workOwnedByBinding"
+
+	// PlacementBindingOwnedByAndInUseOfPrimaryResourceSnapshotCustomFieldName is the name of the custom field that indexes
+	// placement bindings by their owner placement policies and the (primary) resource snapshots they are using.
+	PlacementBindingOwnedByAndInUseOfPrimaryResourceSnapshotCustomFieldName = "ownedByAndInUseOfPrimaryResourceSnapshot"
 )
 
 const (
@@ -76,6 +80,12 @@ const (
 	//
 	// The first value is the owner binding namespace, and the second value is the owner binding name.
 	WorkOwnedByBindingCustomFieldValFmt = "%s/%s"
+
+	// PlacementBindingOwnedByAndInUseOfPrimaryResourceSnapshotCustomFieldValFmt is used to format the value for the custom field,
+	// `PlacementBindingOwnedByAndInUseOfPrimaryResourceSnapshotCustomFieldName`.
+	//
+	// The first value is the owner placement policy, and the second value is the primary resource snapshot being used.
+	PlacementBindingOwnedByAndInUseOfPrimaryResourceSnapshotCustomFieldValFmt = "%s/%s"
 )
 
 var (
@@ -107,6 +117,20 @@ var (
 			return nil, wrappedErr
 		}
 		return []string{fmt.Sprintf(WorkOwnedByBindingCustomFieldValFmt, ownerNS, ownerBinding)}, nil
+	}
+
+	placementBindingOwnedByAndInUseOfPrimaryResourceSnapshotFieldExtractor fieldValueExtractor = func(obj client.Object) ([]string, error) {
+		placementBinding, ok := obj.(placementv1alpha1.PlacementBindingAccessor)
+		if !ok {
+			wrappedErr := errors.NewUnexpectedError(nil, "object is not a placement binding", "type", fmt.Sprintf("%T", obj))
+			return nil, wrappedErr
+		}
+		spec := placementBinding.GetSpec()
+		if spec.PlacementPolicyName == "" || spec.ResourceSnapshotName == "" {
+			wrappedErr := errors.NewUnexpectedError(nil, "placement binding is missing the owner placement policy name or the resource snapshot name")
+			return nil, wrappedErr
+		}
+		return []string{fmt.Sprintf(PlacementBindingOwnedByAndInUseOfPrimaryResourceSnapshotCustomFieldValFmt, spec.PlacementPolicyName, spec.ResourceSnapshotName)}, nil
 	}
 )
 
@@ -149,6 +173,20 @@ func SetupWithHubAgentControllerManager(ctx context.Context, mgr ctrl.Manager) e
 		WorkOwnedByBindingCustomFieldName, workOwnedByBindingFieldExtractor,
 	); err != nil {
 		return errors.Wraps(err, "failed to set up work owner binding field index")
+	}
+
+	if err := indexCompositeField(ctx, fieldIdxer,
+		&placementv1alpha1.PlacementBinding{},
+		PlacementBindingOwnedByAndInUseOfPrimaryResourceSnapshotCustomFieldName, placementBindingOwnedByAndInUseOfPrimaryResourceSnapshotFieldExtractor,
+	); err != nil {
+		return errors.Wraps(err, "failed to set up placement binding owner and in-use primary resource snapshot field index")
+	}
+
+	if err := indexCompositeField(ctx, fieldIdxer,
+		&placementv1alpha1.ClusterPlacementBinding{},
+		PlacementBindingOwnedByAndInUseOfPrimaryResourceSnapshotCustomFieldName, placementBindingOwnedByAndInUseOfPrimaryResourceSnapshotFieldExtractor,
+	); err != nil {
+		return errors.Wraps(err, "failed to set up cluster placement binding owner and in-use primary resource snapshot field index")
 	}
 
 	return nil

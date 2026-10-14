@@ -64,6 +64,12 @@ const (
 	//
 	// This annotation is set on all placement resource snapshots.
 	PlacementResourceSnapshotContentsHashAnnotationKey = "placement.kubefleet.dev/placement-resource-snapshot-contents-hash"
+	// PlacementResourceSnapshotOwnedByAnnotationKey is an annotation key that denotes the owner placement policy of
+	// a placement resource snapshot. Its value is the name of the owner placement policy as it is (i.e., unlike
+	// the value of the `PlacementResourceSnapshotOwnedByLabelKey` label, it is never truncated).
+	//
+	// This annotation is set on all placement resource snapshots.
+	PlacementResourceSnapshotOwnedByAnnotationKey = "placement.kubefleet.dev/owned-by-placement-policy"
 )
 
 // PlacementResourceSnapshot is the KubeFleet API that captures the resources selected by a placement policy
