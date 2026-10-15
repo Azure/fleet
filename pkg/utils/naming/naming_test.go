@@ -128,6 +128,12 @@ func TestLabelValue(t *testing.T) {
 			value: strings.Repeat("a", validation.LabelValueMaxLength),
 			want:  strings.Repeat("a", validation.LabelValueMaxLength),
 		},
+		{
+			// The separator at the truncation point is trimmed, not kept in front of the hash's own.
+			name:  "separator at the truncation point is trimmed before the hash",
+			value: strings.Repeat("a", labelValuePrefixMaxLength-1) + "-" + strings.Repeat("b", 40),
+			want:  strings.Repeat("a", labelValuePrefixMaxLength-1) + "-" + Hash(strings.Repeat("a", labelValuePrefixMaxLength-1)+"-"+strings.Repeat("b", 40)),
+		},
 	}
 
 	for _, tc := range testCases {
@@ -151,6 +157,7 @@ func TestLabelValueShortening(t *testing.T) {
 		// shortened form.
 		strings.Repeat("a", labelValuePrefixMaxLength-1) + "-" + strings.Repeat("b", 40),
 		strings.Repeat("a", labelValuePrefixMaxLength-1) + "." + strings.Repeat("c", 40),
+		strings.Repeat("a", labelValuePrefixMaxLength-1) + "_" + strings.Repeat("d", 40),
 	}
 
 	seen := make(map[string]string, len(testCases))
