@@ -33,3 +33,9 @@ var (
 	// AddToScheme adds the types in this group-version to the given scheme.
 	AddToScheme = SchemeBuilder.AddToScheme
 )
+
+const (
+	// The kind names for all the custom resources in this GV.
+	StagedUpdateRunKind        = "StagedUpdateRun"
+	ClusterStagedUpdateRunKind = "ClusterStagedUpdateRun"
+)

@@ -60,7 +60,7 @@ spec:
 
                       The default value is 1.
                     format: int32
-                    minimum: 1
+                    minimum: 0
                     type: integer
                   maxWaitTimePerClusterMinutes:
                     default: 5

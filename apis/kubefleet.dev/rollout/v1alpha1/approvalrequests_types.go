@@ -21,7 +21,13 @@ import (
 )
 
 const (
-	ApprovalRequestCondTypeApproved = "Approved"
+	ApprovalRequestCondTypeApproved         = "Approved"
+	ApprovalRequestCondTypeApprovalAccepted = "ApprovalAccepted"
+)
+
+// The reasons for the respective condition types.
+const (
+	ApprovalRequestApprovalAcceptedCondReasonAccepted = "ApprovalAccepted"
 )
 
 // ApprovalRequest is the KubeFleet API that enables users to approve a rollout to a stage of clusters

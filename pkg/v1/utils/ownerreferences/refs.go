@@ -20,6 +20,10 @@ package ownerreferences
 import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
+	"k8s.io/klog/v2"
+	"sigs.k8s.io/controller-runtime/pkg/client"
+
+	"github.com/kubefleet-dev/kubefleet/pkg/utils/errors"
 )
 
 // Disown removes a specific owner reference from the given object.
@@ -60,4 +64,21 @@ func Own(obj *unstructured.Unstructured, owner *metav1.OwnerReference) {
 	}
 	ownerRefs = append(ownerRefs, *owner)
 	obj.SetOwnerReferences(ownerRefs)
+}
+
+// IsOwnedByWithNoUIDCheck checks if the given object is owned by the specified owner without considering the UIDs.
+func IsOwnedByWithNoUIDCheck(ctrlClient client.Client, obj metav1.Object, owner client.Object) (bool, error) {
+	ownerGVK, err := ctrlClient.GroupVersionKindFor(owner)
+	if err != nil {
+		return false, errors.NewUnexpectedError(err, "failed to resolve GVK for object", "ownerObj", klog.KObj(owner))
+	}
+	ownerAPIVersion := ownerGVK.GroupVersion().String()
+	ownerKind := ownerGVK.Kind
+
+	for _, ref := range obj.GetOwnerReferences() {
+		if ref.APIVersion == ownerAPIVersion && ref.Kind == ownerKind && ref.Name == owner.GetName() {
+			return true, nil
+		}
+	}
+	return false, nil
 }

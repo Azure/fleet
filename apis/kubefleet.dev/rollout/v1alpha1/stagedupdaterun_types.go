@@ -25,6 +25,7 @@ const (
 	StagedUpdateRunCondTypeInitialized = "Initialized"
 	StagedUpdateRunCondTypeStarted     = "Started"
 	StagedUpdateRunCondTypeCompleted   = "Completed"
+	StagedUpdateRunCondTypeSuspended   = "Suspended"
 
 	// The condition type of stages to run in StagedUpdateRun and ClusterStagedUpdateRun API objects.
 	StagedUpdateRunPerStageCondTypeStarted   = "Started"
@@ -43,10 +44,36 @@ const (
 
 // The reasons for the respective condition types.
 const (
+	// The reasons for the run-level condition types.
 	StagedUpdateRunInitializedCondReasonPreppedResourceSnapshotAndAllStages = "PreppedResourceSnapshotAndAllStages"
+	StagedUpdateRunInitializedCondReasonFailed                              = "Failed"
 
-	StagedUpdateRunTaskApprovalRequestCreatedCondReasonCreated   = "RequestCreated"
-	StagedUpdateRunTaskApprovalRequestApprovedCondReasonApproved = "RequestApproved"
+	StagedUpdateRunStartedCondReasonUpdateStarted = "UpdateStarted"
+
+	StagedUpdateRunCompletedCondReasonSucceeded          = "Succeeded"
+	StagedUpdateRunCompletedCondReasonPartiallySucceeded = "PartiallySucceeded"
+	StagedUpdateRunCompletedCondReasonFailed             = "Failed"
+
+	StagedUpdateRunSuspendedCondReasonSuspended = "Suspended"
+	StagedUpdateRunSuspendedCondReasonResumed   = "Resumed"
+
+	// The reasons for the per-stage condition types.
+	StagedUpdateRunPerStageStartedCondReasonUpdateStarted = "UpdateStarted"
+
+	StagedUpdateRunPerStageCompletedCondReasonSucceeded          = "Succeeded"
+	StagedUpdateRunPerStageCompletedCondReasonPartiallySucceeded = "PartiallySucceeded"
+	StagedUpdateRunPerStageCompletedCondReasonFailed             = "Failed"
+
+	// The reasons for the per-cluster condition types.
+	StagedUpdateRunPerClusterStartedCondReasonUpdateStarted = "UpdateStarted"
+
+	StagedUpdateRunPerClusterCompletedCondReasonSucceeded = "UpdateSucceeded"
+	StagedUpdateRunPerClusterCompletedCondReasonFailed    = "FailedToUpdate"
+
+	// The reasons for the per-task condition types.
+	StagedUpdateRunTaskApprovalRequestCreatedCondReasonCreated           = "RequestCreated"
+	StagedUpdateRunTaskApprovalRequestCreatedCondReasonOwnershipMismatch = "RequestOwnershipMismatch"
+	StagedUpdateRunTaskApprovalRequestApprovedCondReasonApproved         = "RequestApproved"
 
 	StagedUpdateRunTaskTimedWaitStartedCondReasonTimerStarted = "TimerStarted"
 	StagedUpdateRunTaskWaitTimeElapsedCondReasonTimerElapsed  = "TimerElapsed"
@@ -158,8 +185,8 @@ type StagedUpdateRunFailurePolicy struct {
 	//
 	// +kubebuilder:validation:Optional
 	// +kubebuilder:default=1
-	// +kubebuilder:validation:Minimum=1
-	MaxAllowedClusterFailures int32 `json:"maxAllowedClusterFailures,omitempty"`
+	// +kubebuilder:validation:Minimum=0
+	MaxAllowedClusterFailures *int32 `json:"maxAllowedClusterFailures,omitempty"`
 
 	// The maximum time to wait for a rollout to a cluster to complete before KubeFleet considers the rollout to have
 	// failed for the cluster.

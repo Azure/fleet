@@ -108,7 +108,7 @@ type Stage struct {
 	// This field accepts either an integer value (e.g., 5), or a percentage value (e.g., "50%"). For percentage values,
 	// the concurrency number is calculated based on the total number of clusters in the stage, with fractional results rounded down.
 	//
-	// A minimum concurrency of 1 is enforced.
+	// A minimum concurrency of 1 is enforced. Note that KubeFleet might further cap the concurrency as needed.
 	//
 	// Defaults to 1.
 	//
