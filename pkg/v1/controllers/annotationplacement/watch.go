@@ -18,12 +18,10 @@ package annotationplacement
 
 import (
 	"context"
-	"sync"
 
 	"k8s.io/apimachinery/pkg/api/equality"
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
 	"k8s.io/apimachinery/pkg/runtime/schema"
-	"k8s.io/client-go/util/workqueue"
 	"k8s.io/klog/v2"
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/builder"
@@ -34,6 +32,7 @@ import (
 
 	kfplacementv1alpha1 "github.com/kubefleet-dev/kubefleet/apis/kubefleet.dev/placement/v1alpha1"
 	kferrors "github.com/kubefleet-dev/kubefleet/pkg/utils/errors"
+	"github.com/kubefleet-dev/kubefleet/pkg/v1/utils/sourcequeue"
 )
 
 const controllerName = "annotation-placement-controller"
@@ -41,23 +40,13 @@ const controllerName = "annotation-placement-controller"
 // SourceQueue is how the resource watcher hands annotated resources to this controller.
 //
 // The annotated resources are of any kind the hub agent watches, which the manager's cache does not
-// know ahead of time, so they cannot be watched through the manager and must be fed in instead.
-// The feed is a source rather than a channel so that the producer is never blocked and repeated
-// reports of one resource collapse: Add writes straight into the controller's own workqueue, which
-// never blocks a writer and drops a request already queued for the same resource. A channel would
-// push both problems onto the resource watcher, which has a whole fleet's events to deliver and no
-// business waiting on this controller.
-//
-// Resources reported before the manager starts are held until it does, so the watcher does not have
-// to know when the controller became ready. That buffer is unbounded and is only ever drained by
-// the controller calling Start, so a producer must not outlive the manager it was created for: in
-// the hub agent both are started together under the same leader election.
+// know ahead of time, so they cannot be watched through the manager and must be fed in instead,
+// through a sourcequeue.Queue: it never blocks the watcher, collapses repeated reports of one
+// resource, and holds reports made before the manager starts until it does.
 //
 // The zero value is ready to use.
 type SourceQueue struct {
-	mu      sync.Mutex
-	queue   workqueue.TypedRateLimitingInterface[Request]
-	pending map[Request]struct{}
+	sourcequeue.Queue[Request]
 }
 
 // Add reports an annotated resource. It never blocks, and it is safe to call from any goroutine
@@ -68,31 +57,7 @@ func (q *SourceQueue) Add(object client.Object) {
 		klog.ErrorS(nil, "Skipped a resource that names no kind", "obj", klog.KObj(object))
 		return
 	}
-
-	q.mu.Lock()
-	defer q.mu.Unlock()
-	if q.queue == nil {
-		if q.pending == nil {
-			q.pending = make(map[Request]struct{})
-		}
-		// Collapsed the same way the controller's queue collapses, so a resource reported many
-		// times before the manager started still costs one reconcile once it has.
-		q.pending[req] = struct{}{}
-		return
-	}
-	q.queue.Add(req)
-}
-
-// Start hands the queue to the controller. It is called by the controller, never directly.
-func (q *SourceQueue) Start(_ context.Context, queue workqueue.TypedRateLimitingInterface[Request]) error {
-	q.mu.Lock()
-	defer q.mu.Unlock()
-	q.queue = queue
-	for req := range q.pending {
-		queue.Add(req)
-	}
-	q.pending = nil
-	return nil
+	q.Queue.Add(req)
 }
 
 // SetupWithManager registers the controller with the manager.

@@ -147,6 +147,23 @@ package demonstrating the current behavior.
   Rolling a new revision out is left to the rollout APIs; this
   controller only reports. Binding updates wake the policy when their spec or
   this progress changes (`bindingRelevantChanges`).
+- **A change to a selected resource re-queues the policy**
+  (`EnqueuePoliciesSelecting`): the hub's resource-change controller hands
+  every changed resource's key to the policy controller, which re-queues the
+  policies that may select it — namespaced policies in that namespace, and
+  cluster-scoped ones whose selector names that namespace or none — through a
+  `sourcequeue.Queue` per controller, the never-blocking source the annotation
+  placement controller already uses. Matching is on the key alone (group,
+  kind, name, namespace), so deletions work the same way; label selectors are
+  not evaluated and the version is not compared, both of which can only
+  over-trigger a reconcile, never miss one. The hook is best effort: a failure
+  is logged and the change still reaches the placements. Resources the hub
+  agent's resource watcher drops produce no change events, so their policies
+  notice only on the periodic requeue: skipped namespaces (including
+  `default`, `kube-*`, and `fleet-*`), disabled kinds, and the objects
+  `ShouldPropagateObj` excludes (owned ReplicaSets and ControllerRevisions,
+  `kube-root-ca.crt`, default service accounts and their token secrets, and
+  the like), all of which the snapshot manager can still select.
 - **Bindings are owned by the policy** through a controller reference —
   policy and binding share a scope, so unlike claims they can be garbage
   collected — and the controller `Owns()` them: a binding deleted out of band
