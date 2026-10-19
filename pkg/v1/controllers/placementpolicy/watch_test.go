@@ -26,6 +26,7 @@ import (
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/types"
+	"k8s.io/utils/ptr"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/event"
 	"sigs.k8s.io/controller-runtime/pkg/reconcile"
@@ -142,6 +143,51 @@ func TestMemberClusterSchedulingRelevantChanges(t *testing.T) {
 			tc.mutate(updated)
 			if got := pred.Update(event.UpdateEvent{ObjectOld: base(), ObjectNew: updated}); got != tc.want {
 				t.Errorf("memberClusterSchedulingRelevantChanges().Update() = %v, want %v", got, tc.want)
+			}
+		})
+	}
+}
+
+// TestBindingRelevantChanges pins that a binding update wakes its policy when the spec or the
+// rollout progress changes, and not when only a condition's message or transition time does.
+func TestBindingRelevantChanges(t *testing.T) {
+	base := func() *kfplacementv1alpha1.PlacementBinding {
+		return &kfplacementv1alpha1.PlacementBinding{
+			ObjectMeta: metav1.ObjectMeta{Name: "b", Generation: 1},
+			Status: kfplacementv1alpha1.PlacementBindingStatus{
+				LastProcessedResourceSnapshotName: ptr.To("pp-snapshot-0"),
+				Conditions: []metav1.Condition{
+					{Type: kfplacementv1alpha1.PlacementBindingCondTypeSynchronized, Status: metav1.ConditionFalse, ObservedGeneration: 1, Reason: "Waiting", Message: "a"},
+				},
+			},
+		}
+	}
+	testCases := []struct {
+		name   string
+		mutate func(*kfplacementv1alpha1.PlacementBinding)
+		want   bool
+	}{
+		{name: "spec change", mutate: func(b *kfplacementv1alpha1.PlacementBinding) { b.Generation = 2 }, want: true},
+		{name: "synchronized", mutate: func(b *kfplacementv1alpha1.PlacementBinding) { b.Status.Conditions[0].Status = metav1.ConditionTrue }, want: true},
+		{name: "available reported", mutate: func(b *kfplacementv1alpha1.PlacementBinding) {
+			b.Status.Conditions = append(b.Status.Conditions, metav1.Condition{Type: kfplacementv1alpha1.PlacementBindingCondTypeAvailable, Status: metav1.ConditionTrue, ObservedGeneration: 1})
+		}, want: true},
+		{name: "new revision processed", mutate: func(b *kfplacementv1alpha1.PlacementBinding) {
+			b.Status.LastProcessedResourceSnapshotName = ptr.To("pp-snapshot-1")
+		}, want: true},
+		{name: "message only", mutate: func(b *kfplacementv1alpha1.PlacementBinding) { b.Status.Conditions[0].Message = "b" }, want: false},
+		{name: "resource counts only", mutate: func(b *kfplacementv1alpha1.PlacementBinding) { b.Status.SelectedResources = ptr.To(int32(3)) }, want: false},
+	}
+	// Creates and deletes still wake the owner, so that a binding deleted out of band is recreated.
+	if !bindingRelevantChanges().Create(event.CreateEvent{Object: base()}) || !bindingRelevantChanges().Delete(event.DeleteEvent{Object: base()}) {
+		t.Errorf("bindingRelevantChanges() filtered out a create or a delete, want both admitted")
+	}
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			oldObj, newObj := base(), base()
+			tc.mutate(newObj)
+			if got := bindingRelevantChanges().Update(event.UpdateEvent{ObjectOld: oldObj, ObjectNew: newObj}); got != tc.want {
+				t.Errorf("bindingRelevantChanges().Update() = %t, want %t", got, tc.want)
 			}
 		})
 	}

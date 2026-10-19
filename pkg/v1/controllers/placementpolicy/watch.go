@@ -21,6 +21,7 @@ import (
 
 	corev1 "k8s.io/api/core/v1"
 	apiequality "k8s.io/apimachinery/pkg/api/equality"
+	"k8s.io/apimachinery/pkg/api/meta"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/types"
 	"k8s.io/klog/v2"
@@ -169,4 +170,46 @@ func (r *Reconciler) mapMemberClusterToClusterPlacementPolicies(ctx context.Cont
 		})
 	}
 	return requests
+}
+
+// bindingProgressView projects a binding onto what its policy's status reports: the revision the
+// work generator last processed and the status of its Synchronized and Available conditions.
+// Transition times and messages are left out, so status writes that change neither do not wake
+// the policy.
+type bindingProgressView struct {
+	processedRevision             string
+	synchronized, available       metav1.ConditionStatus
+	synchronizedGen, availableGen int64
+}
+
+func bindingProgressOf(obj client.Object) bindingProgressView {
+	binding, ok := obj.(kfplacementv1alpha1.PlacementBindingAccessor)
+	if !ok {
+		return bindingProgressView{}
+	}
+	status := binding.GetStatus()
+	var view bindingProgressView
+	if status.LastProcessedResourceSnapshotName != nil {
+		view.processedRevision = *status.LastProcessedResourceSnapshotName
+	}
+	if cond := meta.FindStatusCondition(status.Conditions, kfplacementv1alpha1.PlacementBindingCondTypeSynchronized); cond != nil {
+		view.synchronized, view.synchronizedGen = cond.Status, cond.ObservedGeneration
+	}
+	if cond := meta.FindStatusCondition(status.Conditions, kfplacementv1alpha1.PlacementBindingCondTypeAvailable); cond != nil {
+		view.available, view.availableGen = cond.Status, cond.ObservedGeneration
+	}
+	return view
+}
+
+// bindingRelevantChanges admits the binding events the owning policy must see: any spec change,
+// as before, and any change in the rollout progress the policy rolls up into its status.
+func bindingRelevantChanges() predicate.Predicate {
+	return predicate.Or(predicate.GenerationChangedPredicate{}, predicate.Funcs{
+		CreateFunc:  func(event.CreateEvent) bool { return false },
+		DeleteFunc:  func(event.DeleteEvent) bool { return false },
+		GenericFunc: func(event.GenericEvent) bool { return false },
+		UpdateFunc: func(e event.UpdateEvent) bool {
+			return bindingProgressOf(e.ObjectOld) != bindingProgressOf(e.ObjectNew)
+		},
+	})
 }

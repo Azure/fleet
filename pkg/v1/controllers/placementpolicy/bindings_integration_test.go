@@ -176,6 +176,44 @@ var _ = Describe("placement binding lifecycle", Ordered, func() {
 		}
 	})
 
+	It("rolls the bindings' rollout progress up into the policy status", func() {
+		policy := &kfplacementv1alpha1.PlacementPolicy{}
+		Expect(k8sClient.Get(ctx, policyKey, policy)).Should(Succeed())
+		revision := stubSnapshotName(policy)
+		policyStatus := func(g Gomega) *kfplacementv1alpha1.PlacementPolicyStatus {
+			fetched := &kfplacementv1alpha1.PlacementPolicy{}
+			g.Expect(k8sClient.Get(ctx, policyKey, fetched)).Should(Succeed())
+			return &fetched.Status
+		}
+
+		By("nothing is synchronized before the work generator reports")
+		Eventually(func(g Gomega) {
+			status := policyStatus(g)
+			g.Expect(status.LatestResourceRevisionName).Should(HaveValue(Equal(revision)))
+			g.Expect(status.SynchronizedClusters).Should(HaveValue(BeZero()))
+			g.Expect(meta.IsStatusConditionFalse(status.Conditions, kfplacementv1alpha1.PlacementPolicyCondTypeSynchronized)).Should(BeTrue())
+			g.Expect(meta.IsStatusConditionTrue(status.Conditions, kfplacementv1alpha1.PlacementPolicyCondTypeResourceCollected)).Should(BeTrue())
+		}, eventuallyTimeout, pollInterval).Should(Succeed())
+
+		By("the bindings report the revision synchronized and available")
+		for _, binding := range bindingsOf(Default) {
+			binding.Status.LastProcessedResourceSnapshotName = &revision
+			for _, condType := range []string{kfplacementv1alpha1.PlacementBindingCondTypeSynchronized, kfplacementv1alpha1.PlacementBindingCondTypeAvailable} {
+				meta.SetStatusCondition(&binding.Status.Conditions, metav1.Condition{
+					Type: condType, Status: metav1.ConditionTrue, ObservedGeneration: binding.Generation, Reason: "IntegrationTest",
+				})
+			}
+			Expect(k8sClient.Status().Update(ctx, &binding)).Should(Succeed())
+		}
+		Eventually(func(g Gomega) {
+			status := policyStatus(g)
+			g.Expect(status.SynchronizedClusters).Should(HaveValue(BeEquivalentTo(2)))
+			g.Expect(status.ResourcesAvailableClusters).Should(HaveValue(BeEquivalentTo(2)))
+			g.Expect(meta.IsStatusConditionTrue(status.Conditions, kfplacementv1alpha1.PlacementPolicyCondTypeSynchronized)).Should(BeTrue())
+			g.Expect(meta.IsStatusConditionTrue(status.Conditions, kfplacementv1alpha1.PlacementPolicyCondTypeAvailable)).Should(BeTrue())
+		}, eventuallyTimeout, pollInterval).Should(Succeed())
+	})
+
 	It("keeps a bound cluster that goes dark and fills its place", func() {
 		// Seniority among bindings is their creation timestamp, which the API server records to
 		// the second; the replacement must land in a later second than the originals for the

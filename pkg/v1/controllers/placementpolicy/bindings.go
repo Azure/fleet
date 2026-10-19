@@ -51,8 +51,8 @@ const (
 
 // snapshotter is the slice of the placement resource snapshot manager this controller depends
 // on. A binding names the resource snapshot it rolls out, and the FEP has the first snapshot
-// taken when the placement is created, so the controller asks for the current snapshot --
-// creating it if there is none yet -- whenever it binds a cluster.
+// taken when the placement is created, so the controller asks every round for the current
+// snapshot -- creating it if there is none yet -- and whether it still matches the resources.
 type snapshotter interface {
 	SnapshotResourcesIfNoSnapshotExists(ctx context.Context, policy kfplacementv1alpha1.PlacementPolicyAccessor) ([]kfplacementv1alpha1.PlacementResourceSnapshotAccessor, bool, error)
 }
@@ -216,7 +216,11 @@ func holdsBindingManagerRole(policy kfplacementv1alpha1.PlacementPolicyAccessor)
 // manipulation under the role it already holds, as the FEP prescribes for a process restarted
 // mid-flow. A round that finds nothing left to do still releases a role a previous round left
 // held, so a change that became moot before its retry cannot keep the role forever.
-func (r *Reconciler) reconcileBindings(ctx context.Context, policy kfplacementv1alpha1.PlacementPolicyAccessor, outcomes []selectorOutcome, desired map[string][]int, existing []kfplacementv1alpha1.PlacementBindingAccessor) (roleHeld bool, err error) {
+//
+// A new binding rolls out snapshotName, the policy's latest resource snapshot; with no snapshot at
+// hand (snapshotName empty), the clusters still to bind wait for a later round while every other
+// change goes through.
+func (r *Reconciler) reconcileBindings(ctx context.Context, policy kfplacementv1alpha1.PlacementPolicyAccessor, outcomes []selectorOutcome, desired map[string][]int, existing []kfplacementv1alpha1.PlacementBindingAccessor, snapshotName string) (roleHeld bool, err error) {
 	selectorsFor := func(clusterName string) []kfplacementv1alpha1.ClusterSelectorWithTermsOnly {
 		selectors := make([]kfplacementv1alpha1.ClusterSelectorWithTermsOnly, 0, len(desired[clusterName]))
 		for _, i := range desired[clusterName] {
@@ -240,6 +244,11 @@ func (r *Reconciler) reconcileBindings(ctx context.Context, policy kfplacementv1
 			!apiequality.Semantic.DeepEqual(binding.GetSpec().SyncStrategy, policy.GetSpec().SyncStrategy):
 			toUpdate = append(toUpdate, binding)
 		}
+	}
+	if snapshotName == "" {
+		// Without a snapshot to roll out the clusters still to bind wait; dropping them before the
+		// role is claimed keeps a round with nothing else to do from claiming it at all.
+		toCreate = nil
 	}
 	slices.Sort(toCreate)
 	for clusterName, binding := range existingByCluster {
@@ -269,32 +278,23 @@ func (r *Reconciler) reconcileBindings(ctx context.Context, policy kfplacementv1
 	// collector can clear the way, and holding the role meanwhile would block the policy's rollouts
 	// -- and the first such error is returned for a retry.
 	var takenName error
-	if len(toCreate) > 0 {
-		snapshots, _, err := r.snapshots.SnapshotResourcesIfNoSnapshotExists(ctx, policy)
+	for _, clusterName := range toCreate {
+		binding, err := r.newBinding(policy, clusterName, snapshotName, selectorsFor(clusterName))
 		if err != nil {
 			return false, err
 		}
-		if len(snapshots) == 0 {
-			return false, kferrors.NewUnexpectedError(nil, "the snapshot manager returned no placement resource snapshot", "placementPolicy", klog.KObj(policy))
-		}
-		for _, clusterName := range toCreate {
-			binding, err := r.newBinding(policy, clusterName, snapshots[0].GetName(), selectorsFor(clusterName))
-			if err != nil {
-				return false, err
+		klog.V(2).InfoS("Binding a cluster", "placementPolicy", klog.KObj(policy), "memberCluster", clusterName, "placementBinding", binding.GetName())
+		if err := r.Create(ctx, binding); err != nil {
+			if !errors.IsAlreadyExists(err) {
+				return false, kferrors.NewAPIServerError(err, "failed to create the placement binding", false, "placementBinding", klog.KObj(binding))
 			}
-			klog.V(2).InfoS("Binding a cluster", "placementPolicy", klog.KObj(policy), "memberCluster", clusterName, "placementBinding", binding.GetName())
-			if err := r.Create(ctx, binding); err != nil {
-				if !errors.IsAlreadyExists(err) {
-					return false, kferrors.NewAPIServerError(err, "failed to create the placement binding", false, "placementBinding", klog.KObj(binding))
+			if err := r.adoptOrReportBindingOccupant(ctx, policy, binding); err != nil {
+				if category := kferrors.Category(err); category != kferrors.ErrCategoryUser && category != kferrors.ErrCategoryTransient {
+					return false, err
 				}
-				if err := r.adoptOrReportBindingOccupant(ctx, policy, binding); err != nil {
-					if category := kferrors.Category(err); category != kferrors.ErrCategoryUser && category != kferrors.ErrCategoryTransient {
-						return false, err
-					}
-					klog.ErrorS(err, "Cannot bind a cluster: the binding name is taken", kferrors.Args(err)...)
-					if takenName == nil {
-						takenName = err
-					}
+				klog.ErrorS(err, "Cannot bind a cluster: the binding name is taken", kferrors.Args(err)...)
+				if takenName == nil {
+					takenName = err
 				}
 			}
 		}

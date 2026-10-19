@@ -38,8 +38,10 @@ const (
 	PlacementPolicyScheduledCondReasonFoundAllClusters         = "FoundAllRequiredClusters"
 	PlacementPolicyScheduledCondReasonFailedToFindSomeClusters = "FailedToFindSomeRequiredClusters"
 
-	PlacementPolicySynchronizedCondReasonAllClustersSynchronized         = "AllClustersSynchronized"
-	PlacementPolicySynchronizedCondReasonFailedToSynchronizeSomeClusters = "FailedToSynchronizeSomeClusters"
+	PlacementPolicySynchronizedCondReasonAllClustersSynchronized             = "AllClustersSynchronized"
+	PlacementPolicySynchronizedCondReasonFailedToSynchronizeSomeClusters     = "FailedToSynchronizeSomeClusters"
+	PlacementPolicySynchronizedCondReasonResourcesChangedPendingRollout      = "ResourcesChangedPendingRollout"
+	PlacementPolicySynchronizedCondReasonSomeClustersOnOlderResourceRevision = "SomeClustersOnOlderResourceRevision"
 
 	PlacementPolicyAvailableCondReasonAllClustersAvailable    = "ResourcesAvailableOnAllClusters"
 	PlacementPolicyAvailableCondReasonSomeClustersUnavailable = "ResourcesUnavailableOnSomeClusters"

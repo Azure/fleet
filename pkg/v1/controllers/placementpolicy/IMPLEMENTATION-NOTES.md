@@ -107,16 +107,46 @@ package demonstrating the current behavior.
   and released once every change is through. A failed write returns with the
   role still held, so the retry resumes under the role it already has (the
   FEP's restart semantics); a role held by another process backs the policy
-  off for ten seconds rather than blocking the rest of the reconcile, which
-  still refreshes claims and status.
+  off exponentially (5s up to 5m, reset by a round that completes) rather
+  than blocking the rest of the reconcile, which still refreshes claims and
+  status.
 - **A binding needs a resource snapshot to roll out**, so the controller takes
   the placement resource snapshot manager as a seam (`snapshotter`) and asks it
-  for the current snapshot — creating the first one, per the FEP's "when a
-  placement is first created" — only on the path that creates a binding. The
-  seam exists for the same reason as `eligibilityChecker`: the real manager
-  needs a dynamic client and informer manager the envtest suite has no use
-  for. Nothing writes `status.latestResourceRevisionName` yet; it is the
-  snapshot manager's to report, not the controller's.
+  every round for the current snapshot — creating the first one, per the FEP's
+  "when a placement is first created" — and whether it still matches the
+  selected resources. The seam exists for the same reason as
+  `eligibilityChecker`: the real manager needs a dynamic client and informer
+  manager the envtest suite has no use for. Scheduling changes apply
+  independently of resources, per the FEP: a round that cannot get the
+  snapshot still unbinds, updates, and refreshes claims and the `Scheduled`
+  status, holds back only the new bindings, and is retried.
+- **The status reports how far the latest revision has reached**
+  (`status.go`): `latestResourceRevisionName` is the latest snapshot;
+  `synchronizedClusters` counts the target clusters whose binding names that
+  revision, has had it processed by the work generator, and reports
+  `Synchronized` for its current generation; `resourcesAvailableClusters`
+  counts, of those, the ones reporting `Available` (availability is judged
+  only for the latest revision, as placements judge it only once
+  synchronized). A binding being deleted, or one not yet updated to the
+  policy's sync strategy, counts as neither: its conditions describe what is
+  going away. Target clusters include a bound cluster kept while
+  unschedulable, since it still holds the resources. The `Synchronized`
+  condition is true only
+  when every target cluster is synchronized *and* the snapshot still matches
+  the hub — per the FEP a resource change alone takes no snapshot, so until a
+  rollout does, the condition says the resources changed and a rollout is
+  pending (`ResourcesChangedPendingRollout`). Otherwise it reports
+  `SomeClustersOnOlderResourceRevision` while a target cluster is still on an
+  older revision and `FailedToSynchronizeSomeClusters` while the rest have yet
+  to apply the latest one, the message counting both. `ResourceCollected` is
+  true once the selected resources are collected and the snapshot taken or
+  found, false when they cannot be collected for good (a resource selected by
+  name is gone, or the selection is invalid), and left as it was on a
+  transient failure or while the cluster selectors are invalid, since no
+  snapshot is attempted then.
+  Rolling a new revision out is left to the rollout APIs; this
+  controller only reports. Binding updates wake the policy when their spec or
+  this progress changes (`bindingRelevantChanges`).
 - **Bindings are owned by the policy** through a controller reference —
   policy and binding share a scope, so unlike claims they can be garbage
   collected — and the controller `Owns()` them: a binding deleted out of band
