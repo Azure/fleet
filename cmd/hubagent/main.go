@@ -44,16 +44,17 @@ import (
 	fleetnetworkingv1alpha1 "go.goms.io/fleet-networking/api/v1alpha1"
 	"go.goms.io/fleet/pkg/webhook/managedresource"
 
-	clusterv1beta1 "go.goms.io/fleet/apis/cluster/v1beta1"
-	placementv1alpha1 "go.goms.io/fleet/apis/placement/v1alpha1"
-	placementv1beta1 "go.goms.io/fleet/apis/placement/v1beta1"
-	"go.goms.io/fleet/cmd/hubagent/options"
-	"go.goms.io/fleet/cmd/hubagent/workload"
-	"go.goms.io/fleet/pkg/admissionpolicymanager"
-	mcv1beta1 "go.goms.io/fleet/pkg/controllers/membercluster/v1beta1"
-	readiness "go.goms.io/fleet/pkg/utils/informer/readiness"
-	"go.goms.io/fleet/pkg/utils/validator"
-	"go.goms.io/fleet/pkg/webhook"
+	clusterv1beta1 "github.com/kubefleet-dev/kubefleet/apis/cluster/v1beta1"
+	kfplacementv1alpha1 "github.com/kubefleet-dev/kubefleet/apis/kubefleet.dev/placement/v1alpha1"
+	placementv1alpha1 "github.com/kubefleet-dev/kubefleet/apis/placement/v1alpha1"
+	placementv1beta1 "github.com/kubefleet-dev/kubefleet/apis/placement/v1beta1"
+	"github.com/kubefleet-dev/kubefleet/cmd/hubagent/options"
+	"github.com/kubefleet-dev/kubefleet/cmd/hubagent/workload"
+	"github.com/kubefleet-dev/kubefleet/pkg/admissionpolicymanager"
+	mcv1beta1 "github.com/kubefleet-dev/kubefleet/pkg/controllers/membercluster/v1beta1"
+	readiness "github.com/kubefleet-dev/kubefleet/pkg/utils/informer/readiness"
+	"github.com/kubefleet-dev/kubefleet/pkg/utils/validator"
+	"github.com/kubefleet-dev/kubefleet/pkg/webhook"
 	// +kubebuilder:scaffold:imports
 )
 
@@ -80,6 +81,7 @@ func init() {
 	utilruntime.Must(apiextensionsv1.AddToScheme(scheme))
 	utilruntime.Must(fleetnetworkingv1alpha1.AddToScheme(scheme))
 	utilruntime.Must(placementv1alpha1.AddToScheme(scheme))
+	utilruntime.Must(kfplacementv1alpha1.AddToScheme(scheme))
 	utilruntime.Must(clusterinventory.AddToScheme(scheme))
 	// +kubebuilder:scaffold:scheme
 	klog.InitFlags(nil)

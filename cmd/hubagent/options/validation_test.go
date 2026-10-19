@@ -132,6 +132,13 @@ func TestValidation(t *testing.T) {
 			}),
 			want: field.ErrorList{field.Invalid(newPath.Child("PlacementControllerWorkQueueRateLimiterOpts").Child("RateLimiterBaseDelay"), 60*time.Second, "the base delay for the placement controller set rate limiter must be less than its max delay")},
 		},
+		"placement policy APIs without the v1beta1 APIs": {
+			opt: newTestOptions(func(option *Options) {
+				option.FeatureFlags.EnablePlacementPolicyAPIs = true
+				option.FeatureFlags.EnableV1Beta1APIs = false
+			}),
+			want: field.ErrorList{field.Invalid(newPath.Child("EnablePlacementPolicyAPIs"), true, "the placement policy APIs require the v1beta1 APIs to be enabled")},
+		},
 		"rate limiter qps must be less than bucket size": {
 			opt: newTestOptions(func(option *Options) {
 				option.PlacementMgmtOpts.PlacementControllerWorkQueueRateLimiterOpts.RateLimiterQPS = 100

@@ -56,6 +56,8 @@ affinity: {}
 
 enableClusterInventoryAPI: true
 enableStagedUpdateRunAPIs: true
+# The experimental FEP-0001 placement policy APIs (placement.kubefleet.dev/v1alpha1).
+enablePlacementPolicyAPIs: false
 enableEvictionAPIs: true
 
 enablePprof: true

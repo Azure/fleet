@@ -108,6 +108,7 @@ _See [helm install](https://helm.sh/docs/helm/helm_install/) for command documen
 | `webhookCertSecretName` | Name of the Secret where cert-manager stores the certificate (required when enabled) | `unset` |
 | `enableClusterInventoryAPI` | Enable cluster inventory APIs | `true` |
 | `enableStagedUpdateRunAPIs` | Enable staged update run APIs | `true` |
+| `enablePlacementPolicyAPIs` | Enable the experimental FEP-0001 placement policy APIs (`placement.kubefleet.dev/v1alpha1`) | `false` |
 | `enableEvictionAPIs` | Enable eviction APIs | `true` |
 | `enablePprof` | Enable pprof endpoint | `true` |
 | `pprofPort` | pprof server port | `6065` |

@@ -71,6 +71,11 @@ func (o *Options) Validate() field.ErrorList {
 		errs = append(errs, field.Invalid(newPath.Child("PlacementControllerWorkQueueRateLimiterOpts").Child("RateLimiterQPS"), o.PlacementMgmtOpts.PlacementControllerWorkQueueRateLimiterOpts.RateLimiterQPS, "the QPS for the placement controller set rate limiter must be less than its bucket size"))
 	}
 
+	// The placement policy controllers are set up with the v1beta1 controllers; refuse a flag that would do nothing.
+	if o.FeatureFlags.EnablePlacementPolicyAPIs && !o.FeatureFlags.EnableV1Beta1APIs {
+		errs = append(errs, field.Invalid(newPath.Child("EnablePlacementPolicyAPIs"), true, "the placement policy APIs require the v1beta1 APIs to be enabled"))
+	}
+
 	// Validate admission policy manager setup (if enabled).
 	if err := o.validateAdmissionPolicyManagerConfig(newPath); err != nil {
 		errs = append(errs, err)
