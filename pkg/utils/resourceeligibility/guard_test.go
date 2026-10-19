@@ -489,6 +489,30 @@ func TestAllowsGVK(t *testing.T) {
 			want: false,
 		},
 		{
+			name: "custom allow list for the core API group does not override the wrapped baseline checker",
+			checker: func() Checker {
+				c := New(nil, Baseline(nil))
+				if err := c.SetGVKCheckList(GVKEligibilityModeAllowList, []schema.GroupVersionKind{{Group: corev1.GroupName}}); err != nil {
+					t.Fatalf("SetGVKCheckList(AllowList) = %v, want no error", err)
+				}
+				return c
+			}(),
+			gvk:  nodeGVK,
+			want: false,
+		},
+		{
+			name: "custom allow list for the core API group allows other core resources via the wrapped baseline checker",
+			checker: func() Checker {
+				c := New(nil, Baseline(nil))
+				if err := c.SetGVKCheckList(GVKEligibilityModeAllowList, []schema.GroupVersionKind{{Group: corev1.GroupName}}); err != nil {
+					t.Fatalf("SetGVKCheckList(AllowList) = %v, want no error", err)
+				}
+				return c
+			}(),
+			gvk:  configMapGVK,
+			want: true,
+		},
+		{
 			name:    "baseline checker denies node resources",
 			checker: Baseline(nil),
 			gvk:     nodeGVK,

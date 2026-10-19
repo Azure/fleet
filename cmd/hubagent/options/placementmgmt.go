@@ -73,8 +73,8 @@ type PlacementManagementOptions struct {
 	//   in the networking.k8s.io/v1beta1 group version for placement only;
 	// * v1: allow all resources of version v1 in the core API group for placement only;
 	// * v1/ConfigMap: allow ConfigMap resources of version v1 in the core API group for placement only;
-	// * networking.k8s.io/v1beta1/Ingress; v1beta1: only allow the Ingress resource in the networking.k8s.io/v1beta1
-	//   group version and all resources of version v1beta1 in the core API group for placement.
+	// * networking.k8s.io/v1beta1/Ingress;v1: only allow the Ingress resource in the networking.k8s.io/v1beta1
+	//   group version and all resources of version v1 in the core API group for placement.
 	//
 	// You can leave the [API-VERSION] and/or [KINDS] parts empty to allow all versions and/or kinds in an API group.
 	//
