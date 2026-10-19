@@ -55,6 +55,21 @@ var (
 	cancel    context.CancelFunc
 )
 
+// snapshotStub stands in for the placement resource snapshot manager: it hands back a snapshot
+// named after the policy without creating anything, which is all the controller needs from it.
+type snapshotStub struct{}
+
+func (snapshotStub) SnapshotResourcesIfNoSnapshotExists(_ context.Context, policy kfplacementv1alpha1.PlacementPolicyAccessor) ([]kfplacementv1alpha1.PlacementResourceSnapshotAccessor, bool, error) {
+	return []kfplacementv1alpha1.PlacementResourceSnapshotAccessor{
+		&kfplacementv1alpha1.PlacementResourceSnapshot{ObjectMeta: metav1.ObjectMeta{Name: stubSnapshotName(policy)}},
+	}, true, nil
+}
+
+// stubSnapshotName is the snapshot name snapshotStub reports for a policy.
+func stubSnapshotName(policy kfplacementv1alpha1.PlacementPolicyAccessor) string {
+	return policy.GetName() + "-snapshot-0"
+}
+
 func TestAPIs(t *testing.T) {
 	RegisterFailHandler(Fail)
 
@@ -110,7 +125,7 @@ var _ = BeforeSuite(func() {
 	Expect(err).Should(Succeed())
 
 	Expect(fieldindexers.SetupWithHubAgentControllerManager(ctx, mgr)).Should(Succeed())
-	reconciler := NewReconciler(mgr.GetClient(), mgr.GetAPIReader())
+	reconciler := NewReconciler(mgr.GetClient(), mgr.GetAPIReader(), snapshotStub{})
 	Expect(reconciler.SetupWithManagerForPlacementPolicy(mgr)).Should(Succeed())
 	Expect(reconciler.SetupWithManagerForClusterPlacementPolicy(mgr)).Should(Succeed())
 

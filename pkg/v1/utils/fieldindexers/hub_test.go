@@ -82,3 +82,46 @@ func TestClusterClaimOwnedByPlacementPolicyFieldExtractor(t *testing.T) {
 		})
 	}
 }
+
+// TestPlacementBindingOwnedByFieldExtractor pins that both binding kinds are indexed
+// by the name of their placement policy.
+func TestPlacementBindingOwnedByFieldExtractor(t *testing.T) {
+	testCases := []struct {
+		name    string
+		obj     client.Object
+		want    []string
+		wantErr bool
+	}{
+		{
+			name: "placement binding",
+			obj:  &placementv1alpha1.PlacementBinding{Spec: placementv1alpha1.PlacementBindingSpec{PlacementPolicyName: "app"}},
+			want: []string{"app"},
+		},
+		{
+			name: "cluster placement binding",
+			obj:  &placementv1alpha1.ClusterPlacementBinding{Spec: placementv1alpha1.PlacementBindingSpec{PlacementPolicyName: "app"}},
+			want: []string{"app"},
+		},
+		{
+			name:    "no placement policy name",
+			obj:     &placementv1alpha1.PlacementBinding{},
+			wantErr: true,
+		},
+		{
+			name:    "not a placement binding",
+			obj:     &placementv1alpha1.Work{},
+			wantErr: true,
+		},
+	}
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			got, err := placementBindingOwnedByFieldExtractor(tc.obj)
+			if (err != nil) != tc.wantErr {
+				t.Fatalf("placementBindingOwnedByFieldExtractor() = %v, want error %t", err, tc.wantErr)
+			}
+			if diff := cmp.Diff(tc.want, got); diff != "" {
+				t.Errorf("placementBindingOwnedByFieldExtractor() mismatch (-want +got):\n%s", diff)
+			}
+		})
+	}
+}

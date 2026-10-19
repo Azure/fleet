@@ -17,6 +17,7 @@ limitations under the License.
 package placementpolicy
 
 import (
+	"slices"
 	"testing"
 
 	"github.com/google/go-cmp/cmp"
@@ -52,7 +53,7 @@ func TestEvaluateSelectorsSkipsClustersWithUnevaluableData(t *testing.T) {
 		*testCluster("bad-data-cluster", nil, map[string]string{propertyprovider.NodeCountProperty: "not-a-number"}, nil),
 	}
 
-	outcomes, err := evaluateSelectors(spec, clusters, allEligible{})
+	outcomes, err := evaluateSelectors(spec, clusters, allEligible{}, nil)
 	if err != nil {
 		t.Fatalf("evaluateSelectors(%v) returned unexpected error: %v", spec, err)
 	}
@@ -62,6 +63,9 @@ func TestEvaluateSelectorsSkipsClustersWithUnevaluableData(t *testing.T) {
 	wantMatched := []string{"good-cluster"}
 	if diff := cmp.Diff(outcomes[0].matched, wantMatched); diff != "" {
 		t.Errorf("evaluateSelectors(%v) matched mismatch (-got, +want):\n%s", spec, diff)
+	}
+	if diff := cmp.Diff([]string{"bad-data-cluster"}, outcomes[0].unevaluable); diff != "" {
+		t.Errorf("evaluateSelectors(%v) unevaluable mismatch (-want +got):\n%s", spec, diff)
 	}
 }
 
@@ -75,8 +79,8 @@ func TestAggregateCounts(t *testing.T) {
 		{
 			name: "integer counts sum per selector",
 			outcomes: []selectorOutcome{
-				{counts: resolvedCounts{desired: 2, minimum: 2}, matched: []string{"a", "b", "c"}},
-				{counts: resolvedCounts{desired: 3, minimum: 3}, matched: []string{"a"}},
+				{counts: resolvedCounts{desired: 2, minimum: 2}, matched: []string{"a", "b", "c"}, chosen: []string{"a", "b"}},
+				{counts: resolvedCounts{desired: 3, minimum: 3}, matched: []string{"a"}, chosen: []string{"a"}},
 			},
 			wantDesired:   5,
 			wantScheduled: 3,
@@ -84,7 +88,7 @@ func TestAggregateCounts(t *testing.T) {
 		{
 			name: "selectAll desired floors at the minimum when unfulfilled",
 			outcomes: []selectorOutcome{
-				{counts: resolvedCounts{selectAll: true, minimum: 2}, matched: []string{"a"}},
+				{counts: resolvedCounts{selectAll: true, minimum: 2}, matched: []string{"a"}, chosen: []string{"a"}},
 			},
 			wantDesired:   2,
 			wantScheduled: 1,
@@ -92,7 +96,7 @@ func TestAggregateCounts(t *testing.T) {
 		{
 			name: "selectAll desired follows the match count when fulfilled",
 			outcomes: []selectorOutcome{
-				{counts: resolvedCounts{selectAll: true, minimum: 1}, matched: []string{"a", "b", "c"}},
+				{counts: resolvedCounts{selectAll: true, minimum: 1}, matched: []string{"a", "b", "c"}, chosen: []string{"a", "b", "c"}},
 			},
 			wantDesired:   3,
 			wantScheduled: 3,
@@ -210,5 +214,124 @@ func TestTolerationTolerates(t *testing.T) {
 				t.Errorf("tolerationTolerates(%v, %v) = %t, want %t", noScheduleTaint, tc.toleration, got, tc.want)
 			}
 		})
+	}
+}
+
+// eligibleExcept is a test eligibility gate that admits every cluster but the named ones.
+type eligibleExcept []string
+
+func (e eligibleExcept) IsEligible(cluster *clusterv1beta1.MemberCluster) (bool, string) {
+	return !slices.Contains(e, cluster.Name), ""
+}
+
+// TestEvaluateSelectorsKeepsClustersSelectedBefore pins that a scheduling decision sticks: a
+// cluster whose binding records a selector's terms stays selected by it, counted when it is
+// schedulable and sticky when it is not, even though it no longer matches, and is marked stale;
+// a binding made for other terms, or for a cluster that has left, keeps nothing.
+func TestEvaluateSelectorsKeepsClustersSelectedBefore(t *testing.T) {
+	eastTerms := []kfplacementv1alpha1.ClusterLabelAndPropertySelectorTerm{{MatchLabels: map[string]string{regionLabel: "east"}}}
+	oldTerms := []kfplacementv1alpha1.ClusterLabelAndPropertySelectorTerm{{MatchLabels: map[string]string{regionLabel: "central"}}}
+	spec := &kfplacementv1alpha1.PlacementPolicySpec{
+		ClusterSelectors: []kfplacementv1alpha1.ClusterSelector{{Terms: eastTerms, Count: ptr.To(intstr.FromInt32(3))}},
+	}
+	west := map[string]string{regionLabel: "west"}
+	clusters := []clusterv1beta1.MemberCluster{
+		*testCluster("east-1", map[string]string{regionLabel: "east"}, nil, nil),
+		*testCluster("relabeled", west, nil, nil),
+		*testCluster("relabeled-dark", west, nil, nil),
+		*testCluster("bound-for-old-terms", west, nil, nil),
+		*testCluster("never-bound", west, nil, nil),
+	}
+	recorded := map[string][]kfplacementv1alpha1.ClusterSelectorWithTermsOnly{
+		"east-1":              {{Terms: eastTerms}},
+		"relabeled":           {{Terms: oldTerms}, {Terms: eastTerms}},
+		"relabeled-dark":      {{Terms: eastTerms}},
+		"bound-for-old-terms": {{Terms: oldTerms}},
+		"left-the-fleet":      {{Terms: eastTerms}},
+	}
+
+	outcomes, err := evaluateSelectors(spec, clusters, eligibleExcept{"relabeled-dark"}, recorded)
+	if err != nil {
+		t.Fatalf("evaluateSelectors() = %v, want no error", err)
+	}
+	if len(outcomes) != 1 {
+		t.Fatalf("evaluateSelectors() = %d outcomes, want 1", len(outcomes))
+	}
+	if diff := cmp.Diff([]string{"east-1", "relabeled"}, outcomes[0].matched); diff != "" {
+		t.Errorf("evaluateSelectors() matched mismatch (-want +got):\n%s", diff)
+	}
+	if diff := cmp.Diff([]string{"relabeled-dark"}, outcomes[0].sticky); diff != "" {
+		t.Errorf("evaluateSelectors() sticky mismatch (-want +got):\n%s", diff)
+	}
+	if diff := cmp.Diff([]string{"relabeled", "relabeled-dark"}, outcomes[0].stale); diff != "" {
+		t.Errorf("evaluateSelectors() stale mismatch (-want +got):\n%s", diff)
+	}
+}
+
+// TestScheduledConditionNamesUnevaluableClusters pins that the clusters whose data cannot be
+// evaluated are named on the condition, deduplicated across selectors and capped in number.
+func TestScheduledConditionNamesUnevaluableClusters(t *testing.T) {
+	testCases := []struct {
+		name        string
+		outcomes    []selectorOutcome
+		wantMessage string
+	}{
+		{
+			name:        "none",
+			outcomes:    []selectorOutcome{{counts: resolvedCounts{desired: 1, minimum: 1}, matched: []string{"a"}}},
+			wantMessage: "All cluster selectors have found their desired numbers of clusters",
+		},
+		{
+			name: "deduplicated across selectors",
+			outcomes: []selectorOutcome{
+				{counts: resolvedCounts{desired: 1, minimum: 1}, matched: []string{"a"}, unevaluable: []string{"c", "b"}},
+				{counts: resolvedCounts{desired: 1, minimum: 1}, matched: []string{"a"}, unevaluable: []string{"b"}},
+			},
+			wantMessage: "All cluster selectors have found their desired numbers of clusters; the data reported by member clusters b, c cannot be evaluated against the cluster selectors, so they keep any existing binding but are not counted",
+		},
+		{
+			name: "capped",
+			outcomes: []selectorOutcome{
+				{counts: resolvedCounts{desired: 1, minimum: 1}, matched: []string{"a"}, unevaluable: []string{"b", "c", "d", "e", "f", "g", "h"}},
+			},
+			wantMessage: "All cluster selectors have found their desired numbers of clusters; the data reported by member clusters b, c, d, e, f and 2 more cannot be evaluated against the cluster selectors, so they keep any existing binding but are not counted",
+		},
+	}
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			if got := scheduledCondition(1, tc.outcomes).Message; got != tc.wantMessage {
+				t.Errorf("scheduledCondition().Message = %q, want %q", got, tc.wantMessage)
+			}
+		})
+	}
+}
+
+// TestEvaluateSelectorsKeepsClustersSelectedBeforeAcrossSelectors pins that a decision sticks to
+// the selector it was made for by terms, not by position: a cluster recorded for one selector that
+// now matches only another is selected by both, and reordering the selectors keeps the pin.
+func TestEvaluateSelectorsKeepsClustersSelectedBeforeAcrossSelectors(t *testing.T) {
+	eastTerms := []kfplacementv1alpha1.ClusterLabelAndPropertySelectorTerm{{MatchLabels: map[string]string{regionLabel: "east"}}}
+	westTerms := []kfplacementv1alpha1.ClusterLabelAndPropertySelectorTerm{{MatchLabels: map[string]string{regionLabel: "west"}}}
+	spec := &kfplacementv1alpha1.PlacementPolicySpec{
+		ClusterSelectors: []kfplacementv1alpha1.ClusterSelector{
+			{Terms: westTerms, Count: ptr.To(intstr.FromInt32(1))},
+			{Terms: eastTerms, Count: ptr.To(intstr.FromInt32(1))},
+		},
+	}
+	clusters := []clusterv1beta1.MemberCluster{
+		*testCluster("moved-west", map[string]string{regionLabel: "west"}, nil, nil),
+	}
+	recorded := map[string][]kfplacementv1alpha1.ClusterSelectorWithTermsOnly{"moved-west": {{Terms: eastTerms}}}
+
+	outcomes, err := evaluateSelectors(spec, clusters, allEligible{}, recorded)
+	if err != nil {
+		t.Fatalf("evaluateSelectors() = %v, want no error", err)
+	}
+	var gotMatched [][]string
+	for i := range outcomes {
+		gotMatched = append(gotMatched, outcomes[i].matched)
+	}
+	if diff := cmp.Diff([][]string{{"moved-west"}, {"moved-west"}}, gotMatched); diff != "" {
+		t.Errorf("evaluateSelectors() matched per selector mismatch (-want +got):\n%s", diff)
 	}
 }
