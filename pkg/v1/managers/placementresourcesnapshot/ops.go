@@ -496,3 +496,56 @@ func (m *Manager) cleanUpOrphanedSecondarySnapshots(
 	}
 	return true, nil
 }
+
+// IsSnapshotSynchronized checks whether the given primary placement resource snapshot (and its secondaries) is
+// still synchronized, i.e., the resources in the snapshot(s) match with the current state of selected resources
+// in the cluster.
+//
+// Important: this method will NOT verify if the given primary placement resource snapshot is still the latest
+// one. Call SnapshotResourcesIfNoSnapshotExists instead.
+func (m *Manager) IsSnapshotSynchronized(ctx context.Context,
+	placementResourceSnapshot placementv1alpha1.PlacementResourceSnapshotAccessor,
+	placementPolicy placementv1alpha1.PlacementPolicyAccessor,
+) (bool, error) {
+	// Do some sanity checks; verify if the given snapshot is a primary placement resource snapshot for the given
+	// placement policy.
+	if placementResourceSnapshot == nil || placementPolicy == nil {
+		return false, errors.NewUnexpectedError(nil, "placement resource snapshot or placement policy is nil", "manager", managerName)
+	}
+
+	subIdxStr := placementResourceSnapshot.GetLabels()[placementv1alpha1.PlacementResourceSnapshotSubIndexLabelKey]
+	if subIdxStr != "0" {
+		return false, errors.NewUnexpectedError(nil, "the given placement resource snapshot is not a primary placement resource snapshot",
+			"placementResourceSnapshot", klog.KObj(placementResourceSnapshot), "observedSubIndex", subIdxStr)
+	}
+
+	// Owner references are only valid within the same namespace; verify the namespace as well.
+	ownerRef := placementPolicyOwnerRef(placementResourceSnapshot, placementPolicy.GetName())
+	if ownerRef == nil || placementResourceSnapshot.GetNamespace() != placementPolicy.GetNamespace() {
+		return false, errors.NewUnexpectedError(nil, "the primary placement resource snapshot is not owned by the given placement policy",
+			"primaryPlacementResourceSnapshot", klog.KObj(placementResourceSnapshot), "placementPolicy", klog.KObj(placementPolicy))
+	}
+	if ownerRef.UID != placementPolicy.GetUID() {
+		// The placement policy might have been deleted and re-created with the same name, and the cache might
+		// still hold snapshots owned by the previous generation of the placement policy.
+		return false, errors.NewTransientError(nil, "observed an inconsistent state: the primary placement resource snapshot is owned by a different placement policy with the same name",
+			"primaryPlacementResourceSnapshot", klog.KObj(placementResourceSnapshot), "primaryPlacementResourceSnapshotOwnerUID", ownerRef.UID,
+			"placementPolicy", klog.KObj(placementPolicy), "placementPolicyUID", placementPolicy.GetUID())
+	}
+
+	// Retrieve the resource hash annotated on the given placement resource snapshot.
+	snapshotHash := placementResourceSnapshot.GetAnnotations()[placementv1alpha1.PlacementResourceSnapshotContentsHashAnnotationKey]
+	if snapshotHash == "" {
+		return false, errors.NewUnexpectedError(nil, "the primary placement resource snapshot is missing the contents hash annotation",
+			"primaryPlacementResourceSnapshot", klog.KObj(placementResourceSnapshot))
+	}
+
+	// Retrieve the currently selected resources and their hash based on the placement policy.
+	_, currentHash, err := m.retrieveAndHashSelectedResources(ctx, placementPolicy)
+	if err != nil {
+		return false, errors.Wraps(err, "failed to retrieve and hash the selected resources")
+	}
+
+	// Compare the hashes.
+	return snapshotHash == currentHash, nil
+}
