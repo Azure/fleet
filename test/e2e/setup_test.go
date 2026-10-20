@@ -46,15 +46,16 @@ import (
 
 	fleetnetworkingv1alpha1 "go.goms.io/fleet-networking/api/v1alpha1"
 
-	clusterv1beta1 "go.goms.io/fleet/apis/cluster/v1beta1"
-	placementv1 "go.goms.io/fleet/apis/placement/v1"
-	placementv1alpha1 "go.goms.io/fleet/apis/placement/v1alpha1"
-	placementv1beta1 "go.goms.io/fleet/apis/placement/v1beta1"
-	"go.goms.io/fleet/pkg/admissionpolicymanager"
-	"go.goms.io/fleet/pkg/propertyprovider/azure/trackers"
-	"go.goms.io/fleet/pkg/utils"
-	testv1alpha1 "go.goms.io/fleet/test/apis/v1alpha1"
-	"go.goms.io/fleet/test/e2e/framework"
+	clusterv1beta1 "github.com/kubefleet-dev/kubefleet/apis/cluster/v1beta1"
+	kfplacementv1alpha1 "github.com/kubefleet-dev/kubefleet/apis/kubefleet.dev/placement/v1alpha1"
+	placementv1 "github.com/kubefleet-dev/kubefleet/apis/placement/v1"
+	placementv1alpha1 "github.com/kubefleet-dev/kubefleet/apis/placement/v1alpha1"
+	placementv1beta1 "github.com/kubefleet-dev/kubefleet/apis/placement/v1beta1"
+	"github.com/kubefleet-dev/kubefleet/pkg/admissionpolicymanager"
+	"github.com/kubefleet-dev/kubefleet/pkg/propertyprovider/azure/trackers"
+	"github.com/kubefleet-dev/kubefleet/pkg/utils"
+	testv1alpha1 "github.com/kubefleet-dev/kubefleet/test/apis/v1alpha1"
+	"github.com/kubefleet-dev/kubefleet/test/e2e/framework"
 )
 
 const (
@@ -296,6 +297,9 @@ func TestMain(m *testing.M) {
 	}
 	if err := placementv1beta1.AddToScheme(scheme); err != nil {
 		log.Fatalf("failed to add custom APIs (placement) to the runtime scheme: %v", err)
+	}
+	if err := kfplacementv1alpha1.AddToScheme(scheme); err != nil {
+		log.Fatalf("failed to add custom APIs (kubefleet.dev placement v1alpha1) to the runtime scheme: %v", err)
 	}
 	if err := placementv1.AddToScheme(scheme); err != nil {
 		log.Fatalf("failed to add custom APIs (placement v1) to the runtime scheme: %v", err)
