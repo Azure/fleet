@@ -21,6 +21,7 @@ import (
 
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/apimachinery/pkg/types"
 	"k8s.io/klog/v2"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/controller/controllerutil"
@@ -82,6 +83,14 @@ func (r *Reconciler) Leave(ctx context.Context) error {
 		}
 		klog.V(2).InfoS("Deleted the appliedWork object with the Orphan propagation policy",
 			"appliedWork", klog.KObj(appliedWork), "work", klog.KObj(work))
+	}
+
+	// Set the requeue rate limiters to forget about all the work. Secondary work objects are never tracked, and
+	// forgetting them becomes a no-op.
+	for idx := range workList.Items {
+		work := &workList.Items[idx]
+		r.cleanupRequeueRateLimiter.Forget(types.NamespacedName{Namespace: r.workNSName, Name: work.Name})
+		r.periodicRequeueRateLimiter.Forget(work)
 	}
 
 	// Drop the cleanup finalizer from all the work objects.

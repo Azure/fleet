@@ -19,7 +19,9 @@ package workapplier
 import (
 	"context"
 	"fmt"
+	"slices"
 	"strconv"
+	"strings"
 
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -117,6 +119,13 @@ func (r *Reconciler) retrieveLinkedAndLeftOverWorks(ctx context.Context,
 			"observedLinkedWorkCount", len(linkedWorks), "wantLinkedWorkCount", wantLinkedWorkCount)
 	}
 
+	// Sort the linked work objects by their names to ensure deterministic processing order.
+	//
+	// The primary work object is excluded from sorting as it must always be the first item in the array.
+	slices.SortFunc(linkedWorks[1:], func(a, b *placementv1alpha1.Work) int {
+		return strings.Compare(a.Name, b.Name)
+	})
+
 	// Verify that all leftover work objects have been marked for deletion.
 	for idx := range leftOverWorks {
 		leftOverWork := leftOverWorks[idx]
@@ -167,6 +176,9 @@ func (r *Reconciler) ensureAppliedWorks(ctx context.Context, works []*placementv
 		appliedWork := &placementv1alpha1.AppliedWork{}
 		err := r.spokeClient.Get(ctx, types.NamespacedName{Name: work.Name}, appliedWork)
 		switch {
+		case err == nil && !appliedWork.GetDeletionTimestamp().IsZero():
+			// The appliedWork object is marked for deletion; wait for the cleanup to complete.
+			return nil, errors.NewTransientError(nil, "found an appliedWork object that has been marked for deletion", "appliedWork", klog.KObj(appliedWork))
 		case err == nil:
 			// The AppliedWork already exists; no further action is needed.
 			klog.V(2).InfoS("Found an appliedWork object for the work object", "appliedWork", klog.KObj(appliedWork))

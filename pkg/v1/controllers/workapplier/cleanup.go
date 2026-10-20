@@ -25,6 +25,7 @@ import (
 	"k8s.io/apimachinery/pkg/api/meta"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime/schema"
+	"k8s.io/apimachinery/pkg/types"
 	utilerrors "k8s.io/apimachinery/pkg/util/errors"
 	"k8s.io/apimachinery/pkg/util/sets"
 	"k8s.io/klog/v2"
@@ -38,11 +39,17 @@ import (
 	"github.com/kubefleet-dev/kubefleet/pkg/v1/utils/ownerreferences"
 )
 
+const (
+	DefaultCleanupBaseDelay = 2 * time.Second
+	DefaultCleanupMaxDelay  = 30 * time.Second
+)
+
 // cleanupWhenBindingDeleted performs cleanup ops when the placement binding that spawns all the linked
 // work objects has been deleted, based on the given SyncStrategy.
 func (r *Reconciler) cleanupWhenBindingDeleted(ctx context.Context,
 	primaryWork *placementv1alpha1.Work) (*time.Duration, error) {
 	primaryWorkCopy := primaryWork.DeepCopy()
+	primaryWorkNamespacedName := types.NamespacedName{Namespace: primaryWork.Namespace, Name: primaryWork.Name}
 	setDefaultSyncStrategy(primaryWorkCopy)
 
 	deletionPolicy := metav1.DeletePropagationForeground
@@ -92,12 +99,12 @@ func (r *Reconciler) cleanupWhenBindingDeleted(ctx context.Context,
 		}
 		klog.V(2).InfoS("The primary appliedWork object has been marked for deletion; wait for the deletion to complete",
 			"appliedWork", klog.KObj(appliedWork), "propagationPolicy", deletionPolicy)
-		return &r.cleanupRequeueAfter, nil
+		return ptr.To(r.cleanupRequeueRateLimiter.When(primaryWorkNamespacedName)), nil
 	default:
 		// The appliedWork object has been marked for deletion; wait for the deletion to complete.
 		if time.Since(appliedWork.DeletionTimestamp.Time) < r.cleanupWaitTime {
 			// Keep waiting.
-			return &r.cleanupRequeueAfter, nil
+			return ptr.To(r.cleanupRequeueRateLimiter.When(primaryWorkNamespacedName)), nil
 		}
 
 		if _, found := appliedWork.Annotations[appliedWorkForcedDeletedAnnotationKey]; !found {
@@ -126,7 +133,7 @@ func (r *Reconciler) cleanupWhenBindingDeleted(ctx context.Context,
 
 		if time.Since(appliedWork.DeletionTimestamp.Time) < 2*r.cleanupWaitTime {
 			// Keep waiting.
-			return &r.cleanupRequeueAfter, nil
+			return ptr.To(r.cleanupRequeueRateLimiter.When(primaryWorkNamespacedName)), nil
 		}
 
 		// If the appliedWork object is still stuck in the pending deletion state after us manually removing the
@@ -162,6 +169,10 @@ func (r *Reconciler) cleanupWhenBindingDeleted(ctx context.Context,
 		klog.V(2).InfoS("Removed the cleanup finalizer from the work", "work", klog.KObj(work))
 	}
 
+	// Set the requeue rate limiters to forget about the work.
+	r.cleanupRequeueRateLimiter.Forget(primaryWorkNamespacedName)
+	r.periodicRequeueRateLimiter.Forget(primaryWork)
+
 	// Remove the cleanup finalizer from the primary work object.
 	if controllerutil.ContainsFinalizer(primaryWork, workApplierCleanupFinalizer) {
 		controllerutil.RemoveFinalizer(primaryWork, workApplierCleanupFinalizer)
@@ -175,6 +186,34 @@ func (r *Reconciler) cleanupWhenBindingDeleted(ctx context.Context,
 	return nil, nil
 }
 
+// shouldCleanUpManifest checks if the object derived from a manifest might have been applied to the member cluster,
+// based on the manifest's last recorded status; if so, the object should be cleaned up once the manifest is no
+// longer present.
+//
+// The check is permissive by design: any manifest that can be identified and has been processed (i.e., it has an
+// Applied condition) is considered, regardless of its apply result. This is safe as the cleanup process always
+// verifies object ownership before taking any action.
+func shouldCleanUpManifest(manifestStatus *placementv1alpha1.PerManifestStatus) bool {
+	// Skip manifests that cannot be identified in the member cluster; attempting to clean them up would always fail.
+	id := &manifestStatus.Identifier
+	if id.APIVersion == "" || id.Kind == "" || id.Resource == "" || id.Name == "" {
+		return false
+	}
+
+	appliedCond := meta.FindStatusCondition(manifestStatus.Conditions, placementv1alpha1.WorkCondTypeApplied)
+	// There are three possibilities:
+	//
+	// a) the manifest has no applied condition; it is guaranteed that the object has never been applied (recall
+	//    the controller's write-ahead process).
+	// b) the manifest has a True applied condition; it might have been applied, cleanup is needed.
+	// c) the manifest has a False applied condition; there are certain cases where cleanup might not be necessary,
+	//    however, as there might be reconciliation attempts that haven't been properly tracked (e.g., failed status
+	//    updates), here the work applier will always err on the side of cleaning up the manifest.
+	//
+	// Note that additional checks will be performed before the cleanup runs.
+	return appliedCond != nil
+}
+
 func (r *Reconciler) manuallyUpdateOwnerReferencesOnManifests(ctx context.Context,
 	appliedWork *placementv1alpha1.AppliedWork,
 	works []placementv1alpha1.Work) error {
@@ -185,15 +224,14 @@ func (r *Reconciler) manuallyUpdateOwnerReferencesOnManifests(ctx context.Contex
 		UID:        appliedWork.UID,
 	}
 
-	// Loop through all work objects, identify all applied (or pre-processed) manifests
+	// Loop through all work objects, identify all manifests that might have been applied
 	// in the status, and add them as owner reference removal candidates.
 	manifestsToRemoveOwnerRef := []placementv1alpha1.ManifestIdentifier{}
 	for workIdx := range works {
 		work := &works[workIdx]
 		for manifestIdx := range work.Status.Manifests {
 			manifestStatus := &work.Status.Manifests[manifestIdx]
-			appliedCond := meta.FindStatusCondition(manifestStatus.Conditions, placementv1alpha1.WorkCondTypeApplied)
-			if appliedCond == nil || (appliedCond.Status != metav1.ConditionTrue && appliedCond.Reason != placementv1alpha1.WorkAppliedCondPreparingToProcessReason) {
+			if !shouldCleanUpManifest(manifestStatus) {
 				continue
 			}
 
@@ -274,9 +312,8 @@ func (r *Reconciler) cleanupLeftOverWorks(ctx context.Context,
 				continue
 			}
 
-			// Check if the manifest has been applied (or pre-processed) before; if so, attempt to remove it.
-			appliedCond := meta.FindStatusCondition(manifestStatus.Conditions, placementv1alpha1.WorkCondTypeApplied)
-			if appliedCond != nil && (appliedCond.Status == metav1.ConditionTrue || appliedCond.Reason == placementv1alpha1.WorkAppliedCondPreparingToProcessReason) {
+			// Check if the manifest might have been applied before; if so, attempt to remove it.
+			if shouldCleanUpManifest(manifestStatus) {
 				manifestsToDelete = append(manifestsToDelete, manifestStatus.Identifier)
 			}
 		}

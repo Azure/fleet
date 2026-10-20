@@ -135,11 +135,14 @@ func (r *Reconciler) refreshOneWorkStatus(
 }
 
 func prepareRefreshedManifestStatusWithIndex(manifestProcessingStates []*manifestProcessingState) (
-	[]placementv1alpha1.PerManifestStatus, map[string]int) {
+	[]placementv1alpha1.PerManifestStatus, map[string][]int) {
 	// Pre-allocate the status slice.
 	refreshedManifestStatuses := make([]placementv1alpha1.PerManifestStatus, len(manifestProcessingStates))
 
-	refreshedManifestStatusesIndex := make(map[string]int, len(manifestProcessingStates))
+	// Prepare the index. Note that there might be multiple manifests with the same identifier (duplicated
+	// manifests), so the index returns a slice of indices. It is guaranteed in normal ops that all indices
+	// except for the first point to duplicated manifests.
+	refreshedManifestStatusesIndex := make(map[string][]int, len(manifestProcessingStates))
 	for idx := range manifestProcessingStates {
 		manifestProcessingState := manifestProcessingStates[idx]
 		idStr := manifestProcessingState.idStr
@@ -152,7 +155,7 @@ func prepareRefreshedManifestStatusWithIndex(manifestProcessingStates []*manifes
 			// identifiable). This is not considered as an error.
 			continue
 		}
-		refreshedManifestStatusesIndex[idStr] = idx
+		refreshedManifestStatusesIndex[idStr] = append(refreshedManifestStatusesIndex[idStr], idx)
 	}
 	return refreshedManifestStatuses, refreshedManifestStatusesIndex
 }
@@ -160,7 +163,7 @@ func prepareRefreshedManifestStatusWithIndex(manifestProcessingStates []*manifes
 func portBackExistingManifestStatuses(
 	existingManifestStatuses []placementv1alpha1.PerManifestStatus,
 	refreshedManifestStatuses []placementv1alpha1.PerManifestStatus,
-	refreshedManifestStatusesIndex map[string]int,
+	refreshedManifestStatusesIndex map[string][]int,
 ) {
 	for idx := range existingManifestStatuses {
 		existingManifestStatus := existingManifestStatuses[idx]
@@ -176,9 +179,19 @@ func portBackExistingManifestStatuses(
 		}
 		existingManifestIdStr := formatManifestIdentifierStr(existingManifestId)
 
-		if idx, found := refreshedManifestStatusesIndex[existingManifestIdStr]; found {
+		if idxes, found := refreshedManifestStatusesIndex[existingManifestIdStr]; found {
 			// A match can be found via the index; port back the existing manifest status.
-			refreshedManifestStatuses[idx] = *existingManifestStatus.DeepCopy()
+			//
+			// Normally there should only be one match. However, in case of duplicated manifests, the index
+			// lookup might yield multiple indices. The system ensures that when there are duplicate manifests,
+			// the one that actually gets processed always appears first in the manifest list (if applicable),
+			// and the portback here would match that order as well. This helps avoid fluctuations when
+			// refreshing work object status.
+			if len(idxes) > 0 {
+				curIdx := idxes[0]
+				refreshedManifestStatuses[curIdx] = *existingManifestStatus.DeepCopy()
+				refreshedManifestStatusesIndex[existingManifestIdStr] = idxes[1:]
+			}
 		}
 	}
 }
@@ -433,7 +446,7 @@ func setWorkAvailableCondition(
 		availableCond = &metav1.Condition{
 			Type:               placementv1alpha1.WorkCondTypeAvailable,
 			Status:             metav1.ConditionTrue,
-			Reason:             placementv1alpha1.WorkAvailableCondNotAllManifestsAvailableReason,
+			Reason:             placementv1alpha1.WorkAvailableCondNotAllManifestsTrackableReason,
 			Message:            fmt.Sprintf("All %d manifest(s) are available (with %d manifests untrackable)", manifestCount, untrackableAppliedObjectsCount),
 			ObservedGeneration: workGeneration,
 		}
@@ -502,8 +515,8 @@ func (r *Reconciler) refreshOneAppliedWorkStatus(
 
 		if isManifestObjectApplied(manifestProcessingState.applyRes) {
 			appliedResources = append(appliedResources, placementv1alpha1.AppliedResource{
-				ManifestIdentifier: *manifestProcessingState.id,
-				UID:                manifestProcessingState.inMemberClusterObj.GetUID(),
+				AppliedResourceIdentifier: placementv1alpha1.AppliedResourceIdentifier(*manifestProcessingState.id),
+				UID:                       manifestProcessingState.inMemberClusterObj.GetUID(),
 			})
 		}
 	}

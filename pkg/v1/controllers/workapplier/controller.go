@@ -26,8 +26,10 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
 	"k8s.io/apimachinery/pkg/runtime/schema"
+	"k8s.io/apimachinery/pkg/types"
 	"k8s.io/apimachinery/pkg/util/sets"
 	"k8s.io/client-go/dynamic"
+	"k8s.io/client-go/util/workqueue"
 	"k8s.io/klog/v2"
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/builder"
@@ -41,7 +43,7 @@ import (
 )
 
 const (
-	controllerName   = "work-applier"
+	controllerName   = "work-applier-v1"
 	fieldManagerName = "kubefleet-member-agent"
 
 	workApplierCleanupFinalizer = "placement.kubefleet.dev/work-cleanup"
@@ -52,9 +54,13 @@ const (
 type ApplyResultType string
 
 const (
+	// The result type for manifests that are to be processed.
+	ApplyResTypePreparingToProcess ApplyResultType = "PreparingToProcess"
+
 	// The result types for apply op failures.
 	ApplyResTypeDecodingErred                   ApplyResultType = "DecodingErred"
 	ApplyResTypeFoundGenerateName               ApplyResultType = "FoundGenerateName"
+	ApplyResTypeNoName                          ApplyResultType = "NoNameSpecified"
 	ApplyResTypeDuplicated                      ApplyResultType = "Duplicated"
 	ApplyResTypeFailedToFindObjInMemberCluster  ApplyResultType = "FailedToFindObjInMemberCluster"
 	ApplyResTypeOwnedByOtherKubeFleetAPIObjects ApplyResultType = "OwnedByOtherKubeFleetAPIObjects"
@@ -72,8 +78,10 @@ const (
 )
 
 var allApplyResTypes = sets.New(
+	ApplyResTypePreparingToProcess,
 	ApplyResTypeDecodingErred,
 	ApplyResTypeFoundGenerateName,
+	ApplyResTypeNoName,
 	ApplyResTypeDuplicated,
 	ApplyResTypeFailedToFindObjInMemberCluster,
 	ApplyResTypeOwnedByOtherKubeFleetAPIObjects,
@@ -189,9 +197,11 @@ type Reconciler struct {
 	parallelizer parallelizerutil.Parallelizer
 
 	concurrentReconciles int
-	cleanupRequeueAfter  time.Duration
-	periodicRequeueAfter time.Duration
-	cleanupWaitTime      time.Duration
+
+	cleanupRequeueRateLimiter  workqueue.TypedRateLimiter[types.NamespacedName]
+	periodicRequeueRateLimiter *MultiStageRequeueWithExponentialBackoffRateLimiter
+
+	cleanupWaitTime time.Duration
 
 	ready atomic.Bool
 }
@@ -202,22 +212,29 @@ func New(workNSName string,
 	restMapper meta.RESTMapper,
 	parallelizer parallelizerutil.Parallelizer,
 	concurrentReconciles int,
-	cleanupRequeueAfter time.Duration,
-	periodicRequeueAfter time.Duration,
+	cleanupRequeueRateLimiter workqueue.TypedRateLimiter[types.NamespacedName],
+	periodicRequeueRateLimiter *MultiStageRequeueWithExponentialBackoffRateLimiter,
 	cleanupWaitTime time.Duration,
 ) *Reconciler {
+	if cleanupRequeueRateLimiter == nil {
+		cleanupRequeueRateLimiter = workqueue.NewTypedItemExponentialFailureRateLimiter[types.NamespacedName](DefaultCleanupBaseDelay, DefaultCleanupMaxDelay)
+	}
+	if periodicRequeueRateLimiter == nil {
+		periodicRequeueRateLimiter = defaultRequeueRateLimiter
+	}
+
 	return &Reconciler{
-		workNSName:           workNSName,
-		hubClient:            hubClient,
-		hubUncachedReader:    hubUncachedReader,
-		spokeDynamicClient:   spokeDynamicClient,
-		spokeClient:          spokeClient,
-		restMapper:           restMapper,
-		parallelizer:         parallelizer,
-		concurrentReconciles: concurrentReconciles,
-		cleanupRequeueAfter:  cleanupRequeueAfter,
-		periodicRequeueAfter: periodicRequeueAfter,
-		cleanupWaitTime:      cleanupWaitTime,
+		workNSName:                 workNSName,
+		hubClient:                  hubClient,
+		hubUncachedReader:          hubUncachedReader,
+		spokeDynamicClient:         spokeDynamicClient,
+		spokeClient:                spokeClient,
+		restMapper:                 restMapper,
+		parallelizer:               parallelizer,
+		concurrentReconciles:       concurrentReconciles,
+		cleanupRequeueRateLimiter:  cleanupRequeueRateLimiter,
+		periodicRequeueRateLimiter: periodicRequeueRateLimiter,
+		cleanupWaitTime:            cleanupWaitTime,
 	}
 }
 
@@ -360,15 +377,19 @@ func (r *Reconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.Resu
 		return ctrl.Result{}, wrappedErr
 	}
 
-	// Periodically requeue the work object to check and (re-)apply manifests.
-	return ctrl.Result{RequeueAfter: r.periodicRequeueAfter}, nil
+	// Requeue the work object with a delay based on the given multi-stage requeue with exponential backoff
+	// rate limiter.
+	requeueAfter := r.periodicRequeueRateLimiter.When(linkedWorks, manifestProcessingStates)
+	klog.V(2).InfoS("Requeue the work object for re-processing", "requeueAfter", requeueAfter, "work", klog.KObj(work), "controller", controllerName)
+	return ctrl.Result{RequeueAfter: requeueAfter}, nil
 }
 
 func (r *Reconciler) SetupWithManager(mgr ctrl.Manager) error {
 	return ctrl.NewControllerManagedBy(mgr).
+		Named(controllerName).
 		WithOptions(ctrloption.Options{
 			MaxConcurrentReconciles: r.concurrentReconciles,
 		}).
-		For(&placementv1alpha1.Work{}, builder.WithPredicates(predicate.GenerationChangedPredicate{})).
+		Watches(&placementv1alpha1.Work{}, &workEventHandler, builder.WithPredicates(predicate.GenerationChangedPredicate{})).
 		Complete(r)
 }

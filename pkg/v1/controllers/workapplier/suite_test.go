@@ -28,9 +28,11 @@ import (
 	. "github.com/onsi/gomega"
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/apimachinery/pkg/types"
 	"k8s.io/client-go/dynamic"
 	"k8s.io/client-go/kubernetes/scheme"
 	"k8s.io/client-go/rest"
+	"k8s.io/client-go/util/workqueue"
 	"k8s.io/klog/v2"
 	"k8s.io/klog/v2/textlogger"
 	ctrl "sigs.k8s.io/controller-runtime"
@@ -72,10 +74,6 @@ const (
 	// The count of workers for the work applier controller.
 	workerCount = 4
 
-	// The requeue delay when the work applier waits for the cleanup (appliedWork deletion) to complete.
-	cleanupRequeueAfter = time.Second * 2
-	// The requeue delay for the periodic re-processing of work objects.
-	periodicRequeueAfter = time.Second * 3
 	// The max. time the work applier waits for an appliedWork object to be deleted before it unblocks
 	// the deletion manually.
 	//
@@ -189,8 +187,8 @@ var _ = BeforeSuite(func() {
 		memberClient1.RESTMapper(),
 		parallelizer.NewParallelizer(workerCount),
 		maxConcurrentReconciles,
-		cleanupRequeueAfter,
-		periodicRequeueAfter,
+		workqueue.NewTypedItemExponentialFailureRateLimiter[types.NamespacedName](DefaultCleanupBaseDelay, DefaultCleanupMaxDelay),
+		defaultRequeueRateLimiter,
 		cleanupWaitTime,
 	)
 	Expect(workApplier1.SetupWithManager(hubMgr1)).To(Succeed())

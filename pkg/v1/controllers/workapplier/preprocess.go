@@ -150,12 +150,21 @@ func (r *Reconciler) preProcessPerWorkObjManifests(ctx context.Context, manifest
 			return
 		}
 
-		// Reject objects with a generate name but no name.
-		if len(manifestObj.GetGenerateName()) > 0 && len(manifestObj.GetName()) == 0 {
-			wrappedErr := kferrors.NewUserError(nil, "rejected an object with only generate name",
+		// Reject objects with a generate name set, regardless of whether a name is also set.
+		if len(manifestObj.GetGenerateName()) > 0 {
+			wrappedErr := kferrors.NewUserError(nil, "cannot process a manifest with a generate name",
 				"ordinal", pieces, "manifestObj", klog.KObj(manifestObj), "work", klog.KObj(ownerWorkObj))
 			processingState.applyErr = wrappedErr
 			processingState.applyRes = ApplyResTypeFoundGenerateName
+			return
+		}
+
+		// Reject objects with no name set.
+		if len(manifestObj.GetName()) == 0 {
+			wrappedErr := kferrors.NewUserError(nil, "cannot process a manifest with no name specified",
+				"ordinal", pieces, "manifestObj", klog.KObj(manifestObj), "work", klog.KObj(ownerWorkObj))
+			processingState.applyErr = wrappedErr
+			processingState.applyRes = ApplyResTypeNoName
 			return
 		}
 
@@ -200,6 +209,16 @@ func (r *Reconciler) decodeManifest(manifest *placementv1alpha1.Manifest) (*sche
 		}
 		return &schema.GroupVersionResource{}, unstructuredObj,
 			kferrors.NewTransientError(err, "failed to complete REST mapping for the manifest")
+	}
+
+	// Verify that the REST scope matches the manifest's scope.
+	if mapping.Scope.Name() == meta.RESTScopeNameRoot && unstructuredObj.GetNamespace() != "" {
+		return &schema.GroupVersionResource{}, unstructuredObj,
+			kferrors.NewUserError(nil, "cluster-scoped resource should not have a namespace specified")
+	}
+	if mapping.Scope.Name() == meta.RESTScopeNameNamespace && unstructuredObj.GetNamespace() == "" {
+		return &schema.GroupVersionResource{}, unstructuredObj,
+			kferrors.NewUserError(nil, "namespace-scoped resource must have a namespace specified")
 	}
 
 	return &mapping.Resource, unstructuredObj, nil
@@ -349,12 +368,18 @@ func (r *Reconciler) writeAheadPerWorkObjManifestProcessingAttempts(ctx context.
 // prepareExistingManifestStatusIndex indexes the given manifest statuses by their identifier strings, so that
 // the status of a specific manifest can be looked up without scanning the whole list.
 func prepareExistingManifestStatusIndex(manifestStatuses []placementv1alpha1.PerManifestStatus) map[string]int {
-	idx := make(map[string]int, len(manifestStatuses))
+	existingManifestStatusIdx := make(map[string]int, len(manifestStatuses))
 	for i := range manifestStatuses {
 		idStr := formatManifestIdentifierStr(&manifestStatuses[i].Identifier)
-		idx[idStr] = i
+		if _, exists := existingManifestStatusIdx[idStr]; exists {
+			// Skip duplicate identifiers; only the first occurrence is indexed. This is to ensure that upon
+			// duplicated manifests, only the first one, which is also the one that gets actually processed,
+			// is indexed.
+			continue
+		}
+		existingManifestStatusIdx[idStr] = i
 	}
-	return idx
+	return existingManifestStatusIdx
 }
 
 // buildManifestStatusToWriteAhead prepares the status of a manifest for the write-ahead process.
@@ -375,7 +400,7 @@ func buildManifestStatusToWriteAhead(manifestProcessingState *manifestProcessing
 			{
 				Type:               placementv1alpha1.WorkCondTypeApplied,
 				Status:             metav1.ConditionFalse,
-				Reason:             placementv1alpha1.WorkAppliedCondPreparingToProcessReason,
+				Reason:             string(ApplyResTypePreparingToProcess),
 				Message:            "The manifest is being prepared for processing",
 				LastTransitionTime: metav1.Now(),
 			},
@@ -424,19 +449,11 @@ func findLeftOverManifests(
 			continue
 		}
 
-		existingManifestStatus := work.Status.Manifests[existingManifestStatusIdx]
+		existingManifestStatus := &work.Status.Manifests[existingManifestStatusIdx]
 
-		// The work applier assumes that the manifest has been applied if:
-		// a) it has an Applied condition set to the True status; or
-		// b) it has an Applied condition which signals that the object is preparing to be processed.
-		//
 		// Note that the manifest status might not be up-to-date, so the work applier will not check on the
 		// generation information.
-		appliedCond := meta.FindStatusCondition(existingManifestStatus.Conditions, placementv1alpha1.WorkCondTypeApplied)
-		if appliedCond == nil {
-			continue
-		}
-		if appliedCond.Status == metav1.ConditionTrue || appliedCond.Reason == placementv1alpha1.WorkAppliedCondPreparingToProcessReason {
+		if shouldCleanUpManifest(existingManifestStatus) {
 			leftOverManifests = append(leftOverManifests, existingManifestStatus.Identifier)
 		}
 	}

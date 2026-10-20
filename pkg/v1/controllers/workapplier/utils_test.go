@@ -18,21 +18,27 @@ package workapplier
 
 import (
 	"fmt"
+	"strings"
 	"time"
 
 	"github.com/google/go-cmp/cmp"
 	"github.com/google/go-cmp/cmp/cmpopts"
 	. "github.com/onsi/gomega"
 	appsv1 "k8s.io/api/apps/v1"
+	autoscalingv2 "k8s.io/api/autoscaling/v2"
 	corev1 "k8s.io/api/core/v1"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
+	"k8s.io/apimachinery/pkg/api/meta"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
 	"k8s.io/apimachinery/pkg/runtime"
+	"k8s.io/apimachinery/pkg/types"
 	"k8s.io/utils/ptr"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/controller/controllerutil"
 
 	placementv1alpha1 "github.com/kubefleet-dev/kubefleet/apis/kubefleet.dev/placement/v1alpha1"
+	"github.com/kubefleet-dev/kubefleet/pkg/utils"
 	testutilsresource "github.com/kubefleet-dev/kubefleet/test/utils/resource"
 )
 
@@ -44,7 +50,14 @@ const (
 	primarySnapshotNameTemplate   = "snapshot-%s-0"
 	deployName                    = "deploy-1"
 	configMapName                 = "configmap-1"
+	configMapDataKey              = "foo"
 	singleWorkLinkedWorkCountAnno = "1"
+	// A test-only label that nudgeWork sets on manifests to bump the generations of Work objects.
+	nudgeLabelKey = "nudge"
+	// The UID used in the owner references that link secondary work objects to their primary work objects. The API
+	// server only requires the UID to be non-empty, and there is no GC controller in the test environment to check
+	// it against the actual primary work object.
+	dummyPrimaryWorkUID types.UID = "dummy-primary-work-uid"
 )
 
 const (
@@ -82,7 +95,7 @@ var (
 			Namespace: "ns-1",
 		},
 		Data: map[string]string{
-			"foo": "bar",
+			configMapDataKey: "bar",
 		},
 	}
 
@@ -185,6 +198,22 @@ func createWorkObject(workName, memberClusterReservedNSName string, syncStrategy
 	)
 	work.Annotations[placementv1alpha1.LinkedWorkCountAnnotationKey] = singleWorkLinkedWorkCountAnno
 	Expect(hubClient.Create(ctx, work)).To(Succeed(), "Failed to create the Work object")
+}
+
+// setPrimaryWorkAsOwner sets the primary work object as the controller owner of a secondary work object, which
+// mimics how KubeFleet links secondary work objects to their primary work objects; the work applier relies on
+// this owner reference to map events on secondary work objects to their primary work objects.
+func setPrimaryWorkAsOwner(secondaryWork *placementv1alpha1.Work, primaryWorkName string) {
+	secondaryWork.OwnerReferences = []metav1.OwnerReference{
+		{
+			APIVersion:         placementv1alpha1.GroupVersion.String(),
+			Kind:               placementv1alpha1.WorkKind,
+			Name:               primaryWorkName,
+			UID:                dummyPrimaryWorkUID,
+			Controller:         ptr.To(true),
+			BlockOwnerDeletion: ptr.To(true),
+		},
+	}
 }
 
 func marshalK8sObjJSON(obj runtime.Object) []byte {
@@ -348,22 +377,34 @@ func regularDeploymentObjectAppliedActual(memberClient client.Client, nsName, de
 }
 
 func regularConfigMapObjectAppliedActual(memberClient client.Client, nsName, configMapName string, appliedWorkOwnerRef *metav1.OwnerReference) func() error {
+	wantConfigMap := configMap.DeepCopy()
+	wantConfigMap.Namespace = nsName
+	wantConfigMap.Name = configMapName
+	return configMapObjectAppliedActual(memberClient, wantConfigMap, appliedWorkOwnerRef)
+}
+
+// configMapObjectAppliedActual checks that the ConfigMap object has been applied as expected, i.e., it has the
+// same namespace, name, and data as the given ConfigMap object, and is owned by the AppliedWork object.
+func configMapObjectAppliedActual(memberClient client.Client, configMapToApply *corev1.ConfigMap, appliedWorkOwnerRef *metav1.OwnerReference) func() error {
 	return func() error {
 		// Retrieve the ConfigMap object.
 		gotConfigMap := &corev1.ConfigMap{}
-		if err := memberClient.Get(ctx, client.ObjectKey{Namespace: nsName, Name: configMapName}, gotConfigMap); err != nil {
+		if err := memberClient.Get(ctx, client.ObjectKey{Namespace: configMapToApply.Namespace, Name: configMapToApply.Name}, gotConfigMap); err != nil {
 			return fmt.Errorf("failed to retrieve the ConfigMap object: %w", err)
 		}
 
 		// Check that the ConfigMap object has been created as expected.
 
 		// To ignore default values automatically, here the test suite rebuilds the objects.
-		wantConfigMap := configMap.DeepCopy()
-		wantConfigMap.TypeMeta = metav1.TypeMeta{}
-		wantConfigMap.Namespace = nsName
-		wantConfigMap.Name = configMapName
-		wantConfigMap.OwnerReferences = []metav1.OwnerReference{
-			*appliedWorkOwnerRef,
+		wantConfigMap := &corev1.ConfigMap{
+			ObjectMeta: metav1.ObjectMeta{
+				Namespace: configMapToApply.Namespace,
+				Name:      configMapToApply.Name,
+				OwnerReferences: []metav1.OwnerReference{
+					*appliedWorkOwnerRef,
+				},
+			},
+			Data: configMapToApply.Data,
 		}
 
 		rebuiltGotConfigMap := &corev1.ConfigMap{
@@ -440,6 +481,52 @@ func workStatusUpdated(
 		}
 
 		// Check that the Work object status has been updated as expected.
+		if diff := cmp.Diff(
+			work.Status, wantWorkStatus,
+			ignoreFieldConditionLTTMsg,
+			ignoreFieldDiffDetailsObsTime,
+		); diff != "" {
+			return fmt.Errorf("work status diff (-got, +want):\n%s", diff)
+		}
+		return nil
+	}
+}
+
+// workStatusStaleActual checks that the status of a Work object has not been refreshed since the Work object was last
+// processed at the given (now outdated) generation, i.e., the Work object has been updated since then, and all of its
+// conditions have become stale.
+func workStatusStaleActual(
+	workNS, workName string,
+	staleWorkGeneration int64,
+	workConds []metav1.Condition,
+	manifestStatuses []placementv1alpha1.PerManifestStatus,
+) func() error {
+	return func() error {
+		// Retrieve the Work object.
+		work := &placementv1alpha1.Work{}
+		if err := hubClient.Get(ctx, client.ObjectKey{Name: workName, Namespace: workNS}, work); err != nil {
+			return fmt.Errorf("failed to retrieve the Work object: %w", err)
+		}
+
+		if work.Generation <= staleWorkGeneration {
+			return fmt.Errorf("work generation = %d, want a generation newer than %d", work.Generation, staleWorkGeneration)
+		}
+
+		// Prepare the expected Work object status, with all the conditions observed at the outdated generation.
+		//
+		// Note that the observed generation of a manifest condition is that of an applied
+		// resource, not that of the Work object.
+		wantWorkConds := make([]metav1.Condition, len(workConds))
+		for idx := range workConds {
+			wantWorkConds[idx] = workConds[idx]
+			wantWorkConds[idx].ObservedGeneration = staleWorkGeneration
+		}
+		wantWorkStatus := placementv1alpha1.WorkStatus{
+			Conditions: wantWorkConds,
+			Manifests:  manifestStatuses,
+		}
+
+		// Check that the Work object status has stayed the same.
 		if diff := cmp.Diff(
 			work.Status, wantWorkStatus,
 			ignoreFieldConditionLTTMsg,
@@ -529,6 +616,34 @@ func updateLinkedWorkObject(workName, memberClusterReservedNSName, primarySnapsh
 		// The work applier might update the work object (e.g., its status) at the same time; retry on conflicts.
 		return hubClient.Update(ctx, work)
 	}, eventuallyDuration, eventuallyInterval).Should(Succeed(), "Failed to update the Work object")
+}
+
+// updatePrimaryLinkedWorkObject replaces the manifests and the sync strategy of an existing primary work object,
+// links it to the given primary placement resource snapshot, and sets its linked work count; this mimics how
+// KubeFleet refreshes primary work objects during a rollout.
+func updatePrimaryLinkedWorkObject(workName, memberClusterReservedNSName, primarySnapshotName, linkedWorkCount string, syncStrategy *placementv1alpha1.SyncStrategy, rawManifestJSON ...[]byte) {
+	manifests := make([]placementv1alpha1.Manifest, len(rawManifestJSON))
+	for idx := range rawManifestJSON {
+		manifests[idx] = placementv1alpha1.Manifest{
+			RawExtension: runtime.RawExtension{
+				Raw: rawManifestJSON[idx],
+			},
+		}
+	}
+
+	Eventually(func() error {
+		work := &placementv1alpha1.Work{}
+		if err := hubClient.Get(ctx, client.ObjectKey{Name: workName, Namespace: memberClusterReservedNSName}, work); err != nil {
+			return fmt.Errorf("failed to retrieve the Work object: %w", err)
+		}
+
+		work.Annotations[placementv1alpha1.WorkLinkedToPrimaryPlacementResourceSnapshotAnnotationKey] = primarySnapshotName
+		work.Annotations[placementv1alpha1.LinkedWorkCountAnnotationKey] = linkedWorkCount
+		work.Spec.Manifests = manifests
+		work.Spec.SyncStrategy = syncStrategy
+		// The work applier might update the work object (e.g., its status) at the same time; retry on conflicts.
+		return hubClient.Update(ctx, work)
+	}, eventuallyDuration, eventuallyInterval).Should(Succeed(), "Failed to update the primary Work object")
 }
 
 func appliedWorkBeingDeletedInForegroundActual(memberClient client.Client, workName string) func() error {
@@ -697,5 +812,222 @@ func workRemovedActual(workNS, workName string) func() error {
 			return fmt.Errorf("failed to retrieve the Work object: %w", err)
 		}
 		return fmt.Errorf("work object still exists (finalizers: %v)", work.Finalizers)
+	}
+}
+
+func regularHPARemovedActual(memberClient client.Client, nsName, hpaName string) func() error {
+	return func() error {
+		// Delete the HorizontalPodAutoscaler object manually, as there are no real built-in controllers in this
+		// test environment to handle garbage collection.
+		hpa := &autoscalingv2.HorizontalPodAutoscaler{
+			ObjectMeta: metav1.ObjectMeta{
+				Namespace: nsName,
+				Name:      hpaName,
+			},
+		}
+		if err := memberClient.Delete(ctx, hpa); err != nil && !apierrors.IsNotFound(err) {
+			return fmt.Errorf("failed to delete the HorizontalPodAutoscaler object: %w", err)
+		}
+
+		if err := memberClient.Get(ctx, client.ObjectKey{Namespace: nsName, Name: hpaName}, hpa); !apierrors.IsNotFound(err) {
+			return fmt.Errorf("horizontalPodAutoscaler object still exists or an unexpected error occurred: %w", err)
+		}
+		return nil
+	}
+}
+
+// configMapStableActual checks that the ConfigMap object exists with the given UID, i.e., it has never been deleted
+// or re-created, and that it has the given data. If wantData is nil, the data is not checked.
+func configMapStableActual(memberClient client.Client, nsName, configMapName string, wantUID types.UID, wantData map[string]string) func() error {
+	return func() error {
+		gotConfigMap := &corev1.ConfigMap{}
+		if err := memberClient.Get(ctx, client.ObjectKey{Namespace: nsName, Name: configMapName}, gotConfigMap); err != nil {
+			return fmt.Errorf("failed to retrieve the ConfigMap object: %w", err)
+		}
+
+		if gotConfigMap.UID != wantUID {
+			return fmt.Errorf("configMap UID = %s, want %s (the object has been re-created)", gotConfigMap.UID, wantUID)
+		}
+		if wantData == nil {
+			return nil
+		}
+		if diff := cmp.Diff(gotConfigMap.Data, wantData); diff != "" {
+			return fmt.Errorf("configMap data diff (-got +want):\n%s", diff)
+		}
+		return nil
+	}
+}
+
+// configMapsWithPrefixAbsentActual checks that no ConfigMap object in the given namespace has a name that starts
+// with the given prefix.
+func configMapsWithPrefixAbsentActual(memberClient client.Client, nsName, prefix string) func() error {
+	return func() error {
+		configMapList := &corev1.ConfigMapList{}
+		if err := memberClient.List(ctx, configMapList, client.InNamespace(nsName)); err != nil {
+			return fmt.Errorf("failed to list ConfigMap objects: %w", err)
+		}
+
+		for idx := range configMapList.Items {
+			if strings.HasPrefix(configMapList.Items[idx].Name, prefix) {
+				return fmt.Errorf("found a ConfigMap object (%s) with the name prefix %s", configMapList.Items[idx].Name, prefix)
+			}
+		}
+		return nil
+	}
+}
+
+// namespaceAbsentActual checks that the namespace does not exist in the member cluster.
+func namespaceAbsentActual(memberClient client.Client, nsName string) func() error {
+	return func() error {
+		gotNS := &corev1.Namespace{}
+		if err := memberClient.Get(ctx, client.ObjectKey{Name: nsName}, gotNS); !apierrors.IsNotFound(err) {
+			return fmt.Errorf("namespace object still exists or an unexpected error occurred: %w", err)
+		}
+		return nil
+	}
+}
+
+// namespaceNotManagedActual checks that the namespace exists in the member cluster, but has not been adopted by
+// KubeFleet, i.e., it has no owner references and no KubeFleet annotations.
+func namespaceNotManagedActual(memberClient client.Client, nsName string) func() error {
+	return func() error {
+		gotNS := &corev1.Namespace{}
+		if err := memberClient.Get(ctx, client.ObjectKey{Name: nsName}, gotNS); err != nil {
+			return fmt.Errorf("failed to retrieve the namespace object: %w", err)
+		}
+
+		if len(gotNS.OwnerReferences) > 0 {
+			return fmt.Errorf("namespace has owner references: %v", gotNS.OwnerReferences)
+		}
+		for key := range gotNS.Annotations {
+			if strings.Contains(key, placementv1alpha1.KubeFleetPrefix) {
+				return fmt.Errorf("namespace has a KubeFleet annotation: %s", key)
+			}
+		}
+		return nil
+	}
+}
+
+// findManifestStatusByOrdinal returns the status of the manifest with the given ordinal in a Work object.
+func findManifestStatusByOrdinal(work *placementv1alpha1.Work, ordinal int) *placementv1alpha1.PerManifestStatus {
+	for idx := range work.Status.Manifests {
+		if work.Status.Manifests[idx].Identifier.Ordinal == ordinal {
+			return &work.Status.Manifests[idx]
+		}
+	}
+	return nil
+}
+
+// manifestAppliedCondMessageActual checks that the Applied condition of the manifest with the given ordinal in a
+// Work object has a message that contains the given substring.
+func manifestAppliedCondMessageActual(workNS, workName string, ordinal int, wantSubstr string) func() error {
+	return func() error {
+		work := &placementv1alpha1.Work{}
+		if err := hubClient.Get(ctx, client.ObjectKey{Name: workName, Namespace: workNS}, work); err != nil {
+			return fmt.Errorf("failed to retrieve the Work object: %w", err)
+		}
+
+		manifestStatus := findManifestStatusByOrdinal(work, ordinal)
+		if manifestStatus == nil {
+			return fmt.Errorf("no status found for the manifest with ordinal %d", ordinal)
+		}
+		appliedCond := meta.FindStatusCondition(manifestStatus.Conditions, placementv1alpha1.ManifestCondTypeApplied)
+		if appliedCond == nil {
+			return fmt.Errorf("no Applied condition found for the manifest with ordinal %d", ordinal)
+		}
+		if !strings.Contains(appliedCond.Message, wantSubstr) {
+			return fmt.Errorf("applied condition message = %q, want a message that contains %q", appliedCond.Message, wantSubstr)
+		}
+		return nil
+	}
+}
+
+// retrieveManifestCondLTT returns the last transition time of a condition of the manifest with the given ordinal
+// in a Work object.
+func retrieveManifestCondLTT(workNS, workName string, ordinal int, condType string) metav1.Time {
+	work := &placementv1alpha1.Work{}
+	Expect(hubClient.Get(ctx, client.ObjectKey{Name: workName, Namespace: workNS}, work)).To(Succeed(), "Failed to retrieve the Work object")
+
+	manifestStatus := findManifestStatusByOrdinal(work, ordinal)
+	Expect(manifestStatus).NotTo(BeNil(), "No status found for the manifest with ordinal %d", ordinal)
+	cond := meta.FindStatusCondition(manifestStatus.Conditions, condType)
+	Expect(cond).NotTo(BeNil(), "No %s condition found for the manifest with ordinal %d", condType, ordinal)
+	return cond.LastTransitionTime
+}
+
+// manifestCondLTTActual checks that a condition of the manifest with the given ordinal in a Work object has the
+// given last transition time, i.e., the condition has not transitioned since the time was captured.
+func manifestCondLTTActual(workNS, workName string, ordinal int, condType string, wantLTT metav1.Time) func() error {
+	return func() error {
+		work := &placementv1alpha1.Work{}
+		if err := hubClient.Get(ctx, client.ObjectKey{Name: workName, Namespace: workNS}, work); err != nil {
+			return fmt.Errorf("failed to retrieve the Work object: %w", err)
+		}
+
+		manifestStatus := findManifestStatusByOrdinal(work, ordinal)
+		if manifestStatus == nil {
+			return fmt.Errorf("no status found for the manifest with ordinal %d", ordinal)
+		}
+		cond := meta.FindStatusCondition(manifestStatus.Conditions, condType)
+		if cond == nil {
+			return fmt.Errorf("no %s condition found for the manifest with ordinal %d", condType, ordinal)
+		}
+		if !cond.LastTransitionTime.Equal(&wantLTT) {
+			return fmt.Errorf("%s condition last transition time = %v, want %v", condType, cond.LastTransitionTime, wantLTT)
+		}
+		return nil
+	}
+}
+
+// nudgeWork bumps the generation of a Work object by setting a random value on a test-only label of its first
+// manifest. For a primary Work object, this triggers an immediate reconciliation.
+func nudgeWork(workName, memberClusterReservedNSName string) {
+	Eventually(func() error {
+		work := &placementv1alpha1.Work{}
+		if err := hubClient.Get(ctx, client.ObjectKey{Name: workName, Namespace: memberClusterReservedNSName}, work); err != nil {
+			return fmt.Errorf("failed to retrieve the Work object: %w", err)
+		}
+		if len(work.Spec.Manifests) == 0 {
+			return fmt.Errorf("the Work object has no manifest to nudge")
+		}
+
+		manifestObj := &unstructured.Unstructured{}
+		if err := manifestObj.UnmarshalJSON(work.Spec.Manifests[0].Raw); err != nil {
+			return fmt.Errorf("failed to unmarshal the first manifest: %w", err)
+		}
+		labels := manifestObj.GetLabels()
+		if labels == nil {
+			labels = map[string]string{}
+		}
+		labels[nudgeLabelKey] = utils.RandStr()
+		manifestObj.SetLabels(labels)
+		nudgedManifestJSON, err := manifestObj.MarshalJSON()
+		if err != nil {
+			return fmt.Errorf("failed to marshal the first manifest: %w", err)
+		}
+
+		work.Spec.Manifests[0].Raw = nudgedManifestJSON
+		// The work applier might update the work object (e.g., its status) at the same time; retry on conflicts.
+		return hubClient.Update(ctx, work)
+	}, eventuallyDuration, eventuallyInterval).Should(Succeed(), "Failed to nudge the Work object")
+}
+
+// workProcessedAtLatestGenerationActual checks that the work applier has processed the latest generation of a
+// Work object, i.e., the Applied condition of the Work object reports the current generation.
+func workProcessedAtLatestGenerationActual(workNS, workName string) func() error {
+	return func() error {
+		work := &placementv1alpha1.Work{}
+		if err := hubClient.Get(ctx, client.ObjectKey{Name: workName, Namespace: workNS}, work); err != nil {
+			return fmt.Errorf("failed to retrieve the Work object: %w", err)
+		}
+
+		appliedCond := meta.FindStatusCondition(work.Status.Conditions, placementv1alpha1.WorkCondTypeApplied)
+		if appliedCond == nil {
+			return fmt.Errorf("no Applied condition found on the Work object")
+		}
+		if appliedCond.ObservedGeneration != work.Generation {
+			return fmt.Errorf("applied condition observed generation = %d, want %d", appliedCond.ObservedGeneration, work.Generation)
+		}
+		return nil
 	}
 }
