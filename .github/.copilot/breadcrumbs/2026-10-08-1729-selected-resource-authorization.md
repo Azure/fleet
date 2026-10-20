@@ -9,13 +9,13 @@
 2. Build SubjectAccessReview requests from the admission request's complete user information: username, UID, groups, and extras.
 3. Fail closed when resource resolution or authorization cannot be completed.
 4. Require `get` for resources selected by name.
-5. For label and all-of-kind selectors, require `list` in the relevant scope and `get` for every currently selected object.
-6. For namespace selection, authorize the Namespace selection and, for NamespaceWithResources, require `list` per selected namespaced resource type and `get` for every currently selected resource.
+5. For CRP/RP label and all-of-kind selectors, require `list` in the relevant scope, without individual `get` checks for enumerated objects.
+6. For namespace selection, authorize the Namespace selection using `get` by name or `list` for label/all-of-kind selection. For NamespaceWithResources, require `list` per eligible expanded namespaced resource type, without individual `get` checks for their objects.
 7. Ignore resources that begin matching dynamic selectors after admission in this implementation.
 8. Require `patch` for JSONPatch overrides and `delete` for Delete overrides.
 9. Require Kubernetes RBAC privilege-protection checks when overrides affect Role, ClusterRole, RoleBinding, or ClusterRoleBinding resources.
-10. Reauthorize the complete selected set on every update, including updates that do not change selectors.
-11. Allow finalizer-removal updates on objects already being deleted without selected-resource reauthorization.
+10. For CRP/RP, authorize creates and reauthorize the complete selected set on spec-changing updates, even if selectors are unchanged. Overrides retain the original every-update reauthorization requirement.
+11. For CRP/RP, skip selected-resource authorization on updates with semantically unchanged specs, including label, annotation, and finalizer changes regardless of deletion state. Preserve existing validation behavior. For overrides, retain the deletion/finalizer cleanup exception.
 12. Enable enforcement by default and provide a temporary feature flag to disable it.
 
 ## Plan
@@ -28,14 +28,21 @@
 - [x] Add unit tests for allowed, denied, no-opinion, API-error, timeout, identity-copying, and duplicate-review cases.
 - **Success criterion:** Authorization behavior is independently testable and every unresolved or unsuccessful review fails closed.
 
-### Phase 2: Placement authorization
+### Phase 2a: ResourcePlacement authorization (current slice)
 
-- [ ] Resolve the current selected set using live hub API reads rather than stale informer data.
-- [ ] Authorize CRP and RP name, label, all-of-kind, NamespaceOnly, NamespaceWithResourceSelectors, and NamespaceWithResources selection modes.
-- [ ] Require selector-level `list` permission where Fleet enumerates resources and object-level `get` permission for every currently selected object.
-- [ ] Preserve the existing deletion/finalizer cleanup escape hatch.
-- [ ] Add CRP and RP webhook tests covering scope, selector modes, overlapping selectors, update reauthorization, denied access, and API failures.
-- **Success criterion:** A placement is admitted only when the requester can list each expanded scope and get every currently selected source object.
+- [x] Build RP permission checks from selectors and REST mappings without fetching source objects.
+- [x] Require `get` for named selections and `list` for label/all-of-kind selections in the RP namespace.
+- [x] Authorize creates and spec-changing updates; preserve existing validation and deletion cleanup behavior.
+- [x] Add RP constructor, scope, selector, overlapping-review, identity, denial, and failure tests.
+- **Success criterion:** RP authorization is independently testable, fails closed, and does not require live object or informer dependencies.
+
+### Phase 2b: ClusterResourcePlacement authorization (follow-up slice)
+
+- [ ] Add direct cluster-scoped resource authorization.
+- [ ] Resolve selected Namespaces using live hub API reads.
+- [ ] Add NamespaceOnly, NamespaceWithResourceSelectors, and NamespaceWithResources authorization.
+- [ ] Add CRP webhook tests for namespace modes, scope, overlapping selectors, and failure cases.
+- **Success criterion:** CRP authorization follows the agreed get/list policy without expanding the RP-only review scope.
 
 ### Phase 3: Override authorization
 
@@ -57,18 +64,19 @@
 
 - [ ] Run formatting and focused authorization, webhook, and option tests.
 - [ ] Run the smallest relevant integration tests using real Kubernetes RBAC authorization.
+- [ ] Add focused RP webhook authorization wiring and update-gating coverage.
 - [ ] Run `make reviewable` before submission.
 - [ ] Update this breadcrumb with implementation details, changed files, and validation results.
 - **Success criterion:** Focused and repository-required checks pass with no authorization bypass or unrelated behavior regression.
 
 ## Decisions
 
-1. Cover all four v1beta1 APIs in the first implementation: CRP, RP, CRO, and RO.
+1. Cover all four v1beta1 APIs in separate reviewable slices: RP first, then CRP, CRO, and RO.
 2. Dynamic resources that match after admission are an acknowledged limitation and are not blocked because dynamic selection is a core Fleet feature.
-3. Label and all-of-kind selection requires `list`, followed by `get` checks for the currently resolved objects.
-4. NamespaceWithResources checks the currently selected resources by requiring `list` for each relevant namespaced GVR and `get` for each selected object.
+3. Placement label and all-of-kind selection requires `list` only. Named selection requires `get` for the named object.
+4. NamespaceWithResources authorizes the Namespace selection and requires `list` for each relevant namespaced GVR, without individual `get` checks for enumerated objects.
 5. Delete overrides require `delete`; JSONPatch overrides require `patch`.
-6. Every update reauthorizes the selected set using the updating requester's identity.
+6. CRP/RP creates and spec-changing updates authorize the complete selected set using the current requester's identity. Unchanged-spec updates skip selected-resource authorization but still undergo existing validation. Override updates retain every-update reauthorization.
 7. Finalizer removal during deletion bypasses selected-resource authorization.
 8. Enforcement is enabled by default behind a temporary disable flag.
 
@@ -80,7 +88,53 @@
 
 ## Status
 
-Plan approved by the user. Phase 1 is complete; Phases 2-5 have not started.
+Plan approved by the user. Phase 1 and the Phase 2a RP-only slice are complete on
+`feat/selected-resource-authorization-phase-2`. Phase 2b and Phases 3-5 remain.
+On October 19, the user requested a smaller review scope. The full implementation
+is preserved in pushed commit `e640d9b2`; the follow-up slice retains RP only.
+
+## Phase 2a implementation details
+
+- Added `ResourcePlacementAuthorizer` and `NewResourcePlacementAuthorizer` in
+  `pkg/utils/authorization/placement.go`, with private mapper, reviewer, and
+  eligibility-checker dependencies. No reader, informer, or Namespace resolution
+  is needed. An explicit RP/CRP type switch routes RP to its typed resolver;
+  the CRP branch returns a clear not-implemented error for the follow-up slice.
+- Build get checks for named selectors and list checks for label/all-of-kind
+  selectors in the RP namespace. No source objects are fetched. Reuse the Phase 1
+  reviewer's identity preservation, deduplication, and bounded concurrency.
+- Use explicit Allowed, Denied, and Indeterminate decisions. Denials take
+  precedence over additional review errors; malformed results fail closed.
+- Add an optional RP webhook authorizer through shared placement validation.
+  Authorize creates and spec-changing updates only. Unchanged-spec updates still
+  run existing validation, and the old invalid-placement deletion exception is
+  unchanged. Authorizer unit tests cover scope, selectors, denials, and SAR errors;
+  shared validator tests cover admission decision mapping. The dedicated RP
+  webhook authorization test file was removed at the user's request; its wiring
+  and update-gating coverage is deferred.
+- Defer CRP authorization and its tests. Its handler passes nil to the shared
+  authorization parameter, preserving existing behavior. The controller's resource
+  selector resolver is unchanged.
+- Production registration still does not inject the RP authorizer. Default-on
+  enforcement, rollout wiring, and SAR RBAC remain Phase 4.
+
+## Phase 2a validation
+
+- Focused race tests passed for `pkg/utils/authorization`, `pkg/utils/validator`,
+  `pkg/webhook/clusterresourceplacement`, and `pkg/webhook/resourceplacement`.
+- Existing CRP webhook tests passed unchanged.
+- `go vet` passed for the authorization, validator, and placement webhook packages.
+- `go build ./cmd/hubagent/...` passed.
+- Before committing, `make lint GOLANGCI_LINT=/home/weiweng/go/bin/golangci-lint`
+  passed repository-wide with the installed repository-version linter (v2.13.2).
+- Repository-configured lint passed with `--new-from-rev=main`,
+  `--max-issues-per-linter=0`, and `--max-same-issues=0` for the affected packages.
+  Unfiltered package lint also reports pre-existing issues in the CRP mutating
+  webhook tests; these were not changed.
+- `git diff --check` passed. Go commands use
+  `MS_GOTOOLCHAIN_ALLOW_NON_LOCAL=1 GOTOOLCHAIN=auto`, as in Phase 1.
+- Full `make reviewable` and real Kubernetes RBAC integration remain Phase 5
+  verification, before PR submission.
 
 ## Phase 1 implementation details
 

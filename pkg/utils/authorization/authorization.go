@@ -42,12 +42,24 @@ type SubjectAccessReviewClient interface {
 	Create(context.Context, ctrlclient.Object, ...ctrlclient.CreateOption) error
 }
 
+// Decision identifies the outcome of an authorization batch.
+type Decision string
+
+const (
+	// DecisionAllowed means all required permissions were granted.
+	DecisionAllowed Decision = "Allowed"
+	// DecisionDenied means at least one required permission was not granted.
+	DecisionDenied Decision = "Denied"
+	// DecisionIndeterminate means authorization could not be completed.
+	DecisionIndeterminate Decision = "Indeterminate"
+)
+
 // Result reports the aggregate outcome of an authorization batch.
-// When Reason and Err are both set, the denial is conclusive and Err reports additional review failures.
+// A denied decision may include Err for additional review failures without changing the decision.
 type Result struct {
-	Allowed bool
-	Reason  string
-	Err     error
+	Decision     Decision
+	DenialReason string
+	Err          error
 }
 
 // Reviewer resolves resource kinds and reviews selected-resource access.
@@ -99,7 +111,7 @@ func (r *Reviewer) Authorize(ctx context.Context, userInfo authenticationv1.User
 	for i := range attributes {
 		key, err := reviewKey(attributes[i])
 		if err != nil {
-			return Result{Err: fmt.Errorf("failed to build authorization review key: %w", err)}
+			return Result{Decision: DecisionIndeterminate, Err: fmt.Errorf("failed to build authorization review key: %w", err)}
 		}
 		if _, ok := seen[key]; ok {
 			continue
@@ -116,7 +128,8 @@ func (r *Reviewer) Authorize(ctx context.Context, userInfo authenticationv1.User
 		if err := ctx.Err(); err != nil {
 			for j := i; j < len(uniqueAttributes); j++ {
 				results[j] = Result{
-					Err: fmt.Errorf("authorization review for %s was not submitted: %w", describeAttributes(uniqueAttributes[j]), err),
+					Decision: DecisionIndeterminate,
+					Err:      fmt.Errorf("authorization review for %s was not submitted: %w", describeAttributes(uniqueAttributes[j]), err),
 				}
 			}
 			break
@@ -132,26 +145,37 @@ func (r *Reviewer) Authorize(ctx context.Context, userInfo authenticationv1.User
 	reasons := make([]string, 0, len(results))
 	errs := make([]error, 0, len(results))
 	for i := range results {
-		if results[i].Allowed {
+		switch results[i].Decision {
+		case DecisionAllowed:
 			continue
-		}
-		if results[i].Reason != "" {
-			reasons = append(reasons, results[i].Reason)
+		case DecisionDenied:
+			if results[i].DenialReason != "" {
+				reasons = append(reasons, results[i].DenialReason)
+			} else {
+				errs = append(errs, fmt.Errorf("authorization review for %s returned a denial without a reason", describeAttributes(uniqueAttributes[i])))
+			}
+		case DecisionIndeterminate:
+			if results[i].Err == nil {
+				errs = append(errs, fmt.Errorf("authorization review for %s returned an indeterminate decision without an error", describeAttributes(uniqueAttributes[i])))
+			}
+		default:
+			errs = append(errs, fmt.Errorf("authorization review for %s returned an unknown decision %q", describeAttributes(uniqueAttributes[i]), results[i].Decision))
 		}
 		if results[i].Err != nil {
 			errs = append(errs, results[i].Err)
 		}
-		if results[i].Reason == "" && results[i].Err == nil {
-			errs = append(errs, fmt.Errorf("authorization review for %s returned no decision", describeAttributes(uniqueAttributes[i])))
-		}
 	}
-	if len(reasons) != 0 || len(errs) != 0 {
+	if len(reasons) != 0 {
 		return Result{
-			Reason: strings.Join(reasons, "; "),
-			Err:    errors.Join(errs...),
+			Decision:     DecisionDenied,
+			DenialReason: strings.Join(reasons, "; "),
+			Err:          errors.Join(errs...),
 		}
 	}
-	return Result{Allowed: true}
+	if len(errs) != 0 {
+		return Result{Decision: DecisionIndeterminate, Err: errors.Join(errs...)}
+	}
+	return Result{Decision: DecisionAllowed}
 }
 
 func (r *Reviewer) review(ctx context.Context, userInfo authenticationv1.UserInfo, attributes authorizationv1.ResourceAttributes) Result {
@@ -165,25 +189,25 @@ func (r *Reviewer) review(ctx context.Context, userInfo authenticationv1.UserInf
 		},
 	}
 	if err := r.client.Create(ctx, review); err != nil {
-		return Result{Err: fmt.Errorf("failed to create SubjectAccessReview for %s: %w", describeAttributes(attributes), err)}
+		return Result{Decision: DecisionIndeterminate, Err: fmt.Errorf("failed to create SubjectAccessReview for %s: %w", describeAttributes(attributes), err)}
 	}
 	if review.Status.Allowed && review.Status.Denied {
-		return Result{Err: fmt.Errorf("SubjectAccessReview for %s returned conflicting allowed and denied decisions", describeAttributes(attributes))}
+		return Result{Decision: DecisionIndeterminate, Err: fmt.Errorf("SubjectAccessReview for %s returned conflicting allowed and denied decisions", describeAttributes(attributes))}
 	}
 	if review.Status.Allowed {
-		return Result{Allowed: true}
+		return Result{Decision: DecisionAllowed}
 	}
 	if review.Status.EvaluationError != "" {
-		return Result{Err: fmt.Errorf("SubjectAccessReview for %s reported an evaluation error: %s", describeAttributes(attributes), review.Status.EvaluationError)}
+		return Result{Decision: DecisionIndeterminate, Err: fmt.Errorf("SubjectAccessReview for %s reported an evaluation error: %s", describeAttributes(attributes), review.Status.EvaluationError)}
 	}
 	decision := "no opinion"
 	if review.Status.Denied {
 		decision = "denied"
 	}
 	if review.Status.Reason == "" {
-		return Result{Reason: fmt.Sprintf("SubjectAccessReview %s access to %s", decision, describeAttributes(attributes))}
+		return Result{Decision: DecisionDenied, DenialReason: fmt.Sprintf("SubjectAccessReview %s access to %s", decision, describeAttributes(attributes))}
 	}
-	return Result{Reason: fmt.Sprintf("SubjectAccessReview %s access to %s: %s", decision, describeAttributes(attributes), review.Status.Reason)}
+	return Result{Decision: DecisionDenied, DenialReason: fmt.Sprintf("SubjectAccessReview %s access to %s: %s", decision, describeAttributes(attributes), review.Status.Reason)}
 }
 
 func reviewKey(attributes authorizationv1.ResourceAttributes) (string, error) {

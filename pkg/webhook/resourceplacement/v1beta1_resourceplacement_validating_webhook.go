@@ -36,13 +36,14 @@ var (
 )
 
 type resourcePlacementValidator struct {
-	decoder webhook.AdmissionDecoder
+	decoder    webhook.AdmissionDecoder
+	authorizer validator.PlacementAuthorizer
 }
 
 // Add registers the webhook for K8s built-in object types.
 func Add(mgr manager.Manager) error {
 	hookServer := mgr.GetWebhookServer()
-	hookServer.Register(ValidationPath, &webhook.Admission{Handler: &resourcePlacementValidator{admission.NewDecoder(mgr.GetScheme())}})
+	hookServer.Register(ValidationPath, &webhook.Admission{Handler: &resourcePlacementValidator{decoder: admission.NewDecoder(mgr.GetScheme())}})
 	return nil
 }
 
@@ -69,5 +70,6 @@ func (v *resourcePlacementValidator) Handle(ctx context.Context, req admission.R
 		func(obj placementv1beta1.PlacementObj) error {
 			return validator.ValidateResourcePlacement(obj.(*placementv1beta1.ResourcePlacement))
 		},
+		v.authorizer,
 	)
 }

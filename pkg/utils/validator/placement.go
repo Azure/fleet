@@ -26,7 +26,9 @@ import (
 	"strings"
 
 	admissionv1 "k8s.io/api/admission/v1"
+	authenticationv1 "k8s.io/api/authentication/v1"
 	corev1 "k8s.io/api/core/v1"
+	apiequality "k8s.io/apimachinery/pkg/api/equality"
 	"k8s.io/apimachinery/pkg/api/meta"
 	"k8s.io/apimachinery/pkg/api/resource"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -39,11 +41,12 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/webhook"
 	"sigs.k8s.io/controller-runtime/pkg/webhook/admission"
 
-	placementv1beta1 "go.goms.io/fleet/apis/placement/v1beta1"
-	"go.goms.io/fleet/pkg/propertyprovider"
-	"go.goms.io/fleet/pkg/utils"
-	"go.goms.io/fleet/pkg/utils/controller"
-	"go.goms.io/fleet/pkg/utils/informer"
+	placementv1beta1 "github.com/kubefleet-dev/kubefleet/apis/placement/v1beta1"
+	"github.com/kubefleet-dev/kubefleet/pkg/propertyprovider"
+	"github.com/kubefleet-dev/kubefleet/pkg/utils"
+	"github.com/kubefleet-dev/kubefleet/pkg/utils/authorization"
+	"github.com/kubefleet-dev/kubefleet/pkg/utils/controller"
+	"github.com/kubefleet-dev/kubefleet/pkg/utils/informer"
 )
 
 var ResourceInformer informer.Manager
@@ -758,8 +761,15 @@ func supportedResourceCapacityTypes() []string {
 	return capacityTypes
 }
 
+// PlacementAuthorizer reviews access to the current resources selected by a placement.
+type PlacementAuthorizer interface {
+	Authorize(context.Context, authenticationv1.UserInfo, placementv1beta1.PlacementObj) authorization.Result
+}
+
 // HandlePlacementValidation provides consolidated webhook validation logic for placement objects.
 // This function accepts higher-order functions for type-specific operations.
+// A nil authorizer leaves selected-resource authorization disabled.
+// Updates with unchanged specs skip selected-resource authorization, but still undergo validation.
 func HandlePlacementValidation(
 	ctx context.Context,
 	req admission.Request,
@@ -768,6 +778,7 @@ func HandlePlacementValidation(
 	decodeFunc func(admission.Request, webhook.AdmissionDecoder) (placementv1beta1.PlacementObj, error),
 	decodeOldFunc func(admission.Request, webhook.AdmissionDecoder) (placementv1beta1.PlacementObj, error),
 	validateFunc func(placementv1beta1.PlacementObj) error,
+	authorizer PlacementAuthorizer,
 ) admission.Response {
 	if req.Operation == admissionv1.Create || req.Operation == admissionv1.Update {
 		klog.V(2).InfoS("handling placement", "resourceType", resourceType, "operation", req.Operation, "namespacedName", types.NamespacedName{Name: req.Name, Namespace: req.Namespace})
@@ -778,12 +789,12 @@ func HandlePlacementValidation(
 			return admission.Errored(http.StatusBadRequest, err)
 		}
 
+		specUnchanged := false
 		if req.Operation == admissionv1.Update {
 			oldPlacement, err := decodeOldFunc(req, decoder)
 			if err != nil {
 				return admission.Errored(http.StatusBadRequest, err)
 			}
-
 			// Special case: allow updates to old placement objects with invalid fields so that we can
 			// update the placement to remove finalizer then delete it.
 			if err := validateFunc(oldPlacement); err != nil {
@@ -792,6 +803,8 @@ func HandlePlacementValidation(
 				}
 				return admission.Denied(fmt.Sprintf(DenyUpdateOldInvalidFmt, resourceType, err))
 			}
+
+			specUnchanged = apiequality.Semantic.DeepEqual(oldPlacement.GetPlacementSpec(), placement.GetPlacementSpec())
 
 			// Handle update case where placement type should be immutable.
 			if IsPlacementPolicyTypeUpdated(oldPlacement.GetPlacementSpec().Policy, placement.GetPlacementSpec().Policy) {
@@ -807,6 +820,35 @@ func HandlePlacementValidation(
 		if err := validateFunc(placement); err != nil {
 			klog.V(2).InfoS("v1beta1 placement has invalid fields, request is denied", "resourceType", resourceType, "operation", req.Operation, "namespacedName", types.NamespacedName{Name: placement.GetName(), Namespace: req.Namespace})
 			return admission.Denied(fmt.Sprintf(DenyCreateUpdateInvalidFmt, resourceType, err))
+		}
+		if authorizer != nil && !specUnchanged {
+			result := authorizer.Authorize(ctx, req.UserInfo, placement)
+			if result.Err != nil {
+				klog.ErrorS(result.Err, "failed to authorize selected placement resources", "resourceType", resourceType, "userName", req.UserInfo.Username)
+			}
+			var invalidResultErr error
+			switch result.Decision {
+			case authorization.DecisionAllowed:
+				if result.Err != nil || result.DenialReason != "" {
+					invalidResultErr = fmt.Errorf("selected-resource authorization returned an allowed decision with denial or error details")
+				}
+			case authorization.DecisionDenied:
+				if result.DenialReason != "" {
+					return admission.Denied(result.DenialReason)
+				}
+				invalidResultErr = fmt.Errorf("selected-resource authorization returned a denial without a reason")
+			case authorization.DecisionIndeterminate:
+				if result.Err != nil {
+					return admission.Errored(http.StatusInternalServerError, result.Err)
+				}
+				invalidResultErr = fmt.Errorf("selected-resource authorization returned an indeterminate decision without an error")
+			default:
+				invalidResultErr = fmt.Errorf("selected-resource authorization returned an unknown decision %q", result.Decision)
+			}
+			if invalidResultErr != nil {
+				klog.ErrorS(invalidResultErr, "failed to authorize selected placement resources", "resourceType", resourceType)
+				return admission.Errored(http.StatusInternalServerError, invalidResultErr)
+			}
 		}
 	}
 

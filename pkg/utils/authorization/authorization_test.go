@@ -125,7 +125,7 @@ func TestAuthorizePreservesUserInfo(t *testing.T) {
 	reviewer := newTestReviewer(t, client, DefaultMaxConcurrentReviews)
 
 	result := reviewer.Authorize(context.Background(), userInfo, attributes)
-	if !result.Allowed || result.Err != nil {
+	if result.Decision != DecisionAllowed || result.Err != nil {
 		t.Fatalf("Authorize() = %+v, want allowed result", result)
 	}
 
@@ -195,13 +195,17 @@ func TestAuthorizeReturnsDenialsAndErrors(t *testing.T) {
 				Resource: "namespaces",
 				Name:     "workloads",
 			})
-			if result.Allowed {
-				t.Errorf("Authorize() = %+v, want denied or error result", result)
+			wantDecision := DecisionDenied
+			if tc.wantErr != "" {
+				wantDecision = DecisionIndeterminate
+			}
+			if result.Decision != wantDecision {
+				t.Errorf("Authorize() decision = %q, want %q", result.Decision, wantDecision)
 			}
 			if tc.wantErr != "" && (result.Err == nil || !strings.Contains(result.Err.Error(), tc.wantErr)) {
 				t.Errorf("Authorize() error = %v, want error containing %q", result.Err, tc.wantErr)
 			}
-			if tc.reason != "" && (result.Err != nil || !strings.Contains(result.Reason, tc.reason)) {
+			if tc.reason != "" && (result.Err != nil || !strings.Contains(result.DenialReason, tc.reason)) {
 				t.Errorf("Authorize() = %+v, want denial reason containing %q", result, tc.reason)
 			}
 		})
@@ -225,7 +229,7 @@ func TestAuthorizeAllowsConclusiveDecisionWithEvaluationError(t *testing.T) {
 		Resource: "namespaces",
 		Name:     "workloads",
 	})
-	if !result.Allowed || result.Err != nil {
+	if result.Decision != DecisionAllowed || result.Err != nil {
 		t.Errorf("Authorize() = %+v, want allowed result", result)
 	}
 }
@@ -266,7 +270,7 @@ func TestAuthorizeRecordsUnsubmittedReviews(t *testing.T) {
 		authorizationv1.ResourceAttributes{Verb: "get", Resource: "configmaps", Name: "second"},
 	)
 
-	if result.Allowed {
+	if result.Decision != DecisionIndeterminate {
 		t.Errorf("Authorize() = %+v, want error result", result)
 	}
 	if !errors.Is(result.Err, context.Canceled) {
@@ -298,7 +302,7 @@ func TestAuthorizeReturnsDenialWhenConcurrencyIsLimited(t *testing.T) {
 		authorizationv1.ResourceAttributes{Verb: "get", Resource: "configmaps", Name: "first"},
 		authorizationv1.ResourceAttributes{Verb: "get", Resource: "configmaps", Name: "second"},
 	)
-	if result.Allowed || result.Err != nil || !strings.Contains(result.Reason, "RBAC denied the request") {
+	if result.Decision != DecisionDenied || result.Err != nil || !strings.Contains(result.DenialReason, "RBAC denied the request") {
 		t.Errorf("Authorize() = %+v, want original authorization denial", result)
 	}
 }
@@ -333,12 +337,12 @@ func TestAuthorizeCollectsReviewResults(t *testing.T) {
 		authorizationv1.ResourceAttributes{Verb: "get", Resource: "configmaps", Name: "third"},
 	)
 
-	if result.Allowed {
+	if result.Decision != DecisionDenied {
 		t.Errorf("Authorize() = %+v, want denied result", result)
 	}
 	wantReason := `SubjectAccessReview denied access to get configmaps "first": first denied; SubjectAccessReview denied access to get configmaps "third": third denied`
-	if result.Reason != wantReason {
-		t.Errorf("Authorize() reason = %q, want %q", result.Reason, wantReason)
+	if result.DenialReason != wantReason {
+		t.Errorf("Authorize() denial reason = %q, want %q", result.DenialReason, wantReason)
 	}
 	if !errors.Is(result.Err, apiErr) {
 		t.Errorf("Authorize() error = %v, want joined error containing %v", result.Err, apiErr)
@@ -361,7 +365,7 @@ func TestAuthorizeDeduplicatesReviews(t *testing.T) {
 	attributes := authorizationv1.ResourceAttributes{Verb: "get", Resource: "namespaces", Name: "workloads"}
 
 	result := reviewer.Authorize(context.Background(), authenticationv1.UserInfo{Username: "requester"}, attributes, attributes)
-	if !result.Allowed || result.Err != nil {
+	if result.Decision != DecisionAllowed || result.Err != nil {
 		t.Fatalf("Authorize() = %+v, want allowed result", result)
 	}
 	if got := calls.Load(); got != 1 {
@@ -383,11 +387,11 @@ func TestAuthorizeDoesNotCacheAcrossCalls(t *testing.T) {
 	attributes := authorizationv1.ResourceAttributes{Verb: "get", Resource: "namespaces", Name: "workloads"}
 
 	result := reviewer.Authorize(context.Background(), userInfo, attributes)
-	if !result.Allowed || result.Err != nil {
+	if result.Decision != DecisionAllowed || result.Err != nil {
 		t.Fatalf("Authorize() = %+v, want allowed result", result)
 	}
 	result = reviewer.Authorize(context.Background(), userInfo, attributes)
-	if !result.Allowed || result.Err != nil {
+	if result.Decision != DecisionAllowed || result.Err != nil {
 		t.Fatalf("Authorize() = %+v, want allowed result", result)
 	}
 	if got := calls.Load(); got != 2 {
@@ -444,7 +448,7 @@ func TestAuthorizeLimitsConcurrency(t *testing.T) {
 	closeRelease.Do(func() { close(release) })
 	select {
 	case got := <-result:
-		if !got.Allowed || got.Err != nil {
+		if got.Decision != DecisionAllowed || got.Err != nil {
 			t.Errorf("Authorize() = %+v, want allowed result", got)
 		}
 	case <-time.After(time.Second):
