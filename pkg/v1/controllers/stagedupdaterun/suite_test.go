@@ -49,6 +49,7 @@ import (
 	rolloutv1alpha1 "github.com/kubefleet-dev/kubefleet/apis/kubefleet.dev/rollout/v1alpha1"
 	"github.com/kubefleet-dev/kubefleet/pkg/utils/informer"
 	"github.com/kubefleet-dev/kubefleet/pkg/utils/parallelizer"
+	"github.com/kubefleet-dev/kubefleet/pkg/utils/resourceeligibility"
 	"github.com/kubefleet-dev/kubefleet/pkg/v1/managers/placementresourcesnapshot"
 	"github.com/kubefleet-dev/kubefleet/pkg/v1/utils/fieldindexers"
 )
@@ -187,6 +188,7 @@ var _ = BeforeSuite(func() {
 		hubMgr,
 		hubDynamicClient,
 		hubDynamicInformerManager,
+		resourceeligibility.Baseline(hubMgr.GetRESTMapper()),
 		hubMgr.GetRESTMapper(),
 		placementResourceSnapshotMuSlotCnt,
 		placementresourcesnapshot.DefaultMaxPerSnapshotResourceDataSizeBytes,
