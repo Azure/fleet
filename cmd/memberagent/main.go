@@ -175,8 +175,8 @@ func main() {
 	}
 	//+kubebuilder:scaffold:builder
 	if opts.CtrlManagerOptions.EnablePprof {
-		memberOpts.PprofBindAddress = fmt.Sprintf(":%d", opts.CtrlManagerOptions.MemberManagerOpts.PprofPort)
-		hubOpts.PprofBindAddress = fmt.Sprintf(":%d", opts.CtrlManagerOptions.HubManagerOpts.PprofPort)
+		memberOpts.PprofBindAddress = fmt.Sprintf("127.0.0.1:%d", opts.CtrlManagerOptions.MemberManagerOpts.PprofPort)
+		hubOpts.PprofBindAddress = fmt.Sprintf("127.0.0.1:%d", opts.CtrlManagerOptions.HubManagerOpts.PprofPort)
 	}
 
 	if err := Start(ctrl.SetupSignalHandler(), hubConfig, memberConfig, hubOpts, memberOpts, *opts); err != nil {

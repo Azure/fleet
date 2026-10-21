@@ -110,7 +110,7 @@ _See [helm install](https://helm.sh/docs/helm/helm_install/) for command documen
 | `enableStagedUpdateRunAPIs` | Enable staged update run APIs | `true` |
 | `enablePlacementPolicyAPIs` | Enable the experimental FEP-0001 placement policy APIs (`placement.kubefleet.dev/v1alpha1`) | `false` |
 | `enableEvictionAPIs` | Enable eviction APIs | `true` |
-| `enablePprof` | Enable pprof endpoint | `true` |
+| `enablePprof` | Enable the pprof endpoint (listens on loopback only; use `kubectl port-forward`) | `false` |
 | `pprofPort` | pprof server port | `6065` |
 | `hubAPIQPS` | QPS for fleet-apiserver (not including events/node heartbeat) | `250` |
 | `hubAPIBurst` | Burst for fleet-apiserver (not including events/node heartbeat) | `1000` |

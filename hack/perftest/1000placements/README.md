@@ -13,6 +13,10 @@ Placements created by this utility program will be each assigned an index X, ran
 and a placement of index X will select all member clusters that are labelled with `placement-group=X%10`.
 * The program requires the following tools (aside from the Go runtime) to be installed:
     * `curl` (for retrieving pprof data)
+* Install the hub agent chart with `--set enablePprof=true` (the `fleetbuilder` scripts do this). The pprof
+  server is off by default and listens on loopback only, so forward it first, for example
+  `kubectl port-forward -n fleet-system deploy/hub-agent 6065`, and set
+  `PPROF_ENDPOINT=http://localhost:6065/debug/pprof/profile`.
 
 > If you have followed the instructions in `../../README.md` and have used the given scripts and utility programs
 > to run the performance/scalability test, all the steps above should have been done for you already.

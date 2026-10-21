@@ -103,7 +103,7 @@ extraVolumes: []
 extraVolumeMounts: []
 extraInitContainers: []
 
-enablePprof: true
+enablePprof: false
 pprofPort: 6065
 hubPprofPort: 6066
 

@@ -158,7 +158,7 @@ func main() {
 		}),
 	}
 	if opts.CtrlMgrOpts.EnablePprof {
-		mgrOpts.PprofBindAddress = fmt.Sprintf(":%d", opts.CtrlMgrOpts.PprofPort)
+		mgrOpts.PprofBindAddress = fmt.Sprintf("127.0.0.1:%d", opts.CtrlMgrOpts.PprofPort)
 	}
 	mgr, err := ctrl.NewManager(defaultCfg, mgrOpts)
 	if err != nil {

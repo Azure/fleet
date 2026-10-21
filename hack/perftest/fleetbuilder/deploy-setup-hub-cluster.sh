@@ -64,6 +64,7 @@ helm upgrade hub-agent charts/hub-agent/ \
     --set namespace=fleet-system \
     --set logVerbosity=2 \
     --set logFileMaxSize=100000 \
+    --set enablePprof=true \
     --set enableWebhook=true \
     --set enableGuardRail=true \
     --set enableWorkload=false \
