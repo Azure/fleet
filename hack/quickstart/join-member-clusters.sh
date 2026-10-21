@@ -8,7 +8,7 @@
 #
 #    You can assume port 6443 unless you have explicitly changed the API server port for your hub cluster. Don't use the mapped Docker port (i.e. 50063)
 #
-# Example usage: ./join-member-clusters.sh 0.2.2 demo-hub-01 https://172.18.0.2:6443 member-cluster-1 [<member-cluster-name-2> ...]
+# Example usage: ./join-member-clusters.sh 0.3.2 demo-hub-01 https://172.18.0.2:6443 member-cluster-1 [<member-cluster-name-2> ...]
 
 usage() {
     cat <<'EOF'
@@ -16,7 +16,7 @@ Usage:
     ./join-member-clusters.sh <kubefleet-version> <hub-cluster-name> <hub-control-plane-url> <member-cluster-name-1> [<member-cluster-name-2> ...]
 
 Example:
-    ./join-member-clusters.sh 0.2.2 demo-hub-01 https://172.18.0.2:6443 member-cluster-1 member-cluster-2
+    ./join-member-clusters.sh 0.3.2 demo-hub-01 https://172.18.0.2:6443 member-cluster-1 member-cluster-2
 
 Requirements:
     - kubectl and helm must be installed
