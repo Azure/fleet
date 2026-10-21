@@ -213,6 +213,25 @@ func resyncPerStageCondWithNoCommit(
 	meta.SetStatusCondition(&stage.Conditions, updatedCond)
 }
 
+func markAllOngoingUpdatesInStageAsCanceled(
+	stagedUpdateRun rolloutv1alpha1.StagedUpdateRunAccessor,
+	stage *rolloutv1alpha1.PerStageStatus,
+) {
+	for i := range stage.Clusters {
+		startedCond := meta.FindStatusCondition(stage.Clusters[i].Conditions, rolloutv1alpha1.StagedUpdateRunPerClusterCondTypeStarted)
+		completedCond := meta.FindStatusCondition(stage.Clusters[i].Conditions, rolloutv1alpha1.StagedUpdateRunPerClusterCondTypeCompleted)
+		if startedCond != nil && completedCond == nil {
+			meta.SetStatusCondition(&stage.Clusters[i].Conditions, metav1.Condition{
+				Type:               rolloutv1alpha1.StagedUpdateRunPerClusterCondTypeCompleted,
+				Status:             metav1.ConditionTrue,
+				Reason:             rolloutv1alpha1.StagedUpdateRunPerClusterCompletedCondReasonCanceled,
+				Message:            "The update on the cluster has been canceled due to stage-level failures",
+				ObservedGeneration: stagedUpdateRun.GetGeneration(),
+			})
+		}
+	}
+}
+
 func resyncPerClusterCondWithNoCommit(
 	stagedUpdateRun rolloutv1alpha1.StagedUpdateRunAccessor,
 	cluster *rolloutv1alpha1.PerClusterStatus,

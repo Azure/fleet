@@ -65,7 +65,7 @@ func (r *Reconciler) initialize(
 	case err == nil:
 		// The staged update strategy has been found; proceed with the initialization.
 	case apierrors.IsNotFound(err):
-		return errors.NewUserError(nil, "staged update run strategy cannot be found", errors.Args(err)...)
+		return errors.NewUserError(nil, "staged update strategy cannot be found", errors.Args(err)...)
 	default:
 		// An API server error other than NotFound error has occurred.
 		return errors.Wraps(err, "failed to find staged update strategy")

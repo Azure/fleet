@@ -136,7 +136,10 @@ func (r *Reconciler) process(ctx context.Context, stagedUpdateRun rolloutv1alpha
 	// Check if the staged update run has been marked as started; if not, add the Started condition.
 	stagedUpdateRunStatus := stagedUpdateRun.GetStatus()
 	startedCond := meta.FindStatusCondition(stagedUpdateRunStatus.Conditions, rolloutv1alpha1.StagedUpdateRunCondTypeStarted)
-	if startedCond == nil || startedCond.ObservedGeneration != stagedUpdateRun.GetGeneration() {
+	if startedCond == nil ||
+		startedCond.Status != metav1.ConditionTrue ||
+		startedCond.Reason != rolloutv1alpha1.StagedUpdateRunStartedCondReasonUpdateStarted ||
+		startedCond.ObservedGeneration != stagedUpdateRun.GetGeneration() {
 		meta.SetStatusCondition(&stagedUpdateRunStatus.Conditions, metav1.Condition{
 			Type:               rolloutv1alpha1.StagedUpdateRunCondTypeStarted,
 			Status:             metav1.ConditionTrue,
@@ -307,59 +310,21 @@ func (r *Reconciler) processOneStage(
 		allowedClusterProcessingConcurrency = maxAllowedClusterProcessingConcurrency
 	}
 
-	var succeededClusterCnt, failedClusterCnt, erredClusterCnt = atomic.Int32{}, atomic.Int32{}, atomic.Int32{}
-
 	// Spin up a child context.
 	childCtx, childCancel := context.WithCancel(ctx)
 	defer childCancel()
 
+	tracker := &perStageClusterProcessingTracker{
+		errs: make([]error, len(stage.Clusters)),
+	}
 	wg := &sync.WaitGroup{}
-	nextClusterIdx := atomic.Int32{}
-	clusterCnt := int32(len(stage.Clusters))
-	errs := make([]error, clusterCnt)
 	for workerIdx := 0; workerIdx < allowedClusterProcessingConcurrency; workerIdx++ {
 		wg.Add(1)
 
 		go func() {
 			defer wg.Done()
-
-			for {
-				clusterIdx := nextClusterIdx.Add(1) - 1
-				if clusterIdx >= clusterCnt {
-					klog.V(2).InfoS("No more clusters to process in the stage", "workerIdx", workerIdx,
-						"stage", stage.StageName, "stagedUpdateRun", klog.KObj(stagedUpdateRun))
-					return
-				}
-				klog.V(2).InfoS("Processing cluster in the stage", "workerIdx", workerIdx,
-					"clusterIdx", clusterIdx, "stage", stage.StageName, "stagedUpdateRun", klog.KObj(stagedUpdateRun))
-
-				cluster := &stage.Clusters[clusterIdx]
-				clusterProcessingRes, err := r.refreshOneCluster(childCtx, cluster, stagedUpdateRun, maxWaitTimePerCluster)
-				if err != nil {
-					klog.ErrorS(err, "Failed to update a cluster in the stage",
-						append(kferrors.Args(err), "stagedUpdateRun", klog.KObj(stagedUpdateRun), "stage", stage.StageName, "cluster", cluster.ClusterName)...)
-					errs[clusterIdx] = err
-				}
-
-				switch clusterProcessingRes {
-				case clusterProcessingResultSucceeded:
-					// The processing has completed successfully; the worker can move on to processing the next cluster.
-					succeededClusterCnt.Add(1)
-				case clusterProcessingResultFailed:
-					failedClusterCnt.Add(1)
-					totalFailures := clusterUpdateTotalFailures.Add(1)
-					if totalFailures > maxAllowedClusterFailures {
-						// The failure threshold has been exceeded. Cancel all ongoing cluster processing attempts.
-						childCancel()
-					}
-					// The worker moves on to processing the next cluster.
-				case clusterProcessingResultErred:
-					// An error occurred while processing the cluster. It does not count as a cluster failure, however,
-					// the worker will stop processing clusters.
-					erredClusterCnt.Add(1)
-					return
-				}
-			}
+			r.doClusterProcessingWork(childCtx, childCancel, workerIdx, stagedUpdateRun, stage, tracker,
+				clusterUpdateTotalFailures, maxAllowedClusterFailures, maxWaitTimePerCluster)
 		}()
 	}
 	wg.Wait()
@@ -368,9 +333,9 @@ func (r *Reconciler) processOneStage(
 	klog.InfoS("Processed all clusters in the stage",
 		"stagedUpdateRun", klog.KObj(stagedUpdateRun),
 		"stage", stage.StageName,
-		"succeededClusterCnt", succeededClusterCnt.Load(),
-		"failedClusterCnt", failedClusterCnt.Load(),
-		"erredClusterCnt", erredClusterCnt.Load(),
+		"succeededClusterCnt", tracker.succeededClusterCnt.Load(),
+		"failedClusterCnt", tracker.failedClusterCnt.Load(),
+		"erredClusterCnt", tracker.erredClusterCnt.Load(),
 	)
 	switch {
 	case clusterUpdateTotalFailures.Load() > maxAllowedClusterFailures:
@@ -380,21 +345,23 @@ func (r *Reconciler) processOneStage(
 			Status: metav1.ConditionTrue,
 			Reason: rolloutv1alpha1.StagedUpdateRunPerStageCompletedCondReasonFailed,
 			Message: fmt.Sprintf("The stage has failed (%d out of %d clusters failed to update; total failures across stages have exceeded the threshold)",
-				failedClusterCnt.Load(), len(stage.Clusters)),
+				tracker.failedClusterCnt.Load(), len(stage.Clusters)),
 			ObservedGeneration: stagedUpdateRun.GetGeneration(),
 		})
+		// Mark all ongoing updates in the stage as canceled due to the stage-level failure.
+		markAllOngoingUpdatesInStageAsCanceled(stagedUpdateRun, stage)
 		stage.CompletedTimestamp = ptr.To(metav1.Now())
 		return stageProcessingResultFailed, nil, nil
-	case succeededClusterCnt.Load() == int32(len(stage.Clusters)):
+	case tracker.succeededClusterCnt.Load() == int32(len(stage.Clusters)):
 		// All clusters in the stage have succeeded. Move on to the execution of the after stage tasks.
-	case succeededClusterCnt.Load()+failedClusterCnt.Load() == int32(len(stage.Clusters)):
+	case tracker.succeededClusterCnt.Load()+tracker.failedClusterCnt.Load() == int32(len(stage.Clusters)):
 		// Some clusters have failed, but the failure threshold has not been exceeded. Move on to the execution
 		// of the after stage tasks.
 	default:
 		// Not all clusters have been successfully updated, but the failure threshold has not been exceeded either.
 		//
 		// Requeue and continue processing in the next reconciliation loop.
-		if aggregatedErrs := utilerrors.NewAggregate(errs); aggregatedErrs != nil {
+		if aggregatedErrs := utilerrors.NewAggregate(tracker.errs); aggregatedErrs != nil {
 			return stageProcessingResultErred, nil, kferrors.NewTransientError(nil, "failed to update some clusters", "errs", aggregatedErrs)
 		}
 		return stageProcessingResultInProgress, nil, nil
@@ -410,13 +377,13 @@ func (r *Reconciler) processOneStage(
 	}
 
 	// Mark the stage as completed (fully or partially).
-	if failedClusterCnt.Load() > 0 {
+	if tracker.failedClusterCnt.Load() > 0 {
 		meta.SetStatusCondition(&stage.Conditions, metav1.Condition{
 			Type:   rolloutv1alpha1.StagedUpdateRunPerStageCondTypeCompleted,
 			Status: metav1.ConditionTrue,
 			Reason: rolloutv1alpha1.StagedUpdateRunPerStageCompletedCondReasonPartiallySucceeded,
 			Message: fmt.Sprintf("The stage has completed with partial success (%d out of %d clusters failed to update)",
-				failedClusterCnt.Load(), len(stage.Clusters)),
+				tracker.failedClusterCnt.Load(), len(stage.Clusters)),
 			ObservedGeneration: stagedUpdateRun.GetGeneration(),
 		})
 	} else {
@@ -432,6 +399,81 @@ func (r *Reconciler) processOneStage(
 	return stageProcessingResultSucceeded, nil, nil
 }
 
+// perStageClusterProcessingTracker is shared by the workers that process the clusters in a stage concurrently; it
+// hands out the clusters to process and tallies the processing results.
+type perStageClusterProcessingTracker struct {
+	// The index (in the stage) of the next cluster to process.
+	nextClusterIdx atomic.Int32
+
+	// The counts of clusters per processing result.
+	succeededClusterCnt atomic.Int32
+	failedClusterCnt    atomic.Int32
+	erredClusterCnt     atomic.Int32
+
+	// The errors (if any) that occurred when processing the clusters, indexed the same way as the clusters in the stage.
+	errs []error
+}
+
+// doClusterProcessingWork processes the clusters in a stage one at a time, each time picking up the next cluster
+// that no worker has picked up yet, until there are no clusters left, the context is cancelled, or an error occurs.
+// Once the cluster update failures exceed the threshold, it cancels the context, which stops the other workers too.
+func (r *Reconciler) doClusterProcessingWork(
+	ctx context.Context,
+	cancel context.CancelFunc,
+	workerIdx int,
+	stagedUpdateRun rolloutv1alpha1.StagedUpdateRunAccessor,
+	stage *rolloutv1alpha1.PerStageStatus,
+	tracker *perStageClusterProcessingTracker,
+	clusterUpdateTotalFailures *atomic.Int32,
+	maxAllowedClusterFailures int32,
+	maxWaitTimePerCluster time.Duration,
+) {
+	clusterCnt := int32(len(stage.Clusters))
+	for {
+		// Stop picking up new clusters once the processing has been cancelled or has run out of time.
+		if ctx.Err() != nil {
+			return
+		}
+
+		clusterIdx := tracker.nextClusterIdx.Add(1) - 1
+		if clusterIdx >= clusterCnt {
+			klog.V(2).InfoS("No more clusters to process in the stage", "workerIdx", workerIdx,
+				"stage", stage.StageName, "stagedUpdateRun", klog.KObj(stagedUpdateRun))
+			return
+		}
+		klog.V(2).InfoS("Processing cluster in the stage", "workerIdx", workerIdx,
+			"clusterIdx", clusterIdx, "stage", stage.StageName, "stagedUpdateRun", klog.KObj(stagedUpdateRun))
+
+		cluster := &stage.Clusters[clusterIdx]
+		clusterProcessingRes, err := r.refreshOneCluster(ctx, cluster, stagedUpdateRun, maxWaitTimePerCluster)
+		if err != nil {
+			klog.ErrorS(err, "Failed to update a cluster in the stage",
+				append(kferrors.Args(err), "stagedUpdateRun", klog.KObj(stagedUpdateRun), "stage", stage.StageName, "cluster", cluster.ClusterName)...)
+			tracker.errs[clusterIdx] = err
+		}
+
+		switch clusterProcessingRes {
+		case clusterProcessingResultSucceeded:
+			// The processing has completed successfully; the worker can move on to processing the next cluster.
+			tracker.succeededClusterCnt.Add(1)
+		case clusterProcessingResultFailed:
+			tracker.failedClusterCnt.Add(1)
+			totalFailures := clusterUpdateTotalFailures.Add(1)
+			if totalFailures > maxAllowedClusterFailures {
+				// The failure threshold has been exceeded. Cancel all ongoing cluster processing attempts.
+				cancel()
+				return
+			}
+			// The worker moves on to processing the next cluster.
+		case clusterProcessingResultErred:
+			// An error occurred while processing the cluster. It does not count as a cluster failure, however,
+			// the worker will stop processing clusters.
+			tracker.erredClusterCnt.Add(1)
+			return
+		}
+	}
+}
+
 func countClusterUpdateFailures(stage *rolloutv1alpha1.PerStageStatus, clusterUpdateTotalFailures *atomic.Int32) error {
 	for idx := range stage.Clusters {
 		perClusterStatus := &stage.Clusters[idx]
@@ -445,6 +487,9 @@ func countClusterUpdateFailures(stage *rolloutv1alpha1.PerStageStatus, clusterUp
 				"clusterName", perClusterStatus.ClusterName)
 		case completedCond.Reason == rolloutv1alpha1.StagedUpdateRunPerClusterCompletedCondReasonFailed:
 			// Register a cluster update failure.
+			clusterUpdateTotalFailures.Add(1)
+		case completedCond.Reason == rolloutv1alpha1.StagedUpdateRunPerClusterCompletedCondReasonCanceled:
+			// Register a cluster update cancellation.
 			clusterUpdateTotalFailures.Add(1)
 		default:
 			// The cluster has completed its update successfully.
@@ -470,6 +515,11 @@ func (r *Reconciler) refreshOneCluster(
 		return clusterProcessingResultSucceeded, nil
 	case completedCond.Reason == rolloutv1alpha1.StagedUpdateRunPerClusterCompletedCondReasonFailed:
 		// The update attempt has failed before.
+		resyncPerClusterCondWithNoCommit(stagedUpdateRun, cluster, rolloutv1alpha1.StagedUpdateRunPerClusterCondTypeCompleted)
+		return clusterProcessingResultFailed, nil
+	case completedCond.Reason == rolloutv1alpha1.StagedUpdateRunPerClusterCompletedCondReasonCanceled:
+		// The update attempt has been canceled before. This branch is added for completeness reasons; normally this
+		// will never be encountered.
 		resyncPerClusterCondWithNoCommit(stagedUpdateRun, cluster, rolloutv1alpha1.StagedUpdateRunPerClusterCondTypeCompleted)
 		return clusterProcessingResultFailed, nil
 	default:
@@ -618,7 +668,7 @@ func (r *Reconciler) refreshOneCluster(
 			Type:               rolloutv1alpha1.StagedUpdateRunPerClusterCondTypeCompleted,
 			Status:             metav1.ConditionTrue,
 			Reason:             rolloutv1alpha1.StagedUpdateRunPerClusterCompletedCondReasonSucceeded,
-			Message:            "The update on the cluster has completed successfully (binding has been suspended)",
+			Message:            "The update on the cluster has completed successfully (binding is suspended)",
 			ObservedGeneration: stagedUpdateRun.GetGeneration(),
 		})
 		return clusterProcessingResultSucceeded, nil

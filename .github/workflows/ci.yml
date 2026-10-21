@@ -74,6 +74,15 @@ jobs:
           KUBEFLEET_CI_WORK_APPLIER_RUN_WITH_PRIORITY_QUEUE=true ginkgo -v -p --procs=4 --race --cover -coverprofile=work-applier-it-no-pri-q-coverage.out ./pkg/controllers/workapplier/
         env:
           KUBEFLEET_CI_TEST_RUNNER_NAME: 'ginkgo'
+
+      # The staged update run controller (v1) integration tests also use in-memory Kubernetes environment setup (one
+      # per Ginkgo process), and take too long to run serially (some of them wait for the per-cluster wait time limit
+      # of at least one minute to elapse); run the suite with parallel Ginkgo processes instead.
+      - name: Run staged update run controller (v1) unit and integration tests with Ginkgo CLI & generate coverage
+        run: |
+          ginkgo -v -p --procs=4 --race --cover -coverprofile=staged-update-run-it-coverage.out ./pkg/v1/controllers/stagedupdaterun/
+        env:
+          KUBEFLEET_CI_TEST_RUNNER_NAME: 'ginkgo'
       
       - name: Upload Codecov report
         uses: codecov/codecov-action@303a32d7a59b442fa8d48b6a1cc6825c09c847a5 # v7.1.1

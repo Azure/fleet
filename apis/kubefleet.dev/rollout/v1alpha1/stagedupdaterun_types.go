@@ -69,6 +69,7 @@ const (
 
 	StagedUpdateRunPerClusterCompletedCondReasonSucceeded = "UpdateSucceeded"
 	StagedUpdateRunPerClusterCompletedCondReasonFailed    = "FailedToUpdate"
+	StagedUpdateRunPerClusterCompletedCondReasonCanceled  = "UpdateCanceled"
 
 	// The reasons for the per-task condition types.
 	StagedUpdateRunTaskApprovalRequestCreatedCondReasonCreated           = "RequestCreated"
@@ -162,6 +163,13 @@ type StagedUpdateRunSpec struct {
 	// If the staged update run is created with this field set to true, KubeFleet will initialize the staged update run,
 	// i.e., decide on the resource snapshot to roll out and determine the stages and the clusters in each stage,
 	// but will not start rolling out resource changes until the field is set back to false.
+	//
+	// When a staged update run is suspended after the rollout starts, KubeFleet will pause the rollout as soon as
+	// possible. If a cluster has started updating but has not yet completed, KubeFleet will not consider
+	// its update a failure even if the maximum wait time for the cluster has been exceeded during the suspension.
+	// The wait timer will be reset once the suspension is lifted. However, the time spent in suspension will
+	// still count towards any timed wait tasks you have configured; those tasks will proceed or even complete,
+	// accounting for the time spent in suspension, once the suspension is lifted.
 	//
 	// +kubebuilder:validation:Optional
 	// +kubebuilder:default=false
