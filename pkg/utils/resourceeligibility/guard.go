@@ -68,7 +68,7 @@ type Checker interface {
 	AllowsNamespace(namespace string) bool
 	AllowsGVK(gvk schema.GroupVersionKind) bool
 	AllowsGVR(gvr schema.GroupVersionResource) (bool, error)
-	AllowsObject(obj *unstructured.Unstructured) (bool, error)
+	AllowsObject(obj *unstructured.Unstructured) (bool, string, error)
 }
 
 // Verify that checker implements the Checker interface.
@@ -77,25 +77,44 @@ var _ Checker = &checker{}
 // checker is the default Checker implementation; it evaluates a namespace check list and a GVK check
 // list, each in either allow list or deny list mode, before deferring to any wrapped Checker.
 type checker struct {
-	nsEligibilityMode NamespaceEligibilityMode
-
+	nsEligibilityMode  NamespaceEligibilityMode
 	customNSList       sets.Set[string]
 	customNSPrefixList sets.Set[string]
 
 	gvkEligibilityMode GVKEligibilityMode
+	customGVKList      gvkMatcherTrie
 
-	customGVKList gvkMatcherTrie
+	skipNSCheck     bool
+	skipGVKRCheck   bool
+	skipObjectCheck bool
 
 	wrapped Checker
 
 	restMapper meta.RESTMapper
 }
 
-// Baseline returns a Checker that features default namespace and GVK deny lists.
+// Baseline returns a Checker that features default namespace and GVK deny lists. The checker also has object checks
+// enabled.
 func Baseline(restMapper meta.RESTMapper) Checker {
-	c := New(restMapper, nil)
+	return baseline(restMapper, false)
+}
 
-	c.SetNamespaceCheckList(NamespaceEligibilityModeDenyList, []string{"default"}, []string{utils.KubeNSNamePrefix, utils.FleetNSNamePrefix})
+func baseline(restMapper meta.RESTMapper, skipObjectCheck bool) Checker {
+	c := New(CheckerOptions{
+		RestMapper:      restMapper,
+		Wrapped:         nil,
+		SkipNSCheck:     false,
+		SkipGVKRCheck:   false,
+		SkipObjectCheck: skipObjectCheck,
+	})
+
+	// About the `default` namespace: it is not explicitly denied here; the namespace itself cannot be selected for placement,
+	// but KubeFleet considers it OK to have resources within the namespace to be placed.
+	//
+	// For the v0 APIs, this is enforced individually when processing the placements.
+	// For the v1 APIs (the new placement experience), this is enforced through the AllowsObject check. See the definition
+	// below for more information.
+	c.SetNamespaceCheckList(NamespaceEligibilityModeDenyList, nil, []string{utils.KubeNSNamePrefix, utils.FleetNSNamePrefix})
 	if err := c.SetGVKCheckList(GVKEligibilityModeDenyList, GVKsDeniedByDefault); err != nil {
 		// The deny list is defined in this package, so a rejection here is a programming error.
 		panic(fmt.Sprintf("failed to register the default GVK deny list: %v", err))
@@ -116,7 +135,14 @@ func AllowAll(restMapper meta.RESTMapper) Checker {
 
 // DefaultForV0APIs returns a Checker for placement with v0 APIs.
 func DefaultForV0APIs(restMapper meta.RESTMapper) Checker {
-	c := New(restMapper, Baseline(restMapper))
+	checkerOpts := CheckerOptions{
+		RestMapper:      restMapper,
+		Wrapped:         baseline(restMapper, true),
+		SkipNSCheck:     true,
+		SkipGVKRCheck:   false,
+		SkipObjectCheck: true,
+	}
+	c := New(checkerOpts)
 
 	// TO-DO (chenyu1): deny envelope APIs in the kubefleet.dev API group when they are added.
 	return c
@@ -124,7 +150,14 @@ func DefaultForV0APIs(restMapper meta.RESTMapper) Checker {
 
 // DefaultForV1APIs returns a Checker for placement with v1 APIs.
 func DefaultForV1APIs(restMapper meta.RESTMapper) Checker {
-	c := New(restMapper, Baseline(restMapper))
+	checkerOpts := CheckerOptions{
+		RestMapper:      restMapper,
+		Wrapped:         Baseline(restMapper),
+		SkipNSCheck:     true,
+		SkipGVKRCheck:   false,
+		SkipObjectCheck: true,
+	}
+	c := New(checkerOpts)
 
 	if err := c.SetGVKCheckList(GVKEligibilityModeDenyList, GVKsDeniedForV1APIs); err != nil {
 		// The deny list is defined in this package, so a rejection here is a programming error.
@@ -133,13 +166,27 @@ func DefaultForV1APIs(restMapper meta.RESTMapper) Checker {
 	return c
 }
 
+// CheckerOptions is the options for creating a new Checker.
+type CheckerOptions struct {
+	RestMapper meta.RESTMapper
+
+	SkipNSCheck     bool
+	SkipGVKRCheck   bool
+	SkipObjectCheck bool
+
+	Wrapped Checker
+}
+
 // New creates a new Checker.
-func New(restMapper meta.RESTMapper, wrapped Checker) Checker {
+func New(opts CheckerOptions) Checker {
 	return &checker{
 		nsEligibilityMode:  NamespaceEligibilityModeDenyList,
 		gvkEligibilityMode: GVKEligibilityModeDenyList,
-		wrapped:            wrapped,
-		restMapper:         restMapper,
+		wrapped:            opts.Wrapped,
+		restMapper:         opts.RestMapper,
+		skipNSCheck:        opts.SkipNSCheck,
+		skipGVKRCheck:      opts.SkipGVKRCheck,
+		skipObjectCheck:    opts.SkipObjectCheck,
 	}
 }
 
@@ -205,6 +252,9 @@ func (c *checker) DeepCopy() Checker {
 		customNSPrefixList: c.customNSPrefixList.Clone(),
 		gvkEligibilityMode: c.gvkEligibilityMode,
 		customGVKList:      c.customGVKList.DeepCopy(),
+		skipNSCheck:        c.skipNSCheck,
+		skipGVKRCheck:      c.skipGVKRCheck,
+		skipObjectCheck:    c.skipObjectCheck,
 		// The REST mapper is a shared dependency rather than owned state, so the reference is kept.
 		restMapper: c.restMapper,
 	}
@@ -214,11 +264,22 @@ func (c *checker) DeepCopy() Checker {
 	return cp
 }
 
-// AllowsNamespace checks if a given namespace is eligible for placement.
+// AllowsNamespace checks if a given namespace (the namespace itself and any resource within it)
+// is eligible for placement.
 func (c *checker) AllowsNamespace(namespace string) bool {
 	if namespace == "" {
 		// Allow cluster-scoped resources (which have an empty namespace) for placement.
 		return true
+	}
+	if c.skipNSCheck {
+		// This checker has been set to skip the namespace check; delegate the decision to the wrapped checker if available.
+		if c.wrapped != nil {
+			return c.wrapped.AllowsNamespace(namespace)
+		}
+		// If no wrapper checker is available, return a decision based on the namespace eligibility mode.
+		//
+		// If the checker uses a namespace deny list, allow all namespaces; otherwise, deny all namespaces.
+		return c.nsEligibilityMode != NamespaceEligibilityModeAllowList
 	}
 
 	hasAnyPrefix := func(prefixes sets.Set[string]) bool {
@@ -251,6 +312,17 @@ func (c *checker) AllowsNamespace(namespace string) bool {
 
 // AllowsGVK checks if a given GVK is eligible for placement.
 func (c *checker) AllowsGVK(gvk schema.GroupVersionKind) bool {
+	if c.skipGVKRCheck {
+		// This checker has been set to skip the GVK check; delegate the decision to the wrapped checker if available.
+		if c.wrapped != nil {
+			return c.wrapped.AllowsGVK(gvk)
+		}
+		// If no wrapper checker is available, return a decision based on the GVK eligibility mode.
+		//
+		// If the checker uses a GVK deny list, allow all GVKs; otherwise, deny all GVKs.
+		return c.gvkEligibilityMode != GVKEligibilityModeAllowList
+	}
+
 	// Check GVK eligibility based on the configured allow list or deny list.
 	eligible := true
 	switch c.gvkEligibilityMode {
@@ -272,6 +344,17 @@ func (c *checker) AllowsGVK(gvk schema.GroupVersionKind) bool {
 
 // AllowsGVR checks if a given GVR is eligible for placement.
 func (c *checker) AllowsGVR(gvr schema.GroupVersionResource) (bool, error) {
+	if c.skipGVKRCheck {
+		// This checker has been set to skip the GVKR check; delegate the decision to the wrapped checker if available.
+		if c.wrapped != nil {
+			return c.wrapped.AllowsGVR(gvr)
+		}
+		// If no wrapper checker is available, return a decision based on the GVKR eligibility mode.
+		//
+		// If the checker uses a GVK deny list, allow all GVRs; otherwise, deny all GVRs.
+		return c.gvkEligibilityMode != GVKEligibilityModeAllowList, nil
+	}
+
 	gvks, err := c.restMapper.KindsFor(gvr)
 	if err != nil {
 		if meta.IsNoMatchError(err) {
@@ -307,31 +390,51 @@ func (c *checker) AllowsGVR(gvr schema.GroupVersionResource) (bool, error) {
 //
 // Note (chenyu1): the logic defined here applies only to the v1 APIs (placement policies), as the v1 APIs
 // require explicit resource selectors.
-func (c *checker) AllowsObject(obj *unstructured.Unstructured) (bool, error) {
+func (c *checker) AllowsObject(obj *unstructured.Unstructured) (bool, string, error) {
+	if c.skipObjectCheck {
+		// This checker has been set to skip the object check; delegate the decision to the wrapped checker if available.
+		if c.wrapped != nil {
+			return c.wrapped.AllowsObject(obj)
+		}
+		// If no wrapper is set up, allow all objects.
+		return true, "", nil
+	}
+
 	switch {
 	case obj.GetDeletionTimestamp() != nil:
-		return false, errors.NewUserError(nil, "the resource is being deleted and cannot be placed")
-	case len(obj.GetOwnerReferences()) > 0:
-		return false, errors.NewUserError(nil, "the resource is under the management of another object; place the owner object instead if applicable")
+		return false, "the resource is being deleted and cannot be placed", nil
+	case hasControllerOwner(obj):
+		return false, "the resource is under the management of a controller; place the owner object instead if applicable", nil
 	case obj.GroupVersionKind() == corev1.SchemeGroupVersion.WithKind(utils.ConfigMapKind) && obj.GetName() == "kube-root-ca.crt":
-		return false, errors.NewUserError(nil, "the built-in CA certificate config map is created automatically in every namespace and cannot be placed")
+		return false, "the built-in CA certificate config map is created automatically in every namespace and cannot be placed", nil
 	case obj.GroupVersionKind() == corev1.SchemeGroupVersion.WithKind("ServiceAccount") && obj.GetName() == "default":
-		return false, errors.NewUserError(nil, "the default service account is created automatically in every namespace and cannot be placed")
+		return false, "the default service account is created automatically in every namespace and cannot be placed", nil
 	case obj.GroupVersionKind() == corev1.SchemeGroupVersion.WithKind(utils.ServiceKind) && obj.GetNamespace() == "default" && obj.GetName() == "kubernetes":
-		return false, errors.NewUserError(nil, "the Kubernetes API service is created automatically in the default namespace and cannot be placed")
+		return false, "the Kubernetes API service is created automatically in the default namespace and cannot be placed", nil
 	case obj.GroupVersionKind() == corev1.SchemeGroupVersion.WithKind("Secret"):
 		secretType, found, err := unstructured.NestedString(obj.Object, "type")
 		if err != nil {
-			return false, errors.NewUnexpectedError(err, "failed to retrieve the type of the secret")
+			return false, "", errors.NewUnexpectedError(err, "failed to retrieve the type of the secret")
 		}
 		if found && secretType == string(corev1.SecretTypeServiceAccountToken) {
-			return false, errors.NewUserError(nil, "service account token secrets are created automatically along with their service accounts and cannot be placed")
+			return false, "service account token secrets are created automatically along with their service accounts and cannot be placed", nil
 		}
+	case obj.GroupVersionKind() == utils.NamespaceGVK && obj.GetName() == "default":
+		return false, "the default namespace itself cannot be placed", nil
 	}
 
 	// Consult the wrapped checker to check if the eligibility is further restricted.
 	if c.wrapped != nil {
 		return c.wrapped.AllowsObject(obj)
 	}
-	return true, nil
+	return true, "", nil
+}
+
+func hasControllerOwner(obj *unstructured.Unstructured) bool {
+	for _, ownerRef := range obj.GetOwnerReferences() {
+		if ownerRef.Controller != nil && *ownerRef.Controller {
+			return true
+		}
+	}
+	return false
 }

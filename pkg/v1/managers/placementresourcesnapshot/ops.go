@@ -72,6 +72,8 @@ func (m *Manager) snapshotResources(ctx context.Context,
 	}
 
 	// Retrieve the currently selected resources and their hash based on the placement policy.
+	//
+	// At this point, KubeFleet allows empty resource snapshots.
 	currentResources, currentHash, err := m.retrieveAndHashSelectedResources(ctx, placementPolicy)
 	if err != nil {
 		return nil, false, errors.Wraps(err, "failed to retrieve and hash the selected resources")
@@ -128,7 +130,7 @@ func (m *Manager) retrieveLatestSnapshot(ctx context.Context, placementPolicy pl
 	var snapshots []placementv1alpha1.PlacementResourceSnapshotAccessor
 	fieldMatchers := client.MatchingFields{
 		fieldindexers.PlacementResourceSnapshotOwnedByAndSubIndexedCustomFieldName: fmt.Sprintf(
-			fieldindexers.PlacementResourceSnapshotOwnedByAndSubIndexedCustomFieldValFmt, placementPolicyOwnerLabelVal(placementPolicy), "0"),
+			fieldindexers.PlacementResourceSnapshotOwnedByAndSubIndexedCustomFieldValFmt, placementPolicy.GetName(), "0"),
 	}
 	if placementPolicy.GetNamespace() == "" {
 		// The placement policy is cluster-scoped; list cluster placement resource snapshots.
@@ -176,6 +178,12 @@ func (m *Manager) retrieveLatestSnapshot(ctx context.Context, placementPolicy pl
 	m.enqueueOldResourceSnapshotsForGC(snapshots, placementPolicy)
 
 	latestPrimarySnapshot := snapshots[len(snapshots)-1]
+	// Verify if the latest primary snapshot has been marked for deletion. If so, wait for its deletion to complete.
+	if !latestPrimarySnapshot.GetDeletionTimestamp().IsZero() {
+		return nil, errors.NewTransientError(nil, "the latest primary placement resource snapshot is marked for deletion",
+			"placementResourceSnapshot", klog.KObj(latestPrimarySnapshot))
+	}
+
 	// Check if there are snapshots with the same index.
 	subIndexedSnapshotCntStr := latestPrimarySnapshot.GetLabels()[placementv1alpha1.SubIndexedPlacementResourceSnapshotCountLabelKey]
 	if subIndexedSnapshotCntStr == "1" {
@@ -197,7 +205,7 @@ func (m *Manager) retrieveLatestSnapshot(ctx context.Context, placementPolicy pl
 	// There are sub-indexed placement resource snapshots with the same index; retrieve them.
 	latestIndex := latestPrimarySnapshot.GetLabels()[placementv1alpha1.PlacementResourceSnapshotIndexLabelKey]
 	fieldMatchers = client.MatchingFields{
-		fieldindexers.PlacementResourceSnapshotOwnedByAndIndexedCustomFieldName: fmt.Sprintf(fieldindexers.PlacementResourceSnapshotOwnedByAndIndexedCustomFieldValFmt, placementPolicyOwnerLabelVal(placementPolicy), latestIndex),
+		fieldindexers.PlacementResourceSnapshotOwnedByAndIndexedCustomFieldName: fmt.Sprintf(fieldindexers.PlacementResourceSnapshotOwnedByAndIndexedCustomFieldValFmt, placementPolicy.GetName(), latestIndex),
 	}
 	var subIndexedSnapshots []placementv1alpha1.PlacementResourceSnapshotAccessor
 	if placementPolicy.GetNamespace() == "" {
@@ -259,7 +267,21 @@ func (m *Manager) retrieveLatestSnapshot(ctx context.Context, placementPolicy pl
 			len(subIndexedSnapshots), subIndexedSnapshotCnt, klog.KObj(placementPolicy), subIndexedSnapshotCnt)
 	}
 
-	return subIndexedSnapshots[:subIndexedSnapshotCnt], nil
+	resSnapshots := subIndexedSnapshots[:subIndexedSnapshotCnt]
+	// Verify that all snapshots in the result have the same resource hash. This is a sanity check that should always
+	// pass in normal ops.
+	primaryHash := latestPrimarySnapshot.GetAnnotations()[placementv1alpha1.PlacementResourceSnapshotContentsHashAnnotationKey]
+	for idx := range resSnapshots {
+		snapshot := resSnapshots[idx]
+		snapshotHash := snapshot.GetAnnotations()[placementv1alpha1.PlacementResourceSnapshotContentsHashAnnotationKey]
+		if snapshotHash != primaryHash {
+			return nil, errors.NewUnexpectedError(nil, "a sub-indexed placement resource snapshot has a different contents hash than the primary placement resource snapshot",
+				"primaryPlacementResourceSnapshot", klog.KObj(latestPrimarySnapshot), "primaryContentsHash", primaryHash,
+				"placementResourceSnapshot", klog.KObj(snapshot), "contentsHash", snapshotHash)
+		}
+	}
+
+	return resSnapshots, nil
 }
 
 // isSnapshotUpToDate checks if the given placement resource snapshot is up-to-date, i.e., the snapshot is
@@ -430,7 +452,7 @@ func (m *Manager) cleanUpOrphanedSecondarySnapshots(
 ) (bool, error) {
 	// List all placement resource snapshots at the given index.
 	fieldMatchers := client.MatchingFields{
-		fieldindexers.PlacementResourceSnapshotOwnedByAndIndexedCustomFieldName: fmt.Sprintf(fieldindexers.PlacementResourceSnapshotOwnedByAndIndexedCustomFieldValFmt, placementPolicyOwnerLabelVal(placementPolicy), strconv.Itoa(nextSnapshotIdx)),
+		fieldindexers.PlacementResourceSnapshotOwnedByAndIndexedCustomFieldName: fmt.Sprintf(fieldindexers.PlacementResourceSnapshotOwnedByAndIndexedCustomFieldValFmt, placementPolicy.GetName(), strconv.Itoa(nextSnapshotIdx)),
 	}
 
 	var snapshots []placementv1alpha1.PlacementResourceSnapshotAccessor
@@ -459,8 +481,8 @@ func (m *Manager) cleanUpOrphanedSecondarySnapshots(
 		snapshot := snapshots[idx]
 		subIdxStr := snapshot.GetLabels()[placementv1alpha1.PlacementResourceSnapshotSubIndexLabelKey]
 		if subIdxStr == "0" {
-			// This normally should never occur.
-			return false, errors.NewUnexpectedError(nil,
+			// This might occur if the cache is lagging behind. The caller should retry the snapshotting operation.
+			return false, errors.NewTransientError(nil,
 				"found a primary placement resource snapshot at the given index while cleaning up orphaned secondary snapshots",
 				"primaryPlacementResourceSnapshot", klog.KObj(snapshot))
 		}

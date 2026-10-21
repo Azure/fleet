@@ -86,7 +86,7 @@ type PlacementManagementOptions struct {
 	//
 	// This list is a collection of names separated by semicolons, such as `internals;monitoring`. KubeFleet
 	// also blocks a number of reserved namespace names for placement by default; such namespaces include
-	// `default` and those that are prefixed with `kube-` or `fleet-`.
+	// those that are prefixed with `kube-` or `fleet-`.
 	SkippedPropagatingNamespaces string
 
 	// The number of concurrent workers that help process resource changes for the placement APIs.

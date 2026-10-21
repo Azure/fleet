@@ -382,6 +382,7 @@ func createSubIndexedPlacementResourceSnapshotWithHash(
 	snapshot.SetLabels(labels)
 	snapshot.SetAnnotations(map[string]string{
 		placementv1alpha1.PlacementResourceSnapshotContentsHashAnnotationKey: contentsHash,
+		placementv1alpha1.PlacementResourceSnapshotOwnedByAnnotationKey:      ownerPlacementPolicyName,
 	})
 	snapshot.SetSpec(placementv1alpha1.PlacementResourceSnapshotSpec{
 		Resources: resources,

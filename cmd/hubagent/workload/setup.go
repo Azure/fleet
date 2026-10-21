@@ -153,32 +153,46 @@ func SetupControllers(ctx context.Context, wg *sync.WaitGroup, mgr ctrl.Manager,
 
 	discoverClient := discovery.NewDiscoveryClientForConfigOrDie(config)
 
-	customResourceEligibilityChecker := resourceeligibility.New(mgr.GetRESTMapper(), nil)
+	var gvkEligibilityMode resourceeligibility.GVKEligibilityMode
+	var parsedGVKs []schema.GroupVersionKind
 	if opts.PlacementMgmtOpts.AllowedPropagatingAPIs == "" {
-		// Set up a deny list for placement eligible GVKs.
-		gvks, err := resourceeligibility.ParseGVKs(opts.PlacementMgmtOpts.SkippedPropagatingAPIs)
+		// Prepare a deny list for placement eligible GVKs.
+		gvkEligibilityMode = resourceeligibility.GVKEligibilityModeDenyList
+		parsedGVKs, err = resourceeligibility.ParseGVKs(opts.PlacementMgmtOpts.SkippedPropagatingAPIs)
 		if err != nil {
 			// Normally this branch would never run as the input has been validated beforehand.
-			return err
-		}
-		if err := customResourceEligibilityChecker.SetGVKCheckList(resourceeligibility.GVKEligibilityModeDenyList, gvks); err != nil {
 			return err
 		}
 	} else {
-		// Set up an allow list for placement eligible GVKs.
-		gvks, err := resourceeligibility.ParseGVKs(opts.PlacementMgmtOpts.AllowedPropagatingAPIs)
+		// Prepare an allow list for placement eligible GVKs.
+		gvkEligibilityMode = resourceeligibility.GVKEligibilityModeAllowList
+		parsedGVKs, err = resourceeligibility.ParseGVKs(opts.PlacementMgmtOpts.AllowedPropagatingAPIs)
 		if err != nil {
 			// Normally this branch would never run as the input has been validated beforehand.
-			return err
-		}
-		if err := customResourceEligibilityChecker.SetGVKCheckList(resourceeligibility.GVKEligibilityModeAllowList, gvks); err != nil {
 			return err
 		}
 	}
 
-	// Set up a namespace deny list for namespaces.
-	userDefinedSkippedNSNames := strings.Split(opts.PlacementMgmtOpts.SkippedPropagatingNamespaces, ";")
+	// Prepare a namespace deny list for namespaces.
+	var userDefinedSkippedNSNames []string
+	for _, ns := range strings.Split(opts.PlacementMgmtOpts.SkippedPropagatingNamespaces, ";") {
+		if ns != "" {
+			userDefinedSkippedNSNames = append(userDefinedSkippedNSNames, ns)
+		}
+	}
+
+	// Set up the resource eligibility checker (V0 APIs only).
+	customResourceEligibilityChecker := resourceeligibility.New(resourceeligibility.CheckerOptions{
+		RestMapper:      mgr.GetRESTMapper(),
+		SkipNSCheck:     len(userDefinedSkippedNSNames) == 0,
+		SkipGVKRCheck:   len(parsedGVKs) == 0,
+		SkipObjectCheck: true,
+	})
 	customResourceEligibilityChecker.SetNamespaceCheckList(resourceeligibility.NamespaceEligibilityModeDenyList, userDefinedSkippedNSNames, nil)
+	if err := customResourceEligibilityChecker.SetGVKCheckList(gvkEligibilityMode, parsedGVKs); err != nil {
+		klog.ErrorS(err, "Failed to set GVK check list for the custom resource eligibility checker")
+		return err
+	}
 
 	// Build the composite resource eligibility checker for v0 APIs.
 	defaultResourceEligibilityCheckerForV0APIs := resourceeligibility.DefaultForV0APIs(mgr.GetRESTMapper())
@@ -328,8 +342,12 @@ func SetupControllers(ctx context.Context, wg *sync.WaitGroup, mgr ctrl.Manager,
 				klog.ErrorS(err, "Unable to set up the field indexes for the placement policy controllers")
 				return err
 			}
-			snapshots, snapshotErr := placementresourcesnapshot.New(mgr, dynamicClient, dynamicInformerManager, mgr.GetRESTMapper(), placementResourceSnapshotSlots,
-				placementresourcesnapshot.DefaultMaxPerSnapshotResourceDataSizeBytes, placementresourcesnapshot.DefaultMaxPerSnapshotResourceCnt)
+			snapshots, snapshotErr := placementresourcesnapshot.New(mgr,
+				dynamicClient, dynamicInformerManager,
+				customResourceEligibilityChecker, mgr.GetRESTMapper(),
+				placementResourceSnapshotSlots,
+				placementresourcesnapshot.DefaultMaxPerSnapshotResourceDataSizeBytes,
+				placementresourcesnapshot.DefaultMaxPerSnapshotResourceCnt)
 			if snapshotErr != nil {
 				klog.ErrorS(snapshotErr, "Unable to set up the placement resource snapshot manager")
 				return snapshotErr

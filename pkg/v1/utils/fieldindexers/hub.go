@@ -108,20 +108,20 @@ const (
 
 var (
 	placementResourceSnapshotOwnedByAndSubIdxedFieldExtractor fieldValueExtractor = func(obj client.Object) ([]string, error) {
-		ownedBy := obj.GetLabels()[placementv1alpha1.PlacementResourceSnapshotOwnedByLabelKey]
+		ownedBy := obj.GetAnnotations()[placementv1alpha1.PlacementResourceSnapshotOwnedByAnnotationKey]
 		subIndex := obj.GetLabels()[placementv1alpha1.PlacementResourceSnapshotSubIndexLabelKey]
 		if ownedBy == "" || subIndex == "" {
-			wrappedErr := errors.NewUnexpectedError(nil, "placement resource snapshot is missing required labels")
+			wrappedErr := errors.NewUnexpectedError(nil, "placement resource snapshot is missing required labels or annotations")
 			return nil, wrappedErr
 		}
 		return []string{fmt.Sprintf(PlacementResourceSnapshotOwnedByAndSubIndexedCustomFieldValFmt, ownedBy, subIndex)}, nil
 	}
 
 	placementResourceSnapshotOwnedByAndIdxedFieldExtractor fieldValueExtractor = func(obj client.Object) ([]string, error) {
-		ownedBy := obj.GetLabels()[placementv1alpha1.PlacementResourceSnapshotOwnedByLabelKey]
+		ownedBy := obj.GetAnnotations()[placementv1alpha1.PlacementResourceSnapshotOwnedByAnnotationKey]
 		index := obj.GetLabels()[placementv1alpha1.PlacementResourceSnapshotIndexLabelKey]
 		if ownedBy == "" || index == "" {
-			wrappedErr := errors.NewUnexpectedError(nil, "placement resource snapshot is missing required labels")
+			wrappedErr := errors.NewUnexpectedError(nil, "placement resource snapshot is missing required labels or annotations")
 			return nil, wrappedErr
 		}
 		return []string{fmt.Sprintf(PlacementResourceSnapshotOwnedByAndIndexedCustomFieldValFmt, ownedBy, index)}, nil

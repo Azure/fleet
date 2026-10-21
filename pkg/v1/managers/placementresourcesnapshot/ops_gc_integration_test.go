@@ -52,6 +52,14 @@ const (
 	configMapNameTemplate        = "configmap-%s"
 	deploymentNameTemplate       = "deployment-%s"
 	placementBindingNameTemplate = "placement-binding-%s"
+
+	gcStaleOwnerInUseErrMsg             = "the placement binding and the primary placement resource snapshot are owned by different placement policies with the same name"
+	gcMissingOwnerInUseErrMsg           = "the placement binding is missing the owner reference to its placement policy"
+	latestSnapshotPendingDeletionErrMsg = "the latest primary placement resource snapshot is marked for deletion"
+	revisionHistoryLimitFieldPath       = "spec.resourceRevisionHistoryLimit"
+
+	// The UID of a placement policy that has been deleted and re-created with the same name.
+	staleOwnerUID types.UID = "stale-placement-policy-uid"
 )
 
 var _ = Describe("core ops (placement resource snapshots)", func() {
@@ -104,6 +112,7 @@ var _ = Describe("core ops (placement resource snapshots)", func() {
 				},
 			}
 			Expect(hubClient.Create(ctx, deployment)).To(Succeed(), "Failed to create the Deployment")
+			waitForDeploymentsInCache(deployment)
 
 			// Create a placement policy that selects the two resources.
 			placementPolicy = &placementv1alpha1.PlacementPolicy{
@@ -306,6 +315,7 @@ var _ = Describe("core ops (placement resource snapshots)", func() {
 			deployment.Spec.Replicas = ptr.To(int32(3))
 			deployment.Spec.Template.Spec.Containers[0].Image = "nginx:1.28"
 			Expect(hubClient.Update(ctx, deployment)).To(Succeed(), "Failed to update the Deployment")
+			waitForDeploymentsInCache(deployment)
 		})
 
 		It("can create a new snapshot when the existing one is stale", func() {
@@ -318,7 +328,7 @@ var _ = Describe("core ops (placement resource snapshots)", func() {
 			Expect(gotSnapshots[0].GetName()).To(Equal(newSnapshotName), "Unexpected name of the new placement resource snapshot")
 		})
 
-		It("can create a new snapshot when the existing one is stale", func() {
+		It("should create a new snapshot with updated resources", func() {
 			_, newHash, err := resourceSnapshotManager.retrieveAndHashSelectedResources(ctx, placementPolicy)
 			Expect(err).ToNot(HaveOccurred(), "Failed to retrieve and hash the selected resources")
 			Expect(newHash).ToNot(Equal(wantHash), "The hash of the selected resources has not changed after the updates")
@@ -395,31 +405,32 @@ var _ = Describe("core ops (placement resource snapshots)", func() {
 
 	Context("primary and secondary placement resource snapshots (too many resources) (label-based selection)", Ordered, func() {
 		placementPolicyName := fmt.Sprintf(placementPolicyNameTemplate, utils.RandStr())
-		configMapNamePrefix := fmt.Sprintf(configMapNameTemplate, utils.RandStr())
+		deploymentNamePrefix := fmt.Sprintf(deploymentNameTemplate, utils.RandStr())
 
 		// The names are in ascending order, which is also the order in which the selected resources are
 		// snapshotted.
-		configMapNames := make([]string, 5)
-		for idx := range configMapNames {
-			configMapNames[idx] = fmt.Sprintf("%s-%d", configMapNamePrefix, idx)
+		deploymentNames := make([]string, 5)
+		for idx := range deploymentNames {
+			deploymentNames[idx] = fmt.Sprintf("%s-%d", deploymentNamePrefix, idx)
 		}
 
-		// The names of the config maps added later; they sort after the ones above.
-		extraConfigMapNames := make([]string, 5)
-		for idx := range extraConfigMapNames {
-			extraConfigMapNames[idx] = fmt.Sprintf("%s-%d", configMapNamePrefix, idx+len(configMapNames))
+		// The names of the Deployments added later; they sort after the ones above.
+		extraDeploymentNames := make([]string, 5)
+		for idx := range extraDeploymentNames {
+			extraDeploymentNames[idx] = fmt.Sprintf("%s-%d", deploymentNamePrefix, idx+len(deploymentNames))
 		}
 
-		allConfigMapNames := append(slices.Clone(configMapNames), extraConfigMapNames...)
+		allDeploymentNames := append(slices.Clone(deploymentNames), extraDeploymentNames...)
 
-		configMapIdentifiers := func(names []string) []placementv1alpha1.ObjectReference {
+		deploymentIdentifiers := func(names []string) []placementv1alpha1.ObjectReference {
 			identifiers := make([]placementv1alpha1.ObjectReference, 0, len(names))
 			for _, name := range names {
 				identifiers = append(identifiers, placementv1alpha1.ObjectReference{
 					Namespace:  appNamespaceName,
 					Name:       name,
+					APIGroup:   "apps",
 					APIVersion: "v1",
-					Kind:       "ConfigMap",
+					Kind:       "Deployment",
 				})
 			}
 			return identifiers
@@ -429,20 +440,17 @@ var _ = Describe("core ops (placement resource snapshots)", func() {
 		var wantHash string
 
 		BeforeAll(func() {
-			// Create five config maps with the same label in the app namespace.
-			for idx := range configMapNames {
-				configMap := &corev1.ConfigMap{
-					ObjectMeta: metav1.ObjectMeta{
-						Name:      configMapNames[idx],
-						Namespace: appNamespaceName,
-						Labels:    map[string]string{"placement-group": "foo"},
-					},
-					Data: map[string]string{"key": fmt.Sprintf("value-%d", idx)},
-				}
-				Expect(hubClient.Create(ctx, configMap)).To(Succeed(), "Failed to create the config map")
+			// Create five Deployments with the same label in the app namespace.
+			deployments := make([]*appsv1.Deployment, 0, len(deploymentNames))
+			for _, name := range deploymentNames {
+				deployment := newDeployment(name, appNamespaceName)
+				deployment.Labels = map[string]string{"placement-group": "foo"}
+				Expect(hubClient.Create(ctx, deployment)).To(Succeed(), "Failed to create the Deployment")
+				deployments = append(deployments, deployment)
 			}
+			waitForDeploymentsInCache(deployments...)
 
-			// Create a placement policy that selects the config maps by their label.
+			// Create a placement policy that selects the Deployments by their label.
 			placementPolicy = &placementv1alpha1.PlacementPolicy{
 				ObjectMeta: metav1.ObjectMeta{
 					Name:      placementPolicyName,
@@ -451,8 +459,9 @@ var _ = Describe("core ops (placement resource snapshots)", func() {
 				Spec: placementv1alpha1.PlacementPolicySpec{
 					ResourceSelectors: []placementv1alpha1.ResourceSelector{
 						{
+							APIGroup:   "apps",
 							APIVersion: "v1",
-							Kind:       "ConfigMap",
+							Kind:       "Deployment",
 							LabelSelector: &metav1.LabelSelector{
 								MatchLabels: map[string]string{"placement-group": "foo"},
 							},
@@ -466,7 +475,7 @@ var _ = Describe("core ops (placement resource snapshots)", func() {
 		It("can compute the hash of selected resources", func() {
 			resources, hash, err := resourceSnapshotManager.retrieveAndHashSelectedResources(ctx, placementPolicy)
 			Expect(err).ToNot(HaveOccurred(), "Failed to retrieve and hash the selected resources")
-			Expect(resources).To(HaveLen(len(configMapNames)), "Unexpected number of selected resources")
+			Expect(resources).To(HaveLen(len(deploymentNames)), "Unexpected number of selected resources")
 			wantHash = hash
 		})
 
@@ -518,7 +527,7 @@ var _ = Describe("core ops (placement resource snapshots)", func() {
 						placementv1alpha1.PlacementResourceSnapshotSubIndexLabelKey:        "0",
 						placementv1alpha1.SubIndexedPlacementResourceSnapshotCountLabelKey: "2",
 					},
-					wantIdentifiers: configMapIdentifiers(configMapNames[:3]),
+					wantIdentifiers: deploymentIdentifiers(deploymentNames[:3]),
 				},
 				{
 					name:         "secondary",
@@ -528,7 +537,7 @@ var _ = Describe("core ops (placement resource snapshots)", func() {
 						placementv1alpha1.PlacementResourceSnapshotIndexLabelKey:    "0",
 						placementv1alpha1.PlacementResourceSnapshotSubIndexLabelKey: "1",
 					},
-					wantIdentifiers: configMapIdentifiers(configMapNames[3:]),
+					wantIdentifiers: deploymentIdentifiers(deploymentNames[3:]),
 				},
 			}
 			for _, tc := range testCases {
@@ -558,18 +567,15 @@ var _ = Describe("core ops (placement resource snapshots)", func() {
 			}
 		})
 
-		It("can create more config maps", func() {
-			for idx, name := range extraConfigMapNames {
-				configMap := &corev1.ConfigMap{
-					ObjectMeta: metav1.ObjectMeta{
-						Name:      name,
-						Namespace: appNamespaceName,
-						Labels:    map[string]string{"placement-group": "foo"},
-					},
-					Data: map[string]string{"key": fmt.Sprintf("value-%d", idx+len(configMapNames))},
-				}
-				Expect(hubClient.Create(ctx, configMap)).To(Succeed(), "Failed to create the config map")
+		It("can create more Deployments", func() {
+			deployments := make([]*appsv1.Deployment, 0, len(extraDeploymentNames))
+			for _, name := range extraDeploymentNames {
+				deployment := newDeployment(name, appNamespaceName)
+				deployment.Labels = map[string]string{"placement-group": "foo"}
+				Expect(hubClient.Create(ctx, deployment)).To(Succeed(), "Failed to create the Deployment")
+				deployments = append(deployments, deployment)
 			}
+			waitForDeploymentsInCache(deployments...)
 		})
 
 		It("should not create new snapshots if snapshots already exist", func() {
@@ -602,18 +608,18 @@ var _ = Describe("core ops (placement resource snapshots)", func() {
 			}
 		})
 
-		// verifySnapshotsOfConfigMaps verifies that the given snapshots, created at the given index, are
-		// the primary and secondary placement resource snapshots that cover the given config maps, and returns
+		// verifySnapshotsOfDeployments verifies that the given snapshots, created at the given index, are
+		// the primary and secondary placement resource snapshots that cover the given Deployments, and returns
 		// the snapshots as persisted.
 		//
 		// The resources are spread across the snapshots in groups of three, in the order of their names.
-		verifySnapshotsOfConfigMaps := func(
+		verifySnapshotsOfDeployments := func(
 			snapshotIdx int,
 			gotSnapshots []placementv1alpha1.PlacementResourceSnapshotAccessor,
 			wantHash string,
-			wantConfigMapNames []string,
+			wantDeploymentNames []string,
 		) []*placementv1alpha1.PlacementResourceSnapshot {
-			wantSnapshotCnt := (len(wantConfigMapNames) + 2) / 3
+			wantSnapshotCnt := (len(wantDeploymentNames) + 2) / 3
 			Expect(gotSnapshots).To(HaveLen(wantSnapshotCnt), "Unexpected number of placement resource snapshots")
 
 			wantOwnerRefs := []metav1.OwnerReference{
@@ -665,12 +671,12 @@ var _ = Describe("core ops (placement resource snapshots)", func() {
 				}
 
 				groupStart := subIdx * 3
-				groupEnd := min(groupStart+3, len(wantConfigMapNames))
+				groupEnd := min(groupStart+3, len(wantDeploymentNames))
 				gotIdentifiers := make([]placementv1alpha1.ObjectReference, 0, len(gotSnapshot.Spec.Resources))
 				for idx := range gotSnapshot.Spec.Resources {
 					gotIdentifiers = append(gotIdentifiers, gotSnapshot.Spec.Resources[idx].Identifier)
 				}
-				if diff := cmp.Diff(gotIdentifiers, configMapIdentifiers(wantConfigMapNames[groupStart:groupEnd])); diff != "" {
+				if diff := cmp.Diff(gotIdentifiers, deploymentIdentifiers(wantDeploymentNames[groupStart:groupEnd])); diff != "" {
 					Fail(fmt.Sprintf("The placement resource snapshot (sub-index %d) resource identifiers diff (-got +want):\n%s", subIdx, diff))
 				}
 			}
@@ -680,71 +686,76 @@ var _ = Describe("core ops (placement resource snapshots)", func() {
 		It("should create new snapshots if the existing ones are stale", func() {
 			_, newHash, err := resourceSnapshotManager.retrieveAndHashSelectedResources(ctx, placementPolicy)
 			Expect(err).ToNot(HaveOccurred(), "Failed to retrieve and hash the selected resources")
-			Expect(newHash).ToNot(Equal(wantHash), "The hash of the selected resources has not changed after adding config maps")
+			Expect(newHash).ToNot(Equal(wantHash), "The hash of the selected resources has not changed after adding Deployments")
 			wantHash = newHash
 
 			// Ten resources, with at most three resources per snapshot: one primary and three secondary snapshots.
 			gotSnapshots, isUpToDate, err := resourceSnapshotManager.SnapshotResourcesIfStale(ctx, placementPolicy)
 			Expect(err).ToNot(HaveOccurred(), "Failed to snapshot resources")
 			Expect(isUpToDate).To(BeTrue(), "The new placement resource snapshots are not up-to-date")
-			verifySnapshotsOfConfigMaps(1, gotSnapshots, wantHash, allConfigMapNames)
+			verifySnapshotsOfDeployments(1, gotSnapshots, wantHash, allDeploymentNames)
 		})
 
-		It("can update the last config map", func() {
-			lastConfigMapName := extraConfigMapNames[len(extraConfigMapNames)-1]
-			configMap := &corev1.ConfigMap{}
-			Expect(hubUncachedReader.Get(ctx, types.NamespacedName{Namespace: appNamespaceName, Name: lastConfigMapName}, configMap)).To(Succeed(),
-				"Failed to get the config map")
-			configMap.Data["key"] = "updated-value"
-			Expect(hubClient.Update(ctx, configMap)).To(Succeed(), "Failed to update the config map")
+		It("can update the last Deployment", func() {
+			lastDeploymentName := extraDeploymentNames[len(extraDeploymentNames)-1]
+			deployment := &appsv1.Deployment{}
+			Expect(hubUncachedReader.Get(ctx, types.NamespacedName{Namespace: appNamespaceName, Name: lastDeploymentName}, deployment)).To(Succeed(),
+				"Failed to get the Deployment")
+			deployment.Spec.Replicas = ptr.To(int32(3))
+			deployment.Spec.Template.Spec.Containers[0].Image = "nginx:1.28"
+			Expect(hubClient.Update(ctx, deployment)).To(Succeed(), "Failed to update the Deployment")
+			waitForDeploymentsInCache(deployment)
 		})
 
 		It("should create new snapshots again if the existing ones are stale", func() {
 			_, newHash, err := resourceSnapshotManager.retrieveAndHashSelectedResources(ctx, placementPolicy)
 			Expect(err).ToNot(HaveOccurred(), "Failed to retrieve and hash the selected resources")
-			Expect(newHash).ToNot(Equal(wantHash), "The hash of the selected resources has not changed after updating the config map")
+			Expect(newHash).ToNot(Equal(wantHash), "The hash of the selected resources has not changed after updating the Deployment")
 			wantHash = newHash
 
 			gotSnapshots, isUpToDate, err := resourceSnapshotManager.SnapshotResourcesIfStale(ctx, placementPolicy)
 			Expect(err).ToNot(HaveOccurred(), "Failed to snapshot resources")
 			Expect(isUpToDate).To(BeTrue(), "The new placement resource snapshots are not up-to-date")
-			persistedSnapshots := verifySnapshotsOfConfigMaps(2, gotSnapshots, wantHash, allConfigMapNames)
+			persistedSnapshots := verifySnapshotsOfDeployments(2, gotSnapshots, wantHash, allDeploymentNames)
 
-			// The last config map lives in the last secondary snapshot; it should carry the updated content.
+			// The last Deployment lives in the last secondary snapshot; it should carry the updated content.
 			lastSnapshot := persistedSnapshots[len(persistedSnapshots)-1]
 			Expect(lastSnapshot.Spec.Resources).To(HaveLen(1), "Unexpected number of resources in the last secondary snapshot")
-			gotConfigMap := &corev1.ConfigMap{}
-			Expect(json.Unmarshal(lastSnapshot.Spec.Resources[0].Manifest.Raw, gotConfigMap)).To(Succeed(), "Failed to unmarshal the config map manifest")
-			if diff := cmp.Diff(gotConfigMap.Data, map[string]string{"key": "updated-value"}); diff != "" {
-				Fail(fmt.Sprintf("Snapshotted config map data diff (-got +want):\n%s", diff))
-			}
+			gotDeployment := &appsv1.Deployment{}
+			Expect(json.Unmarshal(lastSnapshot.Spec.Resources[0].Manifest.Raw, gotDeployment)).To(Succeed(), "Failed to unmarshal the Deployment manifest")
+			Expect(gotDeployment.Spec.Replicas).To(Equal(ptr.To(int32(3))), "Unexpected replica count in the snapshotted Deployment")
+			Expect(gotDeployment.Spec.Template.Spec.Containers[0].Image).To(Equal("nginx:1.28"), "Unexpected image in the snapshotted Deployment")
 		})
 
-		It("can delete some config maps", func() {
-			for _, idx := range []int{2, 5, 9} {
-				configMap := &corev1.ConfigMap{ObjectMeta: metav1.ObjectMeta{Name: allConfigMapNames[idx], Namespace: appNamespaceName}}
-				Expect(hubClient.Delete(ctx, configMap)).To(Succeed(), "Failed to delete the config map")
+		It("can delete some Deployments", func() {
+			deletedIdxs := []int{2, 5, 9}
+			deployments := make([]*appsv1.Deployment, 0, len(deletedIdxs))
+			for _, idx := range deletedIdxs {
+				deployment := &appsv1.Deployment{ObjectMeta: metav1.ObjectMeta{Name: allDeploymentNames[idx], Namespace: appNamespaceName}}
+				Expect(hubClient.Delete(ctx, deployment)).To(Succeed(), "Failed to delete the Deployment")
+				deployments = append(deployments, deployment)
 			}
+			waitForDeploymentsRemovedFromCache(deployments...)
 		})
 
 		It("should create new snapshots if some selected resources have been removed", func() {
 			// Seven resources are left, with at most three resources per snapshot: one primary and two secondary snapshots.
-			var wantConfigMapNames []string
-			for idx, name := range allConfigMapNames {
+			var wantDeploymentNames []string
+			for idx, name := range allDeploymentNames {
 				if idx != 2 && idx != 5 && idx != 9 {
-					wantConfigMapNames = append(wantConfigMapNames, name)
+					wantDeploymentNames = append(wantDeploymentNames, name)
 				}
 			}
 
 			_, newHash, err := resourceSnapshotManager.retrieveAndHashSelectedResources(ctx, placementPolicy)
 			Expect(err).ToNot(HaveOccurred(), "Failed to retrieve and hash the selected resources")
-			Expect(newHash).ToNot(Equal(wantHash), "The hash of the selected resources has not changed after deleting the config maps")
+			Expect(newHash).ToNot(Equal(wantHash), "The hash of the selected resources has not changed after deleting the Deployments")
 			wantHash = newHash
 
 			gotSnapshots, isUpToDate, err := resourceSnapshotManager.SnapshotResourcesIfStale(ctx, placementPolicy)
 			Expect(err).ToNot(HaveOccurred(), "Failed to snapshot resources")
 			Expect(isUpToDate).To(BeTrue(), "The new placement resource snapshots are not up-to-date")
-			verifySnapshotsOfConfigMaps(3, gotSnapshots, wantHash, wantConfigMapNames)
+			verifySnapshotsOfDeployments(3, gotSnapshots, wantHash, wantDeploymentNames)
 		})
 
 		AfterAll(func() {
@@ -770,8 +781,8 @@ var _ = Describe("core ops (placement resource snapshots)", func() {
 			for _, name := range snapshotNames {
 				objs = append(objs, &placementv1alpha1.PlacementResourceSnapshot{ObjectMeta: metav1.ObjectMeta{Name: name, Namespace: appNamespaceName}})
 			}
-			for _, name := range allConfigMapNames {
-				objs = append(objs, &corev1.ConfigMap{ObjectMeta: metav1.ObjectMeta{Name: name, Namespace: appNamespaceName}})
+			for _, name := range allDeploymentNames {
+				objs = append(objs, &appsv1.Deployment{ObjectMeta: metav1.ObjectMeta{Name: name, Namespace: appNamespaceName}})
 			}
 			for _, obj := range objs {
 				Expect(client.IgnoreNotFound(hubClient.Delete(ctx, obj))).To(Succeed(), "Failed to delete object %T", obj)
@@ -800,7 +811,7 @@ var _ = Describe("core ops (placement resource snapshots)", func() {
 					Namespace: appNamespaceName,
 					Labels:    map[string]string{"placement-group": "foo"},
 				},
-				Data: map[string]string{"key": strings.Repeat("a", 3000)},
+				Data: map[string]string{"key": strings.Repeat("a", 15000)},
 			}
 			Expect(hubClient.Create(ctx, configMap)).To(Succeed(), "Failed to create the config map")
 
@@ -853,7 +864,7 @@ var _ = Describe("core ops (placement resource snapshots)", func() {
 			configMap := &corev1.ConfigMap{}
 			Expect(hubUncachedReader.Get(ctx, types.NamespacedName{Namespace: appNamespaceName, Name: configMapName}, configMap)).To(Succeed(),
 				"Failed to get the config map")
-			configMap.Data["key"] = strings.Repeat("a", 1500)
+			configMap.Data["key"] = strings.Repeat("a", 7500)
 			Expect(hubClient.Update(ctx, configMap)).To(Succeed(), "Failed to update the config map")
 
 			secondConfigMap := &corev1.ConfigMap{
@@ -862,7 +873,7 @@ var _ = Describe("core ops (placement resource snapshots)", func() {
 					Namespace: appNamespaceName,
 					Labels:    map[string]string{"placement-group": "foo"},
 				},
-				Data: map[string]string{"key": strings.Repeat("b", 1500)},
+				Data: map[string]string{"key": strings.Repeat("b", 7500)},
 			}
 			Expect(hubClient.Create(ctx, secondConfigMap)).To(Succeed(), "Failed to create the second config map")
 		})
@@ -925,7 +936,7 @@ var _ = Describe("core ops (placement resource snapshots)", func() {
 						placementv1alpha1.SubIndexedPlacementResourceSnapshotCountLabelKey: "2",
 					},
 					wantConfigMap:  configMapName,
-					wantConfigData: strings.Repeat("a", 1500),
+					wantConfigData: strings.Repeat("a", 7500),
 				},
 				{
 					name:         "secondary",
@@ -936,7 +947,7 @@ var _ = Describe("core ops (placement resource snapshots)", func() {
 						placementv1alpha1.PlacementResourceSnapshotSubIndexLabelKey: "1",
 					},
 					wantConfigMap:  secondConfigMapName,
-					wantConfigData: strings.Repeat("b", 1500),
+					wantConfigData: strings.Repeat("b", 7500),
 				},
 			}
 			for _, tc := range testCases {
@@ -982,7 +993,7 @@ var _ = Describe("core ops (placement resource snapshots)", func() {
 				configMap := &corev1.ConfigMap{}
 				Expect(hubUncachedReader.Get(ctx, types.NamespacedName{Namespace: appNamespaceName, Name: name}, configMap)).To(Succeed(),
 					"Failed to get the config map")
-				configMap.Data["key"] = strings.Repeat("c", 800)
+				configMap.Data["key"] = strings.Repeat("c", 4000)
 				Expect(hubClient.Update(ctx, configMap)).To(Succeed(), "Failed to update the config map")
 			}
 		})
@@ -1050,7 +1061,7 @@ var _ = Describe("core ops (placement resource snapshots)", func() {
 				}
 				gotConfigMap := &corev1.ConfigMap{}
 				Expect(json.Unmarshal(gotSnapshot.Spec.Resources[idx].Manifest.Raw, gotConfigMap)).To(Succeed(), "Failed to unmarshal the config map manifest")
-				if diff := cmp.Diff(gotConfigMap.Data, map[string]string{"key": strings.Repeat("c", 800)}); diff != "" {
+				if diff := cmp.Diff(gotConfigMap.Data, map[string]string{"key": strings.Repeat("c", 4000)}); diff != "" {
 					Fail(fmt.Sprintf("The new placement resource snapshot config map data (index %d) diff (-got +want):\n%s", idx, diff))
 				}
 			}
@@ -1856,6 +1867,7 @@ var _ = Describe("core ops (cluster placement resource snapshots)", func() {
 				},
 			}
 			Expect(hubClient.Create(ctx, deployment)).To(Succeed(), "Failed to create the Deployment")
+			waitForDeploymentsInCache(deployment)
 
 			// Create a placement policy that selects the two resources.
 			placementPolicy = &placementv1alpha1.ClusterPlacementPolicy{
@@ -2059,6 +2071,7 @@ var _ = Describe("core ops (cluster placement resource snapshots)", func() {
 			deployment.Spec.Replicas = ptr.To(int32(3))
 			deployment.Spec.Template.Spec.Containers[0].Image = "nginx:1.28"
 			Expect(hubClient.Update(ctx, deployment)).To(Succeed(), "Failed to update the Deployment")
+			waitForDeploymentsInCache(deployment)
 		})
 
 		It("can create a new snapshot when the existing one is stale", func() {
@@ -2145,31 +2158,32 @@ var _ = Describe("core ops (cluster placement resource snapshots)", func() {
 
 	Context("primary and secondary placement resource snapshots (too many resources) (label-based selection)", Ordered, func() {
 		placementPolicyName := fmt.Sprintf(placementPolicyNameTemplate, utils.RandStr())
-		configMapNamePrefix := fmt.Sprintf(configMapNameTemplate, utils.RandStr())
+		deploymentNamePrefix := fmt.Sprintf(deploymentNameTemplate, utils.RandStr())
 
 		// The names are in ascending order, which is also the order in which the selected resources are
 		// snapshotted.
-		configMapNames := make([]string, 5)
-		for idx := range configMapNames {
-			configMapNames[idx] = fmt.Sprintf("%s-%d", configMapNamePrefix, idx)
+		deploymentNames := make([]string, 5)
+		for idx := range deploymentNames {
+			deploymentNames[idx] = fmt.Sprintf("%s-%d", deploymentNamePrefix, idx)
 		}
 
-		// The names of the config maps added later; they sort after the ones above.
-		extraConfigMapNames := make([]string, 5)
-		for idx := range extraConfigMapNames {
-			extraConfigMapNames[idx] = fmt.Sprintf("%s-%d", configMapNamePrefix, idx+len(configMapNames))
+		// The names of the Deployments added later; they sort after the ones above.
+		extraDeploymentNames := make([]string, 5)
+		for idx := range extraDeploymentNames {
+			extraDeploymentNames[idx] = fmt.Sprintf("%s-%d", deploymentNamePrefix, idx+len(deploymentNames))
 		}
 
-		allConfigMapNames := append(slices.Clone(configMapNames), extraConfigMapNames...)
+		allDeploymentNames := append(slices.Clone(deploymentNames), extraDeploymentNames...)
 
-		configMapIdentifiers := func(names []string) []placementv1alpha1.ObjectReference {
+		deploymentIdentifiers := func(names []string) []placementv1alpha1.ObjectReference {
 			identifiers := make([]placementv1alpha1.ObjectReference, 0, len(names))
 			for _, name := range names {
 				identifiers = append(identifiers, placementv1alpha1.ObjectReference{
 					Namespace:  appNamespaceName,
 					Name:       name,
+					APIGroup:   "apps",
 					APIVersion: "v1",
-					Kind:       "ConfigMap",
+					Kind:       "Deployment",
 				})
 			}
 			return identifiers
@@ -2179,20 +2193,17 @@ var _ = Describe("core ops (cluster placement resource snapshots)", func() {
 		var wantHash string
 
 		BeforeAll(func() {
-			// Create five config maps with the same label in the app namespace.
-			for idx := range configMapNames {
-				configMap := &corev1.ConfigMap{
-					ObjectMeta: metav1.ObjectMeta{
-						Name:      configMapNames[idx],
-						Namespace: appNamespaceName,
-						Labels:    map[string]string{"placement-group": "foo"},
-					},
-					Data: map[string]string{"key": fmt.Sprintf("value-%d", idx)},
-				}
-				Expect(hubClient.Create(ctx, configMap)).To(Succeed(), "Failed to create the config map")
+			// Create five Deployments with the same label in the app namespace.
+			deployments := make([]*appsv1.Deployment, 0, len(deploymentNames))
+			for _, name := range deploymentNames {
+				deployment := newDeployment(name, appNamespaceName)
+				deployment.Labels = map[string]string{"placement-group": "foo"}
+				Expect(hubClient.Create(ctx, deployment)).To(Succeed(), "Failed to create the Deployment")
+				deployments = append(deployments, deployment)
 			}
+			waitForDeploymentsInCache(deployments...)
 
-			// Create a placement policy that selects the config maps by their label.
+			// Create a placement policy that selects the Deployments by their label.
 			placementPolicy = &placementv1alpha1.ClusterPlacementPolicy{
 				ObjectMeta: metav1.ObjectMeta{
 					Name: placementPolicyName,
@@ -2200,8 +2211,9 @@ var _ = Describe("core ops (cluster placement resource snapshots)", func() {
 				Spec: placementv1alpha1.PlacementPolicySpec{
 					ResourceSelectors: []placementv1alpha1.ResourceSelector{
 						{
+							APIGroup:   "apps",
 							APIVersion: "v1",
-							Kind:       "ConfigMap",
+							Kind:       "Deployment",
 							Namespace:  appNamespaceName,
 							LabelSelector: &metav1.LabelSelector{
 								MatchLabels: map[string]string{"placement-group": "foo"},
@@ -2216,7 +2228,7 @@ var _ = Describe("core ops (cluster placement resource snapshots)", func() {
 		It("can compute the hash of selected resources", func() {
 			resources, hash, err := resourceSnapshotManager.retrieveAndHashSelectedResources(ctx, placementPolicy)
 			Expect(err).ToNot(HaveOccurred(), "Failed to retrieve and hash the selected resources")
-			Expect(resources).To(HaveLen(len(configMapNames)), "Unexpected number of selected resources")
+			Expect(resources).To(HaveLen(len(deploymentNames)), "Unexpected number of selected resources")
 			wantHash = hash
 		})
 
@@ -2268,7 +2280,7 @@ var _ = Describe("core ops (cluster placement resource snapshots)", func() {
 						placementv1alpha1.PlacementResourceSnapshotSubIndexLabelKey:        "0",
 						placementv1alpha1.SubIndexedPlacementResourceSnapshotCountLabelKey: "2",
 					},
-					wantIdentifiers: configMapIdentifiers(configMapNames[:3]),
+					wantIdentifiers: deploymentIdentifiers(deploymentNames[:3]),
 				},
 				{
 					name:         "secondary",
@@ -2278,7 +2290,7 @@ var _ = Describe("core ops (cluster placement resource snapshots)", func() {
 						placementv1alpha1.PlacementResourceSnapshotIndexLabelKey:    "0",
 						placementv1alpha1.PlacementResourceSnapshotSubIndexLabelKey: "1",
 					},
-					wantIdentifiers: configMapIdentifiers(configMapNames[3:]),
+					wantIdentifiers: deploymentIdentifiers(deploymentNames[3:]),
 				},
 			}
 			for _, tc := range testCases {
@@ -2308,18 +2320,15 @@ var _ = Describe("core ops (cluster placement resource snapshots)", func() {
 			}
 		})
 
-		It("can create more config maps", func() {
-			for idx, name := range extraConfigMapNames {
-				configMap := &corev1.ConfigMap{
-					ObjectMeta: metav1.ObjectMeta{
-						Name:      name,
-						Namespace: appNamespaceName,
-						Labels:    map[string]string{"placement-group": "foo"},
-					},
-					Data: map[string]string{"key": fmt.Sprintf("value-%d", idx+len(configMapNames))},
-				}
-				Expect(hubClient.Create(ctx, configMap)).To(Succeed(), "Failed to create the config map")
+		It("can create more Deployments", func() {
+			deployments := make([]*appsv1.Deployment, 0, len(extraDeploymentNames))
+			for _, name := range extraDeploymentNames {
+				deployment := newDeployment(name, appNamespaceName)
+				deployment.Labels = map[string]string{"placement-group": "foo"}
+				Expect(hubClient.Create(ctx, deployment)).To(Succeed(), "Failed to create the Deployment")
+				deployments = append(deployments, deployment)
 			}
+			waitForDeploymentsInCache(deployments...)
 		})
 
 		It("should not create new snapshots if snapshots already exist", func() {
@@ -2352,18 +2361,18 @@ var _ = Describe("core ops (cluster placement resource snapshots)", func() {
 			}
 		})
 
-		// verifySnapshotsOfConfigMaps verifies that the given snapshots, created at the given index, are
-		// the primary and secondary placement resource snapshots that cover the given config maps, and returns
+		// verifySnapshotsOfDeployments verifies that the given snapshots, created at the given index, are
+		// the primary and secondary placement resource snapshots that cover the given Deployments, and returns
 		// the snapshots as persisted.
 		//
 		// The resources are spread across the snapshots in groups of three, in the order of their names.
-		verifySnapshotsOfConfigMaps := func(
+		verifySnapshotsOfDeployments := func(
 			snapshotIdx int,
 			gotSnapshots []placementv1alpha1.PlacementResourceSnapshotAccessor,
 			wantHash string,
-			wantConfigMapNames []string,
+			wantDeploymentNames []string,
 		) []*placementv1alpha1.ClusterPlacementResourceSnapshot {
-			wantSnapshotCnt := (len(wantConfigMapNames) + 2) / 3
+			wantSnapshotCnt := (len(wantDeploymentNames) + 2) / 3
 			Expect(gotSnapshots).To(HaveLen(wantSnapshotCnt), "Unexpected number of placement resource snapshots")
 
 			wantOwnerRefs := []metav1.OwnerReference{
@@ -2415,12 +2424,12 @@ var _ = Describe("core ops (cluster placement resource snapshots)", func() {
 				}
 
 				groupStart := subIdx * 3
-				groupEnd := min(groupStart+3, len(wantConfigMapNames))
+				groupEnd := min(groupStart+3, len(wantDeploymentNames))
 				gotIdentifiers := make([]placementv1alpha1.ObjectReference, 0, len(gotSnapshot.Spec.Resources))
 				for idx := range gotSnapshot.Spec.Resources {
 					gotIdentifiers = append(gotIdentifiers, gotSnapshot.Spec.Resources[idx].Identifier)
 				}
-				if diff := cmp.Diff(gotIdentifiers, configMapIdentifiers(wantConfigMapNames[groupStart:groupEnd])); diff != "" {
+				if diff := cmp.Diff(gotIdentifiers, deploymentIdentifiers(wantDeploymentNames[groupStart:groupEnd])); diff != "" {
 					Fail(fmt.Sprintf("The placement resource snapshot (sub-index %d) resource identifiers diff (-got +want):\n%s", subIdx, diff))
 				}
 			}
@@ -2430,71 +2439,76 @@ var _ = Describe("core ops (cluster placement resource snapshots)", func() {
 		It("should create new snapshots if the existing ones are stale", func() {
 			_, newHash, err := resourceSnapshotManager.retrieveAndHashSelectedResources(ctx, placementPolicy)
 			Expect(err).ToNot(HaveOccurred(), "Failed to retrieve and hash the selected resources")
-			Expect(newHash).ToNot(Equal(wantHash), "The hash of the selected resources has not changed after adding config maps")
+			Expect(newHash).ToNot(Equal(wantHash), "The hash of the selected resources has not changed after adding Deployments")
 			wantHash = newHash
 
 			// Ten resources, with at most three resources per snapshot: one primary and three secondary snapshots.
 			gotSnapshots, isUpToDate, err := resourceSnapshotManager.SnapshotResourcesIfStale(ctx, placementPolicy)
 			Expect(err).ToNot(HaveOccurred(), "Failed to snapshot resources")
 			Expect(isUpToDate).To(BeTrue(), "The new placement resource snapshots are not up-to-date")
-			verifySnapshotsOfConfigMaps(1, gotSnapshots, wantHash, allConfigMapNames)
+			verifySnapshotsOfDeployments(1, gotSnapshots, wantHash, allDeploymentNames)
 		})
 
-		It("can update the last config map", func() {
-			lastConfigMapName := extraConfigMapNames[len(extraConfigMapNames)-1]
-			configMap := &corev1.ConfigMap{}
-			Expect(hubUncachedReader.Get(ctx, types.NamespacedName{Namespace: appNamespaceName, Name: lastConfigMapName}, configMap)).To(Succeed(),
-				"Failed to get the config map")
-			configMap.Data["key"] = "updated-value"
-			Expect(hubClient.Update(ctx, configMap)).To(Succeed(), "Failed to update the config map")
+		It("can update the last Deployment", func() {
+			lastDeploymentName := extraDeploymentNames[len(extraDeploymentNames)-1]
+			deployment := &appsv1.Deployment{}
+			Expect(hubUncachedReader.Get(ctx, types.NamespacedName{Namespace: appNamespaceName, Name: lastDeploymentName}, deployment)).To(Succeed(),
+				"Failed to get the Deployment")
+			deployment.Spec.Replicas = ptr.To(int32(3))
+			deployment.Spec.Template.Spec.Containers[0].Image = "nginx:1.28"
+			Expect(hubClient.Update(ctx, deployment)).To(Succeed(), "Failed to update the Deployment")
+			waitForDeploymentsInCache(deployment)
 		})
 
 		It("should create new snapshots again if the existing ones are stale", func() {
 			_, newHash, err := resourceSnapshotManager.retrieveAndHashSelectedResources(ctx, placementPolicy)
 			Expect(err).ToNot(HaveOccurred(), "Failed to retrieve and hash the selected resources")
-			Expect(newHash).ToNot(Equal(wantHash), "The hash of the selected resources has not changed after updating the config map")
+			Expect(newHash).ToNot(Equal(wantHash), "The hash of the selected resources has not changed after updating the Deployment")
 			wantHash = newHash
 
 			gotSnapshots, isUpToDate, err := resourceSnapshotManager.SnapshotResourcesIfStale(ctx, placementPolicy)
 			Expect(err).ToNot(HaveOccurred(), "Failed to snapshot resources")
 			Expect(isUpToDate).To(BeTrue(), "The new placement resource snapshots are not up-to-date")
-			persistedSnapshots := verifySnapshotsOfConfigMaps(2, gotSnapshots, wantHash, allConfigMapNames)
+			persistedSnapshots := verifySnapshotsOfDeployments(2, gotSnapshots, wantHash, allDeploymentNames)
 
-			// The last config map lives in the last secondary snapshot; it should carry the updated content.
+			// The last Deployment lives in the last secondary snapshot; it should carry the updated content.
 			lastSnapshot := persistedSnapshots[len(persistedSnapshots)-1]
 			Expect(lastSnapshot.Spec.Resources).To(HaveLen(1), "Unexpected number of resources in the last secondary snapshot")
-			gotConfigMap := &corev1.ConfigMap{}
-			Expect(json.Unmarshal(lastSnapshot.Spec.Resources[0].Manifest.Raw, gotConfigMap)).To(Succeed(), "Failed to unmarshal the config map manifest")
-			if diff := cmp.Diff(gotConfigMap.Data, map[string]string{"key": "updated-value"}); diff != "" {
-				Fail(fmt.Sprintf("Snapshotted config map data diff (-got +want):\n%s", diff))
-			}
+			gotDeployment := &appsv1.Deployment{}
+			Expect(json.Unmarshal(lastSnapshot.Spec.Resources[0].Manifest.Raw, gotDeployment)).To(Succeed(), "Failed to unmarshal the Deployment manifest")
+			Expect(gotDeployment.Spec.Replicas).To(Equal(ptr.To(int32(3))), "Unexpected replica count in the snapshotted Deployment")
+			Expect(gotDeployment.Spec.Template.Spec.Containers[0].Image).To(Equal("nginx:1.28"), "Unexpected image in the snapshotted Deployment")
 		})
 
-		It("can delete some config maps", func() {
-			for _, idx := range []int{2, 5, 9} {
-				configMap := &corev1.ConfigMap{ObjectMeta: metav1.ObjectMeta{Name: allConfigMapNames[idx], Namespace: appNamespaceName}}
-				Expect(hubClient.Delete(ctx, configMap)).To(Succeed(), "Failed to delete the config map")
+		It("can delete some Deployments", func() {
+			deletedIdxs := []int{2, 5, 9}
+			deployments := make([]*appsv1.Deployment, 0, len(deletedIdxs))
+			for _, idx := range deletedIdxs {
+				deployment := &appsv1.Deployment{ObjectMeta: metav1.ObjectMeta{Name: allDeploymentNames[idx], Namespace: appNamespaceName}}
+				Expect(hubClient.Delete(ctx, deployment)).To(Succeed(), "Failed to delete the Deployment")
+				deployments = append(deployments, deployment)
 			}
+			waitForDeploymentsRemovedFromCache(deployments...)
 		})
 
 		It("should create new snapshots if some selected resources have been removed", func() {
 			// Seven resources are left, with at most three resources per snapshot: one primary and two secondary snapshots.
-			var wantConfigMapNames []string
-			for idx, name := range allConfigMapNames {
+			var wantDeploymentNames []string
+			for idx, name := range allDeploymentNames {
 				if idx != 2 && idx != 5 && idx != 9 {
-					wantConfigMapNames = append(wantConfigMapNames, name)
+					wantDeploymentNames = append(wantDeploymentNames, name)
 				}
 			}
 
 			_, newHash, err := resourceSnapshotManager.retrieveAndHashSelectedResources(ctx, placementPolicy)
 			Expect(err).ToNot(HaveOccurred(), "Failed to retrieve and hash the selected resources")
-			Expect(newHash).ToNot(Equal(wantHash), "The hash of the selected resources has not changed after deleting the config maps")
+			Expect(newHash).ToNot(Equal(wantHash), "The hash of the selected resources has not changed after deleting the Deployments")
 			wantHash = newHash
 
 			gotSnapshots, isUpToDate, err := resourceSnapshotManager.SnapshotResourcesIfStale(ctx, placementPolicy)
 			Expect(err).ToNot(HaveOccurred(), "Failed to snapshot resources")
 			Expect(isUpToDate).To(BeTrue(), "The new placement resource snapshots are not up-to-date")
-			verifySnapshotsOfConfigMaps(3, gotSnapshots, wantHash, wantConfigMapNames)
+			verifySnapshotsOfDeployments(3, gotSnapshots, wantHash, wantDeploymentNames)
 		})
 
 		AfterAll(func() {
@@ -2518,8 +2532,8 @@ var _ = Describe("core ops (cluster placement resource snapshots)", func() {
 			for _, name := range snapshotNames {
 				objs = append(objs, &placementv1alpha1.ClusterPlacementResourceSnapshot{ObjectMeta: metav1.ObjectMeta{Name: name}})
 			}
-			for _, name := range allConfigMapNames {
-				objs = append(objs, &corev1.ConfigMap{ObjectMeta: metav1.ObjectMeta{Name: name, Namespace: appNamespaceName}})
+			for _, name := range allDeploymentNames {
+				objs = append(objs, &appsv1.Deployment{ObjectMeta: metav1.ObjectMeta{Name: name, Namespace: appNamespaceName}})
 			}
 			for _, obj := range objs {
 				Expect(client.IgnoreNotFound(hubClient.Delete(ctx, obj))).To(Succeed(), "Failed to delete object %T", obj)
@@ -2548,7 +2562,7 @@ var _ = Describe("core ops (cluster placement resource snapshots)", func() {
 					Namespace: appNamespaceName,
 					Labels:    map[string]string{"placement-group": "foo"},
 				},
-				Data: map[string]string{"key": strings.Repeat("a", 3000)},
+				Data: map[string]string{"key": strings.Repeat("a", 15000)},
 			}
 			Expect(hubClient.Create(ctx, configMap)).To(Succeed(), "Failed to create the config map")
 
@@ -2601,7 +2615,7 @@ var _ = Describe("core ops (cluster placement resource snapshots)", func() {
 			configMap := &corev1.ConfigMap{}
 			Expect(hubUncachedReader.Get(ctx, types.NamespacedName{Namespace: appNamespaceName, Name: configMapName}, configMap)).To(Succeed(),
 				"Failed to get the config map")
-			configMap.Data["key"] = strings.Repeat("a", 1500)
+			configMap.Data["key"] = strings.Repeat("a", 7500)
 			Expect(hubClient.Update(ctx, configMap)).To(Succeed(), "Failed to update the config map")
 
 			secondConfigMap := &corev1.ConfigMap{
@@ -2610,7 +2624,7 @@ var _ = Describe("core ops (cluster placement resource snapshots)", func() {
 					Namespace: appNamespaceName,
 					Labels:    map[string]string{"placement-group": "foo"},
 				},
-				Data: map[string]string{"key": strings.Repeat("b", 1500)},
+				Data: map[string]string{"key": strings.Repeat("b", 7500)},
 			}
 			Expect(hubClient.Create(ctx, secondConfigMap)).To(Succeed(), "Failed to create the second config map")
 		})
@@ -2673,7 +2687,7 @@ var _ = Describe("core ops (cluster placement resource snapshots)", func() {
 						placementv1alpha1.SubIndexedPlacementResourceSnapshotCountLabelKey: "2",
 					},
 					wantConfigMap:  configMapName,
-					wantConfigData: strings.Repeat("a", 1500),
+					wantConfigData: strings.Repeat("a", 7500),
 				},
 				{
 					name:         "secondary",
@@ -2684,7 +2698,7 @@ var _ = Describe("core ops (cluster placement resource snapshots)", func() {
 						placementv1alpha1.PlacementResourceSnapshotSubIndexLabelKey: "1",
 					},
 					wantConfigMap:  secondConfigMapName,
-					wantConfigData: strings.Repeat("b", 1500),
+					wantConfigData: strings.Repeat("b", 7500),
 				},
 			}
 			for _, tc := range testCases {
@@ -2730,7 +2744,7 @@ var _ = Describe("core ops (cluster placement resource snapshots)", func() {
 				configMap := &corev1.ConfigMap{}
 				Expect(hubUncachedReader.Get(ctx, types.NamespacedName{Namespace: appNamespaceName, Name: name}, configMap)).To(Succeed(),
 					"Failed to get the config map")
-				configMap.Data["key"] = strings.Repeat("c", 800)
+				configMap.Data["key"] = strings.Repeat("c", 4000)
 				Expect(hubClient.Update(ctx, configMap)).To(Succeed(), "Failed to update the config map")
 			}
 		})
@@ -2798,7 +2812,7 @@ var _ = Describe("core ops (cluster placement resource snapshots)", func() {
 				}
 				gotConfigMap := &corev1.ConfigMap{}
 				Expect(json.Unmarshal(gotSnapshot.Spec.Resources[idx].Manifest.Raw, gotConfigMap)).To(Succeed(), "Failed to unmarshal the config map manifest")
-				if diff := cmp.Diff(gotConfigMap.Data, map[string]string{"key": strings.Repeat("c", 800)}); diff != "" {
+				if diff := cmp.Diff(gotConfigMap.Data, map[string]string{"key": strings.Repeat("c", 4000)}); diff != "" {
 					Fail(fmt.Sprintf("The new placement resource snapshot config map data (index %d) diff (-got +want):\n%s", idx, diff))
 				}
 			}
@@ -3539,6 +3553,751 @@ var _ = Describe("core ops (cluster placement resource snapshots)", func() {
 					return errors.IsNotFound(hubUncachedReader.Get(ctx, client.ObjectKeyFromObject(obj), obj))
 				}, eventuallyDuration, eventuallyInterval).Should(BeTrue(), "Failed to remove object %T", obj)
 			}
+		})
+	})
+})
+
+var _ = Describe("GC variants", func() {
+	Context("revision history limit changes", Ordered, func() {
+		configMapName := fmt.Sprintf(configMapNameTemplate, utils.RandStr())
+		placementPolicy := newPlacementPolicy(appNamespaceName, configMapNameSelector(configMapName))
+		placementPolicy.Spec.ResourceRevisionHistoryLimit = ptr.To(int32(5))
+
+		// primarySnapshotNames returns the names of the primary snapshots at indices [from, to].
+		primarySnapshotNames := func(from, to int) []string {
+			names := make([]string, 0, to-from+1)
+			for idx := from; idx <= to; idx++ {
+				names = append(names, uniqueNameForPrimaryPlacementResourceSnapshot(placementPolicy.Name, idx))
+			}
+			return names
+		}
+		// createSnapshot updates the selected config map, and calls the manager to create a snapshot at the given index.
+		createSnapshot := func(idx int) {
+			updateConfigMapData(appNamespaceName, configMapName, fmt.Sprintf("value-%d", idx))
+			snapshotAndVerify(resourceSnapshotManager, placementPolicy, primarySnapshotNames(idx, idx))
+		}
+
+		BeforeAll(func() {
+			configMap := &corev1.ConfigMap{
+				ObjectMeta: metav1.ObjectMeta{
+					Name:      configMapName,
+					Namespace: appNamespaceName,
+				},
+				Data: map[string]string{"key": "initial-value"},
+			}
+			Expect(hubClient.Create(ctx, configMap)).To(Succeed(), "Failed to create the config map")
+			Expect(hubClient.Create(ctx, placementPolicy)).To(Succeed(), "Failed to create the placement policy")
+		})
+
+		It("can create six snapshots", func() {
+			for idx := 0; idx < 6; idx++ {
+				createSnapshot(idx)
+			}
+			// No GC request has been enqueued yet, as each call has seen at most five snapshots.
+			Expect(checkOwnedSnapshots(placementPolicy, primarySnapshotNames(0, 5))).To(Succeed())
+		})
+
+		It("should keep five snapshots after the next retrieval", func() {
+			snapshotAndVerify(resourceSnapshotManager, placementPolicy, primarySnapshotNames(5, 5))
+			Eventually(func() error {
+				return checkOwnedSnapshots(placementPolicy, primarySnapshotNames(1, 5))
+			}, eventuallyDuration, eventuallyInterval).Should(Succeed(), "Failed to garbage collect the oldest snapshot")
+		})
+
+		It("can lower the revision history limit to 1", func() {
+			updateRevisionHistoryLimit(placementPolicy, 1)
+		})
+
+		It("should garbage collect all but the latest snapshot at once", func() {
+			snapshotAndVerify(resourceSnapshotManager, placementPolicy, primarySnapshotNames(5, 5))
+			Eventually(func() error {
+				return checkOwnedSnapshots(placementPolicy, primarySnapshotNames(5, 5))
+			}, eventuallyDuration, eventuallyInterval).Should(Succeed(), "Failed to garbage collect all but the latest snapshot")
+		})
+
+		It("can raise the revision history limit to 3", func() {
+			updateRevisionHistoryLimit(placementPolicy, 3)
+		})
+
+		It("should keep the new snapshots up to the raised limit", func() {
+			for idx := 6; idx < 9; idx++ {
+				createSnapshot(idx)
+			}
+			// The limit is a soft one; right after a snapshot is created, there might be one more snapshot than
+			// the limit allows.
+			Expect(checkOwnedSnapshots(placementPolicy, primarySnapshotNames(5, 8))).To(Succeed())
+		})
+
+		It("should trim the history to the raised limit at the next retrieval", func() {
+			snapshotAndVerify(resourceSnapshotManager, placementPolicy, primarySnapshotNames(8, 8))
+			Eventually(func() error {
+				return checkOwnedSnapshots(placementPolicy, primarySnapshotNames(6, 8))
+			}, eventuallyDuration, eventuallyInterval).Should(Succeed(), "Failed to trim the history to the raised limit")
+		})
+
+		AfterAll(func() {
+			objs := primarySnapshotObjs(placementPolicy, 9)
+			objs = append(objs, placementPolicy, &corev1.ConfigMap{ObjectMeta: metav1.ObjectMeta{Name: configMapName, Namespace: appNamespaceName}})
+			deleteObjectsAndWait(objs)
+		})
+	})
+
+	Context("multi-group snapshots", Ordered, func() {
+		groupLabels := map[string]string{placementGroupLabelKey: utils.RandStr()}
+		configMapNamePrefix := fmt.Sprintf(configMapNameTemplate, utils.RandStr())
+		var configMapNames []string
+
+		resourceSelector := configMapLabelSelector(groupLabels)
+		resourceSelector.Namespace = appNamespaceName
+		placementPolicy := newClusterPlacementPolicy(resourceSelector)
+		placementPolicy.Spec.ResourceRevisionHistoryLimit = ptr.To(int32(1))
+
+		extraSecondarySnapshotName := uniqueNameForSecondaryPlacementResourceSnapshot(placementPolicy.Name, 1, 2)
+
+		BeforeAll(func() {
+			// Seven config maps make three groups, as each snapshot can hold at most three resources.
+			configMapNames = createLabeledConfigMaps(configMapNamePrefix, 7, groupLabels)
+			Expect(hubClient.Create(ctx, placementPolicy)).To(Succeed(), "Failed to create the placement policy")
+		})
+
+		It("can create snapshots in three groups", func() {
+			snapshotAndVerify(resourceSnapshotManager, placementPolicy, snapshotSetNames(placementPolicy, 0, 3))
+		})
+
+		It("can deselect three config maps", func() {
+			setConfigMapLabels(configMapNames[4:], nil)
+		})
+
+		It("should create snapshots in two groups", func() {
+			snapshotAndVerify(resourceSnapshotManager, placementPolicy, snapshotSetNames(placementPolicy, 1, 2))
+			// No GC request has been enqueued, as the call has seen only one snapshot.
+			Expect(checkOwnedSnapshots(placementPolicy, slices.Concat(
+				snapshotSetNames(placementPolicy, 0, 3),
+				snapshotSetNames(placementPolicy, 1, 2),
+			))).To(Succeed())
+		})
+
+		It("can add an extra secondary snapshot at index 1", func() {
+			// The extra secondary snapshot mimics one left behind by an interrupted snapshot creation attempt; it has
+			// the same labels, annotations, and owner reference as the ones that the manager creates.
+			primarySnapshot := getPrimarySnapshotFromCache(placementPolicy, 1)
+			extraSecondarySnapshot, err := secondaryPlacementResourceSnapshot("", extraSecondarySnapshotName, placementPolicy, 1, 2,
+				nil, snapshotContentsHash(primarySnapshot), hubClient.Scheme())
+			Expect(err).ToNot(HaveOccurred(), "Failed to build the extra secondary snapshot")
+			Expect(hubClient.Create(ctx, extraSecondarySnapshot)).To(Succeed(), "Failed to create the extra secondary snapshot")
+			getSnapshotFromCache("", extraSecondarySnapshotName)
+		})
+
+		It("can deselect three more config maps", func() {
+			setConfigMapLabels(configMapNames[1:4], nil)
+		})
+
+		It("should garbage collect the primary and both secondary snapshots at index 0", func() {
+			// This call enqueues the snapshots at index 0 for GC.
+			snapshotAndVerify(resourceSnapshotManager, placementPolicy, snapshotSetNames(placementPolicy, 2, 1))
+			wantNames := slices.Concat(
+				snapshotSetNames(placementPolicy, 1, 2),
+				[]string{extraSecondarySnapshotName},
+				snapshotSetNames(placementPolicy, 2, 1),
+			)
+			Eventually(func() error {
+				return checkOwnedSnapshots(placementPolicy, wantNames)
+			}, eventuallyDuration, eventuallyInterval).Should(Succeed(), "Failed to garbage collect the snapshots at index 0")
+		})
+
+		It("can select all config maps again", func() {
+			setConfigMapLabels(configMapNames[1:], groupLabels)
+		})
+
+		It("should garbage collect the snapshots at index 1, including the extra secondary snapshot", func() {
+			// This call enqueues the snapshots at index 1 for GC; all of them should be removed, regardless of the
+			// count label on the primary snapshot.
+			snapshotAndVerify(resourceSnapshotManager, placementPolicy, snapshotSetNames(placementPolicy, 3, 3))
+			wantNames := slices.Concat(
+				snapshotSetNames(placementPolicy, 2, 1),
+				snapshotSetNames(placementPolicy, 3, 3),
+			)
+			Eventually(func() error {
+				return checkOwnedSnapshots(placementPolicy, wantNames)
+			}, eventuallyDuration, eventuallyInterval).Should(Succeed(), "Failed to garbage collect the snapshots at index 1")
+		})
+
+		It("should garbage collect the single-group snapshot at index 2", func() {
+			snapshotAndVerify(resourceSnapshotManager, placementPolicy, snapshotSetNames(placementPolicy, 3, 3))
+			Eventually(func() error {
+				return checkOwnedSnapshots(placementPolicy, snapshotSetNames(placementPolicy, 3, 3))
+			}, eventuallyDuration, eventuallyInterval).Should(Succeed(), "Failed to garbage collect the snapshot at index 2")
+		})
+
+		AfterAll(func() {
+			var objs []client.Object
+			for idx := 0; idx < 4; idx++ {
+				for _, name := range snapshotSetNames(placementPolicy, idx, 3) {
+					objs = append(objs, placementResourceSnapshotObj("", name))
+				}
+			}
+			objs = append(objs, placementResourceSnapshotObj("", extraSecondarySnapshotName), placementPolicy)
+			objs = append(objs, configMapObjs(configMapNames)...)
+			deleteObjectsAndWait(objs)
+		})
+	})
+
+	Context("GC requests", Ordered, func() {
+		configMapName := fmt.Sprintf(configMapNameTemplate, utils.RandStr())
+		// No revision history limit is set; the API server defaults it to 3.
+		placementPolicy := newPlacementPolicy(appNamespaceName, configMapNameSelector(configMapName))
+
+		var pausedMgr *Manager
+		var primarySnapshots []placementv1alpha1.PlacementResourceSnapshotAccessor
+
+		latestSnapshotNames := []string{uniqueNameForPrimaryPlacementResourceSnapshot(placementPolicy.Name, 4)}
+
+		// gcRequestsAt returns the GC requests for the primary snapshots at the given indices.
+		gcRequestsAt := func(idxs ...int) []snapshotGarbageCollectionRequest {
+			reqs := make([]snapshotGarbageCollectionRequest, 0, len(idxs))
+			for _, idx := range idxs {
+				reqs = append(reqs, gcRequestFor(placementPolicy, primarySnapshots[idx]))
+			}
+			return reqs
+		}
+		// createSnapshot updates the selected config map, and calls the paused manager to create a snapshot at
+		// the given index.
+		createSnapshot := func(idx int) {
+			updateConfigMapData(appNamespaceName, configMapName, fmt.Sprintf("value-%d", idx))
+			snapshotAndVerify(pausedMgr, placementPolicy, []string{uniqueNameForPrimaryPlacementResourceSnapshot(placementPolicy.Name, idx)})
+			primarySnapshots = append(primarySnapshots, getPrimarySnapshotFromCache(placementPolicy, idx))
+		}
+
+		BeforeAll(func() {
+			configMap := &corev1.ConfigMap{
+				ObjectMeta: metav1.ObjectMeta{
+					Name:      configMapName,
+					Namespace: appNamespaceName,
+				},
+				Data: map[string]string{"key": "initial-value"},
+			}
+			Expect(hubClient.Create(ctx, configMap)).To(Succeed(), "Failed to create the config map")
+			Expect(hubClient.Create(ctx, placementPolicy)).To(Succeed(), "Failed to create the placement policy")
+			pausedMgr = newPausedManager()
+		})
+
+		It("should default the revision history limit to 3", func() {
+			Expect(placementPolicy.Spec.ResourceRevisionHistoryLimit).To(Equal(ptr.To(int32(3))), "Unexpected default revision history limit")
+		})
+
+		It("should reject revision history limits out of range", func() {
+			for _, limit := range []int32{0, -1, 21} {
+				placementPolicyCopy := placementPolicy.DeepCopy()
+				placementPolicyCopy.Spec.ResourceRevisionHistoryLimit = ptr.To(limit)
+				err := hubClient.Update(ctx, placementPolicyCopy)
+				Expect(errors.IsInvalid(err)).To(BeTrue(), "Update with revision history limit %d = %v, want an invalid error", limit, err)
+				Expect(err.Error()).To(ContainSubstring(revisionHistoryLimitFieldPath), "Unexpected error message")
+			}
+		})
+
+		It("should not enqueue GC requests within the limit", func() {
+			for idx := 0; idx < 4; idx++ {
+				createSnapshot(idx)
+				verifyGCRequests(drainGCRequests(pausedMgr), nil)
+			}
+		})
+
+		It("should enqueue the oldest snapshot once the limit is exceeded", func() {
+			// The GC requests are computed from the snapshots seen before the new snapshot is created.
+			createSnapshot(4)
+			verifyGCRequests(drainGCRequests(pausedMgr), gcRequestsAt(0))
+		})
+
+		It("should not pile up duplicate GC requests", func() {
+			for idx := 0; idx < 3; idx++ {
+				snapshotAndVerify(pausedMgr, placementPolicy, latestSnapshotNames)
+				Expect(pausedMgr.gcwq.Len()).To(Equal(2), "Unexpected number of GC requests in the workqueue")
+			}
+			verifyGCRequests(drainGCRequests(pausedMgr), gcRequestsAt(0, 1))
+		})
+
+		inMemoryLimitTestCases := []struct {
+			name     string
+			limit    *int32
+			wantIdxs []int
+		}{
+			{
+				name:     "unset (the default of 3 applies)",
+				wantIdxs: []int{0, 1},
+			},
+			{
+				name:     "0 (treated as 1)",
+				limit:    ptr.To(int32(0)),
+				wantIdxs: []int{0, 1, 2, 3},
+			},
+			{
+				name:     "-1 (treated as 1)",
+				limit:    ptr.To(int32(-1)),
+				wantIdxs: []int{0, 1, 2, 3},
+			},
+			{
+				name:     "1",
+				limit:    ptr.To(int32(1)),
+				wantIdxs: []int{0, 1, 2, 3},
+			},
+			{
+				name:     "4",
+				limit:    ptr.To(int32(4)),
+				wantIdxs: []int{0},
+			},
+			{
+				name:  "5",
+				limit: ptr.To(int32(5)),
+			},
+			{
+				name:  "20",
+				limit: ptr.To(int32(20)),
+			},
+		}
+		for _, tc := range inMemoryLimitTestCases {
+			It(fmt.Sprintf("should honor an in-memory revision history limit of %s", tc.name), func() {
+				snapshotAndVerify(pausedMgr, withInMemoryRevisionHistoryLimit(placementPolicy, tc.limit), latestSnapshotNames)
+				verifyGCRequests(drainGCRequests(pausedMgr), gcRequestsAt(tc.wantIdxs...))
+			})
+		}
+
+		It("should skip snapshots that are already gone", func() {
+			Expect(hubClient.Delete(ctx, primarySnapshots[0])).To(Succeed(), "Failed to delete the snapshot at index 0")
+			waitForSnapshotGoneFromCache(appNamespaceName, primarySnapshots[0].GetName())
+
+			Expect(pausedMgr.garbageCollect(ctx, gcRequestFor(placementPolicy, primarySnapshots[0]))).To(Succeed(),
+				"Failed to process the GC request for a snapshot that is already gone")
+			snapshotAndVerify(pausedMgr, placementPolicy, latestSnapshotNames)
+			verifyGCRequests(drainGCRequests(pausedMgr), gcRequestsAt(1))
+		})
+
+		AfterAll(func() {
+			if pausedMgr != nil {
+				pausedMgr.gcwq.ShutDown()
+			}
+			objs := primarySnapshotObjs(placementPolicy, 5)
+			objs = append(objs, placementPolicy, &corev1.ConfigMap{ObjectMeta: metav1.ObjectMeta{Name: configMapName, Namespace: appNamespaceName}})
+			deleteObjectsAndWait(objs)
+		})
+	})
+
+	Context("snapshots pending deletion", Ordered, func() {
+		groupLabels := map[string]string{placementGroupLabelKey: utils.RandStr()}
+		configMapNamePrefix := fmt.Sprintf(configMapNameTemplate, utils.RandStr())
+		var configMapNames []string
+
+		placementPolicy := newPlacementPolicy(appNamespaceName, configMapLabelSelector(groupLabels))
+		placementPolicy.Spec.ResourceRevisionHistoryLimit = ptr.To(int32(1))
+
+		var pausedMgr *Manager
+		var gcRequestForSnapshot0 snapshotGarbageCollectionRequest
+
+		primarySnapshotName := func(idx int) string {
+			return uniqueNameForPrimaryPlacementResourceSnapshot(placementPolicy.Name, idx)
+		}
+		secondarySnapshotName := func(idx int) string {
+			return uniqueNameForSecondaryPlacementResourceSnapshot(placementPolicy.Name, idx, 1)
+		}
+
+		BeforeAll(func() {
+			// Four config maps make two groups, as each snapshot can hold at most three resources.
+			configMapNames = createLabeledConfigMaps(configMapNamePrefix, 4, groupLabels)
+			Expect(hubClient.Create(ctx, placementPolicy)).To(Succeed(), "Failed to create the placement policy")
+			pausedMgr = newPausedManager()
+		})
+
+		It("can create snapshots at index 0 and 1", func() {
+			snapshotAndVerify(pausedMgr, placementPolicy, snapshotSetNames(placementPolicy, 0, 2))
+			verifyGCRequests(drainGCRequests(pausedMgr), nil)
+
+			addSnapshotFinalizer(appNamespaceName, primarySnapshotName(0))
+			gcRequestForSnapshot0 = gcRequestFor(placementPolicy, getPrimarySnapshotFromCache(placementPolicy, 0))
+
+			updateConfigMapData(appNamespaceName, configMapNames[0], "changed-1")
+			snapshotAndVerify(pausedMgr, placementPolicy, snapshotSetNames(placementPolicy, 1, 2))
+			verifyGCRequests(drainGCRequests(pausedMgr), nil)
+		})
+
+		It("can delete the primary snapshot at index 0 out of band", func() {
+			markSnapshotForDeletion(appNamespaceName, primarySnapshotName(0))
+		})
+
+		It("should not enqueue a primary snapshot pending deletion", func() {
+			snapshotAndVerify(pausedMgr, placementPolicy, snapshotSetNames(placementPolicy, 1, 2))
+			verifyGCRequests(drainGCRequests(pausedMgr), nil)
+		})
+
+		It("should skip a primary snapshot pending deletion", func() {
+			Expect(pausedMgr.garbageCollect(ctx, gcRequestForSnapshot0)).To(Succeed(), "Failed to process the GC request")
+
+			Expect(checkOwnedSnapshots(placementPolicy, slices.Concat(
+				snapshotSetNames(placementPolicy, 0, 2),
+				snapshotSetNames(placementPolicy, 1, 2),
+			))).To(Succeed())
+			Expect(verifySnapshotExists(appNamespaceName, primarySnapshotName(0)).GetDeletionTimestamp()).ToNot(BeNil(),
+				"The primary snapshot at index 0 is not pending deletion")
+			Expect(verifySnapshotExists(appNamespaceName, secondarySnapshotName(0)).GetDeletionTimestamp()).To(BeNil(),
+				"The secondary snapshot at index 0 has been deleted unexpectedly")
+		})
+
+		It("should leave the secondary snapshot at index 0 behind once its primary snapshot is gone", func() {
+			// This is expected: the GC process is keyed on primary snapshots, and the primary snapshot at index 0
+			// has been deleted out of band, which does not happen in normal ops.
+			removeFinalizersAndDelete(placementResourceSnapshotObj(appNamespaceName, primarySnapshotName(0)))
+			waitForSnapshotGoneFromCache(appNamespaceName, primarySnapshotName(0))
+
+			snapshotAndVerify(pausedMgr, placementPolicy, snapshotSetNames(placementPolicy, 1, 2))
+			verifyGCRequests(drainGCRequests(pausedMgr), nil)
+			Expect(checkOwnedSnapshots(placementPolicy, slices.Concat(
+				[]string{secondarySnapshotName(0)},
+				snapshotSetNames(placementPolicy, 1, 2),
+			))).To(Succeed())
+		})
+
+		It("can create snapshots at index 2 while a secondary snapshot at index 1 has a finalizer", func() {
+			addSnapshotFinalizer(appNamespaceName, secondarySnapshotName(1))
+
+			updateConfigMapData(appNamespaceName, configMapNames[0], "changed-2")
+			snapshotAndVerify(pausedMgr, placementPolicy, snapshotSetNames(placementPolicy, 2, 2))
+			verifyGCRequests(drainGCRequests(pausedMgr), nil)
+		})
+
+		It("should delete the primary snapshot even when a secondary snapshot is pending deletion", func() {
+			snapshotAndVerify(pausedMgr, placementPolicy, snapshotSetNames(placementPolicy, 2, 2))
+			gotReqs := drainGCRequests(pausedMgr)
+			verifyGCRequests(gotReqs, []snapshotGarbageCollectionRequest{
+				gcRequestFor(placementPolicy, getPrimarySnapshotFromCache(placementPolicy, 1)),
+			})
+
+			Expect(pausedMgr.garbageCollect(ctx, gotReqs[0])).To(Succeed(), "Failed to process the GC request")
+			verifySnapshotNotFound(appNamespaceName, primarySnapshotName(1))
+			Expect(verifySnapshotExists(appNamespaceName, secondarySnapshotName(1)).GetDeletionTimestamp()).ToNot(BeNil(),
+				"The secondary snapshot at index 1 is not pending deletion")
+			Expect(checkOwnedSnapshots(placementPolicy, slices.Concat(
+				[]string{secondarySnapshotName(0), secondarySnapshotName(1)},
+				snapshotSetNames(placementPolicy, 2, 2),
+			))).To(Succeed())
+		})
+
+		It("should finish the deletion once the finalizer is removed", func() {
+			removeFinalizersAndDelete(placementResourceSnapshotObj(appNamespaceName, secondarySnapshotName(1)))
+			waitForSnapshotGoneFromCache(appNamespaceName, primarySnapshotName(1))
+
+			snapshotAndVerify(pausedMgr, placementPolicy, snapshotSetNames(placementPolicy, 2, 2))
+			verifyGCRequests(drainGCRequests(pausedMgr), nil)
+			Expect(checkOwnedSnapshots(placementPolicy, slices.Concat(
+				[]string{secondarySnapshotName(0)},
+				snapshotSetNames(placementPolicy, 2, 2),
+			))).To(Succeed())
+		})
+
+		It("should not use a latest primary snapshot that is pending deletion", func() {
+			addSnapshotFinalizer(appNamespaceName, primarySnapshotName(2))
+			markSnapshotForDeletion(appNamespaceName, primarySnapshotName(2))
+
+			gotSnapshots, isUpToDate, err := pausedMgr.SnapshotResourcesIfStale(ctx, placementPolicy)
+			verifySnapshotCallFailed(gotSnapshots, isUpToDate, err, kferrors.ErrCategoryTransient, latestSnapshotPendingDeletionErrMsg)
+			gotSnapshots, isUpToDate, err = pausedMgr.SnapshotResourcesIfNoSnapshotExists(ctx, placementPolicy)
+			verifySnapshotCallFailed(gotSnapshots, isUpToDate, err, kferrors.ErrCategoryTransient, latestSnapshotPendingDeletionErrMsg)
+
+			// A resource change does not lead to a new snapshot either.
+			updateConfigMapData(appNamespaceName, configMapNames[0], "changed-3")
+			gotSnapshots, isUpToDate, err = pausedMgr.SnapshotResourcesIfStale(ctx, placementPolicy)
+			verifySnapshotCallFailed(gotSnapshots, isUpToDate, err, kferrors.ErrCategoryTransient, latestSnapshotPendingDeletionErrMsg)
+			verifyNoPrimarySnapshotAtIdx(placementPolicy, 3)
+			verifyGCRequests(drainGCRequests(pausedMgr), nil)
+		})
+
+		AfterAll(func() {
+			if pausedMgr != nil {
+				pausedMgr.gcwq.ShutDown()
+			}
+			for _, name := range []string{primarySnapshotName(0), primarySnapshotName(1), secondarySnapshotName(1), primarySnapshotName(2)} {
+				removeFinalizersAndDelete(placementResourceSnapshotObj(appNamespaceName, name))
+			}
+			objs := []client.Object{
+				placementResourceSnapshotObj(appNamespaceName, secondarySnapshotName(0)),
+				placementResourceSnapshotObj(appNamespaceName, secondarySnapshotName(2)),
+				placementPolicy,
+			}
+			objs = append(objs, configMapObjs(configMapNames)...)
+			deleteObjectsAndWait(objs)
+		})
+	})
+
+	Context("retryable GC failures", Ordered, func() {
+		configMapName := fmt.Sprintf(configMapNameTemplate, utils.RandStr())
+		placementPolicy := newPlacementPolicy(appNamespaceName, configMapNameSelector(configMapName))
+		placementPolicy.Spec.ResourceRevisionHistoryLimit = ptr.To(int32(1))
+		placementBindingName := fmt.Sprintf(placementBindingNameTemplate, utils.RandStr())
+
+		var gcRequestForSnapshot0 snapshotGarbageCollectionRequest
+
+		primarySnapshotNames := func(idx int) []string {
+			return []string{uniqueNameForPrimaryPlacementResourceSnapshot(placementPolicy.Name, idx)}
+		}
+
+		BeforeAll(func() {
+			configMap := &corev1.ConfigMap{
+				ObjectMeta: metav1.ObjectMeta{
+					Name:      configMapName,
+					Namespace: appNamespaceName,
+				},
+				Data: map[string]string{"key": "initial-value"},
+			}
+			Expect(hubClient.Create(ctx, configMap)).To(Succeed(), "Failed to create the config map")
+			Expect(hubClient.Create(ctx, placementPolicy)).To(Succeed(), "Failed to create the placement policy")
+		})
+
+		It("can create snapshots at index 0 and 1", func() {
+			snapshotAndVerify(resourceSnapshotManager, placementPolicy, primarySnapshotNames(0))
+			gcRequestForSnapshot0 = gcRequestFor(placementPolicy, getPrimarySnapshotFromCache(placementPolicy, 0))
+
+			// This call does not enqueue any GC request yet, as it has seen only one snapshot.
+			updateConfigMapData(appNamespaceName, configMapName, "changed")
+			snapshotAndVerify(resourceSnapshotManager, placementPolicy, primarySnapshotNames(1))
+		})
+
+		It("can create a placement binding owned by a re-created placement policy", func() {
+			createPlacementBinding(placementPolicy, placementBindingName, primarySnapshotNames(0)[0], ptr.To(staleOwnerUID))
+			waitForPlacementBindingCntInCache(placementPolicy, primarySnapshotNames(0)[0], 1)
+		})
+
+		It("should fail to garbage collect the snapshot with a transient error", func() {
+			err := resourceSnapshotManager.garbageCollect(ctx, gcRequestForSnapshot0)
+			verifyErrCategoryAndMsg(err, kferrors.ErrCategoryTransient, gcStaleOwnerInUseErrMsg)
+		})
+
+		It("should keep retrying with backoff", func() {
+			// This call enqueues the snapshot at index 0 for GC.
+			snapshotAndVerify(resourceSnapshotManager, placementPolicy, primarySnapshotNames(1))
+
+			Eventually(func() int {
+				return resourceSnapshotManager.gcwq.NumRequeues(gcRequestForSnapshot0)
+			}, eventuallyDuration, eventuallyInterval).Should(BeNumerically(">=", 2), "The GC request has not been retried")
+			verifySnapshotExists(appNamespaceName, primarySnapshotNames(0)[0])
+		})
+
+		It("can delete the placement binding", func() {
+			deleteObjectsAndWait([]client.Object{placementBindingObj(appNamespaceName, placementBindingName)})
+			waitForPlacementBindingCntInCache(placementPolicy, primarySnapshotNames(0)[0], 0)
+		})
+
+		It("should garbage collect the snapshot and reset the backoff", func() {
+			// This call enqueues the snapshot at index 0 again right away, rather than waiting for the backoff
+			// to expire.
+			snapshotAndVerify(resourceSnapshotManager, placementPolicy, primarySnapshotNames(1))
+
+			Eventually(func() error {
+				return checkOwnedSnapshots(placementPolicy, primarySnapshotNames(1))
+			}, eventuallyDuration, eventuallyInterval).Should(Succeed(), "Failed to garbage collect the snapshot at index 0")
+			Eventually(func() int {
+				return resourceSnapshotManager.gcwq.NumRequeues(gcRequestForSnapshot0)
+			}, eventuallyDuration, eventuallyInterval).Should(Equal(0), "The backoff of the GC request has not been reset")
+		})
+
+		AfterAll(func() {
+			objs := primarySnapshotObjs(placementPolicy, 2)
+			objs = append(objs,
+				placementBindingObj(appNamespaceName, placementBindingName),
+				placementPolicy,
+				&corev1.ConfigMap{ObjectMeta: metav1.ObjectMeta{Name: configMapName, Namespace: appNamespaceName}},
+			)
+			deleteObjectsAndWait(objs)
+		})
+	})
+
+	Context("non-retryable GC failures", Ordered, func() {
+		configMapName := fmt.Sprintf(configMapNameTemplate, utils.RandStr())
+		resourceSelector := configMapNameSelector(configMapName)
+		resourceSelector.Namespace = appNamespaceName
+		placementPolicy := newClusterPlacementPolicy(resourceSelector)
+		placementPolicy.Spec.ResourceRevisionHistoryLimit = ptr.To(int32(1))
+		placementBindingName := fmt.Sprintf(placementBindingNameTemplate, utils.RandStr())
+
+		var gcRequestForSnapshot0 snapshotGarbageCollectionRequest
+
+		primarySnapshotNames := func(idx int) []string {
+			return []string{uniqueNameForPrimaryPlacementResourceSnapshot(placementPolicy.Name, idx)}
+		}
+
+		BeforeAll(func() {
+			configMap := &corev1.ConfigMap{
+				ObjectMeta: metav1.ObjectMeta{
+					Name:      configMapName,
+					Namespace: appNamespaceName,
+				},
+				Data: map[string]string{"key": "initial-value"},
+			}
+			Expect(hubClient.Create(ctx, configMap)).To(Succeed(), "Failed to create the config map")
+			Expect(hubClient.Create(ctx, placementPolicy)).To(Succeed(), "Failed to create the placement policy")
+		})
+
+		It("can create a snapshot at index 0", func() {
+			snapshotAndVerify(resourceSnapshotManager, placementPolicy, primarySnapshotNames(0))
+			gcRequestForSnapshot0 = gcRequestFor(placementPolicy, getPrimarySnapshotFromCache(placementPolicy, 0))
+		})
+
+		It("can create a cluster placement binding without an owner reference", func() {
+			createPlacementBinding(placementPolicy, placementBindingName, primarySnapshotNames(0)[0], nil)
+			waitForPlacementBindingCntInCache(placementPolicy, primarySnapshotNames(0)[0], 1)
+		})
+
+		It("should fail to garbage collect the snapshot with an unexpected error", func() {
+			err := resourceSnapshotManager.garbageCollect(ctx, gcRequestForSnapshot0)
+			verifyErrCategoryAndMsg(err, kferrors.ErrCategoryUnexpected, gcMissingOwnerInUseErrMsg)
+		})
+
+		It("can create snapshots at index 1 and 2", func() {
+			for idx := 1; idx < 3; idx++ {
+				updateConfigMapData(appNamespaceName, configMapName, fmt.Sprintf("value-%d", idx))
+				snapshotAndVerify(resourceSnapshotManager, placementPolicy, primarySnapshotNames(idx))
+			}
+		})
+
+		It("should not retry the snapshot while still processing later requests", func() {
+			// This call enqueues the snapshots at index 0 and 1 (in this order) for GC.
+			snapshotAndVerify(resourceSnapshotManager, placementPolicy, primarySnapshotNames(2))
+
+			// A single worker processes the GC requests in order; once the snapshot at index 1 is gone, the request
+			// for the snapshot at index 0 has been processed.
+			Eventually(func() bool {
+				err := hubUncachedReader.Get(ctx, types.NamespacedName{Name: primarySnapshotNames(1)[0]}, &placementv1alpha1.ClusterPlacementResourceSnapshot{})
+				return errors.IsNotFound(err)
+			}, eventuallyDuration, eventuallyInterval).Should(BeTrue(), "Failed to garbage collect the snapshot at index 1")
+			Expect(resourceSnapshotManager.gcwq.NumRequeues(gcRequestForSnapshot0)).To(Equal(0), "The GC request has been retried unexpectedly")
+			verifySnapshotExists("", primarySnapshotNames(0)[0])
+		})
+
+		It("can delete the cluster placement binding", func() {
+			deleteObjectsAndWait([]client.Object{placementBindingObj("", placementBindingName)})
+			waitForPlacementBindingCntInCache(placementPolicy, primarySnapshotNames(0)[0], 0)
+		})
+
+		It("should garbage collect the snapshot at the next retrieval", func() {
+			snapshotAndVerify(resourceSnapshotManager, placementPolicy, primarySnapshotNames(2))
+			Eventually(func() error {
+				return checkOwnedSnapshots(placementPolicy, primarySnapshotNames(2))
+			}, eventuallyDuration, eventuallyInterval).Should(Succeed(), "Failed to garbage collect the snapshot at index 0")
+		})
+
+		AfterAll(func() {
+			objs := primarySnapshotObjs(placementPolicy, 3)
+			objs = append(objs,
+				placementBindingObj("", placementBindingName),
+				placementPolicy,
+				&corev1.ConfigMap{ObjectMeta: metav1.ObjectMeta{Name: configMapName, Namespace: appNamespaceName}},
+			)
+			deleteObjectsAndWait(objs)
+		})
+	})
+
+	Context("same-named placement policies in different namespaces and scopes", Ordered, func() {
+		placementPolicyName := fmt.Sprintf(placementPolicyNameTemplate, utils.RandStr())
+		otherNamespaceName := fmt.Sprintf(namespaceNameTemplate, utils.RandStr())
+		configMapName := fmt.Sprintf(configMapNameTemplate, utils.RandStr())
+		placementBindingName := fmt.Sprintf(placementBindingNameTemplate, utils.RandStr())
+
+		appPlacementPolicy := newPlacementPolicy(appNamespaceName, configMapNameSelector(configMapName))
+		appPlacementPolicy.Name = placementPolicyName
+		appPlacementPolicy.Spec.ResourceRevisionHistoryLimit = ptr.To(int32(1))
+
+		otherPlacementPolicy := newPlacementPolicy(otherNamespaceName, configMapNameSelector(configMapName))
+		otherPlacementPolicy.Name = placementPolicyName
+		otherPlacementPolicy.Spec.ResourceRevisionHistoryLimit = ptr.To(int32(1))
+
+		resourceSelector := configMapNameSelector(configMapName)
+		resourceSelector.Namespace = otherNamespaceName
+		clusterPlacementPolicy := newClusterPlacementPolicy(resourceSelector)
+		clusterPlacementPolicy.Name = placementPolicyName
+		clusterPlacementPolicy.Spec.ResourceRevisionHistoryLimit = ptr.To(int32(1))
+
+		placementPolicies := []placementv1alpha1.PlacementPolicyAccessor{appPlacementPolicy, otherPlacementPolicy, clusterPlacementPolicy}
+
+		// All three placement policies share the same snapshot names.
+		primarySnapshotNames := func(idx int) []string {
+			return []string{uniqueNameForPrimaryPlacementResourceSnapshot(placementPolicyName, idx)}
+		}
+
+		BeforeAll(func() {
+			createNamespace(otherNamespaceName)
+			for _, namespace := range []string{appNamespaceName, otherNamespaceName} {
+				configMap := &corev1.ConfigMap{
+					ObjectMeta: metav1.ObjectMeta{
+						Name:      configMapName,
+						Namespace: namespace,
+					},
+					Data: map[string]string{"key": "initial-value"},
+				}
+				Expect(hubClient.Create(ctx, configMap)).To(Succeed(), "Failed to create the config map in namespace %s", namespace)
+			}
+			for _, placementPolicy := range placementPolicies {
+				Expect(hubClient.Create(ctx, placementPolicy)).To(Succeed(), "Failed to create placement policy %s/%s",
+					placementPolicy.GetNamespace(), placementPolicy.GetName())
+			}
+		})
+
+		It("can create snapshots for all three placement policies", func() {
+			for _, placementPolicy := range placementPolicies {
+				snapshotAndVerify(resourceSnapshotManager, placementPolicy, primarySnapshotNames(0))
+			}
+		})
+
+		It("can create a placement binding that uses the snapshot of the placement policy in the other namespace", func() {
+			createPlacementBinding(otherPlacementPolicy, placementBindingName, primarySnapshotNames(0)[0], ptr.To(otherPlacementPolicy.UID))
+			waitForPlacementBindingCntInCache(otherPlacementPolicy, primarySnapshotNames(0)[0], 1)
+			// The same lookup in the app namespace finds no placement binding.
+			waitForPlacementBindingCntInCache(appPlacementPolicy, primarySnapshotNames(0)[0], 0)
+		})
+
+		It("can update the config map in the app namespace", func() {
+			updateConfigMapData(appNamespaceName, configMapName, "changed")
+		})
+
+		It("should garbage collect only the old snapshot of the placement policy in the app namespace", func() {
+			snapshotAndVerify(resourceSnapshotManager, appPlacementPolicy, primarySnapshotNames(1))
+			// This call enqueues the snapshot at index 0 for GC.
+			snapshotAndVerify(resourceSnapshotManager, appPlacementPolicy, primarySnapshotNames(1))
+
+			// The snapshot would be kept (with the GC request being retried) if the in-use check found the placement
+			// binding in the other namespace.
+			Eventually(func() error {
+				return checkOwnedSnapshots(appPlacementPolicy, primarySnapshotNames(1))
+			}, eventuallyDuration, eventuallyInterval).Should(Succeed(), "Failed to garbage collect the snapshot at index 0")
+			verifySnapshotExists(otherNamespaceName, primarySnapshotNames(0)[0])
+			verifySnapshotExists("", primarySnapshotNames(0)[0])
+		})
+
+		It("can update the config map in the other namespace", func() {
+			updateConfigMapData(otherNamespaceName, configMapName, "changed")
+		})
+
+		It("should garbage collect only the old snapshot of the cluster placement policy", func() {
+			snapshotAndVerify(resourceSnapshotManager, clusterPlacementPolicy, primarySnapshotNames(1))
+			// This call enqueues the snapshot at index 0 for GC.
+			snapshotAndVerify(resourceSnapshotManager, clusterPlacementPolicy, primarySnapshotNames(1))
+
+			Eventually(func() error {
+				return checkOwnedSnapshots(clusterPlacementPolicy, primarySnapshotNames(1))
+			}, eventuallyDuration, eventuallyInterval).Should(Succeed(), "Failed to garbage collect the snapshot at index 0")
+			// The placement policy in the other namespace has not been called since its first snapshot.
+			Expect(checkOwnedSnapshots(otherPlacementPolicy, primarySnapshotNames(0))).To(Succeed())
+			Expect(checkOwnedSnapshots(appPlacementPolicy, primarySnapshotNames(1))).To(Succeed())
+		})
+
+		AfterAll(func() {
+			var objs []client.Object
+			for _, placementPolicy := range placementPolicies {
+				objs = append(objs, primarySnapshotObjs(placementPolicy, 2)...)
+			}
+			objs = append(objs, placementBindingObj(otherNamespaceName, placementBindingName))
+			for _, placementPolicy := range placementPolicies {
+				objs = append(objs, placementPolicy)
+			}
+			for _, namespace := range []string{appNamespaceName, otherNamespaceName} {
+				objs = append(objs, &corev1.ConfigMap{ObjectMeta: metav1.ObjectMeta{Name: configMapName, Namespace: namespace}})
+			}
+			deleteObjectsAndWait(objs)
 		})
 	})
 })

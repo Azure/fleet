@@ -352,7 +352,7 @@ func newFakeHubClientWithIndexes(t *testing.T, objs ...client.Object) client.Cli
 	}
 	snapshotExtractor := func(obj client.Object) []string {
 		return []string{fmt.Sprintf(fieldindexers.PlacementResourceSnapshotOwnedByAndIndexedCustomFieldValFmt,
-			obj.GetLabels()[placementv1alpha1.PlacementResourceSnapshotOwnedByLabelKey],
+			obj.GetAnnotations()[placementv1alpha1.PlacementResourceSnapshotOwnedByAnnotationKey],
 			obj.GetLabels()[placementv1alpha1.PlacementResourceSnapshotIndexLabelKey])}
 	}
 	return fake.NewClientBuilder().

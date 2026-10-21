@@ -32,9 +32,10 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/manager"
 
-	placementv1alpha1 "go.goms.io/fleet/apis/kubefleet.dev/placement/v1alpha1"
-	errors "go.goms.io/fleet/pkg/utils/errors"
-	"go.goms.io/fleet/pkg/utils/informer"
+	placementv1alpha1 "github.com/kubefleet-dev/kubefleet/apis/kubefleet.dev/placement/v1alpha1"
+	errors "github.com/kubefleet-dev/kubefleet/pkg/utils/errors"
+	"github.com/kubefleet-dev/kubefleet/pkg/utils/informer"
+	"github.com/kubefleet-dev/kubefleet/pkg/utils/resourceeligibility"
 )
 
 const (
@@ -64,6 +65,8 @@ type Manager struct {
 	hubDynamicClient          dynamic.Interface
 	hubDynamicInformerManager informer.Manager
 
+	resourceEligibilityChecker resourceeligibility.Checker
+
 	gcwq workqueue.TypedRateLimitingInterface[snapshotGarbageCollectionRequest]
 
 	restMapper meta.RESTMapper
@@ -79,6 +82,7 @@ type Manager struct {
 func New(mgr ctrl.Manager,
 	hubDynamicClient dynamic.Interface,
 	hubDynamicInformerManager informer.Manager,
+	resourceEligibilityChecker resourceeligibility.Checker,
 	restMapper meta.RESTMapper,
 	muSlotCnt int32,
 	maxPerSnapshotResourceDataSizeBytes int,
@@ -98,6 +102,11 @@ func New(mgr ctrl.Manager,
 			"manager", managerName, "limitRange", fmt.Sprintf("%d~%d", MinPerSnapshotResourceCnt, MaxPerSnapshotResourceCnt), "actual", maxPerSnapshotResourceCnt)
 	}
 
+	if resourceEligibilityChecker == nil {
+		return nil, errors.NewUnexpectedError(nil, "a resource eligibility checker must be set",
+			"manager", managerName)
+	}
+
 	// Set up the resource snapshot GC workqueue.
 	//
 	// The work queue uses an exponential backoff rate limiter (power of 2, starting at 1 second and capped
@@ -113,6 +122,7 @@ func New(mgr ctrl.Manager,
 		hubUncachedReader:                   mgr.GetAPIReader(),
 		hubDynamicClient:                    hubDynamicClient,
 		hubDynamicInformerManager:           hubDynamicInformerManager,
+		resourceEligibilityChecker:          resourceEligibilityChecker,
 		gcwq:                                gcwq,
 		restMapper:                          restMapper,
 		mus:                                 make([]sync.Mutex, muSlotCnt),

@@ -24,6 +24,7 @@ import (
 
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
+	appsv1 "k8s.io/api/apps/v1"
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/client-go/dynamic"
@@ -33,6 +34,7 @@ import (
 	"k8s.io/klog/v2/textlogger"
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client"
+	"sigs.k8s.io/controller-runtime/pkg/client/apiutil"
 	"sigs.k8s.io/controller-runtime/pkg/envtest"
 	"sigs.k8s.io/controller-runtime/pkg/handler"
 	metricsserver "sigs.k8s.io/controller-runtime/pkg/metrics/server"
@@ -40,6 +42,7 @@ import (
 
 	placementv1alpha1 "github.com/kubefleet-dev/kubefleet/apis/kubefleet.dev/placement/v1alpha1"
 	"github.com/kubefleet-dev/kubefleet/pkg/utils/informer"
+	"github.com/kubefleet-dev/kubefleet/pkg/utils/resourceeligibility"
 	"github.com/kubefleet-dev/kubefleet/pkg/v1/utils/fieldindexers"
 )
 
@@ -145,15 +148,30 @@ var _ = BeforeSuite(func() {
 	hubDynamicClient, err := dynamic.NewForConfig(hubCfg)
 	Expect(err).ToNot(HaveOccurred())
 	hubDynamicInformerManager := informer.NewInformerManager(hubDynamicClient, 0, ctx.Done())
+	hubDynamicInformerManager.CreateInformerForResource(informer.APIResourceMeta{
+		GroupVersionKind:     appsv1.SchemeGroupVersion.WithKind("Deployment"),
+		GroupVersionResource: appsv1.SchemeGroupVersion.WithResource("deployments"),
+		IsClusterScoped:      false,
+	})
+	hubDynamicInformerManager.Start()
+	hubDynamicInformerManager.WaitForCacheSync()
+
+	By("Setting up the baseline resource eligibility checker")
+	httpClient, err := rest.HTTPClientFor(hubCfg)
+	Expect(err).ToNot(HaveOccurred())
+	restMapper, err := apiutil.NewDynamicRESTMapper(hubCfg, httpClient)
+	Expect(err).ToNot(HaveOccurred())
+	baselineResourceEligibilityChecker := resourceeligibility.Baseline(restMapper)
 
 	resourceSnapshotManager, err = New(hubMgr,
 		hubDynamicClient,
 		hubDynamicInformerManager,
+		baselineResourceEligibilityChecker,
 		hubMgr.GetRESTMapper(),
 		testMuSlotCnt,
-		// Set maxPerSnapshotResourceDataSizeBytes and maxPerSnapshotResourceCnt to 2000 and 3 respectively to allow
+		// Set maxPerSnapshotResourceDataSizeBytes and maxPerSnapshotResourceCnt to 10000 and 3 respectively to allow
 		// simpler test setup.
-		2000,
+		10000,
 		3,
 	)
 	Expect(err).ToNot(HaveOccurred())

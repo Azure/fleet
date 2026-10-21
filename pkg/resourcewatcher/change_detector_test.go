@@ -78,7 +78,7 @@ func TestChangeDetector_discoverResources(t *testing.T) {
 			},
 			eligibilityChecker: func() resourceeligibility.Checker {
 				// Only the GVK check runs during discovery, which does not use the RESTMapper.
-				c := resourceeligibility.New(nil, resourceeligibility.DefaultForV0APIs(nil))
+				c := resourceeligibility.New(resourceeligibility.CheckerOptions{RestMapper: nil, Wrapped: resourceeligibility.DefaultForV0APIs(nil), SkipNSCheck: false, SkipGVKRCheck: false, SkipObjectCheck: false})
 				_ = c.SetGVKCheckList(resourceeligibility.GVKEligibilityModeDenyList, []schema.GroupVersionKind{{Version: "v1", Kind: "Secret"}}) // Skip secrets
 				return c
 			}(),
@@ -196,10 +196,9 @@ func TestChangeDetector_dynamicResourceFilter(t *testing.T) {
 		}
 	}
 
-	// Mirrors the namespace deny list the hub agent builds in production, minus the "default"
-	// namespace so that the other cases can place objects in it.
+	// Mirrors the namespace deny list the hub agent builds in production.
 	newChecker := func(skippedNSNames ...string) resourceeligibility.Checker {
-		c := resourceeligibility.New(nil, nil)
+		c := resourceeligibility.New(resourceeligibility.CheckerOptions{RestMapper: nil, SkipNSCheck: false, SkipGVKRCheck: false, SkipObjectCheck: false})
 		c.SetNamespaceCheckList(resourceeligibility.NamespaceEligibilityModeDenyList, skippedNSNames, []string{utils.KubeNSNamePrefix, utils.FleetNSNamePrefix})
 		return c
 	}

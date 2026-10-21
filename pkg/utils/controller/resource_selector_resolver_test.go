@@ -474,6 +474,17 @@ func TestGatherSelectedResource(t *testing.T) {
 	}
 	kubeSystemNamespace.SetGroupVersionKind(utils.NamespaceGVK)
 
+	defaultNamespace := &unstructured.Unstructured{ // the default namespace object, which itself cannot be placed
+		Object: map[string]interface{}{
+			"apiVersion": "v1",
+			"kind":       "Namespace",
+			"metadata": map[string]interface{}{
+				"name": "default",
+			},
+		},
+	}
+	defaultNamespace.SetGroupVersionKind(utils.NamespaceGVK)
+
 	tests := []struct {
 		name                       string
 		placementName              types.NamespacedName
@@ -501,7 +512,7 @@ func TestGatherSelectedResource(t *testing.T) {
 				},
 			},
 			resourceEligibilityChecker: func() resourceeligibility.Checker {
-				c := resourceeligibility.New(newFakeRESTMapper(), nil)
+				c := resourceeligibility.New(resourceeligibility.CheckerOptions{RestMapper: newFakeRESTMapper(), SkipNSCheck: false, SkipGVKRCheck: false, SkipObjectCheck: false})
 				_ = c.SetGVKCheckList(resourceeligibility.GVKEligibilityModeAllowList, nil)
 				return c
 			}(), // make this allow list - nothing is allowed
@@ -519,7 +530,7 @@ func TestGatherSelectedResource(t *testing.T) {
 				},
 			},
 			resourceEligibilityChecker: func() resourceeligibility.Checker {
-				c := resourceeligibility.New(newFakeRESTMapper(), nil)
+				c := resourceeligibility.New(resourceeligibility.CheckerOptions{RestMapper: newFakeRESTMapper(), SkipNSCheck: false, SkipGVKRCheck: false, SkipObjectCheck: false})
 				_ = c.SetGVKCheckList(resourceeligibility.GVKEligibilityModeAllowList, nil)
 				return c
 			}(), // make this allow list - nothing is allowed
@@ -915,7 +926,7 @@ func TestGatherSelectedResource(t *testing.T) {
 				},
 			},
 			resourceEligibilityChecker: func() resourceeligibility.Checker {
-				c := resourceeligibility.New(newFakeRESTMapper(), resourceeligibility.DefaultForV0APIs(newFakeRESTMapper()))
+				c := resourceeligibility.New(resourceeligibility.CheckerOptions{RestMapper: newFakeRESTMapper(), Wrapped: resourceeligibility.DefaultForV0APIs(newFakeRESTMapper()), SkipNSCheck: false, SkipGVKRCheck: false, SkipObjectCheck: false})
 				_ = c.SetGVKCheckList(resourceeligibility.GVKEligibilityModeDenyList, []schema.GroupVersionKind{utils.DeploymentGVK})
 				return c
 			}(),
@@ -1064,6 +1075,107 @@ func TestGatherSelectedResource(t *testing.T) {
 						utils.ConfigMapGVR:  {Objects: []runtime.Object{testConfigMap}},
 					},
 					NamespaceScopedResources: []schema.GroupVersionResource{utils.DeploymentGVR, utils.ConfigMapGVR},
+				}
+			}(),
+			wantError: ErrUserError,
+		},
+		{
+			name:          "should return error when selecting the default namespace by name with namespace with resources scope",
+			placementName: types.NamespacedName{Name: "test-placement"},
+			selectors: []fleetv1beta1.ResourceSelectorTerm{
+				{
+					Group:          "",
+					Version:        "v1",
+					Kind:           "Namespace",
+					Name:           "default",
+					SelectionScope: fleetv1beta1.NamespaceWithResources,
+				},
+			},
+			resourceEligibilityChecker: resourceeligibility.DefaultForV0APIs(newFakeRESTMapper()), // default deny list
+			informerManager: func() *testinformer.FakeManager {
+				return &testinformer.FakeManager{
+					IsClusterScopedResource: false,
+					Listers: map[schema.GroupVersionResource]*testinformer.FakeLister{
+						utils.NamespaceGVR:  {Objects: []runtime.Object{testNamespace, defaultNamespace}},
+						utils.DeploymentGVR: {Objects: []runtime.Object{testDeployment}},
+						utils.ConfigMapGVR:  {Objects: []runtime.Object{testConfigMap}},
+					},
+					NamespaceScopedResources: []schema.GroupVersionResource{utils.DeploymentGVR, utils.ConfigMapGVR},
+				}
+			}(),
+			wantError: ErrUserError,
+		},
+		{
+			name:          "should return error when selecting a reserved namespace by name with namespace only scope",
+			placementName: types.NamespacedName{Name: "test-placement"},
+			selectors: []fleetv1beta1.ResourceSelectorTerm{
+				{
+					Group:          "",
+					Version:        "v1",
+					Kind:           "Namespace",
+					Name:           "kube-system",
+					SelectionScope: fleetv1beta1.NamespaceOnly,
+				},
+			},
+			resourceEligibilityChecker: resourceeligibility.DefaultForV0APIs(newFakeRESTMapper()), // default deny list
+			informerManager: func() *testinformer.FakeManager {
+				return &testinformer.FakeManager{
+					IsClusterScopedResource: false,
+					Listers: map[schema.GroupVersionResource]*testinformer.FakeLister{
+						utils.NamespaceGVR: {Objects: []runtime.Object{testNamespace, prodNamespace, kubeSystemNamespace}},
+					},
+				}
+			}(),
+			wantError: ErrUserError,
+		},
+		{
+			name:          "should return error when selecting the default namespace by name with namespace only scope",
+			placementName: types.NamespacedName{Name: "test-placement"},
+			selectors: []fleetv1beta1.ResourceSelectorTerm{
+				{
+					Group:          "",
+					Version:        "v1",
+					Kind:           "Namespace",
+					Name:           "default",
+					SelectionScope: fleetv1beta1.NamespaceOnly,
+				},
+			},
+			resourceEligibilityChecker: resourceeligibility.DefaultForV0APIs(newFakeRESTMapper()), // default deny list
+			informerManager: func() *testinformer.FakeManager {
+				return &testinformer.FakeManager{
+					IsClusterScopedResource: false,
+					Listers: map[schema.GroupVersionResource]*testinformer.FakeLister{
+						utils.NamespaceGVR: {Objects: []runtime.Object{testNamespace, prodNamespace, defaultNamespace}},
+					},
+				}
+			}(),
+			wantError: ErrUserError,
+		},
+		{
+			// A label selector that matches a reserved namespace fails the whole placement, rather than skipping the
+			// reserved namespace.
+			name:          "should return error when the label selector matches a reserved namespace with namespace only scope",
+			placementName: types.NamespacedName{Name: "test-placement"},
+			selectors: []fleetv1beta1.ResourceSelectorTerm{
+				{
+					Group:   "",
+					Version: "v1",
+					Kind:    "Namespace",
+					LabelSelector: &metav1.LabelSelector{
+						MatchLabels: map[string]string{
+							"environment": "test",
+						},
+					},
+					SelectionScope: fleetv1beta1.NamespaceOnly,
+				},
+			},
+			resourceEligibilityChecker: resourceeligibility.DefaultForV0APIs(newFakeRESTMapper()), // default deny list
+			informerManager: func() *testinformer.FakeManager {
+				return &testinformer.FakeManager{
+					IsClusterScopedResource: false,
+					Listers: map[schema.GroupVersionResource]*testinformer.FakeLister{
+						utils.NamespaceGVR: {Objects: []runtime.Object{testNamespace, prodNamespace, testDeletingNamespace, kubeSystemNamespace}},
+					},
 				}
 			}(),
 			wantError: ErrUserError,
@@ -1591,7 +1703,7 @@ func TestGatherSelectedResource(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			checker := tt.resourceEligibilityChecker
 			if checker == nil {
-				checker = resourceeligibility.New(newFakeRESTMapper(), nil)
+				checker = resourceeligibility.New(resourceeligibility.CheckerOptions{RestMapper: newFakeRESTMapper(), SkipNSCheck: false, SkipGVKRCheck: false, SkipObjectCheck: false})
 			}
 			rsr := &ResourceSelectorResolver{
 				ResourceEligibilityChecker: checker,
@@ -2265,13 +2377,24 @@ func TestFetchSelectedNamespace(t *testing.T) {
 	}
 	skippedNs.SetGroupVersionKind(utils.NamespaceGVK)
 
+	defaultNs := &unstructured.Unstructured{
+		Object: map[string]interface{}{
+			"apiVersion": "v1",
+			"kind":       "Namespace",
+			"metadata": map[string]interface{}{
+				"name": "default",
+			},
+		},
+	}
+	defaultNs.SetGroupVersionKind(utils.NamespaceGVK)
+
 	tests := []struct {
 		name            string
 		selector        fleetv1beta1.ResourceSelectorTerm
 		informerManager *testinformer.FakeManager
 		want            string
 		wantFound       bool
-		wantErr         bool
+		wantError       error
 	}{
 		{
 			name: "select namespace by name",
@@ -2290,7 +2413,7 @@ func TestFetchSelectedNamespace(t *testing.T) {
 			wantFound: true,
 		},
 		{
-			name: "filter out skipped namespaces",
+			name: "reserved namespace selected by name",
 			selector: fleetv1beta1.ResourceSelectorTerm{
 				Group:   "",
 				Version: "v1",
@@ -2302,8 +2425,26 @@ func TestFetchSelectedNamespace(t *testing.T) {
 					utils.NamespaceGVR: {Objects: []runtime.Object{testNs1, testNs2, skippedNs}},
 				},
 			},
-			want:      "", // Empty because kube-system is skipped
+			want:      "",
 			wantFound: false,
+			wantError: ErrUserError,
+		},
+		{
+			name: "default namespace selected by name",
+			selector: fleetv1beta1.ResourceSelectorTerm{
+				Group:   "",
+				Version: "v1",
+				Kind:    "Namespace",
+				Name:    "default",
+			},
+			informerManager: &testinformer.FakeManager{
+				Listers: map[schema.GroupVersionResource]*testinformer.FakeLister{
+					utils.NamespaceGVR: {Objects: []runtime.Object{testNs1, testNs2, defaultNs}},
+				},
+			},
+			want:      "",
+			wantFound: false,
+			wantError: ErrUserError,
 		},
 		{
 			name: "no namespaces match selector",
@@ -2332,9 +2473,8 @@ func TestFetchSelectedNamespace(t *testing.T) {
 			}
 
 			gotNamespace, gotFound, err := rsr.fetchSelectedNamespace(tt.selector, "test-placement")
-			if (err != nil) != tt.wantErr {
-				t.Errorf("fetchSelectedNamespace() error = %v, wantErr %v", err, tt.wantErr)
-				return
+			if gotErr, wantErr := err != nil, tt.wantError != nil; gotErr != wantErr || !errors.Is(err, tt.wantError) {
+				t.Fatalf("fetchSelectedNamespace() error = %v, want error %v", err, tt.wantError)
 			}
 			if gotNamespace != tt.want {
 				t.Errorf("fetchSelectedNamespace() namespace = %v, want %v", gotNamespace, tt.want)
@@ -2370,6 +2510,29 @@ func TestGatherSelectedResource_ErrorCases(t *testing.T) {
 	}
 	testDeployment.SetGroupVersionKind(utils.DeploymentGVK)
 
+	defaultNamespace := &unstructured.Unstructured{
+		Object: map[string]interface{}{
+			"apiVersion": "v1",
+			"kind":       "Namespace",
+			"metadata": map[string]interface{}{
+				"name": "default",
+			},
+		},
+	}
+	defaultNamespace.SetGroupVersionKind(utils.NamespaceGVK)
+
+	// All selection scopes share the same error message when the default namespace is selected.
+	defaultNamespaceErrMsg := "the default namespace cannot be selected for placement; to place resources within the default namespace, consider using the ResourcePlacement API"
+	defaultNamespaceInformerManager := &testinformer.FakeManager{
+		IsClusterScopedResource: true,
+		APIResources: map[schema.GroupVersionKind]bool{
+			utils.NamespaceGVK: true, // cluster-scoped
+		},
+		Listers: map[schema.GroupVersionResource]*testinformer.FakeLister{
+			utils.NamespaceGVR: {Objects: []runtime.Object{testNamespace, defaultNamespace}},
+		},
+	}
+
 	tests := []struct {
 		name                       string
 		placementName              types.NamespacedName
@@ -2379,6 +2542,57 @@ func TestGatherSelectedResource_ErrorCases(t *testing.T) {
 		wantError                  error
 		wantErrMsg                 string
 	}{
+		{
+			name:          "CRP selecting the default namespace with NamespaceOnly mode",
+			placementName: types.NamespacedName{Name: "test-placement"},
+			selectors: []fleetv1beta1.ResourceSelectorTerm{
+				{
+					Group:          "",
+					Version:        "v1",
+					Kind:           "Namespace",
+					Name:           "default",
+					SelectionScope: fleetv1beta1.NamespaceOnly,
+				},
+			},
+			resourceEligibilityChecker: resourceeligibility.DefaultForV0APIs(newFakeRESTMapper()),
+			informerManager:            defaultNamespaceInformerManager,
+			wantError:                  ErrUserError,
+			wantErrMsg:                 defaultNamespaceErrMsg,
+		},
+		{
+			name:          "CRP selecting the default namespace with NamespaceWithResources mode",
+			placementName: types.NamespacedName{Name: "test-placement"},
+			selectors: []fleetv1beta1.ResourceSelectorTerm{
+				{
+					Group:          "",
+					Version:        "v1",
+					Kind:           "Namespace",
+					Name:           "default",
+					SelectionScope: fleetv1beta1.NamespaceWithResources,
+				},
+			},
+			resourceEligibilityChecker: resourceeligibility.DefaultForV0APIs(newFakeRESTMapper()),
+			informerManager:            defaultNamespaceInformerManager,
+			wantError:                  ErrUserError,
+			wantErrMsg:                 defaultNamespaceErrMsg,
+		},
+		{
+			name:          "CRP selecting the default namespace with NamespaceWithResourceSelectors mode",
+			placementName: types.NamespacedName{Name: "test-placement"},
+			selectors: []fleetv1beta1.ResourceSelectorTerm{
+				{
+					Group:          "",
+					Version:        "v1",
+					Kind:           "Namespace",
+					Name:           "default",
+					SelectionScope: fleetv1beta1.NamespaceWithResourceSelectors,
+				},
+			},
+			resourceEligibilityChecker: resourceeligibility.DefaultForV0APIs(newFakeRESTMapper()),
+			informerManager:            defaultNamespaceInformerManager,
+			wantError:                  ErrUserError,
+			wantErrMsg:                 defaultNamespaceErrMsg,
+		},
 		{
 			name:          "ResourcePlacement trying to select namespace should fail",
 			placementName: types.NamespacedName{Name: "test-placement", Namespace: "some-ns"},
@@ -2471,7 +2685,7 @@ func TestGatherSelectedResource_ErrorCases(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			checker := tt.resourceEligibilityChecker
 			if checker == nil {
-				checker = resourceeligibility.New(newFakeRESTMapper(), nil)
+				checker = resourceeligibility.New(resourceeligibility.CheckerOptions{RestMapper: newFakeRESTMapper(), SkipNSCheck: false, SkipGVKRCheck: false, SkipObjectCheck: false})
 			}
 			rsr := &ResourceSelectorResolver{
 				ResourceEligibilityChecker: checker,
@@ -2740,6 +2954,85 @@ func TestShouldPropagateObj(t *testing.T) {
 			if err != nil {
 				t.Errorf("ShouldPropagateObj() error = %v", err)
 				return
+			}
+			if got != tt.want {
+				t.Errorf("ShouldPropagateObj() = %v, want %v", got, tt.want)
+			}
+		})
+	}
+}
+
+func TestResourceSelectorResolver_ShouldPropagateObj(t *testing.T) {
+	namespaceObj := func(name string, deleting bool) *unstructured.Unstructured {
+		obj := &unstructured.Unstructured{}
+		obj.SetGroupVersionKind(utils.NamespaceGVK)
+		obj.SetName(name)
+		if deleting {
+			obj.SetDeletionTimestamp(&metav1.Time{Time: time.Date(2025, 1, 1, 0, 0, 0, 0, time.UTC)})
+		}
+		return obj
+	}
+
+	tests := []struct {
+		name       string
+		obj        *unstructured.Unstructured
+		want       bool
+		wantError  error
+		wantErrMsg string
+	}{
+		{
+			name: "eligible namespace",
+			obj:  namespaceObj("test-ns", false),
+			want: true,
+		},
+		{
+			name:       "reserved namespace",
+			obj:        namespaceObj("kube-system", false),
+			want:       false,
+			wantError:  ErrUserError,
+			wantErrMsg: "namespace kube-system and any resource within it are not allowed for placement",
+		},
+		{
+			name:       "default namespace",
+			obj:        namespaceObj("default", false),
+			want:       false,
+			wantError:  ErrUserError,
+			wantErrMsg: "consider using the ResourcePlacement API",
+		},
+		{
+			// The deletion check comes first; a namespace being deleted is skipped silently.
+			name: "reserved namespace being deleted",
+			obj:  namespaceObj("kube-system", true),
+			want: false,
+		},
+		{
+			// Only the namespace object itself is blocked; resources within the default namespace are eligible.
+			name: "config map in the default namespace",
+			obj: func() *unstructured.Unstructured {
+				obj := &unstructured.Unstructured{}
+				obj.SetGroupVersionKind(utils.ConfigMapGVK)
+				obj.SetNamespace("default")
+				obj.SetName("test-configmap")
+				return obj
+			}(),
+			want: true,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			rsr := &ResourceSelectorResolver{
+				ResourceEligibilityChecker: resourceeligibility.DefaultForV0APIs(newFakeRESTMapper()),
+				InformerManager:            &testinformer.FakeManager{},
+				RestMapper:                 newFakeRESTMapper(),
+			}
+
+			got, err := rsr.ShouldPropagateObj(tt.obj.GetNamespace(), "test-placement", tt.obj)
+			if gotErr, wantErr := err != nil, tt.wantError != nil; gotErr != wantErr || !errors.Is(err, tt.wantError) {
+				t.Fatalf("ShouldPropagateObj() error = %v, want error %v", err, tt.wantError)
+			}
+			if tt.wantError != nil && !strings.Contains(err.Error(), tt.wantErrMsg) {
+				t.Errorf("ShouldPropagateObj() error = %v, wantErrMsg %v", err, tt.wantErrMsg)
 			}
 			if got != tt.want {
 				t.Errorf("ShouldPropagateObj() = %v, want %v", got, tt.want)

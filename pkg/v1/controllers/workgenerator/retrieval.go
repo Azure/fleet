@@ -107,10 +107,10 @@ func (r *Reconciler) retrievePrimaryAndSecondaryPlacementResourceSnapshots(
 	}
 
 	// There are secondary snapshots; list all snapshots that share the same owner and index.
-	ownedBy := primarySnapshot.GetLabels()[placementv1alpha1.PlacementResourceSnapshotOwnedByLabelKey]
+	ownedBy := primarySnapshot.GetAnnotations()[placementv1alpha1.PlacementResourceSnapshotOwnedByAnnotationKey]
 	index := primarySnapshot.GetLabels()[placementv1alpha1.PlacementResourceSnapshotIndexLabelKey]
 	if ownedBy == "" || index == "" {
-		return nil, errors.NewUnexpectedError(nil, "the primary placement resource snapshot is missing required labels",
+		return nil, errors.NewUnexpectedError(nil, "the primary placement resource snapshot is missing required labels or annotations",
 			"primaryPlacementResourceSnapshot", klog.KObj(primarySnapshot))
 	}
 	fieldMatchers := client.MatchingFields{
