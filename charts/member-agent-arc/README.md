@@ -28,6 +28,11 @@ Images are published to MCR as `<release tag>-<revision>` (for example `v0.18.16
 on every rebuild of the same source. The workflow selects the highest revision and derives the chart version from
 it by stripping the leading `v`, so image tag `v0.18.16-1` produces chart version `0.18.16-1`.
 
+The chart is checked out at the plain release tag, which can predate a change to `values.yaml`. The workflow therefore
+overwrites each image `repository` with the path the tags were resolved from (`MCR_FLEET_REPO`), and fails before
+publishing if any image the rendered chart references is missing from MCR. The repositories in `values.yaml` only
+take effect when the chart is packaged outside the workflow.
+
 The image tags in `values.yaml` are placeholders of the form `${MEMBER_AGENT_IMAGE_VERSION}`, substituted by
 `envsubst` during `make helm-package-arc-member-cluster-agents`. That target rewrites `values.yaml` in place, so
 after running it locally restore the file with `git checkout charts/member-agent-arc/values.yaml`.
