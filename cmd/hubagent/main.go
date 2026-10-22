@@ -46,6 +46,7 @@ import (
 
 	clusterv1beta1 "github.com/kubefleet-dev/kubefleet/apis/cluster/v1beta1"
 	kfplacementv1alpha1 "github.com/kubefleet-dev/kubefleet/apis/kubefleet.dev/placement/v1alpha1"
+	kfrolloutv1alpha1 "github.com/kubefleet-dev/kubefleet/apis/kubefleet.dev/rollout/v1alpha1"
 	placementv1alpha1 "github.com/kubefleet-dev/kubefleet/apis/placement/v1alpha1"
 	placementv1beta1 "github.com/kubefleet-dev/kubefleet/apis/placement/v1beta1"
 	"github.com/kubefleet-dev/kubefleet/cmd/hubagent/options"
@@ -82,6 +83,7 @@ func init() {
 	utilruntime.Must(fleetnetworkingv1alpha1.AddToScheme(scheme))
 	utilruntime.Must(placementv1alpha1.AddToScheme(scheme))
 	utilruntime.Must(kfplacementv1alpha1.AddToScheme(scheme))
+	utilruntime.Must(kfrolloutv1alpha1.AddToScheme(scheme))
 	utilruntime.Must(clusterinventory.AddToScheme(scheme))
 	// +kubebuilder:scaffold:scheme
 	klog.InitFlags(nil)

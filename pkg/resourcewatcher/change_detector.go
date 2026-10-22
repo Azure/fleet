@@ -33,6 +33,7 @@ import (
 	"github.com/kubefleet-dev/kubefleet/pkg/utils/informer"
 	"github.com/kubefleet-dev/kubefleet/pkg/utils/keys"
 	"github.com/kubefleet-dev/kubefleet/pkg/utils/resourceeligibility"
+	"github.com/kubefleet-dev/kubefleet/pkg/v1/controllers/annotationplacement"
 )
 
 // make sure that our ChangeDetector implements controller runtime interfaces
@@ -66,6 +67,10 @@ type ChangeDetector struct {
 	// cluster wide key and a reconcile function to consume the items in queue.
 	// This controller will be used by both v1alpha1 & v1beta1 ClusterResourcePlacementController.
 	ResourceChangeController controller.Controller
+
+	// AnnotatedSources, when set, receives every resource that carries or just lost the
+	// cluster-selectors annotation, for the annotation-based placement controller.
+	AnnotatedSources *annotationplacement.SourceQueue
 
 	// InformerManager manages all the dynamic informers created by the discovery client
 	InformerManager informer.Manager

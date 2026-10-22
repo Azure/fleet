@@ -25,6 +25,7 @@ import (
 
 	clusterv1beta1 "github.com/kubefleet-dev/kubefleet/apis/cluster/v1beta1"
 	kfplacementv1alpha1 "github.com/kubefleet-dev/kubefleet/apis/kubefleet.dev/placement/v1alpha1"
+	kfrolloutv1alpha1 "github.com/kubefleet-dev/kubefleet/apis/kubefleet.dev/rollout/v1alpha1"
 	placementv1beta1 "github.com/kubefleet-dev/kubefleet/apis/placement/v1beta1"
 	"github.com/kubefleet-dev/kubefleet/pkg/utils"
 )
@@ -169,6 +170,10 @@ var (
 		// TO-DO (chenyu1): deny resources by kinds when envelopes are added to the API group.
 		{
 			Group: kfplacementv1alpha1.GroupVersion.Group,
+		},
+		// Deny all resources in the rollout.kubefleet.dev API group; member clusters do not have its CRDs.
+		{
+			Group: kfrolloutv1alpha1.GroupVersion.Group,
 		},
 	}
 

@@ -24,6 +24,8 @@ import (
 	"k8s.io/client-go/tools/cache"
 	"k8s.io/klog/v2"
 	"sigs.k8s.io/controller-runtime/pkg/client"
+
+	"github.com/kubefleet-dev/kubefleet/pkg/v1/controllers/annotationplacement"
 )
 
 // handleTombStoneObj handles the case that the delete object is a tombStone instead of the real object
@@ -60,6 +62,7 @@ func (d *ChangeDetector) onResourceAdded(obj interface{}) {
 	klog.V(3).InfoS("A resource is added", "obj", klog.KObj(metaInfo),
 		"gvk", runtimeObject.GetObjectKind().GroupVersionKind().String())
 	d.ResourceChangeController.Enqueue(obj)
+	d.reportAnnotated(obj, annotationplacement.HasClusterSelectorsAnnotation(metaInfo))
 }
 
 // onResourceUpdated handles object update event and push the updated object to the resource queue.
@@ -83,6 +86,8 @@ func (d *ChangeDetector) onResourceUpdated(oldObj, newObj interface{}) {
 		klog.V(3).InfoS("A resource is updated", "obj", oldObjMeta.GetName(),
 			"namespace", oldObjMeta.GetNamespace(), "gvk", runtimeObject.GetObjectKind().GroupVersionKind().String())
 		d.ResourceChangeController.Enqueue(newObj)
+		// The old object counts too: removing the annotation is what deletes the generated policy.
+		d.reportAnnotated(newObj, annotationplacement.HasClusterSelectorsAnnotation(newObjMeta) || annotationplacement.HasClusterSelectorsAnnotation(oldObjMeta))
 		return
 	}
 	klog.V(4).InfoS("Received a resource updated event with no change", "obj", oldObjMeta.GetName(),
@@ -98,4 +103,18 @@ func (d *ChangeDetector) onResourceDeleted(obj interface{}) {
 	}
 	klog.V(3).InfoS("A resource is deleted", "obj", klog.KObj(clientObj), "gvk", clientObj.GetObjectKind().GroupVersionKind().String())
 	d.ResourceChangeController.Enqueue(clientObj)
+	// A resource that stops passing the watcher's filter arrives here too, and its generated policy
+	// has to go; the reconciler tells that apart from a real deletion.
+	d.reportAnnotated(clientObj, annotationplacement.HasClusterSelectorsAnnotation(clientObj))
+}
+
+// reportAnnotated hands a resource to annotation-based placement, if it is running and the
+// resource is one it cares about.
+func (d *ChangeDetector) reportAnnotated(obj interface{}, annotated bool) {
+	if d.AnnotatedSources == nil || !annotated {
+		return
+	}
+	if clientObj, ok := obj.(client.Object); ok {
+		d.AnnotatedSources.Add(clientObj)
+	}
 }

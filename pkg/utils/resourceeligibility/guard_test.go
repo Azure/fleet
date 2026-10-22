@@ -31,6 +31,8 @@ import (
 	"k8s.io/utils/ptr"
 
 	clusterv1beta1 "github.com/kubefleet-dev/kubefleet/apis/cluster/v1beta1"
+	kfplacementv1alpha1 "github.com/kubefleet-dev/kubefleet/apis/kubefleet.dev/placement/v1alpha1"
+	kfrolloutv1alpha1 "github.com/kubefleet-dev/kubefleet/apis/kubefleet.dev/rollout/v1alpha1"
 	placementv1beta1 "github.com/kubefleet-dev/kubefleet/apis/placement/v1beta1"
 	"github.com/kubefleet-dev/kubefleet/pkg/utils"
 )
@@ -635,6 +637,18 @@ func TestAllowsGVK(t *testing.T) {
 			checker: Baseline(nil),
 			gvk:     schema.GroupVersionKind{Group: utils.NetworkingGroupName, Version: "v1alpha1", Kind: "InternalServiceExport"},
 			want:    true,
+		},
+		{
+			name:    "baseline checker denies the placement policy API group",
+			checker: Baseline(nil),
+			gvk:     kfplacementv1alpha1.GroupVersion.WithKind(kfplacementv1alpha1.PlacementPolicyKind),
+			want:    false,
+		},
+		{
+			name:    "baseline checker denies the staged update run API group",
+			checker: Baseline(nil),
+			gvk:     kfrolloutv1alpha1.GroupVersion.WithKind(kfrolloutv1alpha1.StagedUpdateRunKind),
+			want:    false,
 		},
 		{
 			name:    "baseline checker allows regular resources",

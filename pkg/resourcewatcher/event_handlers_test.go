@@ -19,16 +19,22 @@ package resourcewatcher
 import (
 	"context"
 	"reflect"
+	"slices"
 	"testing"
+
+	"github.com/google/go-cmp/cmp"
 
 	corev1 "k8s.io/api/core/v1"
 	rbacv1 "k8s.io/api/rbac/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/client-go/tools/cache"
+	"k8s.io/client-go/util/workqueue"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 
+	kfplacementv1alpha1 "github.com/kubefleet-dev/kubefleet/apis/kubefleet.dev/placement/v1alpha1"
+	"github.com/kubefleet-dev/kubefleet/pkg/utils/controller"
+	"github.com/kubefleet-dev/kubefleet/pkg/v1/controllers/annotationplacement"
 	fleetv1beta1 "go.goms.io/fleet/apis/placement/v1beta1"
-
 	"go.goms.io/fleet/pkg/utils/controller"
 )
 
@@ -136,4 +142,52 @@ func (t *fakeController) Enqueue(_ interface{}) {
 // Run is a no-op; the fake is only used to verify that Enqueue is called.
 func (t *fakeController) Run(_ context.Context, _ int) error {
 	return nil
+}
+
+type noopController struct{}
+
+func (noopController) Enqueue(interface{})            {}
+func (noopController) Run(context.Context, int) error { return nil }
+
+// TestReportAnnotated pins which events reach annotation-based placement: an annotated add, an
+// update that keeps or removes the annotation, and an annotated delete; never an unannotated one.
+func TestReportAnnotated(t *testing.T) {
+	configMap := func(name string, annotated bool, rv string) *corev1.ConfigMap {
+		cm := &corev1.ConfigMap{
+			TypeMeta:   metav1.TypeMeta{Kind: "ConfigMap", APIVersion: "v1"},
+			ObjectMeta: metav1.ObjectMeta{Namespace: "app", Name: name, ResourceVersion: rv},
+		}
+		if annotated {
+			cm.Annotations = map[string]string{kfplacementv1alpha1.ClusterSelectorsAnnotation: "region=east"}
+		}
+		return cm
+	}
+	sources := &annotationplacement.SourceQueue{}
+	d := &ChangeDetector{ResourceChangeController: noopController{}, AnnotatedSources: sources}
+
+	d.onResourceAdded(configMap("added", true, "1"))
+	d.onResourceAdded(configMap("plain", false, "1"))
+	d.onResourceUpdated(configMap("removed", true, "1"), configMap("removed", false, "2"))
+	d.onResourceUpdated(configMap("plain-updated", false, "1"), configMap("plain-updated", false, "2"))
+	d.onResourceDeleted(cache.DeletedFinalStateUnknown{Obj: configMap("deleted", true, "1")})
+	d.onResourceDeleted(configMap("plain-deleted", false, "1"))
+
+	wq := workqueue.NewTypedRateLimitingQueue(workqueue.DefaultTypedControllerRateLimiter[annotationplacement.Request]())
+	defer wq.ShutDown()
+	if err := sources.Start(context.Background(), wq); err != nil {
+		t.Fatalf("Start() = %v, want no error", err)
+	}
+	var got []string
+	for wq.Len() > 0 {
+		req, _ := wq.Get()
+		got = append(got, req.Name)
+		wq.Done(req)
+	}
+	slices.Sort(got)
+	if diff := cmp.Diff([]string{"added", "deleted", "removed"}, got); diff != "" {
+		t.Errorf("reported resources mismatch (-want +got):\n%s", diff)
+	}
+
+	// Off when the feature is: no queue, no panic.
+	(&ChangeDetector{ResourceChangeController: noopController{}}).onResourceAdded(configMap("added", true, "1"))
 }

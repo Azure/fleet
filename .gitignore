@@ -51,3 +51,8 @@ _crd-package/
 # Squad: SubSquad activation file (local to this machine)
 .squad-workstream
 .squad/.cache/
+
+# Binaries from go build ./cmd/<agent>
+/hubagent
+/memberagent
+/crdinstaller

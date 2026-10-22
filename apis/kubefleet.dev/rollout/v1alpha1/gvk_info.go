@@ -36,6 +36,10 @@ var (
 
 const (
 	// The kind names for all the custom resources in this GV.
-	StagedUpdateRunKind        = "StagedUpdateRun"
-	ClusterStagedUpdateRunKind = "ClusterStagedUpdateRun"
+	StagedUpdateRunKind             = "StagedUpdateRun"
+	ClusterStagedUpdateRunKind      = "ClusterStagedUpdateRun"
+	StagedUpdateStrategyKind        = "StagedUpdateStrategy"
+	ClusterStagedUpdateStrategyKind = "ClusterStagedUpdateStrategy"
+	ApprovalRequestKind             = "ApprovalRequest"
+	ClusterApprovalRequestKind      = "ClusterApprovalRequest"
 )
