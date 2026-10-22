@@ -129,19 +129,24 @@ func (r *Reconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.Resu
 	// work objects (which can be expensive when there are a large number of manifests to place); once the controller
 	// signals that it has completed processing a placement binding given a specific configuration (a specific
 	// set of placement resource snapshots) and generated all the needed work objects, the control loop will skip
-	// to status reporting. In general we do not try to guard against byzantine faults here, especially
-	// considering that work objects are KubeFleet internal API objects that reside in reserved namespaces; if a
-	// non-KubeFleet agent decides to tamper with work objects, the system is not guaranteed to auto-recover.
-	// The changes, however, will be overwritten upon rollouts.
-	upToDate, err := areWorksUpToDate(placementBinding, works) // codespell:ignore
+	// to status reporting. The check only covers coarse-grained consistency (the last processed snapshot, the
+	// snapshot links, the work count and the sync strategy), so missing or partially missing work objects are
+	// regenerated; it does not, however, verify the content of the work objects. In general we do not try to guard
+	// against byzantine faults here, especially considering that work objects are KubeFleet internal API objects that
+	// reside in reserved namespaces; if a non-KubeFleet agent tampers with the content of work objects, the system is
+	// not guaranteed to auto-recover. Any inadvertent changes, however, will be overwritten upon rollouts.
+	workSyncRes, err := areWorksInSync(placementBinding, works)
 	if err != nil {
-		wrappedErr := errors.Wraps(err, "failed to check if work objects are up-to-date",
+		wrappedErr := errors.Wraps(err, "failed to check if work objects are in sync",
 			"placementBinding", klog.KObj(placementBinding), "targetCluster", placementBindingSpec.ClusterName,
 			"controller", controllerName)
-		klog.ErrorS(wrappedErr, "failed to check if work objects are up-to-date", errors.Args(wrappedErr)...)
+		klog.ErrorS(wrappedErr, "failed to check if work objects are in sync", errors.Args(wrappedErr)...)
 		return ctrl.Result{}, wrappedErr
 	}
-	if upToDate { // codespell:ignore
+	if workSyncRes == workSyncStatusInSync {
+		klog.V(2).InfoS("Work objects are in sync for the placement binding; refreshing placement binding status",
+			"placementBinding", klog.KObj(placementBinding), "targetCluster", placementBindingSpec.ClusterName,
+			"controller", controllerName)
 		if err := r.refreshPlacementBindingStatus(ctx, placementBinding, works); err != nil {
 			wrappedErr := errors.Wraps(err, "failed to refresh placement binding status",
 				"placementBinding", klog.KObj(placementBinding), "targetCluster", placementBindingSpec.ClusterName,
@@ -151,8 +156,12 @@ func (r *Reconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.Resu
 		}
 		return ctrl.Result{}, nil
 	}
+	klog.V(2).InfoS("Work objects are not in sync for the placement binding; reconciling",
+		"placementBinding", klog.KObj(placementBinding), "targetCluster", placementBindingSpec.ClusterName,
+		"workSyncStatus", workSyncRes, "controller", controllerName)
 
-	// The work objects are absent or not up-to-date. Retrieve the placement resource snapshots and create/update
+	// The work objects are not in sync (the last processed snapshot differs from the primary snapshot in the spec, or
+	// some work objects are absent or inconsistent). Retrieve the placement resource snapshots and create/update
 	// the work objects accordingly.
 
 	// Retrieve the assigned primary and secondary placement resource snapshots referenced by the placement binding.
@@ -167,6 +176,8 @@ func (r *Reconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.Resu
 	}
 
 	// Create or update the work objects.
+	//
+	// Note that if any of the work objects we have checked are stale, the refreshing would fail with an error.
 	createdOrUpdatedWorks, workSpecsChanged, err := r.refreshWorks(ctx, placementBinding, placementResourceSnapshots, works)
 	if err != nil {
 		wrappedErr := errors.Wraps(err, "failed to refresh work objects",
