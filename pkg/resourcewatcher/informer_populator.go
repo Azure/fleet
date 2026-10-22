@@ -54,8 +54,10 @@ type InformerPopulator struct {
 	// InformerManager manages all the dynamic informers created by the discovery client
 	InformerManager informer.Manager
 
-	// ResourceEligibilityChecker determines if a given namespace, GVK (GVR) is eligible for placement.
-	ResourceEligibilityChecker resourceeligibility.Checker
+	// ResourceEligibilityCheckerForV0APIs determines if a given namespace, GVK (GVR), or object is eligible for placement for v0 APIs.
+	ResourceEligibilityCheckerForV0APIs resourceeligibility.Checker
+	// ResourceEligibilityCheckerForV1APIs determines if a given namespace, GVK (GVR), or object is eligible for placement for v1 APIs.
+	ResourceEligibilityCheckerForV1APIs resourceeligibility.Checker
 }
 
 // Start runs the informer populator, discovering resources and creating informers.
@@ -81,7 +83,7 @@ func (p *InformerPopulator) Start(ctx context.Context) error {
 
 // discoverAndCreateInformers discovers API resources and creates informers WITHOUT adding event handlers
 func (p *InformerPopulator) discoverAndCreateInformers() {
-	resourcesToWatch := discoverWatchableResources(p.DiscoveryClient, p.ResourceEligibilityChecker)
+	resourcesToWatch := discoverWatchableResources(p.DiscoveryClient, p.ResourceEligibilityCheckerForV0APIs, p.ResourceEligibilityCheckerForV1APIs)
 
 	// Create informers directly without adding event handlers.
 	// This avoids adding any event handlers on follower pods

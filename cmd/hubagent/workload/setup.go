@@ -27,7 +27,6 @@ import (
 	"go.goms.io/fleet/pkg/clients/httputil"
 	"go.goms.io/fleet/pkg/propertychecker/azure"
 	"go.goms.io/fleet/pkg/scheduler/framework/plugins/clusteraffinity"
-	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
 	"k8s.io/apimachinery/pkg/runtime/schema"
 	"k8s.io/client-go/discovery"
 	"k8s.io/client-go/dynamic"
@@ -210,8 +209,8 @@ func SetupControllers(ctx context.Context, wg *sync.WaitGroup, mgr ctrl.Manager,
 	}
 
 	// Build the composite resource eligibility checker for v0 APIs.
-	defaultResourceEligibilityCheckerForV0APIs := resourceeligibility.DefaultForV0APIs(mgr.GetRESTMapper())
-	customResourceEligibilityChecker.Wraps(defaultResourceEligibilityCheckerForV0APIs)
+	v0ResourceEligibilityChecker := customResourceEligibilityChecker.DeepCopy()
+	v0ResourceEligibilityChecker.Wraps(resourceeligibility.DefaultForV0APIs(mgr.GetRESTMapper()))
 
 	// The same user-supplied filters for the v1 APIs (placement policies); the v1 built-in ones deny a few more kinds than v0.
 	v1ResourceEligibilityChecker := customResourceEligibilityChecker.DeepCopy()
@@ -226,7 +225,7 @@ func SetupControllers(ctx context.Context, wg *sync.WaitGroup, mgr ctrl.Manager,
 	resourceSelectorResolver := controller.ResourceSelectorResolver{
 		RestMapper:                 mgr.GetRESTMapper(),
 		InformerManager:            dynamicInformerManager,
-		ResourceEligibilityChecker: customResourceEligibilityChecker,
+		ResourceEligibilityChecker: v0ResourceEligibilityChecker,
 		EnableWorkload:             opts.WebhookAndAdmissionPolicyOpts.EnableWorkload,
 	}
 	resourceSnapshotResolver := controller.NewResourceSnapshotResolver(mgr.GetClient(), mgr.GetScheme())
@@ -417,21 +416,12 @@ func SetupControllers(ctx context.Context, wg *sync.WaitGroup, mgr ctrl.Manager,
 			}
 			// Annotation-based placement generates the policies above; the resource watcher feeds it.
 			annotatedSources = &annotationplacement.SourceQueue{}
-			enableWorkload := opts.WebhookAndAdmissionPolicyOpts.EnableWorkload
 			if err := (&annotationplacement.Reconciler{
-				Client:     mgr.GetClient(),
-				APIReader:  mgr.GetAPIReader(),
-				RESTMapper: mgr.GetRESTMapper(),
-				Recorder:   mgr.GetEventRecorder("annotation-placement-controller"),
-				// The v1 kind and namespace filters, plus the object filter the resource watcher applies,
-				// which the checker does not cover.
-				ShouldPlace: func(source *unstructured.Unstructured) (bool, error) {
-					if !v1ResourceEligibilityChecker.AllowsGVK(source.GroupVersionKind()) ||
-						!v1ResourceEligibilityChecker.AllowsNamespace(annotationplacement.SourceNamespace(source)) {
-						return false, nil
-					}
-					return controller.ShouldPropagateObj(dynamicInformerManager, source, enableWorkload)
-				},
+				Client:                     mgr.GetClient(),
+				APIReader:                  mgr.GetAPIReader(),
+				RESTMapper:                 mgr.GetRESTMapper(),
+				Recorder:                   mgr.GetEventRecorder("annotation-placement-controller"),
+				ResourceEligibilityChecker: v1ResourceEligibilityChecker,
 			}).SetupWithManager(mgr, annotatedSources); err != nil {
 				klog.ErrorS(err, "Unable to set up the annotation placement controller")
 				return err
@@ -679,11 +669,16 @@ func SetupControllers(ctx context.Context, wg *sync.WaitGroup, mgr ctrl.Manager,
 	// Set up the InformerPopulator that runs on ALL pods (leader and followers)
 	// This ensures all pods have synced informer caches for webhook validation
 	klog.Info("Setting up informer populator")
+	checkerForV1APIsInInformerPopulator := v1ResourceEligibilityChecker
+	if !opts.FeatureFlags.EnablePlacementPolicyAPIs {
+		checkerForV1APIsInInformerPopulator = nil
+	}
 	informerPopulator := &resourcewatcher.InformerPopulator{
-		DiscoveryClient:            discoverClient,
-		RESTMapper:                 mgr.GetRESTMapper(),
-		InformerManager:            dynamicInformerManager,
-		ResourceEligibilityChecker: customResourceEligibilityChecker,
+		DiscoveryClient:                     discoverClient,
+		RESTMapper:                          mgr.GetRESTMapper(),
+		InformerManager:                     dynamicInformerManager,
+		ResourceEligibilityCheckerForV0APIs: v0ResourceEligibilityChecker,
+		ResourceEligibilityCheckerForV1APIs: checkerForV1APIsInInformerPopulator,
 	}
 
 	if err := mgr.Add(informerPopulator); err != nil {
@@ -693,6 +688,10 @@ func SetupControllers(ctx context.Context, wg *sync.WaitGroup, mgr ctrl.Manager,
 
 	// Set up a runner that starts all the custom controllers we created above
 	// This runs ONLY on the leader and adds event handlers to the informers created by InformerPopulator
+	checkerForV1APIsInChangeDetector := v1ResourceEligibilityChecker
+	if !opts.FeatureFlags.EnablePlacementPolicyAPIs {
+		checkerForV1APIsInChangeDetector = nil
+	}
 	resourceChangeDetector := &resourcewatcher.ChangeDetector{
 		DiscoveryClient: discoverClient,
 		RESTMapper:      mgr.GetRESTMapper(),
@@ -701,7 +700,8 @@ func SetupControllers(ctx context.Context, wg *sync.WaitGroup, mgr ctrl.Manager,
 		ResourceChangeController:                  resourceChangeController,
 		AnnotatedSources:                          annotatedSources,
 		InformerManager:                           dynamicInformerManager,
-		ResourceEligibilityChecker:                customResourceEligibilityChecker,
+		ResourceEligibilityCheckerForV0APIs:       v0ResourceEligibilityChecker,
+		ResourceEligibilityCheckerForV1APIs:       checkerForV1APIsInChangeDetector,
 		ConcurrentPlacementWorker:                 int(math.Ceil(float64(opts.PlacementMgmtOpts.MaxConcurrentClusterPlacement) / 10)),
 		ConcurrentResourceChangeWorker:            opts.PlacementMgmtOpts.ConcurrentResourceChangeSyncs,
 		EnableWorkload:                            opts.WebhookAndAdmissionPolicyOpts.EnableWorkload,

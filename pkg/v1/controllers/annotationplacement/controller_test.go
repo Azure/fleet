@@ -39,6 +39,7 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/client/interceptor"
 
 	kfplacementv1alpha1 "github.com/kubefleet-dev/kubefleet/apis/kubefleet.dev/placement/v1alpha1"
+	"github.com/kubefleet-dev/kubefleet/pkg/utils/resourceeligibility"
 )
 
 var (
@@ -309,31 +310,112 @@ func TestReconcileDeletedResource(t *testing.T) {
 // Its generated policy is deleted: the resource watcher reports such a resource as deleted and then
 // never again, so this reconciliation is the last chance to clean up.
 func TestReconcileIneligibleResource(t *testing.T) {
-	ctx := context.Background()
-	source := newSource(deploymentGVK, testNamespace, testName, map[string]string{kfplacementv1alpha1.ClusterSelectorsAnnotation: oneSelector})
-	existing := desiredPolicy(source, mustParse(t, oneSelector))
+	for _, check := range []string{"GVK", "namespace", "namespace object", "object"} {
+		t.Run(check, func(t *testing.T) {
+			ctx := context.Background()
+			source := newSource(deploymentGVK, testNamespace, testName, map[string]string{kfplacementv1alpha1.ClusterSelectorsAnnotation: oneSelector})
+			checker := resourceeligibility.AllowAll(newRESTMapper())
+			switch check {
+			case "GVK":
+				if err := checker.SetGVKCheckList(resourceeligibility.GVKEligibilityModeDenyList, []schema.GroupVersionKind{deploymentGVK}); err != nil {
+					t.Fatalf("SetGVKCheckList() = %v, want no error", err)
+				}
+			case "namespace":
+				checker.SetNamespaceCheckList(resourceeligibility.NamespaceEligibilityModeDenyList, []string{testNamespace}, nil)
+			case "namespace object":
+				// A Namespace carries no namespace of its own, so it must be checked against its name;
+				// checking its empty namespace field would let a skipped namespace through.
+				source = newSource(namespaceGVK, "", testNamespace, map[string]string{kfplacementv1alpha1.ClusterSelectorsAnnotation: oneSelector})
+				checker.SetNamespaceCheckList(resourceeligibility.NamespaceEligibilityModeDenyList, []string{testNamespace}, nil)
+			case "object":
+				controller := true
+				source.SetOwnerReferences([]metav1.OwnerReference{{
+					APIVersion: "apps/v1",
+					Kind:       "Deployment",
+					Name:       "owner",
+					UID:        "owner-uid",
+					Controller: &controller,
+				}})
+			}
+			existing := desiredPolicy(source, mustParse(t, oneSelector))
+			r, recorder := newReconciler(t, interceptor.Funcs{}, source, existing)
+			r.ResourceEligibilityChecker = checker
 
-	r, recorder := newReconciler(t, interceptor.Funcs{}, source, existing)
-	r.ShouldPlace = func(*unstructured.Unstructured) (bool, error) { return false, nil }
+			req := RequestFor(source)
+			if _, err := r.Reconcile(ctx, req); err != nil {
+				t.Fatalf("Reconcile(%v) = %v, want no error", req, err)
+			}
+			if _, found := policyFrom(ctx, t, r, source); found {
+				t.Errorf("Reconcile(%v) left the generated policy standing, want it deleted", req)
+			}
+			if diff := cmp.Diff(recordedReasons(recorder), []string{EventReasonPolicyDeleted}); diff != "" {
+				t.Errorf("Reconcile(%v) recorded events mismatch (-got, +want):\n%s", req, diff)
+			}
 
-	req := RequestFor(source)
-	if _, err := r.Reconcile(ctx, req); err != nil {
-		t.Fatalf("Reconcile(%v) = %v, want no error", req, err)
+			// A second pass over a resource that never generated anything must stay silent.
+			if _, err := r.Reconcile(ctx, req); err != nil {
+				t.Fatalf("Reconcile(%v) = %v, want no error", req, err)
+			}
+			if got := recordedReasons(recorder); len(got) != 0 {
+				t.Errorf("Reconcile(%v) recorded events = %v, want none on the second pass", req, got)
+			}
+		})
 	}
-	if _, found := policyFrom(ctx, t, r, source); found {
-		t.Errorf("Reconcile(%v) left the generated policy standing, want it deleted", req)
-	}
-	if diff := cmp.Diff(recordedReasons(recorder), []string{EventReasonPolicyDeleted}); diff != "" {
-		t.Errorf("Reconcile(%v) recorded events mismatch (-got, +want):\n%s", req, diff)
-	}
+}
 
-	// A second pass over a resource that never generated anything must stay silent.
-	if _, err := r.Reconcile(ctx, req); err != nil {
-		t.Fatalf("Reconcile(%v) = %v, want no error", req, err)
+// TestReconcileBlockedAdmissionPolicy covers the admission policy kinds, which annotation-based
+// placement refuses to place even though an explicitly authored placement policy can still place
+// them. An annotated one is warned about rather than given a policy, and a policy generated for it
+// before the kind was blocked is deleted.
+func TestReconcileBlockedAdmissionPolicy(t *testing.T) {
+	for _, kind := range []string{
+		"ValidatingAdmissionPolicy",
+		"ValidatingAdmissionPolicyBinding",
+		"MutatingAdmissionPolicy",
+		"MutatingAdmissionPolicyBinding",
+	} {
+		for _, existingPolicy := range []bool{false, true} {
+			name := kind + "/new"
+			if existingPolicy {
+				name = kind + "/existing"
+			}
+			t.Run(name, func(t *testing.T) {
+				gvk := schema.GroupVersionKind{Group: "admissionregistration.k8s.io", Version: "v1", Kind: kind}
+				source := newSource(gvk, "", testName, map[string]string{kfplacementv1alpha1.ClusterSelectorsAnnotation: oneSelector})
+				objects := []client.Object{source}
+				wantReasons := []string{EventReasonPlacementBlocked}
+				if existingPolicy {
+					objects = append(objects, desiredPolicy(source, mustParse(t, oneSelector)))
+					wantReasons = append(wantReasons, EventReasonPolicyDeleted)
+				}
+				r, recorder := newReconciler(t, interceptor.Funcs{}, objects...)
+				mapper := meta.NewDefaultRESTMapper([]schema.GroupVersion{gvk.GroupVersion()})
+				mapper.Add(gvk, meta.RESTScopeRoot)
+				r.RESTMapper = mapper
+
+				ctx := context.Background()
+				req := RequestFor(source)
+				if _, err := r.Reconcile(ctx, req); err != nil {
+					t.Fatalf("Reconcile(%v) = %v, want no error", req, err)
+				}
+				if _, found := policyFrom(ctx, t, r, source); found {
+					t.Errorf("Reconcile(%v) left a generated policy, want none", req)
+				}
+				if diff := cmp.Diff(recordedReasons(recorder), wantReasons); diff != "" {
+					t.Errorf("Reconcile(%v) recorded events mismatch (-got, +want):\n%s", req, diff)
+				}
+			})
+		}
 	}
-	if got := recordedReasons(recorder); len(got) != 0 {
-		t.Errorf("Reconcile(%v) recorded events = %v, want none on the second pass", req, got)
-	}
+}
+
+type failingEligibilityChecker struct {
+	resourceeligibility.Checker
+	err error
+}
+
+func (c *failingEligibilityChecker) AllowsObject(*unstructured.Unstructured) (bool, string, error) {
+	return false, "", c.err
 }
 
 // TestReconcileEligibilityError covers the eligibility test itself failing, which must surface as a
@@ -342,7 +424,10 @@ func TestReconcileEligibilityError(t *testing.T) {
 	source := newSource(deploymentGVK, testNamespace, testName, map[string]string{kfplacementv1alpha1.ClusterSelectorsAnnotation: oneSelector})
 	r, _ := newReconciler(t, interceptor.Funcs{}, source)
 	wantErr := errors.New("the eligibility test is unwell")
-	r.ShouldPlace = func(*unstructured.Unstructured) (bool, error) { return false, wantErr }
+	r.ResourceEligibilityChecker = &failingEligibilityChecker{
+		Checker: resourceeligibility.AllowAll(r.RESTMapper),
+		err:     wantErr,
+	}
 
 	req := RequestFor(source)
 	if _, err := r.Reconcile(context.Background(), req); !errors.Is(err, wantErr) {

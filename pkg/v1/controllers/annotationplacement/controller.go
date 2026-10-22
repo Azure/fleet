@@ -38,6 +38,7 @@ import (
 
 	kfplacementv1alpha1 "github.com/kubefleet-dev/kubefleet/apis/kubefleet.dev/placement/v1alpha1"
 	kferrors "github.com/kubefleet-dev/kubefleet/pkg/utils/errors"
+	"github.com/kubefleet-dev/kubefleet/pkg/utils/resourceeligibility"
 )
 
 // The reasons of the events this controller records on the annotated resource. Each reason is the
@@ -65,6 +66,8 @@ const (
 	// overwrites nor deletes the pre-existing policy, so the placement the annotation asks for is not
 	// running, and the event is how the user learns why.
 	EventReasonPolicyConflict = "PlacementPolicyConflict"
+	// EventReasonPlacementBlocked is recorded when a kind cannot be placed through annotations.
+	EventReasonPlacementBlocked = "AnnotationPlacementBlocked"
 )
 
 // errForeignPolicy reports that a policy occupies a resource's generated name but is not one this
@@ -135,24 +138,11 @@ type Reconciler struct {
 	// Recorder records the outcome of a reconciliation on the annotated resource.
 	Recorder events.EventRecorder
 
-	// ShouldPlace reports whether a resource is one KubeFleet places at all, mirroring the filter
-	// the resource watcher applies to its events. For example, a Deployment in a user namespace
-	// should place (true); a ConfigMap in a skipped namespace like kube-system, or a ReplicaSet a
-	// Deployment already owns, should not (false).
+	// ResourceEligibilityChecker reports whether a resource can be placed via KubeFleet's placement
+	// capabilities.
 	//
-	// The reconciler applies it again because it can be reached for a resource the watcher would
-	// filter out: the watcher reports a resource that stops passing its filter as a deletion, and
-	// the generated policy watch enqueues whatever a policy names as its owner. A resource that
-	// fails the check has its generated policy deleted.
-	//
-	// Eligibility can change over a resource's life -- an owned ReplicaSet becomes eligible again
-	// once orphaned, a resource stays ineligible while in a skipped namespace. The transitions that
-	// matter are edits to the resource itself (its owner references, its labels), so each fires an
-	// event that re-runs this check; a resource that becomes eligible again and still carries the
-	// annotation has its policy regenerated on that event.
-	//
-	// Left nil, every resource is eligible.
-	ShouldPlace func(source *unstructured.Unstructured) (bool, error)
+	// Note that when using the annotation-based placement experience, additional constraints might apply.
+	ResourceEligibilityChecker resourceeligibility.Checker
 }
 
 // Reconcile brings the generated policy for one resource in line with that resource's annotation.
@@ -190,17 +180,32 @@ func (r *Reconciler) Reconcile(ctx context.Context, req Request) (ctrl.Result, e
 		return ctrl.Result{}, err
 	}
 
-	if r.ShouldPlace != nil {
-		eligible, err := r.ShouldPlace(source)
+	if isObjectBlockedForAnnotationBasedPlacement(source) {
+		if HasClusterSelectorsAnnotation(source) {
+			r.Recorder.Eventf(source, nil, corev1.EventTypeWarning, EventReasonPlacementBlocked, "CheckEligibility",
+				"The %s annotation cannot place %s resources; use an explicitly authored placement policy instead",
+				kfplacementv1alpha1.ClusterSelectorsAnnotation, source.GetKind())
+		}
+		return ctrl.Result{}, r.deletePolicy(ctx, source, "the resource kind is blocked for annotation-based placement")
+	}
+
+	if r.ResourceEligibilityChecker != nil {
+		if !r.ResourceEligibilityChecker.AllowsGVK(source.GroupVersionKind()) {
+			// The resource's GVK is not allowed for placement.
+			return ctrl.Result{}, r.deletePolicy(ctx, source, "the resource is not eligible for placement (blocked GVK)")
+		}
+		// A Namespace object is checked against its own name, as it carries no namespace of its own.
+		if !r.ResourceEligibilityChecker.AllowsNamespace(SourceNamespace(source)) {
+			return ctrl.Result{}, r.deletePolicy(ctx, source, "the resource is not eligible for placement (blocked namespace)")
+		}
+		eligible, cause, err := r.ResourceEligibilityChecker.AllowsObject(source)
 		if err != nil {
-			klog.ErrorS(err, "Failed to decide whether the resource is eligible for placement", "obj", req)
-			return ctrl.Result{}, err
+			wrappedErr := kferrors.Wraps(err, "", "obj", req)
+			klog.ErrorS(wrappedErr, "Failed to check resource eligibility", kferrors.Args(wrappedErr)...)
+			return ctrl.Result{}, wrappedErr
 		}
 		if !eligible {
-			// A resource KubeFleet does not place cannot keep a generated policy either; without
-			// this, a resource that stops being eligible (for instance a ReplicaSet adopted by a
-			// Deployment) would leave its policy behind, invisible to the watcher from then on.
-			return ctrl.Result{}, r.deletePolicy(ctx, source, "the resource is not eligible for placement")
+			return ctrl.Result{}, r.deletePolicy(ctx, source, fmt.Sprintf("the resource is not eligible for placement (%s)", cause))
 		}
 	}
 

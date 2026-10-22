@@ -88,7 +88,7 @@ func getWatchableResources(discoveryClient discovery.ServerResourcesInterface) (
 // discoverWatchableResources discovers all API resources in the cluster and filters them
 // based on their placement eligibility. This is a shared helper used by both InformerPopulator
 // and ChangeDetector to ensure consistent resource discovery logic.
-func discoverWatchableResources(discoveryClient discovery.DiscoveryInterface, resourceEligibilityChecker resourceeligibility.Checker) []informer.APIResourceMeta {
+func discoverWatchableResources(discoveryClient discovery.DiscoveryInterface, resourceEligibilityCheckers ...resourceeligibility.Checker) []informer.APIResourceMeta {
 	newResources, err := getWatchableResources(discoveryClient)
 	if err != nil {
 		klog.ErrorS(err, "Failed to get all the api resources from the cluster")
@@ -96,10 +96,23 @@ func discoverWatchableResources(discoveryClient discovery.DiscoveryInterface, re
 
 	var resourcesToWatch []informer.APIResourceMeta
 	for _, res := range newResources {
-		if resourceEligibilityChecker != nil && !resourceEligibilityChecker.AllowsGVK(res.GroupVersionKind) {
-			continue
+		// A resource is watchable if any of the set eligibility checkers allows it; unset (nil) checkers are
+		// ignored, and if no checker is set at all, every resource is watchable.
+		allowed := false
+		anyCheckerPresent := false
+		for _, checker := range resourceEligibilityCheckers {
+			if checker == nil {
+				continue
+			}
+			anyCheckerPresent = true
+			if checker.AllowsGVK(res.GroupVersionKind) {
+				allowed = true
+				break
+			}
 		}
-		resourcesToWatch = append(resourcesToWatch, res)
+		if allowed || !anyCheckerPresent {
+			resourcesToWatch = append(resourcesToWatch, res)
+		}
 	}
 
 	return resourcesToWatch

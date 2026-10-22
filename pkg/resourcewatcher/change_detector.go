@@ -75,8 +75,10 @@ type ChangeDetector struct {
 	// InformerManager manages all the dynamic informers created by the discovery client
 	InformerManager informer.Manager
 
-	// ResourceEligibilityChecker determines if a given namespace, GVK (GVR) is eligible for placement.
-	ResourceEligibilityChecker resourceeligibility.Checker
+	// ResourceEligibilityCheckerForV0APIs determines if a given namespace or GVK (GVR) is eligible for placement for v0 APIs.
+	ResourceEligibilityCheckerForV0APIs resourceeligibility.Checker
+	// ResourceEligibilityCheckerForV1APIs determines if a given namespace, GVK (GVR), or object is eligible for placement for v1 APIs.
+	ResourceEligibilityCheckerForV1APIs resourceeligibility.Checker
 
 	// ConcurrentPlacementWorker is the number of `placement` reconcilers that are
 	// allowed to sync concurrently.
@@ -140,7 +142,8 @@ func (d *ChangeDetector) discoverAPIResourcesLoop(ctx context.Context, period ti
 
 // discoverResources goes through all the api resources in the cluster and adds event handlers to informers
 func (d *ChangeDetector) discoverResources(dynamicResourceEventHandler cache.ResourceEventHandler) {
-	resourcesToWatch := discoverWatchableResources(d.DiscoveryClient, d.ResourceEligibilityChecker)
+	// Allow watching of a resource type if any of the eligibility checkers allows it.
+	resourcesToWatch := discoverWatchableResources(d.DiscoveryClient, d.ResourceEligibilityCheckerForV0APIs, d.ResourceEligibilityCheckerForV1APIs)
 
 	// On the leader, add event handlers to informers that were already created by InformerPopulator
 	// The informers exist on all pods, but only the leader adds handlers and processes events
@@ -170,19 +173,46 @@ func (d *ChangeDetector) dynamicResourceFilter(obj any) bool {
 	}
 
 	cwKey, _ := key.(keys.ClusterWideKey)
-	if d.ResourceEligibilityChecker != nil && !d.ResourceEligibilityChecker.AllowsNamespace(cwKey.Namespace) {
+	// Block watching of a resource if the v0 APIs' resource eligibility checker disallows its owner namespace; the v1 APIs' checker is
+	// not consulted here as they are guaranteed to have the same namespace allow/deny list at the moment.
+	if d.ResourceEligibilityCheckerForV0APIs != nil && !d.ResourceEligibilityCheckerForV0APIs.AllowsNamespace(cwKey.Namespace) {
 		klog.V(5).InfoS("Skip watching resource in namespace due to placement eligibility", "namespace", cwKey.Namespace,
 			"group", cwKey.Group, "version", cwKey.Version, "kind", cwKey.Kind, "object", cwKey.Name)
 		return false
 	}
 
+	// Block watching of a resource if neither the v0 APIs nor the v1 APIs allow it.
+	//
+	// Note that here the original ShouldPropagateObj method is used to determine eligibility for v0 APIs for compatibility reasons;
+	// the v0 APIs' eligibility checker does not check object-level eligibility (it's a no-op; all objects are considered eligible).
 	if unstructuredObj, ok := obj.(*unstructured.Unstructured); ok {
-		shouldPropagate, err := controller.ShouldPropagateObj(d.InformerManager, unstructuredObj.DeepCopy(), d.EnableWorkload)
-		if err != nil || !shouldPropagate {
-			klog.V(5).InfoS("Skip watching resource in namespace", "namespace", cwKey.Namespace,
-				"group", cwKey.Group, "version", cwKey.Version, "kind", cwKey.Kind, "object", cwKey.Name)
+		shouldPropagateForV0APIs, err := controller.ShouldPropagateObj(d.InformerManager, unstructuredObj.DeepCopy(), d.EnableWorkload)
+		if err != nil {
+			klog.V(5).InfoS("Skip watching a resource as its eligibility check (for v0 APIs) failed", "err", err,
+				"group", cwKey.Group, "version", cwKey.Version, "kind", cwKey.Kind, "object", cwKey.Name, "namespace", cwKey.Namespace)
 			return false
 		}
+		if shouldPropagateForV0APIs {
+			return true
+		}
+
+		// AllowsObject does not check the GVK; the GVK check is required so that kinds blocked only for the v1 APIs
+		// (e.g., Endpoints) do not pass.
+		if d.ResourceEligibilityCheckerForV1APIs != nil && d.ResourceEligibilityCheckerForV1APIs.AllowsGVK(cwKey.GroupVersionKind()) {
+			allowed, _, err := d.ResourceEligibilityCheckerForV1APIs.AllowsObject(unstructuredObj)
+			if err != nil {
+				klog.V(5).InfoS("Skip watching a resource as its eligibility check (for v1 APIs) failed", "err", err,
+					"group", cwKey.Group, "version", cwKey.Version, "kind", cwKey.Kind, "object", cwKey.Name, "namespace", cwKey.Namespace)
+				return false
+			}
+			if allowed {
+				return true
+			}
+		}
+
+		klog.V(5).InfoS("Skip watching a resource as it failed all resource eligibility checks", "namespace", cwKey.Namespace,
+			"group", cwKey.Group, "version", cwKey.Version, "kind", cwKey.Kind, "object", cwKey.Name)
+		return false
 	}
 
 	return true

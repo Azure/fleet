@@ -19,9 +19,11 @@ package resourcewatcher
 import (
 	"testing"
 
+	appsv1 "k8s.io/api/apps/v1"
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
+	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/runtime/schema"
 	fakediscovery "k8s.io/client-go/discovery/fake"
 	"k8s.io/client-go/kubernetes/fake"
@@ -38,7 +40,8 @@ func TestChangeDetector_discoverResources(t *testing.T) {
 	tests := []struct {
 		name               string
 		discoveryResources []*metav1.APIResourceList
-		eligibilityChecker resourceeligibility.Checker
+		v0Checker          func(t *testing.T) resourceeligibility.Checker
+		v1Checker          func(t *testing.T) resourceeligibility.Checker
 	}{
 		{
 			name: "discovers and adds handlers for watchable resources",
@@ -51,7 +54,8 @@ func TestChangeDetector_discoverResources(t *testing.T) {
 					},
 				},
 			},
-			eligibilityChecker: nil, // Allow all resources
+			v0Checker: func(_ *testing.T) resourceeligibility.Checker { return resourceeligibility.AllowAll(nil) },
+			v1Checker: func(_ *testing.T) resourceeligibility.Checker { return resourceeligibility.AllowAll(nil) },
 		},
 		{
 			name: "skips resources without list/watch verbs",
@@ -63,7 +67,8 @@ func TestChangeDetector_discoverResources(t *testing.T) {
 					},
 				},
 			},
-			eligibilityChecker: nil,
+			v0Checker: func(_ *testing.T) resourceeligibility.Checker { return resourceeligibility.AllowAll(nil) },
+			v1Checker: func(_ *testing.T) resourceeligibility.Checker { return resourceeligibility.AllowAll(nil) },
 		},
 		{
 			name: "respects eligibility checker filtering",
@@ -76,12 +81,12 @@ func TestChangeDetector_discoverResources(t *testing.T) {
 					},
 				},
 			},
-			eligibilityChecker: func() resourceeligibility.Checker {
-				// Only the GVK check runs during discovery, which does not use the RESTMapper.
-				c := resourceeligibility.New(resourceeligibility.CheckerOptions{RestMapper: nil, Wrapped: resourceeligibility.DefaultForV0APIs(nil), SkipNSCheck: false, SkipGVKRCheck: false, SkipObjectCheck: false})
-				_ = c.SetGVKCheckList(resourceeligibility.GVKEligibilityModeDenyList, []schema.GroupVersionKind{{Version: "v1", Kind: "Secret"}}) // Skip secrets
-				return c
-			}(),
+			v0Checker: func(t *testing.T) resourceeligibility.Checker {
+				return secretDenyingChecker(t, resourceeligibility.DefaultForV0APIs(nil))
+			},
+			v1Checker: func(t *testing.T) resourceeligibility.Checker {
+				return secretDenyingChecker(t, resourceeligibility.DefaultForV1APIs(nil))
+			},
 		},
 		{
 			name: "discovers apps group resources",
@@ -94,7 +99,8 @@ func TestChangeDetector_discoverResources(t *testing.T) {
 					},
 				},
 			},
-			eligibilityChecker: nil,
+			v0Checker: func(_ *testing.T) resourceeligibility.Checker { return resourceeligibility.AllowAll(nil) },
+			v1Checker: func(_ *testing.T) resourceeligibility.Checker { return resourceeligibility.AllowAll(nil) },
 		},
 	}
 
@@ -146,10 +152,11 @@ func TestChangeDetector_discoverResources(t *testing.T) {
 
 			// Create ChangeDetector with the interface type
 			detector := &ChangeDetector{
-				DiscoveryClient:            fakeDiscovery,
-				RESTMapper:                 restMapper,
-				InformerManager:            fakeInformerManager,
-				ResourceEligibilityChecker: tt.eligibilityChecker,
+				DiscoveryClient:                     fakeDiscovery,
+				RESTMapper:                          restMapper,
+				InformerManager:                     fakeInformerManager,
+				ResourceEligibilityCheckerForV0APIs: tt.v0Checker(t),
+				ResourceEligibilityCheckerForV1APIs: tt.v1Checker(t),
 			}
 
 			// Test discoverResources which discovers resources and adds handlers
@@ -183,6 +190,14 @@ func TestChangeDetector_dynamicResourceFilter(t *testing.T) {
 		u.SetName(name)
 		return u
 	}
+	unstructuredReplicaSetWithNonControllerOwner := func(namespace, name string) *unstructured.Unstructured {
+		u := &unstructured.Unstructured{}
+		u.SetGroupVersionKind(appsv1.SchemeGroupVersion.WithKind(utils.ReplicaSetKind))
+		u.SetNamespace(namespace)
+		u.SetName(name)
+		u.SetOwnerReferences([]metav1.OwnerReference{{APIVersion: "v1", Kind: utils.ConfigMapKind, Name: "owner"}})
+		return u
+	}
 	typedSecret := func(namespace, name string) *corev1.Secret {
 		return &corev1.Secret{
 			TypeMeta: metav1.TypeMeta{
@@ -204,10 +219,12 @@ func TestChangeDetector_dynamicResourceFilter(t *testing.T) {
 	}
 
 	tests := []struct {
-		name               string
-		obj                any
-		eligibilityChecker resourceeligibility.Checker
-		want               bool
+		name string
+		obj  any
+		// v0Checker defaults to newChecker() when unset.
+		v0Checker resourceeligibility.Checker
+		v1Checker resourceeligibility.Checker
+		want      bool
 	}{
 		{
 			name: "non-runtime object is filtered out",
@@ -249,15 +266,42 @@ func TestChangeDetector_dynamicResourceFilter(t *testing.T) {
 			want: false,
 		},
 		{
-			name:               "object in user-skipped namespace is filtered out",
-			obj:                unstructuredConfigMap("skip-me", "cm"),
-			eligibilityChecker: newChecker("skip-me"),
-			want:               false,
+			name:      "object in user-skipped namespace is filtered out",
+			obj:       unstructuredConfigMap("skip-me", "cm"),
+			v0Checker: newChecker("skip-me"),
+			want:      false,
 		},
 		{
-			name: "unstructured ConfigMap kube-root-ca.crt is filtered out by ShouldPropagateObj",
+			// Only the v0 APIs' checker is consulted for namespace eligibility.
+			name:      "object in user-skipped namespace is filtered out even if it is eligible for the v1 APIs",
+			obj:       unstructuredConfigMap("skip-me", "cm"),
+			v0Checker: newChecker("skip-me"),
+			v1Checker: resourceeligibility.AllowAll(nil),
+			want:      false,
+		},
+		{
+			name: "unstructured ConfigMap kube-root-ca.crt is filtered out by ShouldPropagateObj when no v1 APIs checker is set",
 			obj:  unstructuredConfigMap("default", "kube-root-ca.crt"),
 			want: false,
+		},
+		{
+			name:      "unstructured ConfigMap kube-root-ca.crt is filtered out when the v1 APIs reject the object too",
+			obj:       unstructuredConfigMap("default", "kube-root-ca.crt"),
+			v1Checker: resourceeligibility.AllowAll(nil),
+			want:      false,
+		},
+		{
+			// ShouldPropagateObj rejects a ReplicaSet with any owner; the v1 APIs reject only controller owners.
+			name:      "object rejected by ShouldPropagateObj is allowed when the v1 APIs accept it",
+			obj:       unstructuredReplicaSetWithNonControllerOwner("default", "rs"),
+			v1Checker: resourceeligibility.AllowAll(nil),
+			want:      true,
+		},
+		{
+			name:      "object rejected by ShouldPropagateObj is filtered out when its GVK is ineligible for the v1 APIs",
+			obj:       unstructuredReplicaSetWithNonControllerOwner("default", "rs"),
+			v1Checker: gvkDenyingChecker(t, appsv1.SchemeGroupVersion.WithKind(utils.ReplicaSetKind)),
+			want:      false,
 		},
 		{
 			name: "unstructured ConfigMap with regular name is allowed",
@@ -286,13 +330,14 @@ func TestChangeDetector_dynamicResourceFilter(t *testing.T) {
 			fakeInformerManager := &testinformer.FakeManager{
 				APIResources: make(map[schema.GroupVersionKind]bool),
 			}
-			checker := tt.eligibilityChecker
-			if checker == nil {
-				checker = newChecker()
+			v0Checker := tt.v0Checker
+			if v0Checker == nil {
+				v0Checker = newChecker()
 			}
 			detector := &ChangeDetector{
-				InformerManager:            fakeInformerManager,
-				ResourceEligibilityChecker: checker,
+				InformerManager:                     fakeInformerManager,
+				ResourceEligibilityCheckerForV0APIs: v0Checker,
+				ResourceEligibilityCheckerForV1APIs: tt.v1Checker,
 			}
 
 			got := detector.dynamicResourceFilter(tt.obj)
@@ -300,6 +345,131 @@ func TestChangeDetector_dynamicResourceFilter(t *testing.T) {
 				t.Errorf("dynamicResourceFilter(%v) = %v, want %v", tt.obj, got, tt.want)
 			}
 		})
+	}
+}
+
+// TestChangeDetector_dynamicResourceFilter_PlacementPolicyAPIs verifies the filter with the built-in checkers, wired
+// as in production. With the placement policy (v1) APIs disabled, the v1 checker is unset and ShouldPropagateObj alone
+// decides, as it did before the v1 APIs were added; with them enabled, an object that ShouldPropagateObj rejects
+// still passes if the v1 APIs accept both its GVK and the object itself.
+func TestChangeDetector_dynamicResourceFilter_PlacementPolicyAPIs(t *testing.T) {
+	newObj := func(apiVersion, kind, namespace, name string, ownerRefs ...metav1.OwnerReference) *unstructured.Unstructured {
+		u := &unstructured.Unstructured{}
+		u.SetAPIVersion(apiVersion)
+		u.SetKind(kind)
+		u.SetNamespace(namespace)
+		u.SetName(name)
+		u.SetOwnerReferences(ownerRefs)
+		return u
+	}
+	isController := true
+	appsGroupVersion := appsv1.SchemeGroupVersion.String()
+	deploymentOwner := metav1.OwnerReference{APIVersion: appsGroupVersion, Kind: "Deployment", Name: "web", UID: "uid", Controller: &isController}
+	nonControllerOwner := metav1.OwnerReference{APIVersion: "v1", Kind: utils.ConfigMapKind, Name: "owner", UID: "uid"}
+	deleting := func(u *unstructured.Unstructured) *unstructured.Unstructured {
+		now := metav1.Now()
+		u.SetDeletionTimestamp(&now)
+		return u
+	}
+
+	tests := []struct {
+		name           string
+		obj            *unstructured.Unstructured
+		wantV1Disabled bool
+		wantV1Enabled  bool
+	}{
+		{
+			name:           "regular config map",
+			obj:            newObj("v1", "ConfigMap", "app", "user-config"),
+			wantV1Disabled: true,
+			wantV1Enabled:  true,
+		},
+		{
+			name:           "kube-root-ca.crt config map",
+			obj:            newObj("v1", "ConfigMap", "app", "kube-root-ca.crt"),
+			wantV1Disabled: false,
+			wantV1Enabled:  false,
+		},
+		{
+			name:           "default service account",
+			obj:            newObj("v1", "ServiceAccount", "app", "default"),
+			wantV1Disabled: false,
+			wantV1Enabled:  false,
+		},
+		{
+			name:           "replica set owned by a deployment",
+			obj:            newObj(appsGroupVersion, "ReplicaSet", "app", "web-abc", deploymentOwner),
+			wantV1Disabled: false,
+			wantV1Enabled:  false,
+		},
+		{
+			// ShouldPropagateObj rejects a ReplicaSet with any owner; the v1 APIs reject only controller owners.
+			name:           "replica set with a non-controller owner",
+			obj:            newObj(appsGroupVersion, "ReplicaSet", "app", "rs-owned", nonControllerOwner),
+			wantV1Disabled: false,
+			wantV1Enabled:  true,
+		},
+		{
+			name:           "replica set with a non-controller owner being deleted",
+			obj:            deleting(newObj(appsGroupVersion, "ReplicaSet", "app", "rs-owned", nonControllerOwner)),
+			wantV1Disabled: false,
+			wantV1Enabled:  false,
+		},
+		{
+			name:           "standalone replica set",
+			obj:            newObj(appsGroupVersion, "ReplicaSet", "app", "rs"),
+			wantV1Disabled: true,
+			wantV1Enabled:  true,
+		},
+		{
+			// The v1 APIs deny endpoints altogether.
+			name:           "endpoints backed by a service",
+			obj:            newObj("v1", "Endpoints", "app", "svc"),
+			wantV1Disabled: false,
+			wantV1Enabled:  false,
+		},
+		{
+			name:           "standalone endpoints",
+			obj:            newObj("v1", "Endpoints", "app", "standalone"),
+			wantV1Disabled: true,
+			wantV1Enabled:  true,
+		},
+		{
+			name:           "config map in a reserved namespace",
+			obj:            newObj("v1", "ConfigMap", "kube-system", "cm"),
+			wantV1Disabled: false,
+			wantV1Enabled:  false,
+		},
+	}
+
+	for _, tt := range tests {
+		for _, v1Enabled := range []bool{false, true} {
+			subtestName := tt.name + "/placement policy APIs disabled"
+			want := tt.wantV1Disabled
+			if v1Enabled {
+				subtestName = tt.name + "/placement policy APIs enabled"
+				want = tt.wantV1Enabled
+			}
+			t.Run(subtestName, func(t *testing.T) {
+				fakeInformerManager := &testinformer.FakeManager{
+					APIResources: make(map[schema.GroupVersionKind]bool),
+					Listers: map[schema.GroupVersionResource]*testinformer.FakeLister{
+						utils.ServiceGVR: {Objects: []runtime.Object{newObj("v1", "Service", "app", "svc")}},
+					},
+				}
+				detector := &ChangeDetector{
+					InformerManager:                     fakeInformerManager,
+					ResourceEligibilityCheckerForV0APIs: resourceeligibility.DefaultForV0APIs(nil),
+				}
+				if v1Enabled {
+					detector.ResourceEligibilityCheckerForV1APIs = resourceeligibility.DefaultForV1APIs(nil)
+				}
+
+				if got := detector.dynamicResourceFilter(tt.obj); got != want {
+					t.Errorf("dynamicResourceFilter(%s %s/%s) = %v, want %v", tt.obj.GetKind(), tt.obj.GetNamespace(), tt.obj.GetName(), got, want)
+				}
+			})
+		}
 	}
 }
 
