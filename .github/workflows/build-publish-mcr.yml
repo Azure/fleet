@@ -114,10 +114,10 @@ jobs:
       - uses: actions/checkout@v6
         with:
           ref: ${{ needs.prepare-variables.outputs.git_ref }}
-      # The chart comes from the release tag, which can predate a move of the image repository, so pin it to
-      # the repository the tags were resolved from.
-      - name: Point the chart at the resolved image repository
-        run: sed -i "s|^\([[:space:]]*repository:\).*/\([^/]*\)$|\1 mcr.microsoft.com/${MCR_FLEET_REPO}/\2|" charts/member-agent-arc/values.yaml
+      # Compatibility for release tags whose chart still uses the legacy MCR prefix.
+      # Keep while publishing new image revisions from those tags is supported.
+      - name: Update legacy chart image repositories
+        run: sed -i "s|^\([[:space:]]*repository:[[:space:]]*\)mcr\.microsoft\.com/aks/fleet/|\1mcr.microsoft.com/${MCR_FLEET_REPO}/|" charts/member-agent-arc/values.yaml
       - name: Verify every chart image is published
         run: |
           set -euo pipefail
