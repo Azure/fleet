@@ -28,6 +28,7 @@ import (
 	"net/http"
 	"net/textproto"
 	"os"
+	"strconv"
 	"strings"
 	"time"
 
@@ -71,6 +72,19 @@ const (
 	// The list of available property provider names.
 	azurePropertyProvider = "azure"
 )
+
+// Fixed settings for the experimental placement policy work applier. These are deliberately not taken from the
+// applier flags (--deletion-wait-time, --work-applier-requeue-rate-limiter-*, and the like), which tune the v1beta1
+// work applier only; the placement policy work applier also uses its own built-in requeue rate limiters.
+const (
+	placementPolicyWorkApplierConcurrentReconciles = 5
+	placementPolicyWorkApplierCleanupWaitTime      = 5 * time.Minute
+)
+
+// testOnlyPlacementPolicyWorkApplierMaxRequeueDelayEnvVarName names a test-only environment variable that caps,
+// in seconds, every requeue delay of the placement policy work applier. The E2E test environment sets it so that
+// changes made only on the member cluster side are picked up quickly; it is not a supported setting.
+const testOnlyPlacementPolicyWorkApplierMaxRequeueDelayEnvVarName = "TEST_ONLY_PLACEMENT_POLICY_WORK_APPLIER_MAX_REQUEUE_DELAY_SECONDS"
 
 var (
 	scheme = runtime.NewScheme()
@@ -452,7 +466,7 @@ func Start(ctx context.Context, hubCfg, memberConfig *rest.Config, hubOpts, memb
 
 	if globalOpts.EnablePlacementPolicyAPIs {
 		klog.Info("Setting up the placement policy work applier")
-		v1WorkApplier, v1Err := setUpPlacementPolicyWorkApplier(ctx, hubCfg, hubMgr, memberMgr, discoverClient, spokeDynamicClient, restMapper, targetNS, globalOpts)
+		v1WorkApplier, v1Err := setUpPlacementPolicyWorkApplier(ctx, hubCfg, hubMgr, memberMgr, discoverClient, spokeDynamicClient, restMapper, targetNS)
 		if v1Err != nil {
 			return v1Err
 		}
@@ -525,7 +539,6 @@ func setUpPlacementPolicyWorkApplier(
 	spokeDynamicClient dynamic.Interface,
 	restMapper meta.RESTMapper,
 	workNS string,
-	globalOpts options.Options,
 ) (*v1workapplier.Reconciler, error) {
 	// Check both sides up front; a missing CRD would otherwise only show up as a cache sync timeout.
 	appliedWorkGVK := kfplacementv1alpha1.GroupVersion.WithKind(kfplacementv1alpha1.AppliedWorkKind)
@@ -550,24 +563,49 @@ func setUpPlacementPolicyWorkApplier(
 		return nil, err
 	}
 
+	periodicRequeueRateLimiter, err := placementPolicyWorkApplierRequeueRateLimiter()
+	if err != nil {
+		klog.ErrorS(err, "Failed to set up the requeue rate limiter for the placement policy work applier")
+		return nil, err
+	}
+
 	workApplier := v1workapplier.New(
 		workNS,
 		hubMgr.GetClient(), hubMgr.GetAPIReader(),
 		memberMgr.GetClient(), spokeDynamicClient,
 		restMapper,
 		parallelizer.NewParallelizer(parallelizer.DefaultNumOfWorkers),
-		// The same concurrency as the v1beta1 work applier.
-		5,
-		// Nil picks the default cleanup and periodic requeue rate limiters. The work applier requeue
-		// and priority queue flags tune the v1beta1 work applier only.
-		nil, nil,
-		time.Minute*time.Duration(globalOpts.ApplierOpts.ResourceForceDeletionWaitTimeMinutes),
+		placementPolicyWorkApplierConcurrentReconciles,
+		// Nil picks the package's own default cleanup rate limiter; a nil periodic requeue rate limiter
+		// picks its default one too.
+		nil, periodicRequeueRateLimiter,
+		placementPolicyWorkApplierCleanupWaitTime,
 	)
 	if err := workApplier.SetupWithManager(hubMgr); err != nil {
 		klog.ErrorS(err, "Failed to set up the placement policy work applier")
 		return nil, err
 	}
 	return workApplier, nil
+}
+
+// placementPolicyWorkApplierRequeueRateLimiter returns the periodic requeue rate limiter for the placement policy
+// work applier: nil (the package default) unless the test-only environment variable caps the requeue delays.
+func placementPolicyWorkApplierRequeueRateLimiter() (*v1workapplier.MultiStageRequeueWithExponentialBackoffRateLimiter, error) {
+	val, found := os.LookupEnv(testOnlyPlacementPolicyWorkApplierMaxRequeueDelayEnvVarName)
+	if !found || val == "" {
+		return nil, nil
+	}
+	maxDelaySeconds, err := strconv.Atoi(val)
+	if err != nil {
+		return nil, fmt.Errorf("failed to parse %s=%q as an integer: %w", testOnlyPlacementPolicyWorkApplierMaxRequeueDelayEnvVarName, val, err)
+	}
+	rateLimiter, err := v1workapplier.NewDefaultRequeueRateLimiterWithMaxDelay(maxDelaySeconds)
+	if err != nil {
+		return nil, fmt.Errorf("invalid %s=%q: %w", testOnlyPlacementPolicyWorkApplierMaxRequeueDelayEnvVarName, val, err)
+	}
+	klog.InfoS("Capping the requeue delays of the placement policy work applier; this is a test-only setting",
+		"envVar", testOnlyPlacementPolicyWorkApplierMaxRequeueDelayEnvVarName, "maxDelaySeconds", maxDelaySeconds)
+	return rateLimiter, nil
 }
 
 // memberControllers lets the InternalMemberCluster controller join and leave the fleet for

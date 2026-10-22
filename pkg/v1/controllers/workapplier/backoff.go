@@ -59,13 +59,25 @@ const (
 	linkedWorkObjGenStrTmpl        = "%s,%d"
 )
 
+// The parameters of the default requeue rate limiter; see init for the reasoning behind each value.
+const (
+	defaultAttemptsWithFixedDelay                               = 1
+	defaultFixedDelaySeconds                                    = 5
+	defaultExponentialBaseForSlowBackoff                        = 1.2
+	defaultInitialSlowBackoffDelaySeconds                       = 2
+	defaultMaxSlowBackoffDelaySeconds                           = 15
+	defaultExponentialBaseForFastBackoff                        = 1.5
+	defaultMaxFastBackoffDelaySeconds                           = 900
+	defaultSkipToFastBackoffWhenAllAppliedManifestsAreAvailable = true
+)
+
 var defaultRequeueRateLimiter *MultiStageRequeueWithExponentialBackoffRateLimiter
 
 func init() {
 	var err error
 	defaultRequeueRateLimiter, err = NewMultiStageRequeueWithExponentialBackoffRateLimiter(
 		// Allow 1 attempt of fixed delay; this helps give objects a bit of headroom to become available.
-		1,
+		defaultAttemptsWithFixedDelay,
 		// Use a fixed delay of 5 seconds for the first attempt.
 		//
 		// Important (chenyu1): before the introduction of the requeue rate limiter, the work
@@ -75,19 +87,19 @@ func init() {
 		// w/in 10 seconds), which is why the rate limiter uses the 5 seconds fast requeue delay by default.
 		// If you need to change this value and see that some test cases begin to fail, update the test
 		// cases accordingly.
-		5,
+		defaultFixedDelaySeconds,
 		// Then switch to slow exponential backoff with a base of 1.2 with an initial delay of 2 seconds
 		// and a cap of 15 seconds (12 requeues in total, ~90 seconds in total).
 		// This is to allow fast checkups in cases where objects are not yet available.
-		1.2,
-		2,
-		15,
+		defaultExponentialBaseForSlowBackoff,
+		defaultInitialSlowBackoffDelaySeconds,
+		defaultMaxSlowBackoffDelaySeconds,
 		// Eventually, switch to a fast exponential backoff with a base of 1.5 with an initial delay of 15 seconds
 		// and a cap of 15 minutes (10 requeues in total, ~42 minutes in total).
-		1.5,
-		900,
+		defaultExponentialBaseForFastBackoff,
+		defaultMaxFastBackoffDelaySeconds,
 		// Allow skipping to the fast exponential backoff stage if all the applied manifests are available.
-		true,
+		defaultSkipToFastBackoffWhenAllAppliedManifestsAreAvailable,
 		// When the linked Work objects do not change and the processing result remains the same (e.g., some
 		// manifests stay unavailable), the requeue pattern is essentially:
 		// * 1 attempt of requeue with fixed delays (5 seconds); then
@@ -98,6 +110,25 @@ func init() {
 	if err != nil {
 		klog.Fatalf("Failed to initialize default requeue rate limiter: %v", err)
 	}
+}
+
+// NewDefaultRequeueRateLimiterWithMaxDelay creates a rate limiter that requeues the same way as the default one,
+// except that no requeue delay exceeds the given maximum. Values at or above the default caps leave the default
+// behavior unchanged.
+//
+// It is meant for test environments, where changes made only on the member cluster side (e.g., drifts) need to
+// be picked up quickly.
+func NewDefaultRequeueRateLimiterWithMaxDelay(maxDelaySeconds int) (*MultiStageRequeueWithExponentialBackoffRateLimiter, error) {
+	return NewMultiStageRequeueWithExponentialBackoffRateLimiter(
+		defaultAttemptsWithFixedDelay,
+		min(defaultFixedDelaySeconds, maxDelaySeconds),
+		defaultExponentialBaseForSlowBackoff,
+		min(defaultInitialSlowBackoffDelaySeconds, maxDelaySeconds),
+		min(defaultMaxSlowBackoffDelaySeconds, maxDelaySeconds),
+		defaultExponentialBaseForFastBackoff,
+		min(defaultMaxFastBackoffDelaySeconds, maxDelaySeconds),
+		defaultSkipToFastBackoffWhenAllAppliedManifestsAreAvailable,
+	)
 }
 
 // MultiStageRequeueWithExponentialBackoffRateLimiter is a rate limiter that allows requeues of various

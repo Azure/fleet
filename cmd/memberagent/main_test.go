@@ -3,13 +3,88 @@ package main
 import (
 	"context"
 	"errors"
+	"os"
 	"testing"
 
+	"github.com/google/go-cmp/cmp"
+	"github.com/google/go-cmp/cmp/cmpopts"
 	"github.com/stretchr/testify/assert"
 	"k8s.io/client-go/rest"
+	"k8s.io/utils/ptr"
 
 	"github.com/kubefleet-dev/kubefleet/cmd/memberagent/options"
+	v1workapplier "github.com/kubefleet-dev/kubefleet/pkg/v1/controllers/workapplier"
 )
+
+// TestPlacementPolicyWorkApplierRequeueRateLimiter tests that the placement policy work applier uses its default
+// requeue rate limiter unless the test-only environment variable caps the requeue delays.
+func TestPlacementPolicyWorkApplierRequeueRateLimiter(t *testing.T) {
+	wantCapped, err := v1workapplier.NewDefaultRequeueRateLimiterWithMaxDelay(5)
+	if err != nil {
+		t.Fatalf("NewDefaultRequeueRateLimiterWithMaxDelay(5) = %v, want no error", err)
+	}
+
+	testCases := []struct {
+		name      string
+		envVal    *string
+		want      *v1workapplier.MultiStageRequeueWithExponentialBackoffRateLimiter
+		wantErred bool
+	}{
+		{
+			name: "not set",
+		},
+		{
+			name:   "set to empty",
+			envVal: ptr.To(""),
+		},
+		{
+			name:   "set to a valid cap",
+			envVal: ptr.To("5"),
+			want:   wantCapped,
+		},
+		{
+			name:      "set to a non-integer",
+			envVal:    ptr.To("5s"),
+			wantErred: true,
+		},
+		{
+			name:      "set below the minimum",
+			envVal:    ptr.To("1"),
+			wantErred: true,
+		},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			// Setenv restores the original value after the test, even when the variable is then unset.
+			t.Setenv(testOnlyPlacementPolicyWorkApplierMaxRequeueDelayEnvVarName, "")
+			if tc.envVal == nil {
+				if err := os.Unsetenv(testOnlyPlacementPolicyWorkApplierMaxRequeueDelayEnvVarName); err != nil {
+					t.Fatalf("os.Unsetenv() = %v, want no error", err)
+				}
+			} else {
+				t.Setenv(testOnlyPlacementPolicyWorkApplierMaxRequeueDelayEnvVarName, *tc.envVal)
+			}
+
+			got, err := placementPolicyWorkApplierRequeueRateLimiter()
+			if tc.wantErred {
+				if err == nil {
+					t.Fatalf("placementPolicyWorkApplierRequeueRateLimiter() = %v, want an error", got)
+				}
+				return
+			}
+			if err != nil {
+				t.Fatalf("placementPolicyWorkApplierRequeueRateLimiter() = %v, want no error", err)
+			}
+			if diff := cmp.Diff(got, tc.want,
+				cmp.AllowUnexported(v1workapplier.MultiStageRequeueWithExponentialBackoffRateLimiter{}),
+				cmpopts.IgnoreFields(v1workapplier.MultiStageRequeueWithExponentialBackoffRateLimiter{}, "mu"),
+			); diff != "" {
+				t.Errorf("placementPolicyWorkApplierRequeueRateLimiter() mismatches (-got, +want):\n%s", diff)
+			}
+		})
+	}
+}
 
 func Test_buildHubConfig(t *testing.T) {
 	t.Run("use CA auth, no key file - error", func(t *testing.T) {

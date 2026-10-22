@@ -96,7 +96,7 @@ func annotationClusterSelector(matchLabels map[string]string, count intstr.IntOr
 // drive the feature the way a user does, through the annotation alone, and check the whole path
 // that the controller's own envtest suite cannot: the resource watcher noticing the annotation, the
 // generated policy watch noticing edits to the policy, and the event recorded on the resource.
-var _ = Describe("annotation based placement", Ordered, func() {
+var _ = Describe("annotation based placement", Label("placementpolicy"), Ordered, func() {
 	var (
 		configMap       corev1.ConfigMap
 		deployment      appsv1.Deployment

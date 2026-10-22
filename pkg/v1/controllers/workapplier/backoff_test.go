@@ -458,6 +458,89 @@ func TestDefaultRequeueRateLimiter(t *testing.T) {
 	}
 }
 
+// TestNewDefaultRequeueRateLimiterWithMaxDelay tests that the capped rate limiter keeps the default parameters
+// and lowers only those that exceed the cap.
+func TestNewDefaultRequeueRateLimiterWithMaxDelay(t *testing.T) {
+	// wantCapped returns the wanted rate limiter for the given (already capped) delays in seconds.
+	wantCapped := func(fixedDelaySeconds, initialSlowBackoffDelaySeconds, maxSlowBackoffDelaySeconds, maxFastBackoffDelaySeconds int) *MultiStageRequeueWithExponentialBackoffRateLimiter {
+		return &MultiStageRequeueWithExponentialBackoffRateLimiter{
+			requeueCounter:                                       map[types.NamespacedName]int{},
+			lastRequeueDelayTracker:                              map[types.NamespacedName]time.Duration{},
+			lastTrackedLinkedWorksGenHash:                        map[types.NamespacedName]string{},
+			lastTrackedProcessingResultHash:                      map[types.NamespacedName]string{},
+			attemptsWithFixedDelay:                               defaultRateLimiterCfg.attemptsWithFixedDelay,
+			fixedDelay:                                           time.Duration(fixedDelaySeconds) * time.Second,
+			exponentialBaseForSlowBackoff:                        defaultRateLimiterCfg.exponentialBaseForSlowBackoff,
+			initialSlowBackoffDelay:                              time.Duration(initialSlowBackoffDelaySeconds) * time.Second,
+			maxSlowBackoffDelay:                                  time.Duration(maxSlowBackoffDelaySeconds) * time.Second,
+			exponentialBaseForFastBackoff:                        defaultRateLimiterCfg.exponentialBaseForFastBackoff,
+			maxFastBackoffDelay:                                  time.Duration(maxFastBackoffDelaySeconds) * time.Second,
+			skipToFastBackoffWhenAllAppliedManifestsAreAvailable: defaultRateLimiterCfg.skipToFastBackoffWhenAllAppliedManifestsAreAvailable,
+		}
+	}
+
+	testCases := []struct {
+		name            string
+		maxDelaySeconds int
+		wantRateLimiter *MultiStageRequeueWithExponentialBackoffRateLimiter
+		wantErred       bool
+	}{
+		{
+			name:            "cap below the fixed delay",
+			maxDelaySeconds: 3,
+			wantRateLimiter: wantCapped(3, 2, 3, 3),
+		},
+		{
+			name:            "cap at the fixed delay",
+			maxDelaySeconds: 5,
+			wantRateLimiter: wantCapped(5, 2, 5, 5),
+		},
+		{
+			name:            "cap between the slow and fast backoff caps",
+			maxDelaySeconds: 60,
+			wantRateLimiter: wantCapped(5, 2, 15, 60),
+		},
+		{
+			name:            "cap above the defaults",
+			maxDelaySeconds: 3600,
+			wantRateLimiter: wantCapped(
+				defaultRateLimiterCfg.fixedDelaySeconds,
+				defaultRateLimiterCfg.initialSlowBackoffDelaySeconds,
+				defaultRateLimiterCfg.maxSlowBackoffDelaySeconds,
+				defaultRateLimiterCfg.maxFastBackoffDelaySeconds,
+			),
+		},
+		{
+			name:            "cap below the minimum fixed delay",
+			maxDelaySeconds: 1,
+			wantErred:       true,
+		},
+		{
+			name:            "negative cap",
+			maxDelaySeconds: -5,
+			wantErred:       true,
+		},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			rateLimiter, err := NewDefaultRequeueRateLimiterWithMaxDelay(tc.maxDelaySeconds)
+			if tc.wantErred {
+				if err == nil || kferrors.Category(err) != kferrors.ErrCategoryUser {
+					t.Fatalf("NewDefaultRequeueRateLimiterWithMaxDelay(%d) = %v, want a user error", tc.maxDelaySeconds, err)
+				}
+				return
+			}
+			if err != nil {
+				t.Fatalf("NewDefaultRequeueRateLimiterWithMaxDelay(%d) = %v, want no error", tc.maxDelaySeconds, err)
+			}
+			if diff := cmp.Diff(rateLimiter, tc.wantRateLimiter, rateLimiterCmpOpts...); diff != "" {
+				t.Errorf("NewDefaultRequeueRateLimiterWithMaxDelay(%d) mismatches (-got, +want):\n%s", tc.maxDelaySeconds, diff)
+			}
+		})
+	}
+}
+
 // TestWhenWithFullSequences tests the When method with full requeue sequences.
 func TestWhenWithFullSequences(t *testing.T) {
 	linkedWorks := []*placementv1alpha1.Work{

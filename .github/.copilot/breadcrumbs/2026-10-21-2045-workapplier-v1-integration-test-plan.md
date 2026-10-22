@@ -406,7 +406,8 @@ All the decisions below are adopted; the implemented test cases follow them.
 
 1. **Re-join does not re-adopt resources by default.** `Leave` orphans appliedWorks, and the GC strips their owner
    refs. On re-join, new appliedWorks get new UIDs and the existing objects are unowned. With the default
-   `WhenAlreadyExists=ReportError` they become `NotTakenOver`. Flag for product review.
+   `WhenAlreadyExists=ReportError` they become `NotTakenOver`. Product review (October 22, 2026): this is
+   **expected**. Resources previously applied by a cluster that left and rejoined may need to be taken over again.
 2. **Stale-UID owner refs are not cleaned up.** `removeLeftBehindAppliedWorkOwnerRefs` drops AppliedWork owner refs
    only when the **work** is gone (name check). A ref to a re-created appliedWork of the same name (old UID) is kept, so
    takeover fails as a duplicate placement.

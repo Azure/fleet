@@ -114,7 +114,7 @@ func claimsOfPolicy(name, namespace string) (*kfplacementv1alpha1.ClusterClaimLi
 
 // The FEP-0001 placement experience is alpha and runs behind the enable-placement-policy-apis
 // hub agent flag, which test/e2e/setup.sh turns on.
-var _ = Describe("placement policy scheduling and cluster claims", Ordered, Serial, func() {
+var _ = Describe("placement policy scheduling and cluster claims", Label("placementpolicy"), Ordered, Serial, func() {
 	policyName := fmt.Sprintf("pp-e2e-%d", GinkgoParallelProcess())
 	var policyNS string
 
@@ -290,7 +290,7 @@ var _ = Describe("placement policy scheduling and cluster claims", Ordered, Seri
 
 // The cluster-scoped policy has its own watch wiring and claim reference path, so it gets its
 // own end-to-end coverage.
-var _ = Describe("cluster placement policy scheduling and cluster claims", Ordered, Serial, func() {
+var _ = Describe("cluster placement policy scheduling and cluster claims", Label("placementpolicy"), Ordered, Serial, func() {
 	policyName := fmt.Sprintf("cpp-e2e-%d", GinkgoParallelProcess())
 
 	BeforeAll(func() {
