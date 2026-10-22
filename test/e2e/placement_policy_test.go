@@ -21,6 +21,7 @@ import (
 
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
+	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/api/meta"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/types"
@@ -29,6 +30,7 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/client"
 
 	kfplacementv1alpha1 "github.com/kubefleet-dev/kubefleet/apis/kubefleet.dev/placement/v1alpha1"
+	kfrolloutv1alpha1 "github.com/kubefleet-dev/kubefleet/apis/kubefleet.dev/rollout/v1alpha1"
 	"github.com/kubefleet-dev/kubefleet/test/e2e/framework"
 )
 
@@ -206,6 +208,40 @@ var _ = Describe("placement policy scheduling and cluster claims", Ordered, Seri
 			Should(Succeed(), "Failed to apply the ConfigMap on the east clusters")
 		Consistently(appConfigMapRemovedFromClustersActual(memberCluster3WestProd), consistentlyDuration, consistentlyInterval).
 			Should(Succeed(), "The ConfigMap was applied on a cluster that was not selected")
+	})
+
+	It("should roll out resource changes automatically when auto-rollout is enabled", func() {
+		policy := newPolicy(placementPolicyRegionSelector(regionEast, 2))
+		policy.Annotations = map[string]string{kfrolloutv1alpha1.AutoRolloutEnabledAnnotationKey: kfrolloutv1alpha1.AutoRolloutEnabledAnnotationValue}
+		Expect(hubClient.Create(ctx, policy)).Should(Succeed(), "Failed to create the placement policy")
+		Eventually(appConfigMapPlacedOnClustersActual(memberCluster1EastProd, memberCluster2EastCanary), workloadEventuallyDuration, eventuallyInterval).
+			Should(Succeed(), "Failed to apply the ConfigMap on the east clusters")
+
+		By("updating the ConfigMap on the hub")
+		cm := appConfigMap()
+		Eventually(func() error {
+			hubCM := &corev1.ConfigMap{}
+			if err := hubClient.Get(ctx, types.NamespacedName{Name: cm.Name, Namespace: cm.Namespace}, hubCM); err != nil {
+				return err
+			}
+			hubCM.Data["data"] = "auto-rolled-out"
+			return hubClient.Update(ctx, hubCM)
+		}, eventuallyDuration, eventuallyInterval).Should(Succeed(), "Failed to update the ConfigMap on the hub")
+
+		// No staged update run is created; only the auto-rollout controller can deliver the change.
+		By("checking that the change reaches the east clusters")
+		Eventually(appConfigMapPlacedOnClustersActual(memberCluster1EastProd, memberCluster2EastCanary), longEventuallyDuration, eventuallyInterval).
+			Should(Succeed(), "Failed to roll out the ConfigMap change")
+		// The timestamp is written after the bindings are refreshed, so it can trail the change.
+		Eventually(func() error {
+			if err := hubClient.Get(ctx, types.NamespacedName{Name: policyName, Namespace: policyNS}, policy); err != nil {
+				return err
+			}
+			if _, ok := policy.Annotations[kfrolloutv1alpha1.AutoRolloutLastRolloutAttemptTimestampAnnotationKey]; !ok {
+				return fmt.Errorf("the policy has no last rollout attempt timestamp")
+			}
+			return nil
+		}, eventuallyDuration, eventuallyInterval).Should(Succeed(), "The auto-rollout controller did not record the rollout")
 	})
 
 	It("should add a cluster claim for an unfulfillable selector and withdraw it with the policy", func() {

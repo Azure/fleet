@@ -70,6 +70,7 @@ import (
 	"github.com/kubefleet-dev/kubefleet/pkg/utils/resourceeligibility"
 	"github.com/kubefleet-dev/kubefleet/pkg/utils/validator"
 	"github.com/kubefleet-dev/kubefleet/pkg/v1/controllers/annotationplacement"
+	"github.com/kubefleet-dev/kubefleet/pkg/v1/controllers/autorollout"
 	"github.com/kubefleet-dev/kubefleet/pkg/v1/controllers/placementpolicy"
 	"github.com/kubefleet-dev/kubefleet/pkg/v1/controllers/stagedupdaterun"
 	v1workgenerator "github.com/kubefleet-dev/kubefleet/pkg/v1/controllers/workgenerator"
@@ -401,6 +402,17 @@ func SetupControllers(ctx context.Context, wg *sync.WaitGroup, mgr ctrl.Manager,
 			}
 			if err := stagedUpdateRuns.SetupWithManager(mgr, int(math.Ceil(float64(opts.PlacementMgmtOpts.MaxConcurrentClusterPlacement)/10))); err != nil {
 				klog.ErrorS(err, "Unable to set up the placement policy staged update run controller")
+				return err
+			}
+			klog.Info("Setting up the placement policy auto-rollout controller")
+			// A nil parallelizer and rate limiter pick the controller defaults.
+			autoRollouts, arErr := autorollout.New(mgr.GetClient(), snapshots, nil, nil, mgr.GetEventRecorder("auto-rollout-controller"))
+			if arErr != nil {
+				klog.ErrorS(arErr, "Unable to create the placement policy auto-rollout controller")
+				return arErr
+			}
+			if err := autoRollouts.SetupWithManager(mgr, int(math.Ceil(float64(opts.PlacementMgmtOpts.MaxConcurrentClusterPlacement)/10))); err != nil {
+				klog.ErrorS(err, "Unable to set up the placement policy auto-rollout controller")
 				return err
 			}
 			// Annotation-based placement generates the policies above; the resource watcher feeds it.
