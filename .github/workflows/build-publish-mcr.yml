@@ -117,19 +117,7 @@ jobs:
       # The chart comes from the release tag, which can predate a move of the image repository, so pin it to
       # the repository the tags were resolved from.
       - name: Point the chart at the resolved image repository
-        run: |
-          set -euo pipefail
-          values=charts/member-agent-arc/values.yaml
-          for pair in memberagent:member-agent refreshtoken:refresh-token crdinstaller:crd-installer \
-            mcscontrollermanager:mcs-controller-manager membernetcontrollermanager:member-net-controller-manager; do
-            key="${pair%%:*}"
-            repo="mcr.microsoft.com/${MCR_FLEET_REPO}/${pair#*:}"
-            sed -i "/^${key}:/,/^[^[:space:]]/ s|^\([[:space:]]*repository:\).*|\1 ${repo}|" "$values"
-            if ! grep -q "repository: ${repo}$" "$values"; then
-              echo "Failed to set ${key}.repository in ${values}." >&2
-              exit 1
-            fi
-          done
+        run: sed -i "s|^\([[:space:]]*repository:\).*/\([^/]*\)$|\1 mcr.microsoft.com/${MCR_FLEET_REPO}/\2|" charts/member-agent-arc/values.yaml
       - name: Verify every chart image is published
         run: |
           set -euo pipefail
