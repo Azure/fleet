@@ -33,10 +33,13 @@ import (
 type PolicyGeneratorConfigs struct {
 	PodsAndReplicaSetsVAPGeneratorConfig          *PodsAndReplicaSetsValidatingAdmissionPolicyGenerator              `json:"denyPodsAndReplicaSetsOutsideReservedNamespaces,omitempty"`
 	SvcAccountsAndTokenRequestsVAPGeneratorConfig *ServiceAccountsAndTokenRequestsValidatingAdmissionPolicyGenerator `json:"denyServiceAccountsAndTokenRequestsInReservedNamespaces,omitempty"`
+	// The generator has no configurable fields; set it to an empty struct (`{}`) to enable it.
+	AnnotatedForPlacementObjectsVAPGeneratorConfig *AnnotatedForPlacementObjectsValidatingAdmissionPolicyGenerator `json:"denyPlacementAnnotationIfNoPlacementPolicyAPIAccess,omitempty"`
 }
 
-// DefaultPolicyGeneratorConfigs is the default configuration for all available admission policy generators.
-var DefaultPolicyGeneratorConfigs = &PolicyGeneratorConfigs{
+// DefaultPolicyGeneratorConfigsForV0APIs is the default configuration of admission policy generators
+// for placement with v0 APIs.
+var DefaultPolicyGeneratorConfigsForV0APIs = &PolicyGeneratorConfigs{
 	PodsAndReplicaSetsVAPGeneratorConfig: &PodsAndReplicaSetsValidatingAdmissionPolicyGenerator{
 		ReservedNamespacePrefixes: []string{utils.FleetNSNamePrefix, utils.KubeNSNamePrefix},
 	},
@@ -44,6 +47,18 @@ var DefaultPolicyGeneratorConfigs = &PolicyGeneratorConfigs{
 		ReservedNamespacePrefixes: []string{utils.FleetNSNamePrefix, utils.KubeNSNamePrefix},
 		WhitelistedUsernames:      []string{aksSupportUser},
 	},
+}
+
+// DefaultPolicyGeneratorConfigsForV1APIs is the default configuration of admission policy generators
+// for placement with v1 APIs (placement policies). It covers all available admission policy generators.
+var DefaultPolicyGeneratorConfigsForV1APIs = &PolicyGeneratorConfigs{
+	PodsAndReplicaSetsVAPGeneratorConfig: &PodsAndReplicaSetsValidatingAdmissionPolicyGenerator{
+		ReservedNamespacePrefixes: []string{utils.FleetNSNamePrefix, utils.KubeNSNamePrefix},
+	},
+	SvcAccountsAndTokenRequestsVAPGeneratorConfig: &ServiceAccountsAndTokenRequestsValidatingAdmissionPolicyGenerator{
+		ReservedNamespacePrefixes: []string{utils.FleetNSNamePrefix, utils.KubeNSNamePrefix},
+	},
+	AnnotatedForPlacementObjectsVAPGeneratorConfig: &AnnotatedForPlacementObjectsValidatingAdmissionPolicyGenerator{},
 }
 
 // Validate validates each generator configuration in the given PolicyGeneratorConfigs.

@@ -166,8 +166,66 @@ var _ = Describe("Policies, Policy Bindings and their Effects", Ordered, func() 
 					},
 					Validations: []admissionregistrationv1.Validation{
 						{
+<<<<<<< HEAD
 							Expression: `(!((request.namespace.startsWith("fleet-")) || (request.namespace.startsWith("kube-")))) || ((request.userInfo.username == "system:kube-scheduler") || (request.userInfo.username == "system:kube-controller-manager") || ("system:nodes" in request.userInfo.groups) || ("system:masters" in request.userInfo.groups) || ("kubeadm:cluster-admins" in request.userInfo.groups) || ("system:serviceaccounts" in request.userInfo.groups) || (request.userInfo.username == "aks-support"))`,
 							Message:    "writing service accounts in reserved namespaces or requesting tokens from such service accounts is disallowed",
+							Reason:     ptr.To(metav1.StatusReasonForbidden),
+						},
+					},
+				},
+			},
+			{
+				ObjectMeta: metav1.ObjectMeta{
+					Name: annotatedForPlacementObjsVAPPolicyName,
+					Labels: map[string]string{
+						VAPManagedByKubeFleetLabelKey: VAPManagedByKubeFleetLabelValue,
+						VAPPartOfKubeFleetLabelKey:    VAPPartOfKubeFleetLabelValue,
+						VAPComponentKubeFleetLabelKey: VAPComponentAdmissionPolicyManagerLabelValue,
+					},
+				},
+				Spec: admissionregistrationv1.ValidatingAdmissionPolicySpec{
+					FailurePolicy: ptr.To(admissionregistrationv1.Fail),
+					MatchConstraints: &admissionregistrationv1.MatchResources{
+						NamespaceSelector: &metav1.LabelSelector{},
+						ObjectSelector:    &metav1.LabelSelector{},
+						ResourceRules: []admissionregistrationv1.NamedRuleWithOperations{
+							{
+								RuleWithOperations: admissionregistrationv1.RuleWithOperations{
+									Operations: []admissionregistrationv1.OperationType{
+										admissionregistrationv1.Create,
+										admissionregistrationv1.Update,
+									},
+									Rule: admissionregistrationv1.Rule{
+										APIGroups:   []string{"*"},
+										APIVersions: []string{"*"},
+										Resources:   []string{"*/*"},
+										Scope:       ptr.To(admissionregistrationv1.ScopeType("*")), // The system-enforced default.
+									},
+								},
+							},
+						},
+						MatchPolicy: ptr.To(admissionregistrationv1.Equivalent), // The system-enforced default.
+					},
+					MatchConditions: []admissionregistrationv1.MatchCondition{
+						{
+							Name:       "has-placement-annotation",
+							Expression: `has(object.metadata.annotations) && "kubefleet.dev/cluster-selectors" in object.metadata.annotations`,
+						},
+						{
+							Name:       "placement-annotation-added-or-changed",
+							Expression: `!((has(object.metadata.annotations) && "kubefleet.dev/cluster-selectors" in object.metadata.annotations) && (oldObject != null && has(oldObject.metadata.annotations) && "kubefleet.dev/cluster-selectors" in oldObject.metadata.annotations) && (oldObject.metadata.annotations["kubefleet.dev/cluster-selectors"] == object.metadata.annotations["kubefleet.dev/cluster-selectors"]))`,
+						},
+					},
+					Validations: []admissionregistrationv1.Validation{
+						{
+							Expression: `(!(has(object.metadata.namespace) && object.metadata.namespace != "")) || ((authorizer.group("placement.kubefleet.dev").resource("placementpolicies").namespace(object.metadata.namespace).check("create").allowed()) && (authorizer.group("placement.kubefleet.dev").resource("placementpolicies").namespace(object.metadata.namespace).check("update").allowed()))`,
+							Message:    wantNamespacedObjDenialMsg,
+							Reason:     ptr.To(metav1.StatusReasonForbidden),
+						},
+						{
+							Expression: `(has(object.metadata.namespace) && object.metadata.namespace != "") || ((authorizer.group("placement.kubefleet.dev").resource("clusterplacementpolicies").check("create").allowed()) && (authorizer.group("placement.kubefleet.dev").resource("clusterplacementpolicies").check("update").allowed()))`,
+							Message:    wantClusterScopedObjDenialMsg,
+>>>>>>> 38ddddfd (feat: add VAP safeguard for the placement policy API (annotated for placement experience) (#1006))
 							Reason:     ptr.To(metav1.StatusReasonForbidden),
 						},
 					},
@@ -237,6 +295,22 @@ var _ = Describe("Policies, Policy Bindings and their Effects", Ordered, func() 
 					},
 				},
 			},
+			{
+				ObjectMeta: metav1.ObjectMeta{
+					Name: annotatedForPlacementObjsVAPPolicyBindingName,
+					Labels: map[string]string{
+						VAPManagedByKubeFleetLabelKey: VAPManagedByKubeFleetLabelValue,
+						VAPPartOfKubeFleetLabelKey:    VAPPartOfKubeFleetLabelValue,
+						VAPComponentKubeFleetLabelKey: VAPComponentAdmissionPolicyManagerLabelValue,
+					},
+				},
+				Spec: admissionregistrationv1.ValidatingAdmissionPolicyBindingSpec{
+					PolicyName: annotatedForPlacementObjsVAPPolicyName,
+					ValidationActions: []admissionregistrationv1.ValidationAction{
+						admissionregistrationv1.Deny,
+					},
+				},
+			},
 		}
 
 		Eventually(ctx, func() error {
@@ -266,7 +340,4 @@ var _ = Describe("Policies, Policy Bindings and their Effects", Ordered, func() 
 			return nil
 		}, eventuallyDuration, eventuallyInterval).Should(Succeed(), "Received unexpected list of policy bindings or an error has occurred")
 	})
-
-	// Note: in the integration test environment, it appears that validating admission policies have no effect or are
-	// not being enforced as expected. As a result the effects are validated using E2E tests instead.
 })

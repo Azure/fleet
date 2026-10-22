@@ -51,8 +51,9 @@ var (
 )
 
 func init() {
-	// Add all available generators to the set.
-	v := reflect.ValueOf(DefaultPolicyGeneratorConfigs).Elem()
+	// Add all available generators to the set; the default configuration for the v1 APIs covers all
+	// available generators.
+	v := reflect.ValueOf(DefaultPolicyGeneratorConfigsForV1APIs).Elem()
 	for i := range v.NumField() {
 		field := v.Field(i)
 		if field.IsNil() {
@@ -99,8 +100,8 @@ type PolicyManager struct {
 
 func New(client client.Client, policyGeneratorConfigs *PolicyGeneratorConfigs) (*PolicyManager, error) {
 	if policyGeneratorConfigs == nil {
-		klog.V(2).Info("No admission policy generator configuration provided, falling back to the default configuration")
-		policyGeneratorConfigs = DefaultPolicyGeneratorConfigs
+		klog.V(2).Info("No admission policy generator configuration provided, falling back to the default configuration for V0 APIs")
+		policyGeneratorConfigs = DefaultPolicyGeneratorConfigsForV0APIs
 	}
 	// Prepare a set of generators based on the given configuration.
 	enabledPolicyGenerators, err := preparePolicyGenerators(policyGeneratorConfigs)

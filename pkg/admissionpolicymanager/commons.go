@@ -99,3 +99,32 @@ func isFromUsername(u string) CELExprTreeNode {
 func isFromUserGroup(g string) CELExprTreeNode {
 	return RawCELExpr(fmt.Sprintf(`"%s" in request.userInfo.groups`, g))
 }
+
+func objectHasAnnotation(key string) CELExprTreeNode {
+	return RawCELExpr(fmt.Sprintf(`has(object.metadata.annotations) && "%s" in object.metadata.annotations`, key))
+}
+
+func oldObjectHasAnnotation(key string) CELExprTreeNode {
+	return RawCELExpr(fmt.Sprintf(`oldObject != null && has(oldObject.metadata.annotations) && "%s" in oldObject.metadata.annotations`, key))
+}
+
+// annotationValueIsUnchanged fails with a no-such-key error if either the object or the old object does not
+// carry the annotation; guard it with objectHasAnnotation and oldObjectHasAnnotation in the same expression.
+func annotationValueIsUnchanged(key string) CELExprTreeNode {
+	return RawCELExpr(fmt.Sprintf(`oldObject.metadata.annotations["%[1]s"] == object.metadata.annotations["%[1]s"]`, key))
+}
+
+// isNamespacedObject checks the namespace in the object metadata rather than request.namespace, as
+// the API server sets request.namespace to the name of the namespace for Namespace objects, even
+// though they are cluster-scoped.
+func isNamespacedObject() CELExprTreeNode {
+	return RawCELExpr(`has(object.metadata.namespace) && object.metadata.namespace != ""`)
+}
+
+func callerCanInObjectNamespace(group, resource, verb string) CELExprTreeNode {
+	return RawCELExpr(fmt.Sprintf(`authorizer.group("%s").resource("%s").namespace(object.metadata.namespace).check("%s").allowed()`, group, resource, verb))
+}
+
+func callerCanClusterWide(group, resource, verb string) CELExprTreeNode {
+	return RawCELExpr(fmt.Sprintf(`authorizer.group("%s").resource("%s").check("%s").allowed()`, group, resource, verb))
+}

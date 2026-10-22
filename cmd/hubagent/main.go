@@ -231,7 +231,10 @@ func main() {
 	ctx := ctrl.SetupSignalHandler()
 
 	if opts.WebhookAndAdmissionPolicyOpts.EnableAdmissionPolicyManager {
-		policyManagerCfgs := admissionpolicymanager.DefaultPolicyGeneratorConfigs
+		policyManagerCfgs := admissionpolicymanager.DefaultPolicyGeneratorConfigsForV0APIs
+		if opts.FeatureFlags.EnablePlacementPolicyAPIs {
+			policyManagerCfgs = admissionpolicymanager.DefaultPolicyGeneratorConfigsForV1APIs
+		}
 		if len(opts.WebhookAndAdmissionPolicyOpts.AdmissionPolicyManagerConfig) != 0 {
 			// Read user-provided admission policy manager config from given path.
 			cfgData, err := os.ReadFile(opts.WebhookAndAdmissionPolicyOpts.AdmissionPolicyManagerConfig)
