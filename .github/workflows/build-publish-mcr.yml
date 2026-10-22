@@ -104,10 +104,50 @@ jobs:
     runs-on:
       labels: [self-hosted, "1ES.Pool=1es-aks-fleet-pool-ubuntu"]
     needs: prepare-variables
+    env:
+      MEMBER_AGENT_IMAGE_VERSION: ${{ needs.prepare-variables.outputs.release_tag }}
+      REFRESH_TOKEN_IMAGE_VERSION: ${{ needs.prepare-variables.outputs.release_tag }}
+      CRD_INSTALLER_IMAGE_VERSION: ${{ needs.prepare-variables.outputs.release_tag }}
+      MCS_CONTROLLER_IMAGE_VERSION: ${{ needs.prepare-variables.outputs.fleet_networking_version }}
+      MEMBER_NET_CONTROLLER_IMAGE_VERSION: ${{ needs.prepare-variables.outputs.fleet_networking_version }}
     steps:
       - uses: actions/checkout@v6
         with:
           ref: ${{ needs.prepare-variables.outputs.git_ref }}
+      # Compatibility for release tags whose chart still uses the legacy MCR prefix.
+      # Keep while publishing new image revisions from those tags is supported.
+      - name: Update legacy chart image repositories
+        run: sed -i "s|^\([[:space:]]*repository:[[:space:]]*\)mcr\.microsoft\.com/aks/fleet/|\1mcr.microsoft.com/${MCR_FLEET_REPO}/|" charts/member-agent-arc/values.yaml
+      - name: Verify every chart image is published
+        run: |
+          set -euo pipefail
+          envsubst < charts/member-agent-arc/values.yaml > "$RUNNER_TEMP/values.yaml"
+          images=$(helm template charts/member-agent-arc -f "$RUNNER_TEMP/values.yaml" \
+            | sed -n 's/^[[:space:]]*image:[[:space:]]*"\{0,1\}\([^"]*\)"\{0,1\}[[:space:]]*$/\1/p' | sort -u)
+          if [ -z "$images" ]; then
+            echo "The rendered chart references no images." >&2
+            exit 1
+          fi
+          missing=0
+          for image in $images; do
+            ref="${image#mcr.microsoft.com/}"
+            if [ "$ref" = "$image" ]; then
+              echo "Image is not hosted on MCR: ${image}" >&2
+              missing=1
+              continue
+            fi
+            # The self-hosted runner's curl predates --retry-all-errors.
+            status=$(curl -s -o /dev/null -w '%{http_code}' -I --retry 3 --retry-delay 5 --max-time 30 \
+              -H 'Accept: application/vnd.oci.image.index.v1+json, application/vnd.docker.distribution.manifest.list.v2+json' \
+              "https://mcr.microsoft.com/v2/${ref%:*}/manifests/${ref##*:}") || true
+            if [ "$status" = "200" ]; then
+              echo "Found ${image}"
+            else
+              echo "Image not found in MCR (HTTP ${status:-none}): ${image}" >&2
+              missing=1
+            fi
+          done
+          exit "$missing"
       - name: 'Login the ACR'
         run: |
           az login --identity
@@ -119,9 +159,4 @@ jobs:
           make helm-package-arc-member-cluster-agents
         env:
           ARC_MEMBER_AGENT_HELMCHART_VERSION: ${{ needs.prepare-variables.outputs.arc_helmchart_version }}
-          MEMBER_AGENT_IMAGE_VERSION: ${{ needs.prepare-variables.outputs.release_tag }}
-          REFRESH_TOKEN_IMAGE_VERSION: ${{ needs.prepare-variables.outputs.release_tag }}
-          CRD_INSTALLER_IMAGE_VERSION: ${{ needs.prepare-variables.outputs.release_tag }}
-          MCS_CONTROLLER_IMAGE_VERSION: ${{ needs.prepare-variables.outputs.fleet_networking_version }}
-          MEMBER_NET_CONTROLLER_IMAGE_VERSION: ${{ needs.prepare-variables.outputs.fleet_networking_version }}
           REGISTRY: ${{ secrets.AZURE_REGISTRY }}/${{ env.ARC_REGISTRY_REPO}}
