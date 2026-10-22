@@ -1,6 +1,8 @@
 package main
 
 import (
+	"context"
+	"errors"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
@@ -306,4 +308,45 @@ func Test_buildHubConfig(t *testing.T) {
 		assert.Empty(t, config.TLSClientConfig.CertFile)
 		assert.Empty(t, config.TLSClientConfig.KeyFile)
 	})
+}
+
+// fakeMemberController records the calls it gets and fails with err.
+type fakeMemberController struct {
+	err           error
+	joins, leaves int
+}
+
+func (f *fakeMemberController) Join(_ context.Context) error {
+	f.joins++
+	return f.err
+}
+
+func (f *fakeMemberController) Leave(_ context.Context) error {
+	f.leaves++
+	return f.err
+}
+
+func TestMemberControllers(t *testing.T) {
+	errFirst := errors.New("first")
+	first := &fakeMemberController{err: errFirst}
+	second := &fakeMemberController{}
+	m := memberControllers{first, second}
+
+	// A failure in one controller must not stop the call from reaching the rest.
+	if err := m.Join(context.Background()); !errors.Is(err, errFirst) {
+		t.Errorf("Join() = %v, want %v", err, errFirst)
+	}
+	if err := m.Leave(context.Background()); !errors.Is(err, errFirst) {
+		t.Errorf("Leave() = %v, want %v", err, errFirst)
+	}
+	for name, c := range map[string]*fakeMemberController{"first": first, "second": second} {
+		if c.joins != 1 || c.leaves != 1 {
+			t.Errorf("%s controller got %d joins and %d leaves, want 1 and 1", name, c.joins, c.leaves)
+		}
+	}
+
+	second.err, first.err = nil, nil
+	if err := m.Join(context.Background()); err != nil {
+		t.Errorf("Join() = %v, want nil", err)
+	}
 }

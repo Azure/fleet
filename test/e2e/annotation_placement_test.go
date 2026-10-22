@@ -115,7 +115,7 @@ var _ = Describe("annotation based placement", Ordered, func() {
 	AfterAll(func() {
 		// A wait below that fails aborts the rest of this node; the work resources must go
 		// regardless, or they leak into every spec that follows in this process.
-		defer cleanupWorkResources()
+		defer cleanupWorkResourcesOnHubAndMembers()
 
 		// The annotations come off first so that the hub agent withdraws the generated policies
 		// itself, rather than leaving them to the garbage collector once the namespace goes; a
@@ -141,6 +141,17 @@ var _ = Describe("annotation based placement", Ordered, func() {
 			}
 			return nil
 		}, eventuallyDuration, eventuallyInterval).Should(Succeed(), "Failed to clean up the generated cluster placement policy")
+
+		// The Deployment spec placed real pods; wait for them to leave so the namespace deletes
+		// that follow do not race pod termination.
+		var placed []client.Object
+		if deployment.Name != "" {
+			placed = append(placed, &appsv1.Deployment{ObjectMeta: metav1.ObjectMeta{Name: deployment.Name}})
+		}
+		for _, c := range allMemberClusters {
+			Eventually(namespacedResourcesRemovedFromClusterActual(c, placed...), workloadEventuallyDuration, eventuallyInterval).
+				Should(Succeed(), "Failed to remove the placed resources from %s", c.ClusterName)
+		}
 	})
 
 	// generatedPolicy reads back the one policy generated for the ConfigMap, failing the caller's
@@ -232,6 +243,12 @@ var _ = Describe("annotation based placement", Ordered, func() {
 		}}
 		diff := cmp.Diff(policy.OwnerReferences, wantOwnerReferences)
 		Expect(diff).To(BeEmpty(), "generated placement policy owner references diff (-got, +want):\n%s", diff)
+
+		By("checking that the ConfigMap is applied on the canary cluster only")
+		Eventually(appConfigMapPlacedOnClustersActual(memberCluster2EastCanary), workloadEventuallyDuration, eventuallyInterval).
+			Should(Succeed(), "Failed to apply the ConfigMap on the canary cluster")
+		Consistently(appConfigMapRemovedFromClustersActual(memberCluster1EastProd, memberCluster3WestProd), consistentlyDuration, consistentlyInterval).
+			Should(Succeed(), "The ConfigMap was applied on a cluster that was not selected")
 	})
 
 	It("should update the policy when the annotation changes", func() {
@@ -242,6 +259,10 @@ var _ = Describe("annotation based placement", Ordered, func() {
 
 		wantSelector := annotationClusterSelector(map[string]string{corev1.LabelTopologyRegion: regionEast}, intstr.FromInt32(2))
 		Eventually(generatedPolicySpecActual(wantSelector), eventuallyDuration, eventuallyInterval).Should(Succeed(), "Failed to update the placement policy")
+
+		By("checking that the ConfigMap is removed from the canary cluster, which no longer matches")
+		Eventually(appConfigMapRemovedFromClustersActual(allMemberClusters...), workloadEventuallyDuration, eventuallyInterval).
+			Should(Succeed(), "Failed to remove the ConfigMap from the cluster that no longer matches")
 	})
 
 	It("should restore the policy when it is edited", func() {

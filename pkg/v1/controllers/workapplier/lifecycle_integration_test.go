@@ -283,7 +283,7 @@ var _ = Describe("lifecycle", func() {
 			// Re-join the fleet when the test case completes (or fails), so that the dedicated work applier keeps
 			// processing work objects for the lifecycle test cases that run afterwards on the same Ginkgo process.
 			DeferCleanup(func() {
-				Expect(workApplierLifecycle.Join()).To(Succeed(), "Failed to re-join the fleet")
+				Expect(workApplierLifecycle.Join(ctx)).To(Succeed(), "Failed to re-join the fleet")
 			})
 
 			// Create the namespace directly in the member cluster, as the work objects do not feature the
@@ -396,7 +396,7 @@ var _ = Describe("lifecycle", func() {
 		})
 
 		It("can re-join the fleet", func() {
-			Expect(workApplierLifecycle.Join()).To(Succeed(), "Failed to re-join the fleet")
+			Expect(workApplierLifecycle.Join(ctx)).To(Succeed(), "Failed to re-join the fleet")
 		})
 
 		It("should add the cleanup finalizer back and prepare new appliedWork objects", func() {
@@ -512,7 +512,7 @@ var _ = Describe("lifecycle", func() {
 		AfterAll(func() {
 			// Make sure that the work applier has re-joined the fleet before cleaning up (in case the test case fails
 			// while away from the fleet); the cleanup relies on the work applier.
-			Expect(workApplierLifecycle.Join()).To(Succeed(), "Failed to re-join the fleet")
+			Expect(workApplierLifecycle.Join(ctx)).To(Succeed(), "Failed to re-join the fleet")
 
 			for _, workName := range []string{workAName, workBName} {
 				work := &placementv1alpha1.Work{

@@ -36,6 +36,10 @@ type Options struct {
 	// KubeFleet cluster property provider related options.
 	PropertyProviderOpts PropertyProviderOptions
 
+	// Apply the Works of the experimental FEP-0001 placement policy APIs (placement.kubefleet.dev/v1alpha1)
+	// or not. The hub agent must run with the same APIs enabled.
+	EnablePlacementPolicyAPIs bool
+
 	// The fields below are added only for backwards compatibility reasons.
 	// Their values are never read.
 	UseV1Beta1APIs bool
@@ -50,6 +54,11 @@ func (o *Options) AddFlags(flags *flag.FlagSet) {
 	o.CtrlManagerOptions.AddFlags(flags)
 	o.ApplierOpts.AddFlags(flags)
 	o.PropertyProviderOpts.AddFlags(flags)
+	flags.BoolVar(
+		&o.EnablePlacementPolicyAPIs,
+		"enable-placement-policy-apis",
+		false,
+		"Apply the Works of the experimental placement policy APIs (placement.kubefleet.dev/v1alpha1) or not. The hub agent must run with the same APIs enabled.")
 
 	// The flags set up below are added only for backwards compatibility reasons.
 	// They are no-op flags and their values are never read.

@@ -113,3 +113,7 @@ priorityQueue:
   priorityLinearEquationCoeffB: 100
 
 enableNamespaceCollectionInPropertyProvider: false
+
+# Apply the Works of the experimental FEP-0001 placement policy APIs (placement.kubefleet.dev/v1alpha1).
+# The hub agent must run with enablePlacementPolicyAPIs too.
+enablePlacementPolicyAPIs: false

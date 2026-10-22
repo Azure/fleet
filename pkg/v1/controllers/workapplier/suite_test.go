@@ -321,7 +321,7 @@ var _ = BeforeSuite(func() {
 		go func() {
 			defer GinkgoRecover()
 			defer wg.Done()
-			Expect(pair.workApplier.Join()).To(Succeed())
+			Expect(pair.workApplier.Join(ctx)).To(Succeed())
 			Expect(pair.mgr.Start(ctx)).To(Succeed())
 		}()
 	}

@@ -75,6 +75,8 @@ type Reconciler struct {
 	MaxConcurrentReconciles int
 	// the wait time in minutes before we force delete a member cluster.
 	ForceDeleteWaitTime time.Duration
+	// Grant the member agent access to the Works of the experimental placement policy APIs or not.
+	PlacementPolicyAPIsEnabled bool
 	// agents are used as hashset to query the expected agent type, so the value will be ignored.
 	agents map[clusterv1beta1.AgentType]bool
 }
@@ -413,6 +415,9 @@ func (r *Reconciler) syncRole(ctx context.Context, mc *clusterv1beta1.MemberClus
 			OwnerReferences: []metav1.OwnerReference{*toOwnerReference(mc)},
 		},
 		Rules: []rbacv1.PolicyRule{utils.FleetClusterRule, utils.FleetPlacementRule, utils.FleetNetworkRule, utils.EventRule, utils.EventsK8sIoRule},
+	}
+	if r.PlacementPolicyAPIsEnabled {
+		expectedRole.Rules = append(expectedRole.Rules, utils.FleetPlacementPolicyWorkRule)
 	}
 
 	// Creates role if not found.

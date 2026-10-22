@@ -112,6 +112,7 @@ spec:
             {{- if .Values.enableNamespaceCollectionInPropertyProvider }}
             - --enable-namespace-collection-in-property-provider={{ .Values.enableNamespaceCollectionInPropertyProvider }}
             {{- end }}
+            - --enable-placement-policy-apis={{ .Values.enablePlacementPolicyAPIs }}
           env:
           {{- if not $mountHubKubeconfig }}
           - name: HUB_SERVER_URL

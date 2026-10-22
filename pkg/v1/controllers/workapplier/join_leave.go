@@ -34,7 +34,7 @@ import (
 //
 // As a member cluster side controller, work applier can only start reconciling work objects after the
 // member cluster has successfully joined the fleet.
-func (r *Reconciler) Join() error {
+func (r *Reconciler) Join(_ context.Context) error {
 	if !r.ready.Load() {
 		klog.InfoS("Setting the work applier as ready")
 	}

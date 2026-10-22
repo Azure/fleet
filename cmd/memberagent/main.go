@@ -31,6 +31,7 @@ import (
 	"strings"
 	"time"
 
+	"k8s.io/apimachinery/pkg/api/meta"
 	"k8s.io/apimachinery/pkg/runtime"
 	utilrand "k8s.io/apimachinery/pkg/util/rand"
 	utilruntime "k8s.io/apimachinery/pkg/util/runtime"
@@ -49,16 +50,20 @@ import (
 	metricsserver "sigs.k8s.io/controller-runtime/pkg/metrics/server"
 	"sigs.k8s.io/controller-runtime/pkg/webhook"
 
-	clusterv1beta1 "go.goms.io/fleet/apis/cluster/v1beta1"
-	placementv1beta1 "go.goms.io/fleet/apis/placement/v1beta1"
-	"go.goms.io/fleet/cmd/memberagent/options"
-	imcv1beta1 "go.goms.io/fleet/pkg/controllers/internalmembercluster/v1beta1"
-	"go.goms.io/fleet/pkg/controllers/workapplier"
-	"go.goms.io/fleet/pkg/propertyprovider"
-	"go.goms.io/fleet/pkg/propertyprovider/azure"
-	"go.goms.io/fleet/pkg/utils"
-	"go.goms.io/fleet/pkg/utils/httpclient"
-	"go.goms.io/fleet/pkg/utils/parallelizer"
+	clusterv1beta1 "github.com/kubefleet-dev/kubefleet/apis/cluster/v1beta1"
+	kfplacementv1alpha1 "github.com/kubefleet-dev/kubefleet/apis/kubefleet.dev/placement/v1alpha1"
+	placementv1beta1 "github.com/kubefleet-dev/kubefleet/apis/placement/v1beta1"
+	"github.com/kubefleet-dev/kubefleet/cmd/memberagent/options"
+	imcv1beta1 "github.com/kubefleet-dev/kubefleet/pkg/controllers/internalmembercluster/v1beta1"
+	"github.com/kubefleet-dev/kubefleet/pkg/controllers/workapplier"
+	"github.com/kubefleet-dev/kubefleet/pkg/propertyprovider"
+	"github.com/kubefleet-dev/kubefleet/pkg/propertyprovider/azure"
+	"github.com/kubefleet-dev/kubefleet/pkg/utils"
+	"github.com/kubefleet-dev/kubefleet/pkg/utils/controller"
+	"github.com/kubefleet-dev/kubefleet/pkg/utils/httpclient"
+	"github.com/kubefleet-dev/kubefleet/pkg/utils/parallelizer"
+	v1workapplier "github.com/kubefleet-dev/kubefleet/pkg/v1/controllers/workapplier"
+	"github.com/kubefleet-dev/kubefleet/pkg/v1/utils/fieldindexers"
 	//+kubebuilder:scaffold:imports
 )
 
@@ -77,6 +82,7 @@ func init() {
 	utilruntime.Must(clientgoscheme.AddToScheme(scheme))
 	utilruntime.Must(clusterv1beta1.AddToScheme(scheme))
 	utilruntime.Must(placementv1beta1.AddToScheme(scheme))
+	utilruntime.Must(kfplacementv1alpha1.AddToScheme(scheme))
 	//+kubebuilder:scaffold:scheme
 }
 
@@ -442,6 +448,16 @@ func Start(ctx context.Context, hubCfg, memberConfig *rest.Config, hubOpts, memb
 		klog.ErrorS(err, "Failed to create v1beta1 controller", "controller", "work")
 		return err
 	}
+	workAppliers := memberControllers{workApplier}
+
+	if globalOpts.EnablePlacementPolicyAPIs {
+		klog.Info("Setting up the placement policy work applier")
+		v1WorkApplier, v1Err := setUpPlacementPolicyWorkApplier(ctx, hubCfg, hubMgr, memberMgr, discoverClient, spokeDynamicClient, restMapper, targetNS, globalOpts)
+		if v1Err != nil {
+			return v1Err
+		}
+		workAppliers = append(workAppliers, v1WorkApplier)
+	}
 
 	klog.Info("Setting up the internalMemberCluster v1beta1 controller")
 	// Set up a provider provider (if applicable).
@@ -470,7 +486,7 @@ func Start(ctx context.Context, hubCfg, memberConfig *rest.Config, hubOpts, memb
 		ctx,
 		hubMgr.GetClient(),
 		memberMgr.GetConfig(), memberMgr.GetClient(),
-		workApplier,
+		workAppliers,
 		pp)
 	if err != nil {
 		klog.ErrorS(err, "Failed to create InternalMemberCluster v1beta1 reconciler")
@@ -498,4 +514,79 @@ func Start(ctx context.Context, hubCfg, memberConfig *rest.Config, hubOpts, memb
 	}
 
 	return nil
+}
+
+// setUpPlacementPolicyWorkApplier sets up the work applier for the Works of the experimental placement policy APIs.
+func setUpPlacementPolicyWorkApplier(
+	ctx context.Context,
+	hubCfg *rest.Config,
+	hubMgr, memberMgr ctrl.Manager,
+	memberDiscoveryClient discovery.DiscoveryInterface,
+	spokeDynamicClient dynamic.Interface,
+	restMapper meta.RESTMapper,
+	workNS string,
+	globalOpts options.Options,
+) (*v1workapplier.Reconciler, error) {
+	// Check both sides up front; a missing CRD would otherwise only show up as a cache sync timeout.
+	appliedWorkGVK := kfplacementv1alpha1.GroupVersion.WithKind(kfplacementv1alpha1.AppliedWorkKind)
+	if err := utils.CheckCRDInstalled(memberDiscoveryClient, appliedWorkGVK); err != nil {
+		klog.ErrorS(err, "Unable to find the required CRD in the member cluster", "GVK", appliedWorkGVK)
+		return nil, err
+	}
+	hubDiscoveryClient, err := discovery.NewDiscoveryClientForConfig(hubCfg)
+	if err != nil {
+		klog.ErrorS(err, "Failed to create the hub discovery client")
+		return nil, err
+	}
+	workGVK := kfplacementv1alpha1.GroupVersion.WithKind(kfplacementv1alpha1.WorkKind)
+	if err := utils.CheckCRDInstalled(hubDiscoveryClient, workGVK); err != nil {
+		klog.ErrorS(err, "Unable to find the required CRD in the hub cluster; the hub agent might predate the placement policy APIs", "GVK", workGVK)
+		return nil, err
+	}
+
+	// The work applier finds the Works of a placement binding via these indexes.
+	if err := fieldindexers.SetupWithMemberAgentControllerManager(ctx, hubMgr); err != nil {
+		klog.ErrorS(err, "Failed to set up the field indexes for the placement policy work applier")
+		return nil, err
+	}
+
+	workApplier := v1workapplier.New(
+		workNS,
+		hubMgr.GetClient(), hubMgr.GetAPIReader(),
+		memberMgr.GetClient(), spokeDynamicClient,
+		restMapper,
+		parallelizer.NewParallelizer(parallelizer.DefaultNumOfWorkers),
+		// The same concurrency as the v1beta1 work applier.
+		5,
+		// Nil picks the default cleanup and periodic requeue rate limiters. The work applier requeue
+		// and priority queue flags tune the v1beta1 work applier only.
+		nil, nil,
+		time.Minute*time.Duration(globalOpts.ApplierOpts.ResourceForceDeletionWaitTimeMinutes),
+	)
+	if err := workApplier.SetupWithManager(hubMgr); err != nil {
+		klog.ErrorS(err, "Failed to set up the placement policy work applier")
+		return nil, err
+	}
+	return workApplier, nil
+}
+
+// memberControllers lets the InternalMemberCluster controller join and leave the fleet for
+// several member controllers at once. Every controller gets the call even if an earlier one
+// fails, so a single failure does not leave the others in the wrong state.
+type memberControllers []controller.MemberController
+
+func (m memberControllers) Join(ctx context.Context) error {
+	errs := make([]error, 0, len(m))
+	for _, c := range m {
+		errs = append(errs, c.Join(ctx))
+	}
+	return errors.Join(errs...)
+}
+
+func (m memberControllers) Leave(ctx context.Context) error {
+	errs := make([]error, 0, len(m))
+	for _, c := range m {
+		errs = append(errs, c.Leave(ctx))
+	}
+	return errors.Join(errs...)
 }

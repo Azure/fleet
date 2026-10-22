@@ -42,10 +42,11 @@ import (
 
 	fleetnetworkingv1alpha1 "go.goms.io/fleet-networking/api/v1alpha1"
 
-	clusterv1beta1 "go.goms.io/fleet/apis/cluster/v1beta1"
-	placementv1 "go.goms.io/fleet/apis/placement/v1"
-	placementv1beta1 "go.goms.io/fleet/apis/placement/v1beta1"
-	"go.goms.io/fleet/pkg/utils/condition"
+	clusterv1beta1 "github.com/kubefleet-dev/kubefleet/apis/cluster/v1beta1"
+	kfplacementv1alpha1 "github.com/kubefleet-dev/kubefleet/apis/kubefleet.dev/placement/v1alpha1"
+	placementv1 "github.com/kubefleet-dev/kubefleet/apis/placement/v1"
+	placementv1beta1 "github.com/kubefleet-dev/kubefleet/apis/placement/v1beta1"
+	"github.com/kubefleet-dev/kubefleet/pkg/utils/condition"
 )
 
 const (
@@ -117,6 +118,13 @@ var (
 		Verbs:     []string{"*"},
 		APIGroups: []string{placementv1beta1.GroupVersion.Group},
 		Resources: []string{"*"},
+	}
+	// FleetPlacementPolicyWorkRule lets the member agent apply the Works of the experimental
+	// placement policy APIs; it is granted only when the hub agent runs with those APIs enabled.
+	FleetPlacementPolicyWorkRule = rbacv1.PolicyRule{
+		Verbs:     []string{"get", "list", "watch", "update", "patch"},
+		APIGroups: []string{kfplacementv1alpha1.GroupVersion.Group},
+		Resources: []string{"works", "works/status"},
 	}
 	// EventRule grants access to core/v1 Events. The Fleet controllers have
 	// moved to the events.k8s.io recorder, but this rule is still required:

@@ -29,6 +29,7 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/client"
 
 	kfplacementv1alpha1 "github.com/kubefleet-dev/kubefleet/apis/kubefleet.dev/placement/v1alpha1"
+	"github.com/kubefleet-dev/kubefleet/test/e2e/framework"
 )
 
 // The referenced ConfigMap is the one the shared work resources already provide.
@@ -56,6 +57,48 @@ func placementPolicyRegionSelector(region string, count int32) kfplacementv1alph
 	}
 }
 
+// appConfigMapPlacedOnClustersActual checks that the app ConfigMap on each given cluster matches
+// the hub copy.
+func appConfigMapPlacedOnClustersActual(clusters ...*framework.Cluster) func() error {
+	cm := appConfigMap()
+	return func() error {
+		for _, c := range clusters {
+			if err := validateConfigMapOnCluster(c, types.NamespacedName{Name: cm.Name, Namespace: cm.Namespace}); err != nil {
+				return fmt.Errorf("cluster %s: %w", c.ClusterName, err)
+			}
+		}
+		return nil
+	}
+}
+
+// appConfigMapRemovedFromClustersActual checks that none of the given clusters has the app ConfigMap.
+func appConfigMapRemovedFromClustersActual(clusters ...*framework.Cluster) func() error {
+	return func() error {
+		for _, c := range clusters {
+			if err := namespacedResourcesRemovedFromClusterActual(c)(); err != nil {
+				return err
+			}
+		}
+		return nil
+	}
+}
+
+// cleanupWorkResourcesOnHubAndMembers removes the work resources from the hub and every member
+// cluster. The placement policy work applier creates the namespaces of the resources it applies
+// and leaves them behind on purpose, so the member clusters need cleaning too.
+//
+// The hub goes first: once its namespace is gone, so are the Works, and nothing re-creates the
+// member namespaces. The member cleanup is deferred so that a failed hub cleanup does not leak
+// them into later specs.
+func cleanupWorkResourcesOnHubAndMembers() {
+	defer func() {
+		for _, c := range allMemberClusters {
+			cleanWorkResourcesOnCluster(c)
+		}
+	}()
+	cleanupWorkResources()
+}
+
 // claimsOfPolicy lists the cluster claims added for a policy through the ownership labels; the
 // namespace label is empty for claims of a cluster-scoped policy.
 func claimsOfPolicy(name, namespace string) (*kfplacementv1alpha1.ClusterClaimList, error) {
@@ -80,7 +123,7 @@ var _ = Describe("placement policy scheduling and cluster claims", Ordered, Seri
 	})
 
 	AfterAll(func() {
-		cleanupWorkResources()
+		cleanupWorkResourcesOnHubAndMembers()
 	})
 
 	scheduledConditionActual := func(wantStatus metav1.ConditionStatus, wantReason string, wantScheduled int32) func() error {
@@ -125,6 +168,8 @@ var _ = Describe("placement policy scheduling and cluster claims", Ordered, Seri
 			}
 			return client.IgnoreNotFound(err)
 		}, eventuallyDuration, eventuallyInterval).Should(Succeed(), "Failed to clean up the placement policy")
+		Eventually(appConfigMapRemovedFromClustersActual(allMemberClusters...), workloadEventuallyDuration, eventuallyInterval).
+			Should(Succeed(), "Failed to remove the placed ConfigMap from the member clusters")
 	})
 
 	It("should report fulfilled scheduling for a selector the fleet satisfies", func() {
@@ -155,6 +200,12 @@ var _ = Describe("placement policy scheduling and cluster claims", Ordered, Seri
 			}
 			return nil
 		}, eventuallyDuration, eventuallyInterval).Should(Succeed(), "Failed to bind the selected clusters")
+
+		By("checking that the ConfigMap is applied on the east clusters only")
+		Eventually(appConfigMapPlacedOnClustersActual(memberCluster1EastProd, memberCluster2EastCanary), workloadEventuallyDuration, eventuallyInterval).
+			Should(Succeed(), "Failed to apply the ConfigMap on the east clusters")
+		Consistently(appConfigMapRemovedFromClustersActual(memberCluster3WestProd), consistentlyDuration, consistentlyInterval).
+			Should(Succeed(), "The ConfigMap was applied on a cluster that was not selected")
 	})
 
 	It("should add a cluster claim for an unfulfillable selector and withdraw it with the policy", func() {
@@ -212,7 +263,7 @@ var _ = Describe("cluster placement policy scheduling and cluster claims", Order
 	})
 
 	AfterAll(func() {
-		cleanupWorkResources()
+		cleanupWorkResourcesOnHubAndMembers()
 	})
 
 	newClusterPolicy := func(selectors ...kfplacementv1alpha1.ClusterSelector) *kfplacementv1alpha1.ClusterPlacementPolicy {
@@ -235,6 +286,8 @@ var _ = Describe("cluster placement policy scheduling and cluster claims", Order
 			}
 			return client.IgnoreNotFound(err)
 		}, eventuallyDuration, eventuallyInterval).Should(Succeed(), "Failed to clean up the cluster placement policy")
+		Eventually(appConfigMapRemovedFromClustersActual(allMemberClusters...), workloadEventuallyDuration, eventuallyInterval).
+			Should(Succeed(), "Failed to remove the placed ConfigMap from the member clusters")
 	})
 
 	It("should schedule against the fleet and claim for an unfulfillable selector", func() {
@@ -302,5 +355,11 @@ var _ = Describe("cluster placement policy scheduling and cluster claims", Order
 			}
 			return nil
 		}, eventuallyDuration, eventuallyInterval).Should(Succeed(), "Failed to bind the west cluster")
+
+		By("checking that the ConfigMap is applied on the west cluster only")
+		Eventually(appConfigMapPlacedOnClustersActual(memberCluster3WestProd), workloadEventuallyDuration, eventuallyInterval).
+			Should(Succeed(), "Failed to apply the ConfigMap on the west cluster")
+		Consistently(appConfigMapRemovedFromClustersActual(memberCluster1EastProd, memberCluster2EastCanary), consistentlyDuration, consistentlyInterval).
+			Should(Succeed(), "The ConfigMap was applied on a cluster that was not selected")
 	})
 })
