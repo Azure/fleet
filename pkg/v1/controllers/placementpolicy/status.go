@@ -62,10 +62,7 @@ type resourceStatus struct {
 func summarizeResourceStatus(latestRevision string, current bool, syncStrategy *kfplacementv1alpha1.SyncStrategy, targets map[string][]int, bindings []kfplacementv1alpha1.PlacementBindingAccessor) resourceStatus {
 	status := resourceStatus{latestRevision: latestRevision, current: current, targets: int32Len(slices.Collect(maps.Keys(targets)))}
 	for _, binding := range bindings {
-		if _, isTarget := targets[binding.GetSpec().ClusterName]; !isTarget {
-			continue
-		}
-		if !binding.GetDeletionTimestamp().IsZero() || !apiequality.Semantic.DeepEqual(binding.GetSpec().SyncStrategy, syncStrategy) {
+		if !countsTowardStatus(binding, syncStrategy, targets) {
 			continue
 		}
 		if binding.GetSpec().ResourceSnapshotName != latestRevision {
@@ -85,6 +82,33 @@ func summarizeResourceStatus(latestRevision string, current bool, syncStrategy *
 		}
 	}
 	return status
+}
+
+// summarizeAvailability summarizes the resource status of a round whose selected resources cannot
+// be collected, so there is no latest revision to judge the bindings against. No target cluster
+// counts as synchronized, but availability depends only on the bindings, so it is still counted
+// for whatever revision each binding holds, the way a Deployment reports its ready pods whatever
+// their revision.
+func summarizeAvailability(syncStrategy *kfplacementv1alpha1.SyncStrategy, targets map[string][]int, bindings []kfplacementv1alpha1.PlacementBindingAccessor) resourceStatus {
+	status := resourceStatus{targets: int32Len(slices.Collect(maps.Keys(targets)))}
+	for _, binding := range bindings {
+		if countsTowardStatus(binding, syncStrategy, targets) &&
+			condition.IsConditionStatusTrue(meta.FindStatusCondition(binding.GetStatus().Conditions, kfplacementv1alpha1.PlacementBindingCondTypeAvailable), binding.GetGeneration()) {
+			status.available++
+		}
+	}
+	return status
+}
+
+// countsTowardStatus reports whether a binding speaks for its cluster in the policy status: the
+// cluster is a target, and the binding is neither being deleted, as its conditions outlive the
+// removal of its resources, nor still on an older sync strategy than the policy's, as its
+// conditions describe the old one.
+func countsTowardStatus(binding kfplacementv1alpha1.PlacementBindingAccessor, syncStrategy *kfplacementv1alpha1.SyncStrategy, targets map[string][]int) bool {
+	if _, isTarget := targets[binding.GetSpec().ClusterName]; !isTarget {
+		return false
+	}
+	return binding.GetDeletionTimestamp().IsZero() && apiequality.Semantic.DeepEqual(binding.GetSpec().SyncStrategy, syncStrategy)
 }
 
 // synchronizedCondition builds the policy's Synchronized condition: true when the latest revision
@@ -159,8 +183,9 @@ func selectionFailedCondition(generation int64, err error) metav1.Condition {
 	}
 }
 
-// availableCondition builds the policy's Available condition: true when every target cluster has
-// the latest revision synchronized and its resources have passed the availability check.
+// availableCondition builds the policy's Available condition: true when the resources of every
+// target cluster have passed the availability check, on the latest revision or, when the selected
+// resources cannot be collected, on whatever revision the cluster holds.
 func (s resourceStatus) availableCondition(generation int64) metav1.Condition {
 	if s.available < s.targets {
 		return metav1.Condition{

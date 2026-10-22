@@ -81,6 +81,34 @@ func TestSummarizeResourceStatus(t *testing.T) {
 	}
 }
 
+// TestSummarizeAvailability pins that a round without a latest revision still counts the target
+// clusters whose resources are available, whatever revision they are on, and counts none as
+// synchronized.
+func TestSummarizeAvailability(t *testing.T) {
+	const latest, older = "pp-snapshot-1", "pp-snapshot-0"
+	targets := map[string][]int{"done": {0}, "rolling": {0}, "stale-gen": {0}, "failing": {0}, "terminating": {0}, "old-strategy": {0}}
+	terminating := progressedBinding("terminating", latest, ptr.To(latest), metav1.ConditionTrue, metav1.ConditionTrue, false)
+	terminating.SetDeletionTimestamp(ptr.To(metav1.Now()))
+	oldStrategy := progressedBinding("old-strategy", latest, ptr.To(latest), metav1.ConditionTrue, metav1.ConditionTrue, false)
+	oldStrategy.GetSpec().SyncStrategy = &kfplacementv1alpha1.SyncStrategy{ApplyMethod: kfplacementv1alpha1.ApplyMethodServerSideApply}
+	bindings := []kfplacementv1alpha1.PlacementBindingAccessor{
+		progressedBinding("done", latest, ptr.To(latest), metav1.ConditionTrue, metav1.ConditionTrue, false),
+		// Available on the older revision, which still counts without a latest one to judge against.
+		progressedBinding("rolling", older, ptr.To(older), metav1.ConditionTrue, metav1.ConditionTrue, false),
+		progressedBinding("stale-gen", latest, ptr.To(latest), metav1.ConditionTrue, metav1.ConditionTrue, true),
+		progressedBinding("failing", latest, ptr.To(latest), metav1.ConditionFalse, metav1.ConditionUnknown, false),
+		progressedBinding("leaving", latest, ptr.To(latest), metav1.ConditionTrue, metav1.ConditionTrue, false),
+		terminating,
+		oldStrategy,
+	}
+
+	got := summarizeAvailability(nil, targets, bindings)
+	want := resourceStatus{targets: 6, available: 2}
+	if diff := cmp.Diff(want, got, cmp.AllowUnexported(resourceStatus{})); diff != "" {
+		t.Errorf("summarizeAvailability() mismatch (-want +got):\n%s", diff)
+	}
+}
+
 func TestResourceStatusConditions(t *testing.T) {
 	testCases := []struct {
 		name          string

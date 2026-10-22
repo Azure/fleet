@@ -143,7 +143,11 @@ package demonstrating the current behavior.
   found, false when they cannot be collected for good (a resource selected by
   name is gone, or the selection is invalid), and left as it was on a
   transient failure or while the cluster selectors are invalid, since no
-  snapshot is attempted then.
+  snapshot is attempted then. When the resources cannot be collected, no
+  target cluster counts as synchronized, but `resourcesAvailableClusters` and
+  `Available` are still reported from the bindings, whatever revision each
+  holds, the way a Deployment reports its ready pods; the latest revision is
+  left as it was.
   Rolling a new revision out is left to the rollout APIs; this
   controller only reports. Binding updates wake the policy when their spec or
   this progress changes (`bindingRelevantChanges`).

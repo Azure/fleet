@@ -192,7 +192,8 @@ func (r *Reconciler) Reconcile(ctx context.Context, req runtime.Request) (runtim
 	// status; it only holds back new bindings. A transient failure leaves the resource status as it
 	// was, but one that the retries cannot fix on their own, a selected resource that is gone or a
 	// selection the user got wrong, reports the target clusters as not synchronized: the last
-	// round's verdict no longer describes the selected resources.
+	// round's verdict no longer describes the selected resources. Their availability depends only
+	// on the bindings, so it is still reported.
 	var latestRevision string
 	var resources *resourceStatus
 	snapshots, current, snapshotErr := r.snapshots.SnapshotResourcesIfNoSnapshotExists(ctx, policy)
@@ -209,6 +210,9 @@ func (r *Reconciler) Reconcile(ctx context.Context, req runtime.Request) (runtim
 		// it skips a binding whose sync strategy is still the old one: its conditions hold for its
 		// current generation but describe the old strategy.
 		summary := summarizeResourceStatus(latestRevision, current, policy.GetSpec().SyncStrategy, desiredBindings, existingBindings)
+		resources = &summary
+	} else if selectionErr != nil {
+		summary := summarizeAvailability(policy.GetSpec().SyncStrategy, desiredBindings, existingBindings)
 		resources = &summary
 	}
 	roleHeld, bindingErr := r.reconcileBindings(ctx, policy, outcomes, desiredBindings, existingBindings, latestRevision)
@@ -260,8 +264,9 @@ func (r *Reconciler) Reconcile(ctx context.Context, req runtime.Request) (runtim
 // nothing has changed. A nil outcome list clears the cluster counts (used when the selectors
 // cannot be evaluated at all); a nil activeClaims leaves the current claim count untouched, and a
 // nil resources leaves the resource revision, the synchronization and availability counts, and
-// their conditions untouched, except that a non-nil selectionErr reports the ResourceCollected and
-// Synchronized conditions false.
+// their conditions untouched. A non-nil selectionErr reports the ResourceCollected and
+// Synchronized conditions false and leaves the resource revision as it was, while the counts and
+// the Available condition still come from resources.
 func (r *Reconciler) updateStatus(ctx context.Context, policy kfplacementv1alpha1.PlacementPolicyAccessor, outcomes []selectorOutcome, activeClaims *int32, scheduledCond metav1.Condition, resources *resourceStatus, selectionErr error) error {
 	status := policy.GetStatus()
 	observedStatus := status.DeepCopy()
@@ -279,11 +284,13 @@ func (r *Reconciler) updateStatus(ctx context.Context, policy kfplacementv1alpha
 	}
 	meta.SetStatusCondition(&status.Conditions, scheduledCond)
 	if resources != nil {
-		status.LatestResourceRevisionName = &resources.latestRevision
+		if selectionErr == nil {
+			status.LatestResourceRevisionName = &resources.latestRevision
+			meta.SetStatusCondition(&status.Conditions, resourceCollectedCondition(policy.GetGeneration(), nil))
+			meta.SetStatusCondition(&status.Conditions, resources.synchronizedCondition(policy.GetGeneration()))
+		}
 		status.SynchronizedClusters = &resources.synchronized
 		status.ResourcesAvailableClusters = &resources.available
-		meta.SetStatusCondition(&status.Conditions, resourceCollectedCondition(policy.GetGeneration(), nil))
-		meta.SetStatusCondition(&status.Conditions, resources.synchronizedCondition(policy.GetGeneration()))
 		meta.SetStatusCondition(&status.Conditions, resources.availableCondition(policy.GetGeneration()))
 	}
 	if selectionErr != nil {

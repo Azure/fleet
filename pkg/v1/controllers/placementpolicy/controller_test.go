@@ -181,8 +181,9 @@ func (f failingSnapshotter) SnapshotResourcesIfNoSnapshotExists(context.Context,
 // TestReconcileSchedulesWithoutSnapshot pins that scheduling does not wait on resources: a round
 // whose snapshot fails still unbinds a cluster that has left and writes the Scheduled status, and
 // only then reports the snapshot error for a retry. A transient failure leaves the Synchronized
-// and ResourceCollected conditions as they were; a selected resource that is gone reports both
-// false.
+// and ResourceCollected conditions and the cluster counts as they were; a selected resource that
+// is gone reports both conditions false, no cluster synchronized, and the availability the
+// bindings report.
 func TestReconcileSchedulesWithoutSnapshot(t *testing.T) {
 	scheme := runtime.NewScheme()
 	if err := kfplacementv1alpha1.AddToScheme(scheme); err != nil {
@@ -196,6 +197,7 @@ func TestReconcileSchedulesWithoutSnapshot(t *testing.T) {
 		snapshotErr       error
 		wantSyncCond      metav1.ConditionStatus
 		wantCollectedCond metav1.ConditionStatus
+		wantCounts        *int32
 	}{
 		{
 			name:              "transient failure",
@@ -210,6 +212,7 @@ func TestReconcileSchedulesWithoutSnapshot(t *testing.T) {
 				"failed to retrieve selected resources (name-based selector)"),
 			wantSyncCond:      metav1.ConditionFalse,
 			wantCollectedCond: metav1.ConditionFalse,
+			wantCounts:        ptr.To[int32](0),
 		},
 	}
 	for _, tc := range testCases {
@@ -270,6 +273,15 @@ func TestReconcileSchedulesWithoutSnapshot(t *testing.T) {
 			}
 			if gotCollected != tc.wantCollectedCond {
 				t.Errorf("Reconcile() left ResourceCollected condition status %q, want %q", gotCollected, tc.wantCollectedCond)
+			}
+			if diff := cmp.Diff(tc.wantCounts, fetched.Status.SynchronizedClusters); diff != "" {
+				t.Errorf("Reconcile() synchronizedClusters mismatch (-want +got):\n%s", diff)
+			}
+			if diff := cmp.Diff(tc.wantCounts, fetched.Status.ResourcesAvailableClusters); diff != "" {
+				t.Errorf("Reconcile() resourcesAvailableClusters mismatch (-want +got):\n%s", diff)
+			}
+			if gotAvailable := meta.FindStatusCondition(fetched.Status.Conditions, kfplacementv1alpha1.PlacementPolicyCondTypeAvailable) != nil; gotAvailable != (tc.wantCounts != nil) {
+				t.Errorf("Reconcile() wrote an Available condition = %t, want %t", gotAvailable, tc.wantCounts != nil)
 			}
 		})
 	}
