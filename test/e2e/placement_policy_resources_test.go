@@ -20,6 +20,7 @@ import (
 	"fmt"
 	"maps"
 
+	"github.com/google/go-cmp/cmp"
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
 	corev1 "k8s.io/api/core/v1"
@@ -48,7 +49,35 @@ const (
 
 	// placementPolicySelectedLabelKey is the label that the ConfigMaps selected by label carry.
 	placementPolicySelectedLabelKey = "placement-policy-e2e/selected"
+
+	placementPolicyResourceDeletedNameTemplate = "pp-resource-deleted-%d"
 )
+
+// newPlacementPolicySelectedConfigMap returns a ConfigMap that carries the label the specs select ConfigMaps by.
+func newPlacementPolicySelectedConfigMap(key types.NamespacedName, data map[string]string) *corev1.ConfigMap {
+	return &corev1.ConfigMap{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      key.Name,
+			Namespace: key.Namespace,
+			Labels:    map[string]string{placementPolicySelectedLabelKey: "true"},
+		},
+		Data: maps.Clone(data),
+	}
+}
+
+// placementPolicyLabelSelectedResourceSelectors returns the resource selectors that select ConfigMaps by the label
+// that newPlacementPolicySelectedConfigMap sets.
+func placementPolicyLabelSelectedResourceSelectors() []kfplacementv1alpha1.ResourceSelector {
+	return []kfplacementv1alpha1.ResourceSelector{
+		{
+			APIVersion: "v1",
+			Kind:       "ConfigMap",
+			LabelSelector: &metav1.LabelSelector{
+				MatchLabels: map[string]string{placementPolicySelectedLabelKey: "true"},
+			},
+		},
+	}
+}
 
 // The FEP-0001 placement experience is alpha and runs behind the enable-placement-policy-apis hub and member
 // agent flags, which test/e2e/setup.sh turns on.
@@ -69,37 +98,18 @@ var _ = Describe("placement policy resource selection", Label("placementpolicy")
 
 		var initialSnapshotName string
 
-		newSelectedConfigMap := func(key types.NamespacedName, data map[string]string) *corev1.ConfigMap {
-			return &corev1.ConfigMap{
-				ObjectMeta: metav1.ObjectMeta{
-					Name:      key.Name,
-					Namespace: key.Namespace,
-					Labels:    map[string]string{placementPolicySelectedLabelKey: "true"},
-				},
-				Data: maps.Clone(data),
-			}
-		}
-
 		BeforeAll(func() {
 			By("creating the work resources")
 			createWorkResources()
 
 			By("creating two ConfigMaps that carry the selected label")
 			for _, key := range []types.NamespacedName{cmAKey, cmBKey} {
-				Expect(hubClient.Create(ctx, newSelectedConfigMap(key, v0Data))).To(Succeed(), "Failed to create ConfigMap %s", key)
+				Expect(hubClient.Create(ctx, newPlacementPolicySelectedConfigMap(key, v0Data))).To(Succeed(), "Failed to create ConfigMap %s", key)
 			}
 
 			By("creating a placement policy that selects ConfigMaps by label")
 			policy := newPlacementPolicyObject(policyKey, kfplacementv1alpha1.PlacementPolicySpec{
-				ResourceSelectors: []kfplacementv1alpha1.ResourceSelector{
-					{
-						APIVersion: "v1",
-						Kind:       "ConfigMap",
-						LabelSelector: &metav1.LabelSelector{
-							MatchLabels: map[string]string{placementPolicySelectedLabelKey: "true"},
-						},
-					},
-				},
+				ResourceSelectors: placementPolicyLabelSelectedResourceSelectors(),
 			})
 			Expect(hubClient.Create(ctx, policy)).To(Succeed(), "Failed to create placement policy %s", policyKey)
 		})
@@ -139,7 +149,7 @@ var _ = Describe("placement policy resource selection", Label("placementpolicy")
 
 		It("can change a selected ConfigMap and add another one on the hub", func() {
 			updateConfigMapDataOnHub(cmAKey, v1Data)
-			Expect(hubClient.Create(ctx, newSelectedConfigMap(cmCKey, v1Data))).To(Succeed(), "Failed to create ConfigMap %s", cmCKey)
+			Expect(hubClient.Create(ctx, newPlacementPolicySelectedConfigMap(cmCKey, v1Data))).To(Succeed(), "Failed to create ConfigMap %s", cmCKey)
 		})
 
 		It("should report the resource changes as pending a rollout, without taking a new resource snapshot", func() {
@@ -541,6 +551,93 @@ var _ = Describe("placement policy resource selection", Label("placementpolicy")
 				Should(Succeed(), "Failed to place the once-missing ConfigMap on every member cluster")
 			Eventually(placementPolicyStatusActual(policyKey, allSynchronizedPlacementPolicyStatus(int32(len(allMemberClusters)))), workloadEventuallyDuration, eventuallyInterval).
 				Should(Succeed(), "Failed to report the expected placement policy status")
+		})
+	})
+
+	Context("placement policy auto-rolling out the deletion of a ConfigMap it selects by label", Ordered, func() {
+		nsName := appNamespace().Name
+		policyKey := types.NamespacedName{
+			Namespace: nsName,
+			Name:      fmt.Sprintf(placementPolicyResourceDeletedNameTemplate, GinkgoParallelProcess()),
+		}
+		keptCMKey := types.NamespacedName{Namespace: nsName, Name: "selected-config-a"}
+		deletedCMKey := types.NamespacedName{Namespace: nsName, Name: "selected-config-b"}
+		v0Data := map[string]string{"data": "v0"}
+
+		var initialSnapshotName, newSnapshotName string
+		var keptCMUIDsByCluster map[string]types.UID
+
+		BeforeAll(func() {
+			By("creating the work resources")
+			createWorkResources()
+
+			By("creating two ConfigMaps that carry the selected label")
+			for _, key := range []types.NamespacedName{keptCMKey, deletedCMKey} {
+				Expect(hubClient.Create(ctx, newPlacementPolicySelectedConfigMap(key, v0Data))).To(Succeed(), "Failed to create ConfigMap %s", key)
+			}
+
+			By("creating a placement policy that selects ConfigMaps by label, with auto-rollout enabled")
+			policy := newPlacementPolicyObject(policyKey, kfplacementv1alpha1.PlacementPolicySpec{
+				ResourceSelectors: placementPolicyLabelSelectedResourceSelectors(),
+			})
+			policy.SetAnnotations(autoRolloutAnnotations())
+			Expect(hubClient.Create(ctx, policy)).To(Succeed(), "Failed to create placement policy %s", policyKey)
+		})
+
+		AfterAll(func() {
+			// The work resources must go even if removing the policy fails; otherwise they leak into later specs.
+			defer cleanupWorkResourcesOnHubAndMembers()
+			ensurePlacementPolicyRemoved(policyKey)
+		})
+
+		It("should place both ConfigMaps on every member cluster", func() {
+			initialSnapshotName = waitForPlacementPolicySynchronized(policyKey, noTermsSelectorsForAllMemberClusters(), 2)
+			for _, key := range []types.NamespacedName{keptCMKey, deletedCMKey} {
+				Eventually(configMapDataOnClustersActual(key, v0Data, allMemberClusters...), workloadEventuallyDuration, eventuallyInterval).
+					Should(Succeed(), "Failed to place ConfigMap %s on every member cluster", key)
+			}
+
+			var err error
+			keptCMUIDsByCluster, err = configMapUIDsByCluster(keptCMKey, allMemberClusters...)
+			Expect(err).NotTo(HaveOccurred(), "Failed to read ConfigMap %s on the member clusters", keptCMKey)
+		})
+
+		It("can delete one of the ConfigMaps on the hub", func() {
+			cm := &corev1.ConfigMap{ObjectMeta: metav1.ObjectMeta{Name: deletedCMKey.Name, Namespace: deletedCMKey.Namespace}}
+			Expect(hubClient.Delete(ctx, cm)).To(Succeed(), "Failed to delete ConfigMap %s on the hub cluster", deletedCMKey)
+		})
+
+		It("should roll the deletion out, removing the ConfigMap from every member cluster", func() {
+			// The deletion is a resource change like any other: auto-rollout takes a resource snapshot without the
+			// ConfigMap, and the work applier removes what the Works no longer carry.
+			Eventually(placementPolicyLatestSnapshotChangedActual(policyKey, initialSnapshotName, &newSnapshotName), placementPolicyRolloutEventuallyDuration, eventuallyInterval).
+				Should(Succeed(), "Failed to take a resource snapshot without the deleted ConfigMap")
+			Eventually(allSynchronizedPlacementPolicyBindingsActual(policyKey, noTermsSelectorsForAllMemberClusters(), 1), placementPolicyRolloutEventuallyDuration, eventuallyInterval).
+				Should(Succeed(), "Failed to roll the new resource snapshot out to every binding")
+			Eventually(configMapAbsentOnClustersActual(deletedCMKey, allMemberClusters...), workloadEventuallyDuration, eventuallyInterval).
+				Should(Succeed(), "Failed to remove the deleted ConfigMap from the member clusters")
+
+			wantStatus := allSynchronizedPlacementPolicyStatus(int32(len(allMemberClusters)))
+			wantStatus.LatestResourceRevisionName = ptr.To(newSnapshotName)
+			Eventually(placementPolicyStatusActual(policyKey, wantStatus), workloadEventuallyDuration, eventuallyInterval).
+				Should(Succeed(), "Failed to report the expected placement policy status")
+		})
+
+		It("should leave the other ConfigMap on every member cluster as it was", func() {
+			dataActual := configMapDataOnClustersActual(keptCMKey, v0Data, allMemberClusters...)
+			Consistently(func() error {
+				if err := dataActual(); err != nil {
+					return err
+				}
+				uids, err := configMapUIDsByCluster(keptCMKey, allMemberClusters...)
+				if err != nil {
+					return err
+				}
+				if diff := cmp.Diff(uids, keptCMUIDsByCluster); diff != "" {
+					return fmt.Errorf("ConfigMap %s UIDs diff, keyed by cluster (-got, +want):\n%s", keptCMKey, diff)
+				}
+				return nil
+			}, consistentlyDuration, consistentlyInterval).Should(Succeed(), "The other ConfigMap was changed or re-created")
 		})
 	})
 })

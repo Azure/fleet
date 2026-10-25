@@ -25,6 +25,7 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/types"
 	"k8s.io/utils/ptr"
+	"sigs.k8s.io/controller-runtime/pkg/client"
 
 	kfplacementv1alpha1 "github.com/kubefleet-dev/kubefleet/apis/kubefleet.dev/placement/v1alpha1"
 	kfrolloutv1alpha1 "github.com/kubefleet-dev/kubefleet/apis/kubefleet.dev/rollout/v1alpha1"
@@ -42,6 +43,14 @@ const (
 	placementPolicyRunDeletedStrategyNameTemplate = "pp-run-deleted-strategy-%d"
 	placementPolicyDeletedRunNameTemplate         = "pp-deleted-run-%d"
 	placementPolicyFollowUpRunNameTemplate        = "pp-follow-up-run-%d"
+
+	placementPolicyHandMadeRequestNameTemplate         = "pp-hand-made-request-%d"
+	placementPolicyHandMadeRequestStrategyNameTemplate = "pp-hand-made-request-strategy-%d"
+	placementPolicyHandMadeRequestRunNameTemplate      = "pp-hand-made-request-run-%d"
+
+	clusterPlacementPolicySuspendedMidRunNameTemplate         = "cpp-suspended-mid-run-%d"
+	clusterPlacementPolicySuspendedMidRunStrategyNameTemplate = "cpp-suspended-mid-run-strategy-%d"
+	clusterPlacementPolicySuspendedMidRunRunNameTemplate      = "cpp-suspended-mid-run-run-%d"
 )
 
 // canaryApprovalStrategySpec returns a strategy with a canary stage, gated by an approval, before a prod stage.
@@ -363,6 +372,264 @@ var _ = Describe("placement policy staged update run interruptions", Label("plac
 			wantStatus.LatestResourceRevisionName = ptr.To(newSnapshotName)
 			Eventually(placementPolicyStatusActual(policyKey, wantStatus), workloadEventuallyDuration, eventuallyInterval).
 				Should(Succeed(), "Failed to report the expected placement policy status")
+		})
+	})
+
+	Context("placement policy whose staged update run finds a hand-made approval request under the name it uses", Ordered, func() {
+		nsName := appNamespace().Name
+		policyKey := types.NamespacedName{Namespace: nsName, Name: fmt.Sprintf(placementPolicyHandMadeRequestNameTemplate, GinkgoParallelProcess())}
+		strategyKey := types.NamespacedName{Namespace: nsName, Name: fmt.Sprintf(placementPolicyHandMadeRequestStrategyNameTemplate, GinkgoParallelProcess())}
+		runKey := types.NamespacedName{Namespace: nsName, Name: fmt.Sprintf(placementPolicyHandMadeRequestRunNameTemplate, GinkgoParallelProcess())}
+		// The name that the run gives the approval request of the canary stage's after-stage task; see
+		// formatAfterStageApprovalRequestName in the staged update run controller (short names are not hashed).
+		requestKey := types.NamespacedName{Namespace: nsName, Name: fmt.Sprintf("%s-after-stage-%s", runKey.Name, placementPolicyCanaryStageName)}
+		cmKey := types.NamespacedName{Namespace: nsName, Name: appConfigMap().Name}
+		v0Data := appConfigMap().Data
+		v1Data := map[string]string{"data": "test-v1"}
+
+		var initialSnapshotName, newSnapshotName string
+
+		BeforeAll(func() {
+			By("creating the work resources")
+			createWorkResources()
+
+			By("creating a policy that places the ConfigMap on every member cluster")
+			policy := newPlacementPolicyObject(policyKey, kfplacementv1alpha1.PlacementPolicySpec{
+				ResourceSelectors: placementPolicyResourceSelectors(),
+			})
+			Expect(hubClient.Create(ctx, policy)).To(Succeed(), "Failed to create placement policy %s", policyKey)
+
+			By("creating a strategy with a canary stage, gated by an approval, before a prod stage")
+			strategy := newStagedUpdateStrategyObject(strategyKey, canaryApprovalStrategySpec())
+			Expect(hubClient.Create(ctx, strategy)).To(Succeed(), "Failed to create staged update strategy %s", strategyKey)
+		})
+
+		AfterAll(func() {
+			// The work resources must go even if the cleanup below fails; otherwise they leak into later specs.
+			defer cleanupWorkResourcesOnHubAndMembers()
+			ensureStagedUpdateRunRemoved(runKey)
+			// The hand-made request outlives the run, should the spec fail before deleting it.
+			Expect(client.IgnoreNotFound(hubClient.Delete(ctx, newApprovalRequestObject(requestKey)))).To(Succeed(), "Failed to delete approval request %s", requestKey)
+			ensureStagedUpdateStrategyRemoved(strategyKey)
+			ensurePlacementPolicyRemoved(policyKey)
+		})
+
+		It("should place the initial version on every member cluster", func() {
+			initialSnapshotName = waitForPlacementPolicySynchronized(policyKey, noTermsSelectorsForAllMemberClusters(), 1)
+			Eventually(configMapDataOnClustersActual(cmKey, v0Data, allMemberClusters...), workloadEventuallyDuration, eventuallyInterval).
+				Should(Succeed(), "Failed to place the initial version on every member cluster")
+		})
+
+		It("can create, and approve, an approval request under the name that the run will use for the canary stage", func() {
+			request := newApprovalRequestObject(requestKey)
+			request.SetSpec(kfrolloutv1alpha1.ApprovalRequestSpec{
+				StagedUpdateRunName: runKey.Name,
+				StageName:           placementPolicyCanaryStageName,
+			})
+			Expect(hubClient.Create(ctx, request)).To(Succeed(), "Failed to create approval request %s", requestKey)
+			approvePlacementPolicyApprovalRequest(requestKey)
+		})
+
+		It("can change the ConfigMap on the hub, and roll the change out with a staged update run", func() {
+			updateConfigMapDataOnHub(cmKey, v1Data)
+			run := newStagedUpdateRunObject(runKey, kfrolloutv1alpha1.StagedUpdateRunSpec{
+				PlacementPolicyName:      policyKey.Name,
+				StagedUpdateStrategyName: strategyKey.Name,
+			})
+			Expect(hubClient.Create(ctx, run)).To(Succeed(), "Failed to create staged update run %s", runKey)
+		})
+
+		It("should roll the new version out to the canary cluster, then report that it does not own the approval request", func() {
+			Eventually(stagedUpdateRunApprovalTaskActual(runKey, 0, false, requestKey.Name,
+				kfrolloutv1alpha1.StagedUpdateRunTaskCondTypeApprovalRequestCreated, metav1.ConditionFalse,
+				kfrolloutv1alpha1.StagedUpdateRunTaskApprovalRequestCreatedCondReasonOwnershipMismatch),
+				placementPolicyRolloutEventuallyDuration, eventuallyInterval).Should(Succeed(), "Failed to report the approval request as not owned by the run")
+			newSnapshotName = resourceSnapshotNameToRolloutOf(runKey)
+			Expect(newSnapshotName).NotTo(Equal(initialSnapshotName), "Staged update run %s rolls out the initial resource snapshot", runKey)
+			Eventually(onlyCanaryUpdatedActual(policyKey, cmKey, initialSnapshotName, newSnapshotName, v0Data, v1Data), workloadEventuallyDuration, eventuallyInterval).
+				Should(Succeed(), "Failed to roll the new version out to the canary cluster only")
+		})
+
+		It("should not roll out to the prod clusters, although the hand-made request is approved", func() {
+			Consistently(onlyCanaryUpdatedActual(policyKey, cmKey, initialSnapshotName, newSnapshotName, v0Data, v1Data), consistentlyDuration, consistentlyInterval).
+				Should(Succeed(), "The new version reached the prod clusters through an approval request that the run does not own")
+		})
+
+		It("can delete the hand-made approval request", func() {
+			Expect(hubClient.Delete(ctx, newApprovalRequestObject(requestKey))).To(Succeed(), "Failed to delete approval request %s", requestKey)
+		})
+
+		It("should create its own approval request, which needs an approval as usual", func() {
+			Eventually(approvalRequestActual(requestKey, runKey, placementPolicyCanaryStageName, false), placementPolicyRolloutEventuallyDuration, eventuallyInterval).
+				Should(Succeed(), "Failed to create an approval request controlled by the run")
+			Eventually(stagedUpdateRunApprovalTaskActual(runKey, 0, false, requestKey.Name,
+				kfrolloutv1alpha1.StagedUpdateRunTaskCondTypeApprovalRequestCreated, metav1.ConditionTrue,
+				kfrolloutv1alpha1.StagedUpdateRunTaskApprovalRequestCreatedCondReasonCreated),
+				placementPolicyRolloutEventuallyDuration, eventuallyInterval).Should(Succeed(), "Failed to report the approval request as created")
+			Consistently(onlyCanaryUpdatedActual(policyKey, cmKey, initialSnapshotName, newSnapshotName, v0Data, v1Data), consistentlyDuration, consistentlyInterval).
+				Should(Succeed(), "The new version reached the prod clusters before the approval")
+		})
+
+		It("can approve the canary stage", func() {
+			approvePlacementPolicyApprovalRequest(requestKey)
+		})
+
+		It("should roll the new version out to every member cluster", func() {
+			Eventually(stagedUpdateRunSucceededActual(runKey), placementPolicyRolloutEventuallyDuration, eventuallyInterval).
+				Should(Succeed(), "Failed to complete staged update run %s", runKey)
+			Eventually(configMapDataOnClustersActual(cmKey, v1Data, allMemberClusters...), workloadEventuallyDuration, eventuallyInterval).
+				Should(Succeed(), "Failed to place the new version on every member cluster")
+			wantStatus := allSynchronizedPlacementPolicyStatus(int32(len(allMemberClusters)))
+			wantStatus.LatestResourceRevisionName = ptr.To(newSnapshotName)
+			Eventually(placementPolicyStatusActual(policyKey, wantStatus), workloadEventuallyDuration, eventuallyInterval).
+				Should(Succeed(), "Failed to report the expected placement policy status")
+		})
+	})
+
+	Context("cluster placement policy whose binding is suspended by hand while a staged update run is in progress", Ordered, func() {
+		policyKey := types.NamespacedName{Name: fmt.Sprintf(clusterPlacementPolicySuspendedMidRunNameTemplate, GinkgoParallelProcess())}
+		strategyKey := types.NamespacedName{Name: fmt.Sprintf(clusterPlacementPolicySuspendedMidRunStrategyNameTemplate, GinkgoParallelProcess())}
+		runKey := types.NamespacedName{Name: fmt.Sprintf(clusterPlacementPolicySuspendedMidRunRunNameTemplate, GinkgoParallelProcess())}
+		cmKey := types.NamespacedName{Namespace: appNamespace().Name, Name: appConfigMap().Name}
+		v0Data := appConfigMap().Data
+		v1Data := map[string]string{"data": "test-v1"}
+		// A prod cluster, which the run reaches only after the approval.
+		suspendedClusterName := memberCluster1EastProdName
+		updatedClusterNames := []string{memberCluster2EastCanaryName, memberCluster3WestProdName}
+		// The member clusters are known only once the suite is set up, after the spec tree is built.
+		clusterCount := func() int32 { return int32(len(allMemberClusterNames)) }
+
+		var initialSnapshotName, newSnapshotName string
+		var bindingUIDsByCluster map[string]types.UID
+		var approvalRequestKey types.NamespacedName
+
+		BeforeAll(func() {
+			By("creating the work resources")
+			createWorkResources()
+
+			By("creating a cluster placement policy that places the ConfigMap on every member cluster")
+			policy := newPlacementPolicyObject(policyKey, kfplacementv1alpha1.PlacementPolicySpec{
+				ResourceSelectors: placementPolicyResourceSelectors(),
+			})
+			Expect(hubClient.Create(ctx, policy)).To(Succeed(), "Failed to create cluster placement policy %s", policyKey)
+
+			By("creating a strategy with a canary stage, gated by an approval, before a prod stage")
+			strategy := newStagedUpdateStrategyObject(strategyKey, canaryApprovalStrategySpec())
+			Expect(hubClient.Create(ctx, strategy)).To(Succeed(), "Failed to create cluster staged update strategy %s", strategyKey)
+		})
+
+		AfterAll(func() {
+			// The work resources must go even if the cleanup below fails; otherwise they leak into later specs.
+			defer cleanupWorkResourcesOnHubAndMembers()
+			ensureStagedUpdateRunRemoved(runKey)
+			ensureStagedUpdateStrategyRemoved(strategyKey)
+			ensurePlacementPolicyRemoved(policyKey)
+		})
+
+		It("should place the initial version on every member cluster", func() {
+			initialSnapshotName = waitForPlacementPolicySynchronized(policyKey, noTermsSelectorsForAllMemberClusters(), 1)
+			Eventually(configMapDataOnClustersActual(cmKey, v0Data, allMemberClusters...), workloadEventuallyDuration, eventuallyInterval).
+				Should(Succeed(), "Failed to place the initial version on every member cluster")
+			bindingUIDsByCluster = placementPolicyBindingUIDsByCluster(policyKey)
+		})
+
+		It("can change the ConfigMap on the hub, and roll the change out with a cluster staged update run", func() {
+			updateConfigMapDataOnHub(cmKey, v1Data)
+			run := newStagedUpdateRunObject(runKey, kfrolloutv1alpha1.StagedUpdateRunSpec{
+				PlacementPolicyName:      policyKey.Name,
+				StagedUpdateStrategyName: strategyKey.Name,
+			})
+			Expect(hubClient.Create(ctx, run)).To(Succeed(), "Failed to create cluster staged update run %s", runKey)
+		})
+
+		It("should roll the new version out to the canary cluster, then wait for an approval", func() {
+			approvalRequestKey = waitForStageApprovalRequest(runKey, 0, false)
+			newSnapshotName = resourceSnapshotNameToRolloutOf(runKey)
+			Expect(newSnapshotName).NotTo(Equal(initialSnapshotName), "Cluster staged update run %s rolls out the initial resource snapshot", runKey)
+			Eventually(onlyCanaryUpdatedActual(policyKey, cmKey, initialSnapshotName, newSnapshotName, v0Data, v1Data), workloadEventuallyDuration, eventuallyInterval).
+				Should(Succeed(), "Failed to roll the new version out to the canary cluster only")
+		})
+
+		It("can suspend the binding for member cluster 1", func() {
+			setPlacementPolicyBindingSuspended(policyKey, suspendedClusterName, true)
+		})
+
+		It("should remove the ConfigMap from member cluster 1", func() {
+			Eventually(suspendedPlacementPolicyBindingActual(policyKey, suspendedClusterName, bindingUIDsByCluster[suspendedClusterName], initialSnapshotName),
+				workloadEventuallyDuration, eventuallyInterval).Should(Succeed(), "Failed to process the suspension of the binding")
+			Eventually(appConfigMapRemovedFromClustersActual(memberCluster1EastProd), workloadEventuallyDuration, eventuallyInterval).
+				Should(Succeed(), "Failed to remove the ConfigMap from member cluster 1")
+		})
+
+		It("can approve the canary stage", func() {
+			approvePlacementPolicyApprovalRequest(approvalRequestKey)
+		})
+
+		It("should complete the run, counting the suspended cluster as updated", func() {
+			Eventually(stagedUpdateRunSucceededActual(runKey), placementPolicyRolloutEventuallyDuration, eventuallyInterval).
+				Should(Succeed(), "Failed to complete cluster staged update run %s", runKey)
+			Expect(stagedUpdateRunClusterResultsActual(runKey, map[string]string{
+				memberCluster2EastCanaryName: kfrolloutv1alpha1.StagedUpdateRunPerClusterCompletedCondReasonSucceeded,
+				memberCluster1EastProdName:   kfrolloutv1alpha1.StagedUpdateRunPerClusterCompletedCondReasonSucceeded,
+				memberCluster3WestProdName:   kfrolloutv1alpha1.StagedUpdateRunPerClusterCompletedCondReasonSucceeded,
+			})()).To(Succeed(), "Cluster staged update run %s did not update every cluster", runKey)
+
+			// The run skips the wait on a suspended binding; only the message of the cluster's Completed condition tells
+			// that path apart.
+			run, err := retrieveStagedUpdateRun(runKey)
+			Expect(err).NotTo(HaveOccurred(), "Failed to get cluster staged update run %s", runKey)
+			var completedCond *metav1.Condition
+			for _, stage := range run.GetStatus().Stages {
+				for _, cluster := range stage.Clusters {
+					if cluster.ClusterName == suspendedClusterName {
+						completedCond = meta.FindStatusCondition(cluster.Conditions, kfrolloutv1alpha1.StagedUpdateRunPerClusterCondTypeCompleted)
+					}
+				}
+			}
+			Expect(completedCond).NotTo(BeNil(), "Cluster staged update run %s reports no Completed condition for member cluster 1", runKey)
+			Expect(completedCond.Message).To(ContainSubstring("binding is suspended"), "The Completed condition of member cluster 1 does not report the binding as suspended")
+		})
+
+		It("should have moved the suspended binding to the new resource snapshot, without placing it on member cluster 1", func() {
+			suspendedActual := suspendedPlacementPolicyBindingActual(policyKey, suspendedClusterName, bindingUIDsByCluster[suspendedClusterName], newSnapshotName)
+			Eventually(suspendedActual, workloadEventuallyDuration, eventuallyInterval).
+				Should(Succeed(), "Failed to move the suspended binding to the new resource snapshot")
+			Eventually(configMapDataOnClustersActual(cmKey, v1Data, memberCluster2EastCanary, memberCluster3WestProd), workloadEventuallyDuration, eventuallyInterval).
+				Should(Succeed(), "Failed to place the new version on the other member clusters")
+
+			// The suspended binding names the latest revision but has processed none, so it counts as neither
+			// synchronized nor on an older revision.
+			wantStatus := someClustersNotSynchronizedPlacementPolicyStatus(clusterCount(), clusterCount()-1)
+			wantStatus.LatestResourceRevisionName = ptr.To(newSnapshotName)
+			statusActual := placementPolicyStatusActual(policyKey, wantStatus)
+			Eventually(statusActual, workloadEventuallyDuration, eventuallyInterval).
+				Should(Succeed(), "Failed to report the expected cluster placement policy status")
+
+			worksActual := placementPolicyWorkClustersActual(policyKey, updatedClusterNames...)
+			removedActual := appConfigMapRemovedFromClustersActual(memberCluster1EastProd)
+			Consistently(func() error {
+				for _, actual := range []func() error{suspendedActual, worksActual, removedActual, statusActual} {
+					if err := actual(); err != nil {
+						return err
+					}
+				}
+				return nil
+			}, consistentlyDuration, consistentlyInterval).Should(Succeed(), "The new version reached member cluster 1, or the suspended binding changed")
+		})
+
+		It("can resume the binding for member cluster 1", func() {
+			setPlacementPolicyBindingSuspended(policyKey, suspendedClusterName, false)
+		})
+
+		It("should place the new version on member cluster 1", func() {
+			Eventually(allSynchronizedPlacementPolicyBindingsActual(policyKey, noTermsSelectorsForAllMemberClusters(), 1), workloadEventuallyDuration, eventuallyInterval).
+				Should(Succeed(), "Failed to synchronize every binding on the new resource snapshot")
+			Eventually(configMapDataOnClustersActual(cmKey, v1Data, allMemberClusters...), workloadEventuallyDuration, eventuallyInterval).
+				Should(Succeed(), "Failed to place the new version on every member cluster")
+			wantStatus := allSynchronizedPlacementPolicyStatus(clusterCount())
+			wantStatus.LatestResourceRevisionName = ptr.To(newSnapshotName)
+			Eventually(placementPolicyStatusActual(policyKey, wantStatus), workloadEventuallyDuration, eventuallyInterval).
+				Should(Succeed(), "Failed to report the expected cluster placement policy status")
 		})
 	})
 })

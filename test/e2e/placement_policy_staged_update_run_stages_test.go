@@ -18,6 +18,7 @@ package e2e
 
 import (
 	"fmt"
+	"slices"
 	"time"
 
 	. "github.com/onsi/ginkgo/v2"
@@ -25,6 +26,7 @@ import (
 	"k8s.io/apimachinery/pkg/api/meta"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/types"
+	"k8s.io/apimachinery/pkg/util/intstr"
 	"k8s.io/utils/ptr"
 
 	kfplacementv1alpha1 "github.com/kubefleet-dev/kubefleet/apis/kubefleet.dev/placement/v1alpha1"
@@ -43,6 +45,10 @@ const (
 	clusterPlacementPolicyPartialStrategyNameTemplate         = "cpp-partial-strategy-%d"
 	clusterPlacementPolicyPartialStrategyStrategyNameTemplate = "cpp-partial-strategy-strategy-%d"
 	clusterPlacementPolicyPartialStrategyRunNameTemplate      = "cpp-partial-strategy-run-%d"
+
+	clusterPlacementPolicyConcurrencyNameTemplate         = "cpp-concurrency-%d"
+	clusterPlacementPolicyConcurrencyStrategyNameTemplate = "cpp-concurrency-%d-strategy-%d"
+	clusterPlacementPolicyConcurrencyRunNameTemplate      = "cpp-concurrency-%d-run-%d"
 
 	placementPolicyEastStageName = "east"
 
@@ -403,5 +409,113 @@ var _ = Describe("placement policy staged update run stages", Label("placementpo
 			Eventually(placementPolicyStatusActual(policyKey, wantStatus), workloadEventuallyDuration, eventuallyInterval).
 				Should(Succeed(), "Failed to report the expected cluster placement policy status")
 		})
+	})
+
+	Context("cluster placement policy rolled out with limits on how many clusters a stage updates at once", Ordered, func() {
+		policyKey := types.NamespacedName{Name: fmt.Sprintf(clusterPlacementPolicyConcurrencyNameTemplate, GinkgoParallelProcess())}
+		cmKey := types.NamespacedName{Namespace: appNamespace().Name, Name: appConfigMap().Name}
+		v0Data := appConfigMap().Data
+		// Each case rolls out a change with its own strategy, whose single stage covers all three member clusters.
+		cases := []struct {
+			description    string
+			maxConcurrency intstr.IntOrString
+			wantResolved   int32
+			data           map[string]string
+		}{
+			{description: "3", maxConcurrency: intstr.FromInt32(3), wantResolved: 3, data: map[string]string{"data": "test-v1"}},
+			// A percentage of the stage's clusters is rounded down: 70% of 3 is 2.
+			{description: "70%", maxConcurrency: intstr.FromString("70%"), wantResolved: 2, data: map[string]string{"data": "test-v2"}},
+		}
+		strategyKey := func(i int) types.NamespacedName {
+			return types.NamespacedName{Name: fmt.Sprintf(clusterPlacementPolicyConcurrencyStrategyNameTemplate, GinkgoParallelProcess(), i)}
+		}
+		runKey := func(i int) types.NamespacedName {
+			return types.NamespacedName{Name: fmt.Sprintf(clusterPlacementPolicyConcurrencyRunNameTemplate, GinkgoParallelProcess(), i)}
+		}
+
+		var bindingNamesByCluster map[string]string
+
+		BeforeAll(func() {
+			By("creating the work resources")
+			createWorkResources()
+
+			By("creating a cluster placement policy that places the ConfigMap on every member cluster")
+			policy := newPlacementPolicyObject(policyKey, kfplacementv1alpha1.PlacementPolicySpec{
+				ResourceSelectors: placementPolicyResourceSelectors(),
+			})
+			Expect(hubClient.Create(ctx, policy)).To(Succeed(), "Failed to create cluster placement policy %s", policyKey)
+
+			By("creating a strategy for each concurrency limit, with a single stage that covers every cluster")
+			for i, c := range cases {
+				strategy := newStagedUpdateStrategyObject(strategyKey(i), kfrolloutv1alpha1.StagedUpdateStrategySpec{
+					Stages: []kfrolloutv1alpha1.Stage{
+						{
+							Name:           placementPolicyAllClustersStageName,
+							LabelSelector:  &metav1.LabelSelector{},
+							MaxConcurrency: ptr.To(c.maxConcurrency),
+						},
+					},
+				})
+				Expect(hubClient.Create(ctx, strategy)).To(Succeed(), "Failed to create cluster staged update strategy %s", strategyKey(i))
+			}
+		})
+
+		AfterAll(func() {
+			// The work resources must go even if the cleanup below fails; otherwise they leak into later specs.
+			defer cleanupWorkResourcesOnHubAndMembers()
+			for i := range cases {
+				ensureStagedUpdateRunRemoved(runKey(i))
+				ensureStagedUpdateStrategyRemoved(strategyKey(i))
+			}
+			ensurePlacementPolicyRemoved(policyKey)
+		})
+
+		It("should place the initial version on every member cluster", func() {
+			waitForPlacementPolicySynchronized(policyKey, noTermsSelectorsForAllMemberClusters(), 1)
+			Eventually(configMapDataOnClustersActual(cmKey, v0Data, allMemberClusters...), workloadEventuallyDuration, eventuallyInterval).
+				Should(Succeed(), "Failed to place the initial version on every member cluster")
+			bindingNamesByCluster = placementPolicyBindingNamesByCluster(policyKey)
+		})
+
+		for i, c := range cases {
+			It(fmt.Sprintf("can change the ConfigMap and roll the change out with a stage that updates at most %s of its clusters at once", c.description), func() {
+				updateConfigMapDataOnHub(cmKey, c.data)
+				run := newStagedUpdateRunObject(runKey(i), kfrolloutv1alpha1.StagedUpdateRunSpec{
+					PlacementPolicyName:      policyKey.Name,
+					StagedUpdateStrategyName: strategyKey(i).Name,
+				})
+				Expect(hubClient.Create(ctx, run)).To(Succeed(), "Failed to create cluster staged update run %s", runKey(i))
+			})
+
+			It(fmt.Sprintf("should resolve the limit of %s to %d clusters, and update every cluster", c.description, c.wantResolved), func() {
+				Eventually(stagedUpdateRunSucceededActual(runKey(i)), placementPolicyRolloutEventuallyDuration, eventuallyInterval).
+					Should(Succeed(), "Failed to complete cluster staged update run %s", runKey(i))
+
+				// Clusters in a stage with no sorting label key are ordered by name.
+				clusters := make([]kfrolloutv1alpha1.PerClusterStatus, 0, len(allMemberClusterNames))
+				for _, clusterName := range slices.Sorted(slices.Values(allMemberClusterNames)) {
+					clusters = append(clusters, succeededStagedUpdateRunClusterStatus(clusterName, bindingNamesByCluster[clusterName]))
+				}
+				// Timestamps are ignored in the comparison; non-nil wanted values check that they are set.
+				wantStatus := kfrolloutv1alpha1.StagedUpdateRunStatus{
+					Conditions:                    succeededStagedUpdateRunConditions(),
+					ResourceSnapshotNameToRollout: resourceSnapshotNameToRolloutOf(runKey(i)),
+					Stages: []kfrolloutv1alpha1.PerStageStatus{
+						{
+							StageName:          placementPolicyAllClustersStageName,
+							Clusters:           clusters,
+							Conditions:         succeededStagedUpdateRunStageConditions(),
+							StartedTimestamp:   &metav1.Time{},
+							CompletedTimestamp: &metav1.Time{},
+							MaxConcurrency:     ptr.To(c.wantResolved),
+						},
+					},
+				}
+				Eventually(stagedUpdateRunStatusActual(runKey(i), wantStatus), eventuallyDuration, eventuallyInterval).
+					Should(Succeed(), "Cluster staged update run %s does not report the expected status", runKey(i))
+				Eventually(configMapDataOnClustersActual(cmKey, c.data, allMemberClusters...), workloadEventuallyDuration, eventuallyInterval).
+					Should(Succeed(), "Failed to place the new version on every member cluster")
+			})
+		}
 	})
 })

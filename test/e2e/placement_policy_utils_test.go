@@ -109,6 +109,98 @@ func clusterSelectorTermsMatchingLabels(matchLabels map[string]string) kfplaceme
 	}
 }
 
+// clusterSelectorWithTerms builds a cluster selector with the given terms and count.
+func clusterSelectorWithTerms(terms []kfplacementv1alpha1.ClusterLabelAndPropertySelectorTerm, count intstr.IntOrString) kfplacementv1alpha1.ClusterSelector {
+	return kfplacementv1alpha1.ClusterSelector{
+		Terms: terms,
+		Count: ptr.To(count),
+	}
+}
+
+// sameSelectorsForClusters returns, keyed by cluster, how the binding of each given cluster records the cluster
+// selectors of a policy whose only selector, with the given terms, selects them all.
+func sameSelectorsForClusters(
+	terms []kfplacementv1alpha1.ClusterLabelAndPropertySelectorTerm,
+	clusterNames ...string,
+) map[string][]kfplacementv1alpha1.ClusterSelectorWithTermsOnly {
+	selectorsByCluster := make(map[string][]kfplacementv1alpha1.ClusterSelectorWithTermsOnly, len(clusterNames))
+	for _, clusterName := range clusterNames {
+		selectorsByCluster[clusterName] = []kfplacementv1alpha1.ClusterSelectorWithTermsOnly{{Terms: terms}}
+	}
+	return selectorsByCluster
+}
+
+// waitForPlacementPolicyPlacedOnlyOn waits until the policy, whose only cluster selector has the given terms, binds
+// exactly the given clusters, has the app ConfigMap placed on them and removed from every other member cluster, and
+// reports all of them as synchronized and available.
+func waitForPlacementPolicyPlacedOnlyOn(
+	key types.NamespacedName,
+	terms []kfplacementv1alpha1.ClusterLabelAndPropertySelectorTerm,
+	clusterNames ...string,
+) {
+	GinkgoHelper()
+
+	var bound, unbound []*framework.Cluster
+	for _, cluster := range allMemberClusters {
+		if slices.Contains(clusterNames, cluster.ClusterName) {
+			bound = append(bound, cluster)
+		} else {
+			unbound = append(unbound, cluster)
+		}
+	}
+
+	Eventually(allSynchronizedPlacementPolicyBindingsActual(key, sameSelectorsForClusters(terms, clusterNames...), 1), workloadEventuallyDuration, eventuallyInterval).
+		Should(Succeed(), "Failed to bind exactly clusters %v for placement policy %s", clusterNames, key)
+	Eventually(appConfigMapPlacedOnClustersActual(bound...), workloadEventuallyDuration, eventuallyInterval).
+		Should(Succeed(), "Failed to place the ConfigMap on clusters %v", clusterNames)
+	Eventually(appConfigMapRemovedFromClustersActual(unbound...), workloadEventuallyDuration, eventuallyInterval).
+		Should(Succeed(), "Failed to remove the ConfigMap from the clusters other than %v", clusterNames)
+	Eventually(placementPolicyStatusActual(key, allSynchronizedPlacementPolicyStatus(int32(len(clusterNames)))), workloadEventuallyDuration, eventuallyInterval).
+		Should(Succeed(), "Failed to report the expected status for placement policy %s", key)
+}
+
+// placementPolicyBindingUIDsByCluster returns, keyed by cluster, the UIDs of the bindings that name the policy, so
+// that specs can check later that the bindings were kept rather than replaced.
+func placementPolicyBindingUIDsByCluster(key types.NamespacedName) map[string]types.UID {
+	GinkgoHelper()
+
+	bindings, err := placementPolicyBindingsByCluster(key)
+	Expect(err).NotTo(HaveOccurred(), "Failed to list the bindings of placement policy %s", key)
+	uids := make(map[string]types.UID, len(bindings))
+	for clusterName, binding := range bindings {
+		uids[clusterName] = binding.GetUID()
+	}
+	return uids
+}
+
+// waitPastCreationSecond waits until the second after the one in which a binding was created has begun, with a
+// margin (the Kind clusters share the host clock).
+//
+// When a selector picks too many clusters, the placement policy controller trims the newest bindings first, by
+// creation timestamp, which has a resolution of one second, and breaks ties by cluster name. Specs that rely on which
+// of two bindings is the newer one call this before causing the second binding, so that it is stamped a later second
+// than the first.
+func waitPastCreationSecond(createdAt metav1.Time) {
+	if wait := time.Until(createdAt.Add(time.Second + 250*time.Millisecond)); wait > 0 {
+		time.Sleep(wait)
+	}
+}
+
+// placementPolicyTolerationsFor returns the tolerations of the taints that buildTaints puts on the given member
+// clusters.
+func placementPolicyTolerationsFor(clusterNames ...string) []kfplacementv1alpha1.Toleration {
+	tolerations := make([]kfplacementv1alpha1.Toleration, 0, len(clusterNames))
+	for _, clusterName := range clusterNames {
+		tolerations = append(tolerations, kfplacementv1alpha1.Toleration{
+			Key:      regionLabelName,
+			Operator: corev1.TolerationOpEqual,
+			Value:    taintTolerationMap[clusterName][regionLabelName],
+			Effect:   corev1.TaintEffectNoSchedule,
+		})
+	}
+	return tolerations
+}
+
 // placementPolicyBindingsByCluster returns, keyed by cluster, the bindings that name the policy. Unlike
 // placementPolicyBindings, it needs no policy object, so it also works before the policy has a snapshot or after
 // it is gone.
@@ -268,6 +360,26 @@ func someClustersOnOlderResourceRevisionPlacementPolicyStatus(clusterCount, sync
 	return status
 }
 
+// unfulfilledPlacementPolicyStatus returns the status of a policy that wants desiredCount clusters but has found only
+// scheduledCount, with activeClaims cluster claims outstanding for the missing ones. Each found cluster has the
+// latest resource revision synchronized and available; with no target cluster at all, nothing is out of sync or
+// unavailable either.
+//
+// The latest resource revision name and the observed generations are left for the actual to fill in.
+func unfulfilledPlacementPolicyStatus(desiredCount, scheduledCount, activeClaims int32) kfplacementv1alpha1.PlacementPolicyStatus {
+	status := allSynchronizedPlacementPolicyStatus(scheduledCount)
+	meta.SetStatusCondition(&status.Conditions, placementPolicyCondition(kfplacementv1alpha1.PlacementPolicyCondTypeScheduled,
+		metav1.ConditionFalse, kfplacementv1alpha1.PlacementPolicyScheduledCondReasonFailedToFindSomeClusters))
+	status.DesiredClusters = ptr.To(desiredCount)
+	status.ActiveClusterClaims = ptr.To(activeClaims)
+	return status
+}
+
+// placementPolicyScheduledCondReasonInvalidClusterSelectors is the Scheduled condition reason of a policy whose
+// cluster selectors cannot be evaluated. The API defines no constant for it, so it is spelled out the way the
+// placement policy controller reports it.
+const placementPolicyScheduledCondReasonInvalidClusterSelectors = "InvalidClusterSelectors"
+
 // otherProdClusterName returns the name of the prod member cluster other than the given one.
 func otherProdClusterName(clusterName string) string {
 	GinkgoHelper()
@@ -403,6 +515,47 @@ func placementPolicyWorks(key types.NamespacedName) ([]kfplacementv1alpha1.Work,
 	return owned, nil
 }
 
+// placementPolicyWorkNamesByCluster returns, keyed by the member cluster they are for, the names of the Works on the
+// hub that were generated for the policy's bindings. An AppliedWork carries the name of its Work.
+func placementPolicyWorkNamesByCluster(key types.NamespacedName) (map[string][]string, error) {
+	works, err := placementPolicyWorks(key)
+	if err != nil {
+		return nil, err
+	}
+	clusterNamesByReservedNamespace := make(map[string]string, len(allMemberClusterNames))
+	for _, clusterName := range allMemberClusterNames {
+		clusterNamesByReservedNamespace[fmt.Sprintf(utils.NamespaceNameFormat, clusterName)] = clusterName
+	}
+	namesByCluster := make(map[string][]string, len(allMemberClusterNames))
+	for i := range works {
+		clusterName, found := clusterNamesByReservedNamespace[works[i].Namespace]
+		if !found {
+			return nil, fmt.Errorf("work %s of placement policy %s is not in the reserved namespace of a member cluster", client.ObjectKeyFromObject(&works[i]), key)
+		}
+		namesByCluster[clusterName] = append(namesByCluster[clusterName], works[i].Name)
+	}
+	return namesByCluster, nil
+}
+
+// setPlacementPolicyBindingSuspended suspends or resumes the binding of the policy for the given cluster, retrying on
+// conflicts. Users do not normally edit the field; upcoming APIs build on it, and specs set it as a stand-in for them.
+func setPlacementPolicyBindingSuspended(key types.NamespacedName, clusterName string, suspended bool) {
+	GinkgoHelper()
+
+	Eventually(func() error {
+		bindings, err := placementPolicyBindingsByCluster(key)
+		if err != nil {
+			return err
+		}
+		binding, found := bindings[clusterName]
+		if !found {
+			return fmt.Errorf("placement policy %s has no binding for cluster %s", key, clusterName)
+		}
+		binding.GetSpec().Suspended = suspended
+		return hubClient.Update(ctx, binding)
+	}, eventuallyDuration, eventuallyInterval).Should(Succeed(), "Failed to set suspended=%t on the binding of placement policy %s for cluster %s", suspended, key, clusterName)
+}
+
 // memberClusterNamed returns the member cluster of the given name.
 func memberClusterNamed(name string) *framework.Cluster {
 	GinkgoHelper()
@@ -472,6 +625,38 @@ func placementPolicyBindings(policy kfplacementv1alpha1.PlacementPolicyAccessor)
 	for _, binding := range all {
 		if binding.GetSpec().PlacementPolicyName == policy.GetName() {
 			named = append(named, binding)
+		}
+	}
+	return named, nil
+}
+
+// placementPolicySnapshots lists the resource snapshots, primary and secondary, that name the policy through the owner
+// annotation, which, unlike the owner label, always holds the full policy name. It needs no policy object, so it
+// also finds the snapshots of a policy that is gone.
+func placementPolicySnapshots(key types.NamespacedName) ([]kfplacementv1alpha1.PlacementResourceSnapshotAccessor, error) {
+	var all []kfplacementv1alpha1.PlacementResourceSnapshotAccessor
+	if key.Namespace == "" {
+		list := &kfplacementv1alpha1.ClusterPlacementResourceSnapshotList{}
+		if err := hubClient.List(ctx, list); err != nil {
+			return nil, err
+		}
+		for i := range list.Items {
+			all = append(all, &list.Items[i])
+		}
+	} else {
+		list := &kfplacementv1alpha1.PlacementResourceSnapshotList{}
+		if err := hubClient.List(ctx, list, client.InNamespace(key.Namespace)); err != nil {
+			return nil, err
+		}
+		for i := range list.Items {
+			all = append(all, &list.Items[i])
+		}
+	}
+
+	named := make([]kfplacementv1alpha1.PlacementResourceSnapshotAccessor, 0, len(all))
+	for _, snapshot := range all {
+		if snapshot.GetAnnotations()[kfplacementv1alpha1.PlacementResourceSnapshotOwnedByAnnotationKey] == key.Name {
+			named = append(named, snapshot)
 		}
 	}
 	return named, nil
@@ -571,13 +756,13 @@ func ensurePlacementPolicyRemoved(key types.NamespacedName) {
 		Should(Succeed(), "Failed to remove the placed ConfigMap from the member clusters")
 }
 
-// deletePlacementPolicyAndWait deletes a placement policy and waits until it is gone, without checking what happens to
-// the resources it placed; specs whose policy orphans its resources use it directly.
-func deletePlacementPolicyAndWait(key types.NamespacedName) {
+// deletePlacementPolicyAndWait deletes a placement policy, with the given delete options, and waits until it is gone,
+// without checking what happens to the resources it placed; specs whose policy orphans its resources use it directly.
+func deletePlacementPolicyAndWait(key types.NamespacedName, opts ...client.DeleteOption) {
 	GinkgoHelper()
 
 	policy := newPlacementPolicyObject(key, kfplacementv1alpha1.PlacementPolicySpec{})
-	Expect(client.IgnoreNotFound(hubClient.Delete(ctx, policy))).To(Succeed(), "Failed to delete placement policy %s", key)
+	Expect(client.IgnoreNotFound(hubClient.Delete(ctx, policy, opts...))).To(Succeed(), "Failed to delete placement policy %s", key)
 	// Policy deletion is finalizer-gated on cluster claim withdrawal, so waiting for the policy to disappear also
 	// confirms that its claims are gone.
 	Eventually(func() error {
@@ -710,7 +895,7 @@ func updateConfigMapDataOnMemberCluster(cluster *framework.Cluster, key types.Na
 // createConfigMapOnMemberCluster creates a ConfigMap, and its namespace if needed, directly on a member cluster, so
 // that the ConfigMap is not managed by KubeFleet. Creation is retried, as the namespace might still be terminating
 // after an earlier spec's cleanup.
-func createConfigMapOnMemberCluster(cluster *framework.Cluster, cm *corev1.ConfigMap) {
+func createConfigMapOnMemberCluster(cluster *framework.Cluster, cm *corev1.ConfigMap, opts ...client.CreateOption) {
 	GinkgoHelper()
 
 	Eventually(func() error {
@@ -718,7 +903,7 @@ func createConfigMapOnMemberCluster(cluster *framework.Cluster, cm *corev1.Confi
 		if err := client.IgnoreAlreadyExists(cluster.KubeClient.Create(ctx, ns)); err != nil {
 			return err
 		}
-		return cluster.KubeClient.Create(ctx, cm.DeepCopy())
+		return cluster.KubeClient.Create(ctx, cm.DeepCopy(), opts...)
 	}, workloadEventuallyDuration, eventuallyInterval).Should(Succeed(),
 		"Failed to create ConfigMap %s on cluster %s", client.ObjectKeyFromObject(cm), cluster.ClusterName)
 }

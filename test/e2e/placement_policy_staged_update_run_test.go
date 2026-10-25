@@ -23,11 +23,13 @@ import (
 
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
+	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/api/meta"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/types"
 	"k8s.io/apimachinery/pkg/util/intstr"
 	"k8s.io/utils/ptr"
+	"sigs.k8s.io/controller-runtime/pkg/client"
 
 	kfplacementv1alpha1 "github.com/kubefleet-dev/kubefleet/apis/kubefleet.dev/placement/v1alpha1"
 	kfrolloutv1alpha1 "github.com/kubefleet-dev/kubefleet/apis/kubefleet.dev/rollout/v1alpha1"
@@ -49,6 +51,9 @@ const (
 	clusterPlacementPolicyMutualExclusionNameTemplate         = "cpp-mutual-exclusion-%d"
 	clusterPlacementPolicyMutualExclusionStrategyNameTemplate = "cpp-mutual-exclusion-strategy-%d"
 	clusterPlacementPolicyMutualExclusionRunNameTemplate      = "cpp-mutual-exclusion-run-%d"
+
+	placementPolicyGeneratedStrategyNameTemplate = "pp-generated-strategy-%d"
+	placementPolicyGeneratedRunNameTemplate      = "pp-generated-run-%d"
 
 	placementPolicyCanaryStageName      = "canary"
 	placementPolicyProdStageName        = "prod"
@@ -676,6 +681,113 @@ var _ = Describe("placement policy staged update runs", Label("placementpolicy")
 			wantStatus.LatestResourceRevisionName = ptr.To(newSnapshotName)
 			Eventually(placementPolicyStatusActual(policyKey, wantStatus), workloadEventuallyDuration, eventuallyInterval).
 				Should(Succeed(), "Failed to report the expected cluster placement policy status")
+		})
+	})
+
+	Context("annotation-generated placement policy rolled out by a staged update run", Ordered, func() {
+		nsName := appNamespace().Name
+		strategyKey := types.NamespacedName{Namespace: nsName, Name: fmt.Sprintf(placementPolicyGeneratedStrategyNameTemplate, GinkgoParallelProcess())}
+		runKey := types.NamespacedName{Namespace: nsName, Name: fmt.Sprintf(placementPolicyGeneratedRunNameTemplate, GinkgoParallelProcess())}
+		cmKey := types.NamespacedName{Namespace: nsName, Name: appConfigMap().Name}
+		v0Data := appConfigMap().Data
+		v1Data := map[string]string{"data": "test-v1"}
+		canaryTerms := clusterSelectorTermsMatchingLabels(map[string]string{envLabelName: envCanary})
+		prodTerms := clusterSelectorTermsMatchingLabels(map[string]string{envLabelName: envProd})
+		// The generated policy has two selectors, the canary cluster and every prod cluster; each binding records the
+		// one that picked its cluster.
+		wantSelectorsByCluster := func() map[string][]kfplacementv1alpha1.ClusterSelectorWithTermsOnly {
+			return map[string][]kfplacementv1alpha1.ClusterSelectorWithTermsOnly{
+				memberCluster2EastCanaryName: {canaryTerms},
+				memberCluster1EastProdName:   {prodTerms},
+				memberCluster3WestProdName:   {prodTerms},
+			}
+		}
+
+		var configMap corev1.ConfigMap
+		var policyKey types.NamespacedName
+		var initialSnapshotName, newSnapshotName string
+		var approvalRequestKey types.NamespacedName
+
+		BeforeAll(func() {
+			By("creating the work resources")
+			createWorkResources()
+
+			By("creating a strategy with a canary stage, gated by an approval, before a prod stage")
+			strategy := newStagedUpdateStrategyObject(strategyKey, canaryApprovalStrategySpec())
+			Expect(hubClient.Create(ctx, strategy)).To(Succeed(), "Failed to create staged update strategy %s", strategyKey)
+
+			By("annotating the ConfigMap so that the hub agent generates a placement policy for the canary and prod clusters")
+			configMap = appConfigMap()
+			setClusterSelectorsAnnotation(&configMap, fmt.Sprintf("%s=%s;%s=%s,count=%s", envLabelName, envCanary, envLabelName, envProd, clusterSelectorCountAll))
+		})
+
+		AfterAll(func() {
+			// The work resources must go even if the cleanup below fails; otherwise they leak into later specs.
+			defer cleanupWorkResourcesOnHubAndMembers()
+			// The run goes first, so that it gives up the binding manager role before the policy goes.
+			ensureStagedUpdateRunRemoved(runKey)
+			ensureStagedUpdateStrategyRemoved(strategyKey)
+			// Removing the annotation makes the hub agent delete the generated policy.
+			setClusterSelectorsAnnotation(&configMap, "")
+			if policyKey.Name != "" {
+				ensurePlacementPolicyRemoved(policyKey)
+			}
+		})
+
+		It("should generate a placement policy that places the ConfigMap on every member cluster", func() {
+			// The provenance labels are how a user finds the generated policy, whose name is the hub agent's to choose.
+			Eventually(func() error {
+				policies := &kfplacementv1alpha1.PlacementPolicyList{}
+				if err := hubClient.List(ctx, policies, client.InNamespace(cmKey.Namespace), generatedPolicyLabels("", "ConfigMap", cmKey.Name)); err != nil {
+					return err
+				}
+				if len(policies.Items) != 1 {
+					return fmt.Errorf("%d placement policies are generated for ConfigMap %s, want 1", len(policies.Items), cmKey)
+				}
+				policyKey = types.NamespacedName{Namespace: policies.Items[0].Namespace, Name: policies.Items[0].Name}
+				return nil
+			}, eventuallyDuration, eventuallyInterval).Should(Succeed(), "Failed to generate a placement policy for ConfigMap %s", cmKey)
+			initialSnapshotName = waitForPlacementPolicySynchronized(policyKey, wantSelectorsByCluster(), 1)
+			Eventually(configMapDataOnClustersActual(cmKey, v0Data, allMemberClusters...), workloadEventuallyDuration, eventuallyInterval).
+				Should(Succeed(), "Failed to place the initial version on every member cluster")
+		})
+
+		It("can change the ConfigMap on the hub, and roll the change out with a staged update run on the generated policy", func() {
+			updateConfigMapDataOnHub(cmKey, v1Data)
+			run := newStagedUpdateRunObject(runKey, kfrolloutv1alpha1.StagedUpdateRunSpec{
+				PlacementPolicyName:      policyKey.Name,
+				StagedUpdateStrategyName: strategyKey.Name,
+			})
+			Expect(hubClient.Create(ctx, run)).To(Succeed(), "Failed to create staged update run %s", runKey)
+		})
+
+		It("should roll the new version out to the canary cluster, then wait for an approval", func() {
+			approvalRequestKey = waitForStageApprovalRequest(runKey, 0, false)
+			newSnapshotName = resourceSnapshotNameToRolloutOf(runKey)
+			Expect(newSnapshotName).NotTo(Equal(initialSnapshotName), "Staged update run %s rolls out the initial resource snapshot", runKey)
+			onlyCanaryActual := onlyCanaryUpdatedActual(policyKey, cmKey, initialSnapshotName, newSnapshotName, v0Data, v1Data)
+			Eventually(onlyCanaryActual, workloadEventuallyDuration, eventuallyInterval).
+				Should(Succeed(), "Failed to roll the new version out to the canary cluster only")
+			Consistently(onlyCanaryActual, consistentlyDuration, consistentlyInterval).
+				Should(Succeed(), "The new version reached the prod clusters before the approval")
+		})
+
+		It("can approve the canary stage", func() {
+			approvePlacementPolicyApprovalRequest(approvalRequestKey)
+		})
+
+		It("should roll the new version out to every member cluster, keeping the generated policy as it was", func() {
+			Eventually(stagedUpdateRunSucceededActual(runKey), placementPolicyRolloutEventuallyDuration, eventuallyInterval).
+				Should(Succeed(), "Failed to complete staged update run %s", runKey)
+			// The bindings still record the selectors that the annotation generated.
+			Eventually(allSynchronizedPlacementPolicyBindingsActual(policyKey, wantSelectorsByCluster(), 1), workloadEventuallyDuration, eventuallyInterval).
+				Should(Succeed(), "Failed to roll the new resource snapshot out to every binding")
+			Eventually(configMapDataOnClustersActual(cmKey, v1Data, allMemberClusters...), workloadEventuallyDuration, eventuallyInterval).
+				Should(Succeed(), "Failed to place the new version on every member cluster")
+			wantStatus := allSynchronizedPlacementPolicyStatus(int32(len(allMemberClusters)))
+			wantStatus.LatestResourceRevisionName = ptr.To(newSnapshotName)
+			Eventually(placementPolicyStatusActual(policyKey, wantStatus), workloadEventuallyDuration, eventuallyInterval).
+				Should(Succeed(), "Failed to report the expected placement policy status")
 		})
 	})
 })

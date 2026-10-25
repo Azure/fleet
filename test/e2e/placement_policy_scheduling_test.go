@@ -18,7 +18,7 @@ package e2e
 
 import (
 	"fmt"
-	"time"
+	"strings"
 
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
@@ -29,6 +29,7 @@ import (
 
 	kfplacementv1alpha1 "github.com/kubefleet-dev/kubefleet/apis/kubefleet.dev/placement/v1alpha1"
 	placementv1beta1 "github.com/kubefleet-dev/kubefleet/apis/placement/v1beta1"
+	"github.com/kubefleet-dev/kubefleet/pkg/utils"
 )
 
 const (
@@ -37,6 +38,8 @@ const (
 	placementPolicyOverlappingNameTemplate    = "pp-overlapping-%d"
 	placementPolicyScaledNameTemplate         = "pp-scaled-%d"
 	placementPolicyStickyNameTemplate         = "pp-sticky-%d"
+
+	clusterPlacementPolicyBindingDeletedNameTemplate = "cpp-binding-deleted-%d"
 )
 
 // The FEP-0001 placement experience is alpha and runs behind the enable-placement-policy-apis hub and member
@@ -296,13 +299,8 @@ var _ = Describe("placement policy scheduling", Label("placementpolicy"), func()
 		})
 
 		It("can scale the selector up to 2 clusters", func() {
-			// A scale-down trims the newest bindings by creation timestamp, which has a resolution of one second, and
-			// breaks ties by cluster name. The new binding must be stamped later than the first one for the scale-down
-			// below to have a well-defined newest binding, so the scale-up waits for the next second (with a margin;
-			// the Kind clusters share the host clock).
-			if wait := time.Until(firstBindingCreatedAt.Add(time.Second + 250*time.Millisecond)); wait > 0 {
-				time.Sleep(wait)
-			}
+			// The scale-down below needs a well-defined newest binding.
+			waitPastCreationSecond(firstBindingCreatedAt)
 			setEastSelectorCount(2)
 		})
 
@@ -423,25 +421,111 @@ var _ = Describe("placement policy scheduling", Label("placementpolicy"), func()
 
 		It("should report the selector as unfulfilled, with the claim outstanding", func() {
 			// With no target cluster left, nothing is out of sync or unavailable.
-			wantStatus := kfplacementv1alpha1.PlacementPolicyStatus{
-				Conditions: []metav1.Condition{
-					placementPolicyCondition(kfplacementv1alpha1.PlacementPolicyCondTypeResourceCollected, metav1.ConditionTrue,
-						kfplacementv1alpha1.PlacementPolicyResourceCollectedCondReasonAllResourcesCollected),
-					placementPolicyCondition(kfplacementv1alpha1.PlacementPolicyCondTypeScheduled, metav1.ConditionFalse,
-						kfplacementv1alpha1.PlacementPolicyScheduledCondReasonFailedToFindSomeClusters),
-					placementPolicyCondition(kfplacementv1alpha1.PlacementPolicyCondTypeSynchronized, metav1.ConditionTrue,
-						kfplacementv1alpha1.PlacementPolicySynchronizedCondReasonAllClustersSynchronized),
-					placementPolicyCondition(kfplacementv1alpha1.PlacementPolicyCondTypeAvailable, metav1.ConditionTrue,
-						kfplacementv1alpha1.PlacementPolicyAvailableCondReasonAllClustersAvailable),
-				},
-				DesiredClusters:            ptr.To(int32(1)),
-				ScheduledClusters:          ptr.To(int32(0)),
-				SynchronizedClusters:       ptr.To(int32(0)),
-				ResourcesAvailableClusters: ptr.To(int32(0)),
-				ActiveClusterClaims:        ptr.To(int32(1)),
-			}
-			Eventually(placementPolicyStatusActual(policyKey, wantStatus), eventuallyDuration, eventuallyInterval).
+			Eventually(placementPolicyStatusActual(policyKey, unfulfilledPlacementPolicyStatus(1, 0, 1)), eventuallyDuration, eventuallyInterval).
 				Should(Succeed(), "Failed to report the expected placement policy status")
+		})
+	})
+
+	Context("cluster placement policy whose binding is deleted out of band", Ordered, func() {
+		policyKey := types.NamespacedName{
+			Name: fmt.Sprintf(clusterPlacementPolicyBindingDeletedNameTemplate, GinkgoParallelProcess()),
+		}
+		cmKey := types.NamespacedName{Namespace: appNamespace().Name, Name: appConfigMap().Name}
+		deletedClusterName := memberCluster2EastCanaryName
+
+		var bindingUIDsByCluster map[string]types.UID
+		var workUIDsByWork map[string]types.UID
+		var cmUIDsByCluster map[string]types.UID
+
+		BeforeAll(func() {
+			By("creating the work resources")
+			createWorkResources()
+
+			By("creating a cluster placement policy that selects every member cluster")
+			policy := newPlacementPolicyObject(policyKey, kfplacementv1alpha1.PlacementPolicySpec{
+				ResourceSelectors: placementPolicyResourceSelectors(),
+			})
+			Expect(hubClient.Create(ctx, policy)).To(Succeed(), "Failed to create cluster placement policy %s", policyKey)
+		})
+
+		AfterAll(func() {
+			// The work resources must go even if removing the policy fails; otherwise they leak into later specs.
+			defer cleanupWorkResourcesOnHubAndMembers()
+			ensurePlacementPolicyRemoved(policyKey)
+		})
+
+		It("should place the ConfigMap on every member cluster", func() {
+			waitForPlacementPolicySynchronized(policyKey, noTermsSelectorsForAllMemberClusters(), 1)
+			Eventually(appConfigMapPlacedOnClustersActual(allMemberClusters...), workloadEventuallyDuration, eventuallyInterval).
+				Should(Succeed(), "Failed to place the ConfigMap on every member cluster")
+
+			bindingUIDsByCluster = placementPolicyBindingUIDsByCluster(policyKey)
+			var err error
+			workUIDsByWork, err = placementPolicyWorkUIDs(policyKey)
+			Expect(err).NotTo(HaveOccurred(), "Failed to list the Works of cluster placement policy %s", policyKey)
+			cmUIDsByCluster, err = configMapUIDsByCluster(cmKey, allMemberClusters...)
+			Expect(err).NotTo(HaveOccurred(), "Failed to read the ConfigMap on the member clusters")
+		})
+
+		It("can delete the binding for member cluster 2", func() {
+			bindings, err := placementPolicyBindingsByCluster(policyKey)
+			Expect(err).NotTo(HaveOccurred(), "Failed to list the bindings of cluster placement policy %s", policyKey)
+			binding, found := bindings[deletedClusterName]
+			Expect(found).To(BeTrue(), "Cluster placement policy %s has no binding for member cluster 2", policyKey)
+			Expect(hubClient.Delete(ctx, binding)).To(Succeed(), "Failed to delete binding %s", binding.GetName())
+		})
+
+		It("should re-create the binding, and with it the Works and the ConfigMap, on member cluster 2 only", func() {
+			// Deleting the binding deletes its Works, and the work applier removes the ConfigMap they placed (the default
+			// whenPlacementDeleted=CleanUpResources). The policy then binds the cluster again, under the same binding
+			// name, and the ConfigMap comes back as a new object.
+			Eventually(allSynchronizedPlacementPolicyBindingsActual(policyKey, noTermsSelectorsForAllMemberClusters(), 1), workloadEventuallyDuration, eventuallyInterval).
+				Should(Succeed(), "Failed to bind every member cluster again")
+			Eventually(appConfigMapPlacedOnClustersActual(allMemberClusters...), workloadEventuallyDuration, eventuallyInterval).
+				Should(Succeed(), "Failed to place the ConfigMap on every member cluster again")
+
+			deletedClusterNamespace := fmt.Sprintf(utils.NamespaceNameFormat, deletedClusterName)
+			Eventually(func() error {
+				bindings, err := placementPolicyBindingsByCluster(policyKey)
+				if err != nil {
+					return err
+				}
+				workUIDs, err := placementPolicyWorkUIDs(policyKey)
+				if err != nil {
+					return err
+				}
+				cmUIDs, err := configMapUIDsByCluster(cmKey, allMemberClusters...)
+				if err != nil {
+					return err
+				}
+				for clusterName, uid := range bindingUIDsByCluster {
+					binding, found := bindings[clusterName]
+					if !found {
+						return fmt.Errorf("cluster placement policy %s has no binding for cluster %s", policyKey, clusterName)
+					}
+					if replaced := binding.GetUID() != uid; replaced != (clusterName == deletedClusterName) {
+						return fmt.Errorf("the binding for cluster %s replaced = %t (UID %s, before %s)", clusterName, replaced, binding.GetUID(), uid)
+					}
+				}
+				for clusterName, uid := range cmUIDsByCluster {
+					if replaced := cmUIDs[clusterName] != uid; replaced != (clusterName == deletedClusterName) {
+						return fmt.Errorf("the ConfigMap on cluster %s replaced = %t (UID %s, before %s)", clusterName, replaced, cmUIDs[clusterName], uid)
+					}
+				}
+				// The Works of the other clusters are kept as they were; those of the re-created binding are new.
+				for workKey, uid := range workUIDsByWork {
+					onDeletedCluster := strings.HasPrefix(workKey, deletedClusterNamespace+"/")
+					if gotUID, found := workUIDs[workKey]; found && (gotUID == uid) == onDeletedCluster {
+						return fmt.Errorf("work %s replaced = %t (UID %s, before %s)", workKey, gotUID != uid, gotUID, uid)
+					} else if !found && !onDeletedCluster {
+						return fmt.Errorf("work %s is gone", workKey)
+					}
+				}
+				return nil
+			}, workloadEventuallyDuration, eventuallyInterval).Should(Succeed(), "Failed to replace the binding, its Works, and the ConfigMap of member cluster 2 only")
+
+			Eventually(placementPolicyStatusActual(policyKey, allSynchronizedPlacementPolicyStatus(int32(len(allMemberClusters)))), workloadEventuallyDuration, eventuallyInterval).
+				Should(Succeed(), "Failed to report the expected cluster placement policy status")
 		})
 	})
 })

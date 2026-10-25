@@ -134,7 +134,7 @@ Priorities: **P0** = core journeys needed for alpha confidence; **P1** = importa
 scopes across scenarios rather than doubling everything. Run both scopes only where code paths differ (staged
 runs, claims, cross-namespace selection).
 
-### S. Scheduling: `placement_policy_scheduling_test.go` (extends the existing file's coverage)
+### S. Scheduling: `placement_policy_scheduling_test.go` (S1–S5), plus `_selectors` (S6–S10) and `_cluster_changes` (S11–S13, all Serial)
 
 | # | Pri | Scope | Scenario | Key assertions |
 | --- | --- | --- | --- | --- |
@@ -143,18 +143,18 @@ runs, claims, cross-namespace selection).
 | S3 | P0 (implemented, passed on Kind) | PP | Overlapping selectors: A=`alias=cluster-1,count 1`, B=`env=prod,count 2` | Exactly 2 bindings (1, 3). Binding 1's `spec.clusterSelectors` lists A's and B's terms; binding 3 lists B's. `desired=scheduled=3` (per-selector sums), while `synchronized=available=2` (counted per bound cluster) |
 | S4 | P0 (implemented, passed on Kind) | PP | Scale `region=east` count 1→2→1 | 2nd binding added; on scale-down the **newest** is trimmed and the originally picked cluster keeps its binding (same UID) and CM. The scale-up waits out the first binding's creation second (Q14) |
 | S5 | P0 (implemented, passed on Kind) | PP, Serial | Sticky: `env=canary,count 1` binds 2, then relabel cluster-2 `env=prod` | Binding and CM kept (Consistently), still counted. Then change the selector **terms** → re-evaluated → unbound, CM removed, claim added |
-| S6 | P1 | CPP | `region=east,count 3,minCount 2` | `scheduled=2`, `Scheduled=False/FailedToFindSomeRequiredClusters` (message shows floor met), claim added. **Pins the current behavior as intended (Q7):** reaching `minCount` but not `count` reports `Scheduled=False` |
-| S7 | P1 | PP | `whenUnfulfilled: KeepSearching` on an unfulfillable selector | No claim (Consistently), `activeClusterClaims=0`, `Scheduled=False` |
-| S8 | P1 | PP | `matchLabelExpressions` with In / NotIn / Exists / DoesNotExist, all with `count: All` (one Ordered context, swapping terms; each swap is a term change, so the set is re-evaluated) | Bound set follows each change. Without `count: All`, the default count of 1 would bind a single score-ranked cluster |
-| S9 | P1 | CPP | `matchClusterPropertyExpressions` `node-count Ge 3`, then `Eq 2`, both with `count: All` (gated on the property provider) | {2, 3}, then {1}. Node counts include the control plane; the legacy pick-all test expects the same {2, 3} for `Ge 3` |
-| S10 | P1 | PP | Runtime-invalid selector (`Gt` inside `matchLabelExpressions`) | `Scheduled=False/InvalidClusterSelectors`; existing bindings untouched; fixing the spec recovers |
-| S11 | P1 | PP, Serial | Taints: taint cluster-2 NoSchedule; `region=east,count All` | Only 1 bound; adding a toleration binds 2 |
-| S12 | P1 | PP, Serial | Taint after bind: `env=prod,count 1` binds X, then taint X | X keeps binding and CM, not counted; the other prod cluster Y is bound. Untaint → overpick trimmed: Y unbound, X kept |
-| S13 | P1 | CPP, Serial | An **existing** cluster starts matching: `region=south,count 1` → claim (never fulfilled); relabel cluster-3 `region=south` | Binding on 3, CM placed, claim withdrawn, `activeClusterClaims=0`, `Scheduled=True`. The new-cluster variant is L4 |
-| S14 | P2 | PP | Term change on an unfulfilled selector | Claim replaced under the **same name** (new UID) with the new terms |
-| S15 | P2 | CPP | Delete a binding out of band | The work generator deletes that binding's Works, so the member's resources are removed (default `CleanUpResources`). The policy then recreates the binding, and the resources come back as new objects (new UIDs). Pin this churn |
+| S6 | P1 (implemented, passed on Kind) | CPP | `region=east,count 3,minCount 2` | `scheduled=2`, `Scheduled=False/FailedToFindSomeRequiredClusters` (message shows floor met), claim added. **Pins the current behavior as intended (Q7):** reaching `minCount` but not `count` reports `Scheduled=False`. Status pinned in full: `desired=3`, `scheduled=synchronized=available=2`, `activeClusterClaims=1`; the message check looks for "have reached their minimum cluster counts" |
+| S7 | P1 (implemented, passed on Kind) | PP | `whenUnfulfilled: KeepSearching` on an unfulfillable selector | No claim and no binding (Consistently), `activeClusterClaims=0`, `Scheduled=False`. Switching the selector to `AddClusterClaim` then adds the claim (`activeClusterClaims=1`), as the contrast |
+| S8 | P1 (implemented, passed on Kind) | PP | `matchLabelExpressions` with In / NotIn / Exists / DoesNotExist, all with `count: All` (one Ordered context, swapping terms; each swap is a term change, so the set is re-evaluated) | Bound set follows each change: `env In [canary]` → {2}; `env NotIn [canary]` → {1, 3}; `env Exists` AND `<never-set> DoesNotExist` → all; `env DoesNotExist` OR `<never-set> Exists` → none (all unbound, CM removed, claim added). Every member cluster carries the same label keys, so Exists/DoesNotExist are each checked against a present and an absent key rather than a labeled subset (which would need a Serial relabel). Without `count: All`, the default count of 1 would bind a single score-ranked cluster |
+| S9 | P1 (implemented, passed on Kind) | CPP | `matchClusterPropertyExpressions` `node-count Ge 3`, then `Eq 2`, both with `count: All` (gated on the property provider) | {2, 3}, then {1}. Node counts include the control plane; the legacy pick-all test expects the same {2, 3} for `Ge 3`. Skipped unless `PROPERTY_PROVIDER=azure` (the `setup.sh` default), like the legacy property specs |
+| S10 | P1 (implemented, passed on Kind) | PP | Runtime-invalid selector (`Gt` inside `matchLabelExpressions`) | `Scheduled=False/InvalidClusterSelectors`; existing bindings untouched (same UIDs, old terms, CM kept; Consistently); fixing the spec recovers with the same bindings. Also pins the status while invalid: `desired`/`scheduled` are cleared, while `activeClusterClaims`, the resource revision, the synchronized/available counts, and their conditions stay as the last valid round reported them (`observedGeneration` included) |
+| S11 | P1 (implemented, passed on Kind) | PP, Serial | Taints: taint cluster-2 NoSchedule; `region=east,count All` | Only 1 bound (cluster-2 neither bound nor given the CM; Consistently); adding a toleration binds 2. The taint is added just before the policy is created, as in the legacy taint specs |
+| S12 | P1 (implemented, passed on Kind) | PP, Serial | Taint after bind: `env=prod,count 1` binds X, then taint X | X keeps binding (same UID) and CM, not counted; the other prod cluster Y is bound. While tainted, `desired=scheduled=1` but `synchronized=available=2`: X is still a target of the resource status. Untaint → overpick trimmed: Y unbound, X kept. The taint waits out X's binding creation second (Q14) |
+| S13 | P1 (implemented, passed on Kind) | CPP, Serial | An **existing** cluster starts matching: `region=south,count 1` → claim (never fulfilled); relabel cluster-3 `region=south` | Binding on 3, CM placed, claim withdrawn, `activeClusterClaims=0`, `Scheduled=True`. The new-cluster variant is L4 |
+| S14 | P2 (implemented, passed on Kind) | PP | Term change on an unfulfilled selector | Claim replaced under the **same name** (new UID) with the new terms |
+| S15 | P2 (implemented, passed on Kind) | CPP | Delete a binding out of band | The work generator deletes that binding's Works, so the member's resources are removed (default `CleanUpResources`). The policy then recreates the binding, and the resources come back as new objects (new UIDs). Pin this churn |
 
-### R. Resource selection and snapshots: `placement_policy_resources_test.go`
+### R. Resource selection and snapshots: `placement_policy_resources_test.go` (R1–R4), plus `_resources_eligibility` (R5) and `_resources_snapshots` (R6, R7)
 
 | # | Pri | Scope | Scenario | Key assertions |
 | --- | --- | --- | --- | --- |
@@ -162,12 +162,12 @@ runs, claims, cross-namespace selection).
 | R2 | P0 (implemented, passed on Kind) | PP | Pending change + scale up (count 1→2) | The new cluster gets the **latest existing** (old) snapshot's content, not the hub's current content |
 | R3 | P0 (implemented, passed on Kind) | CPP | Select a `Namespace` and a `ClusterRole` by name; then delete the CPP and **re-create** it with a CM selector (with `namespace`) added | Only the namespace (owned by an AppliedWork) and the ClusterRole are placed, not the namespace's CMs (Consistently). Deleting the CPP removes both from the members. After waiting for the old bindings and snapshots to be garbage-collected, the re-created CPP places all three. Adding the selector to the live CPP instead would only report `ResourcesChangedPendingRollout` (a selector change is a resource change), hence the re-create (decision 13) |
 | R4 | P0 (implemented, passed on Kind) | PP | Selection errors: `namespace` ≠ the PP's; a named CM that is missing (two contexts) | `ResourceCollected=False/FailedToCollectSomeResources`, `Synchronized=False/FailedToSynchronizeSomeClusters`, `Available=False`, no latest revision, no bindings (Consistently). Fixing the namespace (to the PP's own) or creating the CM → `True` and placed. Once the separate VAPs land, the namespace-mismatch case may be rejected at admission instead; adjust it then |
-| R5 | P1 | PP/CPP | Hub eligibility: a PP in `default`; a CPP naming `kube-root-ca.crt`; a label selector that also matches an owned CM | Both by-name cases → `ResourceCollected=False`. The owned CM is silently skipped |
-| R6 | P1 | CPP | 60 CMs (> 50 per snapshot) | Primary + secondary snapshots (sub-index/count labels). Per cluster: primary + secondary Works (`linked-work-count`). All 60 on the members; binding `selectedResources=60` |
-| R7 | P1 | CPP | `resourceRevisionHistoryLimit: 1` + 3 staged update runs whose strategy leaves cluster-3 out (U9's setup) | Old snapshots GC'd, **except** the one cluster-3's binding still references. Auto-rollout can't produce this state, since it moves every binding |
-| R8 | P2 | PP | Delete a label-selected CM on the hub, then roll out | Removed from the members (leftover-manifest cleanup) |
+| R5 | P1 (implemented, passed on Kind) | PP/CPP | Hub eligibility (decision 15), in four contexts: a PP in `kube-public` (a reserved namespace); a CPP naming `kube-root-ca.crt`, then the `default` Namespace; a PP in `default`; a label selector that also matches a controller-owned CM | The `kube-public` PP and both by-name cases → `ResourceCollected=False` with no binding (Consistently); since they share one status, each also checks the `ResourceCollected` message for its cause. The PP in `default` places its CM normally. The controller-owned CM (a `controller: true` owner reference) is silently skipped: binding `selectedResources=1`, and neither it nor its unlabeled owner reaches the members (Consistently) |
+| R6 | P1 (implemented, passed on Kind) | CPP | 60 CMs (> 50 per snapshot) | Primary + secondary snapshots (sub-index/count labels): 50 + 10 resources, both index 0, both controlled by the CPP. Per cluster: primary + secondary Works (`linked-work-count=2` on the primary, which controls the secondary): 50 + 10 manifests. All 60 on the members; binding `selectedResources=60` |
+| R7 | P1 (implemented, passed on Kind) | CPP | `resourceRevisionHistoryLimit: 1` + 3 staged update runs whose strategy leaves cluster-3 out (U9's setup) | Old snapshots GC'd, **except** the one cluster-3's binding still references: after each run, exactly {initial, latest} remain. Auto-rollout can't produce this state, since it moves every binding. A snapshot counts as in use while any binding's `spec.resourceSnapshotName` names it |
+| R8 | P2 (implemented, passed on Kind) | PP | Delete a label-selected CM on the hub, then roll out | Removed from the members (leftover-manifest cleanup). Rolled out by auto-rollout; the other CM keeps its UID (Consistently) |
 
-### A. Sync strategy, status, and availability: `placement_policy_sync_strategy_test.go`
+### A. Sync strategy, status, and availability: `placement_policy_sync_strategy_test.go` (A1–A4), plus `_sync_strategy_failures` (A5, A7) and `_sync_strategy_takeover` (A6, A8)
 
 The goal is real-member behavior plus the status contract (binding `failedResources`/counts → policy conditions).
 The [v1 work applier ITs](./2026-10-21-2045-workapplier-v1-integration-test-plan.md) already cover the full matrix,
@@ -179,19 +179,19 @@ so this section picks a representative subset.
 | A2 | P0 (implemented, passed on Kind) | `whenDrifted: ReportError`; edit the CM on the member | `FoundDrifts` with `diffDetails` on the binding. Revert → recovers. Contrast with the default `ApplyAnyway` (drift overwritten). Detection waits for the applier's periodic requeue, which the E2E cap keeps within ~5s (P-5) |
 | A3 | P0 (implemented, passed on Kind) | `whenPlacementDeleted: OrphanResources`, then delete the policy | Resources stay on the members with no KubeFleet owner refs; hub bindings, Works, and snapshots are gone |
 | A4 | P0 (implemented, passed on Kind) | Deployment placed (default availability) | Binding `Available=True/AllResourcesAvailable`, counts set; policy `resourcesAvailableClusters=N`, `Available=True` |
-| A5 | P1 | Deployment with an unpullable image | Binding `Available=False/SomeResourcesUnavailable`; policy `Available=False/ResourcesUnavailableOnSomeClusters` |
-| A6 | P1 | `TakeOverIfNoDiff` with a differing pre-existing CM, partial vs full comparison | `FailedToTakeOver` + `diffDetails`; a field present only on the member matters only under full comparison |
-| A7 | P1 | `whenNamespaceDoesNotExist: ReportError`; select only a CM whose namespace is not on the member | First wait until the member namespace from earlier specs is fully gone: per-process namespace names are reused, and cleanup is async. Then: failed apply reported; creating the ns on the member → applied (ns unmanaged). D1 pins the default `CreateNamespace` leftover |
-| A8 | P1 | `whenOwnedByOthers` with a member CM owned by another object (+ AlwaysTakeOver) | `ReportError` → takeover fails; `ShareOwnership` → co-owned |
-| A9 | P2 | `ServerSideApply` (+ `forceConflicts`) on a field owned by another manager | Applied with forced ownership; without force → apply failure |
+| A5 | P1 (implemented as cluster-1 alone, passed on Kind) | Deployment with an unpullable image | Binding `Synchronized=True`, `Available=False/SomeResourcesUnavailable`; 2 selected, 2 synchronized, 1 available; `failedResources` has the Deployment with `Available=False/Unavailable` (observed generation = the member Deployment's). Policy `Synchronized=True`, `Available=False/ResourcesUnavailableOnSomeClusters`, `resourcesAvailableClusters=0` |
+| A6 | P1 (implemented as cluster-1 alone, passed on Kind) | `TakeOverIfNoDiff` with a differing pre-existing CM, partial vs full comparison | `FailedToTakeOver` + `diffDetails`; a field present only on the member matters only under full comparison. The member CM differs in `data.data` and has a `member-only` key: full comparison reports both diffs, partial only `/data/data`. Once the member's `data.data` matches the hub, partial comparison takes it over, and the `member-only` key is kept |
+| A7 | P1 (implemented as cluster-1 alone, passed on Kind) | `whenNamespaceDoesNotExist: ReportError`; select only a CM whose namespace is not on the member | First wait until the member namespace from earlier specs is fully gone: per-process namespace names are reused, and cleanup is async. Then: failed apply reported (`FailedToApply`; neither the namespace nor the CM is created, Consistently); creating the ns on the member → applied (ns unmanaged). D1 pins the default `CreateNamespace` leftover |
+| A8 | P1 (implemented as cluster-1 alone, passed on Kind) | `whenOwnedByOthers` with a member CM owned by another object (+ AlwaysTakeOver) | `ReportError` → takeover fails (`FailedToTakeOver`, no diff details; CM untouched, Consistently); `ShareOwnership` → co-owned (both owner references, hub data). Also pins that deleting the policy leaves the CM in place, owned by the other object alone: the GC drops the deleted AppliedWork's reference rather than deleting an object that still has an owner |
+| A9 | P2 (implemented as PP on cluster-1 alone, passed on Kind) | `ServerSideApply` (+ `forceConflicts`) on a field owned by another manager | Applied with forced ownership; without force → apply failure (`FailedToApply`). The member CM is created with another field manager; the managed fields show who owns `data.data` before and after |
 
 ### X. Interop and conflicts: `placement_policy_interop_test.go`
 
 | # | Pri | Scenario | Key assertions |
 | --- | --- | --- | --- |
-| X1 | P1 | A CRP (PickFixed cluster-1) places the app namespace; a PP selects the same CM to cluster-1, even with `AlwaysTakeOver` + `ShareOwnership` | PP binding reports `OwnedByOtherKubeFleetAPIObjects`; the CRP stays healthy and unchanged |
+| X1 | P1 (implemented, passed on Kind) | A CRP (PickFixed cluster-1) places the app namespace; a PP selects the same CM to cluster-1, even with `AlwaysTakeOver` + `ShareOwnership` | PP binding reports `OwnedByOtherKubeFleetAPIObjects`; the CRP stays healthy and unchanged. The CM stays owned by the CRP's v1beta1 AppliedWork alone, and also after the PP is deleted (Consistently) |
 | X2 | Deferred | Reverse: the PP places first, then the CRP selects the same namespace (default, then `allowCoOwnership: true`) | **Expected (Q3): blocked in both cases.** Today the legacy applier only treats v1beta1 AppliedWork owners as KubeFleet duplicates ([apply.go](../../../pkg/controllers/workapplier/apply.go)), so `allowCoOwnership` may still permit dual management. The fix comes in a separate PR; add X2 there, not in this E2E work |
-| X3 | P1 | Two PPs (same ns) select the same CM to the same cluster; create the second only after the first is synchronized | With the default `ReportError`, the second binding reports `NotTakenOver`; with `AlwaysTakeOver`, it reports `FailedToTakeOver` (another v1 AppliedWork owns the CM). The first stays synchronized. Deleting the first removes the CM, then the second creates it |
+| X3 | P1 (implemented, passed on Kind) | Two PPs (same ns) select the same CM to the same cluster; create the second only after the first is synchronized | The second PP is created with `AlwaysTakeOver` + `ShareOwnership` and reports `FailedToTakeOver` (another v1 AppliedWork owns the CM); switched to the default `ReportError`, it reports `NotTakenOver`. The first stays synchronized, the CM owned by its AppliedWork alone (Consistently). Deleting the first removes the CM, then the second creates it (new UID). The second is back on `ReportError` before the deletion on purpose: with a takeover option, it could take the CM over before the garbage collector removes it |
 
 ### U. Staged update runs: `placement_policy_staged_update_run_test.go` (U1–U3), plus `_stages` (U4, U5, U9), `_interruptions` (U6, U8), and `_failures` (U7, U10)
 
@@ -211,10 +211,10 @@ CPP + the `Cluster*` variants). Common strategy: stage `canary` (`env=canary`, a
 | U8 | P1 (implemented, passed on Kind) | PP | Run deleted mid-way (waiting on approval) | Approval requests GC'd; role released; partial state kept. A new run completes the rollout |
 | U9 | P1 (implemented, passed on Kind) | CPP | Strategy whose stages miss cluster-3 | Run `Succeeded`; cluster-3 stays on the old revision; policy `SomeClustersOnOlderResourceRevision`. Ties to R7 (referenced snapshot not GC'd) |
 | U10 | P1 (implemented, passed on Kind) | PP | Init failures: missing strategy; missing policy; `resourceSnapshotName` from another policy; missing `sortingLabelKey` label | `Initialized=False/Failed` (terminal); nothing rolled out |
-| U11 | P2 | CPP | `maxConcurrency` `3` and `70%` on a 3-cluster stage | Resolved `status.stages[].maxConcurrency` (3 and 2); all clusters end updated |
-| U12 | P2 | PP | Hand-made approval request with the run's deterministic name, created before the run reaches the stage (name computed with the format in [uniquename.go](../../../pkg/v1/controllers/stagedupdaterun/uniquename.go)) | `ApprovalRequestCreated=False/RequestOwnershipMismatch`. Deleting it → the run creates its own request, which then needs approval as usual |
-| U13 | P2 | PP | Rolling out an annotation-generated policy (name found via provenance labels) | Shows annotation placement and runs work together |
-| U14 | P2 | CPP | `binding.spec.suspended=true` set by hand mid-run (see section B) | That cluster counts as succeeded; its resources are removed (work generator) |
+| U11 | P2 (implemented, passed on Kind) | CPP | `maxConcurrency` `3` and `70%` on a 3-cluster stage | Resolved `status.stages[].maxConcurrency` (3 and 2); all clusters end updated |
+| U12 | P2 (implemented, passed on Kind) | PP | Hand-made approval request with the run's deterministic name, created before the run reaches the stage (name computed with the format in [uniquename.go](../../../pkg/v1/controllers/stagedupdaterun/uniquename.go)) | `ApprovalRequestCreated=False/RequestOwnershipMismatch`. Deleting it → the run creates its own request, which then needs approval as usual. The hand-made request is also approved beforehand: an approval on a request the run does not own does not let it through |
+| U13 | P2 (implemented, passed on Kind) | PP | Rolling out an annotation-generated policy (name found via provenance labels) | Shows annotation placement and runs work together. Annotation `env=canary;env=prod,count=All`; the bindings keep the generated selectors |
+| U14 | P2 (implemented, passed on Kind) | CPP | `binding.spec.suspended=true` set by hand mid-run (see section B) | That cluster counts as succeeded (the Completed message says the binding is suspended); its resources are removed (work generator). The run still moves the suspended binding to the new snapshot, so resuming it places the new version |
 
 ### AR. Auto-rollout: `placement_policy_auto_rollout_test.go`
 
@@ -222,10 +222,10 @@ CPP + the `Cluster*` variants). Common strategy: stage `canary` (`env=canary`, a
 | --- | --- | --- | --- |
 | AR1 | P0 (implemented as PP, passed on Kind) | `auto-rollout-enabled: "true"`, min wait `1m`; edit the selected CM | All bound clusters get v1 with no run; the `last-rollout-attempt-timestamp` annotation is written; `Synchronized=True`; `bindingManager` nil |
 | AR2 | P0 (implemented, passed on Kind) | Annotation absent, then `"false"` | Pending rollout persists (Consistently ≥30s) |
-| AR3 | P1 (implemented, passed on Kind) | Second edit right after AR1 | Not rolled out before timestamp + 1m; rolled out after (~1m cost) |
-| AR4 | P1 (implemented, passed on Kind) | Coexistence, in this order: auto-rollout policy synchronized → create a staged run (it claims the role and waits on the canary approval) → edit the CM | While the run holds the role, auto-rollout does not act: prod keeps the old content (Consistently ~15s; keep this window short so the claim backoff stays small). Approve → the run completes and releases the role → auto-rollout rolls out the edit it was blocked on. Auto-rollout does not react to the role release; it retries on its claim backoff (5s doubling, up to 180s), so allow up to ~3 min |
+| AR3 | P1 (implemented, passed on Kind) | Second edit right after AR1 | Not rolled out before timestamp + 2m; rolled out after (~2m cost). The specs' minimum wait period is 2m, not the 1m floor, because the period starts with AR1's attempt, before AR1's checks settle; the spec fails with a clear message if less than 15s of the hold is left to observe |
+| AR4 | P1 (implemented, passed on Kind) | Coexistence, in this order: auto-rollout policy synchronized → create a staged run (it claims the role and waits on the canary approval) → edit the CM | While the run holds the role, auto-rollout does not act: prod keeps the old content (Consistently ~15s; keep this window short so the claim backoff stays small). Approve → the run completes and releases the role → auto-rollout rolls out the edit it was blocked on. Auto-rollout does not react to the role release; it retries on its claim backoff (5s doubling, up to 180s). The retry comes at most one backoff interval after the release, and the earlier steps cap how long the run holds the role (about 160s at most), so the interval never exceeds 160s; allow up to 4 min |
 | AR5 | P1 (implemented, passed on Kind) | Annotation-generated policy: the user sets up rollout separately by adding the auto-rollout annotation to it (the annotation controller leaves extra annotations alone) | Edits to the annotated resource roll out. Do **not** pin what a generated policy does without the annotation; that default is undecided (Q4) |
-| AR6 | P2 | Invalid / out-of-range `minimum-wait-period` | Pin clamping and defaulting only if cheap. Otherwise leave to the ITs |
+| AR6 | P2 (implemented, passed on Kind) | Invalid / out-of-range `minimum-wait-period` | Pin clamping and defaulting only if cheap. Otherwise leave to the ITs. Made cheap by backdating the last-attempt annotation, as the ITs do: `5h` rolls out at once (clamped to 1h), `1s` waits until the 1m mark, `soon` until the 3m mark (about 2 minutes in all) |
 
 ### L. Member cluster lifecycle: `placement_policy_join_leave_test.go` (`placementpolicy` lane)
 
@@ -237,9 +237,9 @@ lane's parallel specs finish. Each one rejoins every cluster it removed and rest
 | --- | --- | --- | --- |
 | L1 | **Skipped (Q10)** | `env=prod,count All` CPP; cluster-3 leaves | **Expected:** the binding stays while cluster-3 is leaving and is deleted only after it has left. Then Works are gone, counts drop, there is no claim, and the resources are **kept** on cluster-3 (orphaned, no owner refs). Today the binding is deleted as soon as cluster-3 starts leaving, a known bug to be fixed separately. Add L1 with the fix |
 | L2 | **Skipped (Q10)** | Rejoin cluster-3 (default `ReportError`), then take the resources over again with `TakeOverIfNoDiff` (unchanged resources) and `AlwaysTakeOver` | **Expected (Q2):** resources left behind by a cluster that left are unowned on rejoin and must be taken over again. Default → `NotTakenOver` on the binding's `failedResources`; policy `Synchronized=False`. Switching the policy's `whenAlreadyExists` (no rollout needed) → re-adopted, owner refs restored, `Synchronized=True`. Needs L1's leftover resources, so it lands with the fix. Until then, B2 covers the same re-takeover mechanics through suspension |
-| L3 | P2 | Member agent stopped on a bound cluster (heartbeat stale, ~3m) | Binding kept, not counted, gap filled. Agent back → overpick trimmed (newest goes). Expensive |
+| L3 | P2 (implemented as CPP, Serial, passed on Kind) | Member agent stopped on a bound cluster (heartbeat stale, ~3m) | Binding kept, not counted, gap filled. Agent back → overpick trimmed (newest goes). Expensive: the agent is scaled to 0, and the gap is filled once the 5m heartbeat timeout passes (about 5 minutes on Kind; up to 7.5 with the 150s requeue backstop), about 6 minutes of Serial time in all |
 | L4 | P0 (skipped for now, per the user) | A **new** cluster fulfills a waiting selector. With cluster-3 out of the fleet, create a CPP selecting `fleet-e2e/new-cluster=true,count 1` → claim created. Then rejoin cluster-3 via `createMemberCluster` with its usual labels plus `fleet-e2e/new-cluster=true` | **Precondition:** before cluster-3 leaves, assert that no (cluster) placement binding targets it, so the Q10 bug can't affect this test. Before the join: `Scheduled=False`, one claim carrying the selector terms, and the claim stays unfulfilled (Consistently: no `Completed`, no `provisionedClusterName`). After cluster-3 joins and is healthy: binding on 3, CM placed, claim withdrawn, `activeClusterClaims=0`, `Scheduled=True`. Remove the extra label in `DeferCleanup` |
-| L5 | P1 | A matching cluster that registers but never joins: L4's setup, but the new cluster is a `MemberCluster` with no agent (per-process name, matching label) | No binding; the claim stays active (Consistently), since withdrawal requires an eligible cluster. Follow the existing virtual-cluster pattern ([scheduler_watchers_test.go](../../../test/e2e/scheduler_watchers_test.go)): create with `createMemberCluster` and clean up with `ensureMemberClusterAndRelatedResourcesDeletion`, which strips finalizers, so there is no force-delete wait |
+| L5 | P1 (implemented as CPP, Serial, passed on Kind) | A matching cluster that registers but never joins: L4's setup, but the new cluster is a `MemberCluster` with no agent (per-process name, matching label) | No binding; the claim stays active (Consistently), since withdrawal requires an eligible cluster. Before the Consistently check, the claim's `lastObservedMostRecentClusterCreationTimestamp` reaches the new cluster's creation time, which shows that the policy reconciled with the cluster in place. Follow the existing virtual-cluster pattern ([scheduler_watchers_test.go](../../../test/e2e/scheduler_watchers_test.go)): create with `createMemberCluster` and clean up with `ensureMemberClusterAndRelatedResourcesDeletion`, which strips finalizers, so there is no force-delete wait |
 | L6 | **Deferred to the Q10 fix** | Hub-side timing of a leave, on a **virtual** cluster: create it, mark it healthy, let a `count: All` policy bind it, then delete its `MemberCluster` | With no agent to report the leave, the hub member-cluster controller keeps the `MemberCluster` in `Terminating` until force delete (`forceDeleteWaitTime` is 1m in the E2E hub). **Expected:** the binding is kept throughout that window (Consistently) and deleted once the cluster is gone. This fails today. It checks binding timing deterministically and needs no leave/rejoin of a real cluster. Only L1 can show that the resources are kept, since a virtual cluster has no member side |
 
 L4 stands alone in Phase 1, with its own leave and rejoin; its precondition keeps it clear of the Q10 bug. Once the
@@ -256,17 +256,17 @@ according to `whenPlacementDeleted`. The placement policy controller never touch
 
 | # | Pri | Scope | Scenario | Key assertions |
 | --- | --- | --- | --- | --- |
-| B1 | P1 | PP | Suspend one binding of a 3-cluster policy (no rollout in flight), then unsuspend it | Suspended: that cluster's Works are gone, its resources are removed, and `lastProcessedResourceSnapshotName` is cleared. The other clusters are untouched, and the binding stays suspended with no replacement binding created (Consistently). Pin the policy's counts and conditions as reported. Unsuspended: Works recreated, resources back, `Synchronized=True` |
-| B2 | P1 | CPP | B1 with `whenPlacementDeleted: OrphanResources` | Suspending leaves the resources on the member, orphaned with no KubeFleet owner refs. After unsuspending, the binding reports `NotTakenOver` until the policy switches `whenAlreadyExists` to a takeover option (cf. L2) |
-| B3 | P2 | PP | Suspended binding + a resource change rolled out (auto-rollout) | The suspended binding's `resourceSnapshotName` moves but nothing is applied to that cluster. On unsuspension it gets the latest content |
+| B1 | P1 (implemented, passed on Kind) | PP | Suspend one binding of a 3-cluster policy (no rollout in flight), then unsuspend it | Suspended: that cluster's Works are gone, its resources are removed, and `lastProcessedResourceSnapshotName` is cleared. The other clusters are untouched, and the binding stays suspended with no replacement binding created (Consistently). Policy status as reported: `desired=scheduled=3`, `synchronized=available=2`, `Synchronized=False/FailedToSynchronizeSomeClusters`, `Available=False` (the suspended binding counts as neither synchronized nor outdated). Unsuspended: Works recreated, resources back, `Synchronized=True`, same binding UIDs |
+| B2 | P1 (implemented, passed on Kind) | CPP | B1 with `whenPlacementDeleted: OrphanResources` | Suspending leaves the resources on the member, orphaned with no KubeFleet owner refs. After unsuspending, the binding reports `NotTakenOver` until the policy switches `whenAlreadyExists` to a takeover option (`TakeOverIfNoDiff`, as the CM is unchanged; cf. L2), which takes it over without a rollout |
+| B3 | P2 (implemented, passed on Kind) | PP | Suspended binding + a resource change rolled out (auto-rollout) | The suspended binding's `resourceSnapshotName` moves but nothing is applied to that cluster. On unsuspension it gets the latest content |
 
 ### D. Deletion and ownership: `placement_policy_lifecycle_test.go`
 
 | # | Pri | Scenario | Key assertions |
 | --- | --- | --- | --- |
 | D1 | P0 (implemented, passed on Kind) | Delete a policy (default `CleanUpResources`) | Explicitly: bindings, Works (`fleet-member-*` ns), and snapshots gone on the hub; AppliedWorks and resources gone on the members; auto-created member ns remains (pinned) |
-| D2 | P1 | Delete with `propagationPolicy: Orphan`, then recreate the same name | Orphaned bindings **adopted** (same UIDs, new controller ref); member CM not churned (resourceVersion unchanged). **Pending the Q11 fix:** the snapshots are orphaned too and are currently reused without an owner ref. Once the fix lands, assert snapshot ownership and what deleting the recreated policy cleans up. Until then, implement only the binding-adoption part |
-| D3 | P1 | Delete the PP's hub namespace | Policy, bindings, snapshots, Works, and member resources all cleaned up; no leaked claims |
+| D2 | P1 (binding adoption implemented, passed on Kind; snapshot part pending Q11) | Delete with `propagationPolicy: Orphan`, then recreate the same name | Orphaned bindings **adopted** (same UIDs, new controller ref); Works kept (same UIDs); member CM not churned (resourceVersion unchanged), both while orphaned and after adoption (Consistently). **Pending the Q11 fix:** the snapshots are orphaned too and are currently reused without an owner ref. Once the fix lands, assert snapshot ownership, the policy status, and what deleting the recreated policy cleans up. Until then, only the binding-adoption part is implemented |
+| D3 | P1 (implemented, passed on Kind) | Delete the PP's hub namespace | Policy, bindings, snapshots, Works, and member resources all cleaned up; no leaked claims. The PP also has an unfulfillable selector, so it has a claim to withdraw |
 | ~~D4~~ | Dropped | ~~CEL smoke~~ | The chart's CRDs are symlinks to `config/crd/bases`, so an E2E smoke would verify nothing an envtest API-validation IT doesn't. The CEL rules belong in that IT (none exists for `kubefleet.dev` today; see "Left to ITs/UTs") |
 
 ## Helpers
@@ -379,14 +379,23 @@ lane or keep the P2s out.
     delete and re-create the CPP with the selector added. Before re-creating, R3 waits for the deleted CPP's bindings
     and snapshots to be garbage-collected. Binding names are deterministic, and `retrieveLatestSnapshot` doesn't check
     ownership (the Q11 root cause), so a quick re-create could pick up the old snapshot.
-14. **Scale-down tie-break (found on Kind, 01:50):** **Open, for the user to decide.** `chooseClusters` trims the
-    newest bindings by `creationTimestamp`, which has one-second resolution, and breaks ties by cluster name. Two
-    bindings created within the same second (seen on Kind: 14:40:00.53 and 14:40:00.90) tie, so a scale-down can
-    trim the earlier pick when its cluster name sorts later. The code comment ("oldest and name breaking ties")
-    documents the tie-break, but "a scale-down undoes the latest picks" holds only at one-second granularity. S4
-    works around it by scaling up only after the first binding's creation second has passed. Options: accept it as
-    a documented limitation, or record a finer bind time on the binding (e.g., an RFC3339Nano annotation) for the
-    ordering.
+14. ~~**Scale-down tie-break (found on Kind, 01:50):** `chooseClusters` trims the newest bindings by
+    `creationTimestamp`, which has one-second resolution, and breaks ties by cluster name; accept that, or record a
+    finer bind time?~~ **Resolved (2026-10-24): accepted as a limitation.** Two bindings created within the same
+    second (seen on Kind: 14:40:00.53 and 14:40:00.90) tie, so a trim can drop the earlier pick when its cluster name
+    sorts later. The code comment ("oldest and name breaking ties") documents the tie-break, but "a scale-down undoes
+    the latest picks" holds only at one-second granularity. This affects any trim that follows a quick replacement, not
+    just a scale-down: S12 hit it too, after a taint was lifted (bind, taint, and replacement all landed within one
+    second on Kind, so the replacement was kept and the original dropped). No finer bind time will be recorded. The
+    E2Es keep the workaround instead: any spec that relies on which of two bindings is newer calls the shared
+    `waitPastCreationSecond` helper before causing the second binding (S4 before scaling up, S12 before tainting).
+15. ~~**`default` namespace (raised while implementing R5, 2026-10-24):** the plan had a PP in `default` failing
+    with `ResourceCollected=False`, but the v1 eligibility checker denies only the `kube-` and `fleet-` prefixes, and
+    its comment (`resourceeligibility.Baseline`) says resources in `default` may be placed; only the `default`
+    Namespace object itself is refused. (The hub agent's `--skipped-propagating-namespaces` help text says `default`
+    is blocked, which describes the v0 path.) Intended, or a bug?~~ **Decided: intended.** R5 pins it: a PP in
+    `default` places its CM; naming the `default` Namespace fails; `kube-public` stands in for the reserved-namespace
+    case.
 
 ## Status
 
@@ -702,3 +711,215 @@ lane or keep the P2s out.
   - U10 alone then passed 7/7, and a second full run passed 230/230 (8m22s). `make lint` reports 0 issues.
   - Timing: U7's four runs took about 61s, 61s, 96s, and 142s (the last includes `AfterAll`), well within their 3m
     waits. AR3 and AR4 passed on both runs.
+- 2026-10-24 01:49 — Implemented the S-series P1s (S6–S13); not yet run on Kind. Expectations were checked against
+  the placement policy controller first (`scheduling.go`, `bindings.go`, `claims.go`, `status.go`, `watch.go`).
+  New files:
+  - [placement_policy_scheduling_selectors_test.go](../../../test/e2e/placement_policy_scheduling_selectors_test.go),
+    parallel:
+    - S6: the claim carries the east terms. The status is pinned in full, and the Scheduled message is checked for
+      the minimum count being reached, the only thing that tells it apart from an unmet floor.
+    - S7: no claim or binding (Consistently), then switching to `AddClusterClaim` adds the claim.
+    - S8: four term swaps (In, NotIn, presence terms every cluster satisfies, presence terms none satisfies). The
+      member clusters all carry the same label keys, so Exists/DoesNotExist pair a present key with one that no
+      cluster carries instead of relabeling a cluster (which would make the context Serial).
+    - S9: skipped unless the Azure property provider is on, like the legacy property specs.
+    - S10: while the selector is invalid, the controller returns before touching bindings or the resource status,
+      so the spec pins the cleared `desired`/`scheduled` and the resource conditions left at the last valid
+      generation. Reverting the terms recovers with the same binding UIDs.
+  - [placement_policy_scheduling_cluster_changes_test.go](../../../test/e2e/placement_policy_scheduling_cluster_changes_test.go),
+    all Serial; each context restores its taint or label in `AfterAll`:
+    - S11: the taint goes on cluster-2 just before the policy is created, as in the legacy taint specs. A hub agent
+      cache that has yet to see the taint would bind cluster-2 and keep it (sticky), which would show up as a
+      failure of the first spec.
+    - S12: also pins `desired=scheduled=1` with `synchronized=available=2` while the bound cluster is tainted.
+    - S13: the claim is withdrawn once the relabeled cluster is bound; the status reports no active claim.
+
+  Changes to existing files:
+  - Helpers: `clusterSelectorWithTerms`, `sameSelectorsForClusters`, `waitForPlacementPolicyPlacedOnlyOn`,
+    `placementPolicyBindingUIDsByCluster`, `placementPolicyTolerationsFor`, `unfulfilledPlacementPolicyStatus`
+    (S5's final status now uses it), and the spelled-out `InvalidClusterSelectors` reason. Actuals:
+    `noPlacementPolicyClaimsActual` and `placementPolicyBindingsKeptActual`.
+  - `placementPolicyStatusActual` now fills in the observed generation only for wanted conditions that name none,
+    so S10 can pin conditions at an older generation. No existing caller sets one.
+
+  Validation: gofmt, `go vet ./test/e2e/`, `make lint` (0 issues). The `placementpolicy` dry run selects 267 specs
+  (36 new; S11–S13 are marked Serial). Expected lane cost: the parallel contexts take about 1–2 minutes each, and
+  the three Serial contexts add about 2–3 minutes at the end of the lane.
+- 2026-10-24 03:21 — Ran S6–S13 on Kind (setup via `setup.sh 3` with a temporary `DOCKER_CONFIG`; teardown via
+  `stop.sh 3`). The focused run also covered S5, whose final status now uses the shared builder.
+  - Run 1: 39/40 passed. S9's 3 specs were skipped because ginkgo ran without `PROPERTY_PROVIDER=azure`. CI sets it
+    on the E2E step, so the lane runs S9 there; local runs must pass it to ginkgo too.
+  - The failure was S12's last step, from the Q14 tie: X (cluster-3) was bound and, after the taint, Y (cluster-1)
+    was bound within the same second. Once the taint was lifted, the name tie-break kept Y and dropped X.
+  - Fix: S12 now waits out X's binding creation second before tainting, through the new shared
+    `waitPastCreationSecond`. S4's inline wait moved to the same helper.
+  - Runs 2 and 3, with `PROPERTY_PROVIDER=azure` and S4 added to the focus: 48/48 passed each time (3m29s and
+    3m12s). `make lint` reports 0 issues.
+- 2026-10-24 03:53 — Q14 resolved: the one-second tie-break is accepted as a limitation. No product change; S4 and
+  S12 keep their `waitPastCreationSecond` workaround. Only Q11 (the user's fix in progress) remains open.
+- 2026-10-24 04:36 — Implemented the R- and A-series P1s (R5–R7, A5–A8); not yet run on Kind. Expectations were
+  checked against the snapshot manager (`resources.go`, `snapshots.go`, `gc.go`), the eligibility checker
+  (`resourceeligibility`), the work generator (`works.go`, `status.go`), and the v1 work applier (`process.go`,
+  `takeover_drift_detection.go`, `apply.go`, `cleanup.go`). Decision 15 (`default` is placeable) came from the user
+  while R5 was being written.
+
+  New files:
+  - [placement_policy_resources_eligibility_test.go](../../../test/e2e/placement_policy_resources_eligibility_test.go):
+    R5, in four contexts. The two `ResourceCollected=False` statuses are identical, so each case also checks the
+    condition message for its cause. The `kube-root-ca.crt` wait allows for Kubernetes publishing the ConfigMap
+    after the namespace is created.
+  - [placement_policy_resources_snapshots_test.go](../../../test/e2e/placement_policy_resources_snapshots_test.go):
+    - R6: snapshot and Work layouts are compared in one shot, keyed by sub-index and by cluster namespace.
+    - R7: three runs; after each, the primary snapshots are exactly {initial, latest}.
+  - [placement_policy_sync_strategy_failures_test.go](../../../test/e2e/placement_policy_sync_strategy_failures_test.go):
+    A5 (reuses U7's unpullable image) and A7.
+  - [placement_policy_sync_strategy_takeover_test.go](../../../test/e2e/placement_policy_sync_strategy_takeover_test.go):
+    - A6: full, then partial comparison, then the member edit that lets the takeover happen.
+    - A8: also pins the co-owned CM surviving policy deletion.
+
+  Changes to existing files:
+  - Helpers: `placementPolicySnapshots` (`placementPolicyLeftoversRemovedActual` now uses it), and the actuals
+    `placementPolicyPrimarySnapshotNamesActual`, `placementPolicyConditionMessageActual`, and
+    `configMapManagedOnClustersActual`.
+
+  Validation: gofmt, `go vet ./test/e2e/`, `make lint` (0 issues). The `placementpolicy` dry run selects 311 specs
+  (44 new, none Serial).
+- 2026-10-24 04:56 — Ran R5–R7 and A5–A8 on Kind (setup via `setup.sh 3` with a temporary `DOCKER_CONFIG`;
+  teardown via `stop.sh 3`; ginkgo with `PROPERTY_PROVIDER=azure`). The focus also covered D1, R3, and A3, which use
+  `placementPolicyLeftoversRemovedActual`, now built on the shared `placementPolicySnapshots` lister: 60 specs in all.
+  Run 1: 60/60 passed (2m07s). Run 2: 60/60 passed (1m23s). No changes were needed. R7's three runs took about 10s
+  each, and the garbage collection of the unused snapshots was observed within each spec's wait.
+- 2026-10-24 06:10 — The user asked for the remaining P1s: X1, X3, L5, B1, B2, D2, and D3. Plan, after checking the
+  expectations against the code (`workapplier/process.go` and `takeover_drift_detection.go`,
+  `workgenerator/controller.go` and `cleanup.go`, `placementpolicy/bindings.go`, `claims.go`, `status.go`, and
+  `watch.go`, and the snapshot manager's `ops.go`):
+  - X1 and X3 in a new `placement_policy_interop_test.go`:
+    - X1: the v1 applier refuses any object that a v1beta1 AppliedWork owns (`isOwnedByOlderKubeFleetAPIObjects`),
+      before looking at the sync strategy, so the binding reports `OwnedByOtherKubeFleetAPIObjects`.
+    - X3: the second policy is created with `AlwaysTakeOver` + `ShareOwnership` first (`FailedToTakeOver`, from the
+      duplicate-placement check), then switched to the default (`NotTakenOver`), and only then is the first policy
+      deleted. The order differs from the plan's on purpose: with a takeover option, the second policy's applier drops
+      owner references to AppliedWorks whose Work is gone (`removeLeftBehindAppliedWorkOwnerRefs`), so it could take
+      the ConfigMap over before the garbage collector removes it. Under `ReportError` it cannot, so the ConfigMap is
+      removed and then created anew (new UID).
+  - L5 in a new `placement_policy_join_leave_test.go`, `Serial`: a never-joined virtual cluster with the matching
+    label. Every policy reconciles on a member cluster create, and the claim's
+    `lastObservedMostRecentClusterCreationTimestamp` advances to the new cluster's creation time, which shows the
+    policy saw the cluster before the Consistently check that the claim (same UID) stays and nothing is bound.
+  - B1 and B2 in a new `placement_policy_binding_suspension_test.go`. While suspended, the binding's
+    `lastProcessedResourceSnapshotName` is cleared and its (stale) conditions are left alone, so the policy counts
+    it as neither synchronized nor outdated: `someClustersNotSynchronizedPlacementPolicyStatus(3, 2)`. B2 re-adopts
+    the orphaned ConfigMap with `TakeOverIfNoDiff` (it is unchanged).
+  - D2 and D3 in `placement_policy_lifecycle_test.go`:
+    - D2: Q11 is not fixed (`retrieveLatestSnapshot` still ignores ownership), so the re-created policy reuses the
+      orphaned snapshot. That doesn't block adoption (`adoptOrReportBindingOccupant` runs once creating the binding
+      hits `AlreadyExists`), but `latestPrimarySnapshotOfPlacementPolicy` requires a controlled snapshot, so D2 skips
+      the binding and policy status actuals. It checks binding ownership, Work UIDs, and member ConfigMap
+      resource versions only.
+    - D3: the policy also has an unfulfillable selector, so that "no leaked claims" checks a claim that existed.
+- 2026-10-24 06:55 — Implemented X1, X3, L5, B1, B2, D2 (binding adoption only, Q11), and D3, then ran them on Kind
+  (setup via `setup.sh 3` with a temporary `DOCKER_CONFIG`; teardown via `stop.sh 3`; ginkgo with
+  `PROPERTY_PROVIDER=azure`).
+
+  New files:
+  - [placement_policy_interop_test.go](../../../test/e2e/placement_policy_interop_test.go): X1 and X3.
+  - [placement_policy_binding_suspension_test.go](../../../test/e2e/placement_policy_binding_suspension_test.go):
+    B1 and B2.
+  - [placement_policy_join_leave_test.go](../../../test/e2e/placement_policy_join_leave_test.go): L5 (`Serial`).
+
+  Changes to existing files:
+  - [placement_policy_lifecycle_test.go](../../../test/e2e/placement_policy_lifecycle_test.go): D2 and D3. D1 now
+    uses the shared `placementPolicyWorkNamesByCluster`.
+  - Helpers: `deletePlacementPolicyAndWait` takes delete options; `placementPolicyWorkNamesByCluster`,
+    `setPlacementPolicyBindingSuspended`, `placementPolicyWorkUIDs`, and `configMapResourceVersionsByCluster`.
+  - Actuals: `placementPolicyWorkClustersActual`, `suspendedPlacementPolicyBindingActual`,
+    `placementPolicyBindingOwnershipActual`, `placementPolicyWorksKeptActual`, `configMapUnchangedOnClustersActual`,
+    `configMapPlacedByPlacementPolicyActual`, `placementPolicyClaimKeptActual`, and
+    `placementPolicyClaimObservedClusterCreationActual`.
+
+  Validation:
+  - gofmt, `go vet ./test/e2e/`, and `make lint` (0 issues). The `placementpolicy` dry run selects 353 specs (42
+    new; L5's 4 are Serial).
+  - Run 1, the new contexts plus D1: 38/40. B1 and B2 failed on a test bug: the cluster count was read while the spec
+    tree was built, before the suite set up the member cluster list, so it was 0. Every other field of the status
+    matched the plan (3 desired and scheduled, 2 synchronized and available). The count is now read inside the specs.
+  - B1 and B2 alone: 15/15 (1m23s). The full `placementpolicy` lane: 353/353 (11m29s). A flakiness rerun of the new
+    contexts plus D1: 47/47 (1m55s).
+  - Remaining from this plan: the P2s (S14, S15, R8, A9, U11–U14, AR6, L3, B3), L4 (skipped for now, per the
+    user), L1, L2, and L6 (Q10), X2 (separate PR), and D2's snapshot assertions (Q11).
+- 2026-10-24 07:05 — The user asked for the P2s: S14, S15, R8, A9, U11–U14, AR6, L3, and B3. Plan, after checking the
+  expectations against the code:
+  - S14 (`_selectors`): a claim's terms are compared on every round; a term change withdraws it (UID-pinned delete),
+    and the claim watch reissues it under the same deterministic name (`claimName` hashes the policy and selector
+    index).
+  - S15 (`placement_policy_scheduling_test.go`): the binding watch admits deletes (`GenerationChangedPredicate` passes
+    them), so the policy re-creates the binding once the old one is gone. The applier deletes the AppliedWork with
+    foreground propagation, so the old ConfigMap goes before the re-created binding's Work can apply: new UIDs for
+    the binding, the Works, and the ConfigMap.
+  - R8 (`placement_policy_resources_test.go`): rolled out by auto-rollout; the applier's leftover-manifest cleanup
+    (`findLeftOverManifests`) removes the deleted ConfigMap.
+  - A9 (`_sync_strategy_failures`): a member ConfigMap applied by another field manager. Without `forceConflicts`, the
+    server-side apply conflicts (`FailedToApply`); the applier forces on its own only when no foreign manager exists
+    (`shouldUseForcedServerSideApply`). With it, KubeFleet's manager takes the field over.
+  - U11 (`_stages`): `initialize.go` resolves the stage's `maxConcurrency` with
+    `GetScaledValueFromIntOrPercent(..., roundUp=false)`, so 70% of 3 is 2.
+  - U12 and U14 (`_interruptions`): a request that the run does not control yields
+    `ApprovalRequestCreated=False/RequestOwnershipMismatch`; deleting it enqueues the run through
+    `spec.stagedUpdateRunName`. U12 also pre-approves the hand-made request, to show that a request the run does not
+    own cannot unblock it. U14: the run still moves a suspended binding to the new snapshot, then marks the cluster
+    succeeded right away; only the message (`binding is suspended`) tells that path apart.
+  - U13 (`placement_policy_staged_update_run_test.go`): annotation `env=canary;env=prod,count=All`, rolled out by the
+    usual canary-then-prod strategy.
+  - AR6 (`placement_policy_auto_rollout_test.go`): cheap enough by backdating the last-rollout-attempt annotation, as
+    the auto-rollout ITs do: `5h` with the last attempt 61m ago rolls out at once (clamped down to 1h); `1s` with the
+    last attempt 30s ago waits until the 1m mark (clamped up); `soon` with the last attempt 2m30s ago waits until the
+    3m mark (default). The backdated timestamp goes in the same update as the wait period, since a change to the
+    timestamp alone does not enqueue the policy.
+  - L3 (`placement_policy_join_leave_test.go`, Serial): scale the bound cluster's `member-agent` Deployment to 0. The
+    policy controller's eligibility checker has a fixed 5m heartbeat timeout, with the 150s periodic requeue as the
+    backstop (resource-usage updates of the other clusters usually wake it sooner), so the gap is filled after about
+    5–7.5m. Restarting the agent flips the Healthy condition, an event the policy watches, so the overpick is
+    trimmed promptly. Expected cost: about 7–9 minutes of Serial time.
+  - B3 (`_binding_suspension`): auto-rollout refreshes every binding it controls, suspended or not.
+- 2026-10-24 07:55 — Implemented the P2s (S14, S15, R8, A9, U11–U14, AR6, L3, B3) and ran them on Kind (setup via
+  `setup.sh 3` with a temporary `DOCKER_CONFIG`; teardown via `stop.sh 3`; ginkgo with `PROPERTY_PROVIDER=azure`).
+
+  Where they live:
+  - S14 in `_scheduling_selectors`, S15 in `placement_policy_scheduling_test.go`, R8 in
+    `placement_policy_resources_test.go`, A9 in `_sync_strategy_failures`.
+  - U11 in `_staged_update_run_stages`, U12 and U14 in `_staged_update_run_interruptions`, U13 in
+    `placement_policy_staged_update_run_test.go`.
+  - AR6 in `placement_policy_auto_rollout_test.go`, L3 in `_join_leave` (Serial), B3 in `_binding_suspension`.
+
+  Helper changes:
+  - `createConfigMapOnMemberCluster` takes create options (A9 sets a field owner).
+  - R1's labeled ConfigMap builder and label selector moved to file level, now shared with R8.
+  - New actuals: `configMapUIDsByCluster`, `placementPolicyLatestSnapshotChangedActual`, and
+    `stagedUpdateRunApprovalTaskActual`.
+  - File-local helpers: A9's `configMapDataKeyOwnersActual` (reads the managed fields), and L3's
+    `stopMemberAgent`/`startMemberAgent` (scale the `member-agent` Deployment, then wait for no pods, or for a fresh
+    heartbeat and the joined check).
+
+  Validation:
+  - gofmt, `go vet ./test/e2e/`, `make lint` (0 issues). The `placementpolicy` dry run selects 415 specs (62 new).
+  - New contexts plus R1, whose helpers moved: 67/67 on the first run (8m32s). L3's wait for the replacement took
+    about 5 minutes (the heartbeat timeout), and L3 about 6 minutes in all; AR6 about 2 minutes.
+  - Full `placementpolicy` lane: 415/415 (17m52s, up from 11m29s, mostly L3's Serial time). That is well within the
+    70m timeout, so the timeout risk noted under Phasing does not apply.
+  - Remaining from this plan: L4 (skipped for now, per the user), L1, L2, and L6 (Q10), X2 (separate PR), and D2's
+    snapshot assertions (Q11).
+- 2026-10-24 08:05 — A review comment flagged two possible flakes in the auto-rollout specs. The changes:
+  - AR4's wait for the held-back rollout is 4m, up from 3m. The comment's premise was off: the retry comes at most
+    one backoff interval after the run lets go, not after the 180s cap, and the steps before it bound that interval
+    at 160s. That still left a thin margin in the worst case. The constant's comment now states the real bound.
+  - AR3: the specs' minimum wait period is 2m, up from 1m, because the period starts with AR1's attempt, before
+    AR1's checks settle. Only AR3 waits on it; AR4, AR5, R8, and B3 use the same annotations but only roll out once.
+    The hold is no longer silently skipped when the window is gone: the spec fails with a clear message if less than
+    15s of it is left once the change shows as pending.
+
+  Validation:
+  - gofmt, `go vet ./test/e2e/`, and `make lint` (0 issues).
+  - On Kind, only the five contexts that use the changed constants (AR1/AR3, AR4, AR5, R8, B3), with `--repeat=1`:
+    31/31 on both runs (3m27s and 2m52s).
+  - AR3's hold lasted about 114s of the 115s possible, so AR1's rollout settled within seconds. AR4's retry spec took
+    about 50s, well under the 4m bound. The AR1/AR3 context costs about 1 more minute.

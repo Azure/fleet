@@ -38,19 +38,29 @@ const (
 	placementPolicyAutoRolloutCoexistenceNameTemplate         = "pp-auto-rollout-coexist-%d"
 	placementPolicyAutoRolloutCoexistenceStrategyNameTemplate = "pp-auto-rollout-coexist-strategy-%d"
 	placementPolicyAutoRolloutCoexistenceRunNameTemplate      = "pp-auto-rollout-coexist-run-%d"
+	placementPolicyAutoRolloutWaitPeriodNameTemplate          = "pp-auto-rollout-wait-period-%d"
 
-	// placementPolicyAutoRolloutMinimumWaitPeriod is the minimum wait period that the specs set on their policies, the
-	// shortest one allowed.
-	placementPolicyAutoRolloutMinimumWaitPeriod = time.Minute
+	// placementPolicyAutoRolloutMinimumWaitPeriod is the minimum wait period that the specs set on their policies. Only
+	// a second auto-rollout waits on it, and the period starts with the first one, before the specs have checked that
+	// the first one settled; twice the shortest period allowed keeps enough of it left to observe the hold on a slow
+	// runner.
+	placementPolicyAutoRolloutMinimumWaitPeriod = 2 * time.Minute
+
+	// placementPolicyAutoRolloutMinimumHoldObserved is the least time that must be left of the minimum wait period once
+	// a second change shows as pending, for the specs to observe that auto-rollout holds it back.
+	placementPolicyAutoRolloutMinimumHoldObserved = 15 * time.Second
 
 	// placementPolicyAutoRolloutDisabledConsistentlyDuration is how long the specs watch a pending change that
 	// auto-rollout must leave alone.
 	placementPolicyAutoRolloutDisabledConsistentlyDuration = 30 * time.Second
 
 	// placementPolicyAutoRolloutRetryEventuallyDuration bounds the wait on an auto-rollout that a staged update run has
-	// held back: auto-rollout does not react to the run giving up the binding manager role, and retries its claim on a
-	// backoff that starts at 5s and doubles, up to 180s.
-	placementPolicyAutoRolloutRetryEventuallyDuration = 3 * time.Minute
+	// held back. Auto-rollout does not react to the run giving up the binding manager role; it retries its claim on a
+	// backoff that starts at 5s and doubles, up to 180s, so the retry comes at most one backoff interval after the run
+	// lets go. The steps before the wait bound how long the run holds the role (about 160s at most, with each of them
+	// running out its own timeout), so that interval never exceeds 160s; the bound leaves room for it, plus the rollout
+	// itself.
+	placementPolicyAutoRolloutRetryEventuallyDuration = 4 * time.Minute
 )
 
 // autoRolloutAnnotations returns the annotations that enable auto-rollout on a policy with the specs' minimum wait
@@ -207,11 +217,13 @@ var _ = Describe("placement policy auto-rollout", Label("placementpolicy"), func
 			}
 			Eventually(heldActual, workloadEventuallyDuration, eventuallyInterval).
 				Should(Succeed(), "Failed to report the second change as pending a rollout")
-			// Hold until shortly before the period ends, leaving a margin for the controller to act on time.
-			if holdFor := time.Until(lastAttemptAt.Add(placementPolicyAutoRolloutMinimumWaitPeriod - 5*time.Second)); holdFor > 0 {
-				Consistently(heldActual, holdFor, consistentlyInterval).
-					Should(Succeed(), "The second change was rolled out before the minimum wait period passed")
-			}
+			// Hold until shortly before the period ends, leaving a margin for the controller to act on time. Too little
+			// time left means that the first auto-rollout took too long to settle for the hold to be observed.
+			holdFor := time.Until(lastAttemptAt.Add(placementPolicyAutoRolloutMinimumWaitPeriod - 5*time.Second))
+			Expect(holdFor).To(BeNumerically(">=", placementPolicyAutoRolloutMinimumHoldObserved),
+				"Only %v of the minimum wait period is left to observe the hold; the first auto-rollout took too long to settle", holdFor)
+			Consistently(heldActual, holdFor, consistentlyInterval).
+				Should(Succeed(), "The second change was rolled out before the minimum wait period passed")
 		})
 
 		It("should roll the second change out once the minimum wait period has passed", func() {
@@ -529,6 +541,134 @@ var _ = Describe("placement policy auto-rollout", Label("placementpolicy"), func
 			Expect(policy.GetAnnotations()).To(HaveKeyWithValue(kfrolloutv1alpha1.AutoRolloutEnabledAnnotationKey, kfrolloutv1alpha1.AutoRolloutEnabledAnnotationValue),
 				"The auto-rollout annotation is gone from the generated policy")
 			Expect(lastAutoRolloutAttemptOf(policyKey)).NotTo(BeZero(), "Placement policy %s records no auto-rollout attempt", policyKey)
+		})
+	})
+
+	// The auto-rollout ITs cover the bounds and the default of the minimum wait period in full; these specs check them
+	// on the hub agent the cheap way, as the ITs do: by backdating the last rollout attempt, so that each case costs
+	// seconds of waiting rather than minutes.
+	Context("placement policy with a minimum wait period out of the allowed range, or malformed", Ordered, func() {
+		policyKey := types.NamespacedName{
+			Namespace: appNamespace().Name,
+			Name:      fmt.Sprintf(placementPolicyAutoRolloutWaitPeriodNameTemplate, GinkgoParallelProcess()),
+		}
+		cmKey := types.NamespacedName{Namespace: appNamespace().Name, Name: appConfigMap().Name}
+		v0Data := appConfigMap().Data
+		v1Data := map[string]string{"data": "test-v1"}
+		v2Data := map[string]string{"data": "test-v2"}
+		v3Data := map[string]string{"data": "test-v3"}
+
+		var changedAt, lastAttemptAt time.Time
+
+		// setWaitPeriodSinceAttempt sets the minimum wait period and backdates the last rollout attempt, in one update:
+		// a change to the timestamp alone does not wake auto-rollout up, while one to the wait period does.
+		setWaitPeriodSinceAttempt := func(period string, attemptAt time.Time) {
+			updatePlacementPolicy(policyKey, func(policy kfplacementv1alpha1.PlacementPolicyAccessor) {
+				annotations := policy.GetAnnotations()
+				if annotations == nil {
+					annotations = make(map[string]string)
+				}
+				annotations[kfrolloutv1alpha1.AutoRolloutMinimumWaitPeriodAnnotationKey] = period
+				annotations[kfrolloutv1alpha1.AutoRolloutLastRolloutAttemptTimestampAnnotationKey] = attemptAt.UTC().Format(time.RFC3339Nano)
+				policy.SetAnnotations(annotations)
+			})
+		}
+		// lastAttemptNoEarlierThanActual checks that auto-rollout has recorded a rollout attempt no earlier than the
+		// given time on the policy.
+		lastAttemptNoEarlierThanActual := func(t time.Time) func() error {
+			return func() error {
+				policy, err := retrievePlacementPolicy(policyKey)
+				if err != nil {
+					return err
+				}
+				val := policy.GetAnnotations()[kfrolloutv1alpha1.AutoRolloutLastRolloutAttemptTimestampAnnotationKey]
+				attemptAt, err := time.Parse(time.RFC3339Nano, val)
+				if err != nil {
+					return fmt.Errorf("placement policy %s records an invalid auto-rollout attempt timestamp %q: %w", policyKey, val, err)
+				}
+				if attemptAt.Before(t) {
+					return fmt.Errorf("placement policy %s last recorded an auto-rollout attempt at %v, want one no earlier than %v", policyKey, attemptAt, t)
+				}
+				return nil
+			}
+		}
+		// rolledOutOnlyAfter checks that the member clusters keep the old version until shortly before releaseAt, and
+		// get the new one after that.
+		rolledOutOnlyAfter := func(oldData, newData map[string]string, releaseAt time.Time) {
+			GinkgoHelper()
+
+			// The specs leave about 30s between the change and the release; a hold much shorter than that means that
+			// the spec ran too slowly to tell an early rollout apart.
+			hold := time.Until(releaseAt) - 5*time.Second
+			Expect(hold).To(BeNumerically(">", 10*time.Second), "Too little time is left before the release to check that the change is held back")
+			Consistently(configMapDataOnClustersActual(cmKey, oldData, allMemberClusters...), hold, consistentlyInterval).
+				Should(Succeed(), "The change was rolled out before %v", releaseAt)
+			Eventually(configMapDataOnClustersActual(cmKey, newData, allMemberClusters...), placementPolicyRolloutEventuallyDuration, eventuallyInterval).
+				Should(Succeed(), "Failed to roll the change out after %v", releaseAt)
+			// The attempt is recorded once the bindings are refreshed; wait for it, so that the next spec's backdated
+			// timestamp is not overwritten.
+			Eventually(lastAttemptNoEarlierThanActual(releaseAt), eventuallyDuration, eventuallyInterval).
+				Should(Succeed(), "Failed to record the auto-rollout attempt")
+		}
+
+		BeforeAll(func() {
+			By("creating the work resources")
+			createWorkResources()
+
+			By("creating a placement policy with auto-rollout enabled, a 5h minimum wait period, and the last rollout attempt 61m ago")
+			policy := newPlacementPolicyObject(policyKey, kfplacementv1alpha1.PlacementPolicySpec{
+				ResourceSelectors: placementPolicyResourceSelectors(),
+			})
+			policy.SetAnnotations(map[string]string{
+				kfrolloutv1alpha1.AutoRolloutEnabledAnnotationKey:                     kfrolloutv1alpha1.AutoRolloutEnabledAnnotationValue,
+				kfrolloutv1alpha1.AutoRolloutMinimumWaitPeriodAnnotationKey:           "5h",
+				kfrolloutv1alpha1.AutoRolloutLastRolloutAttemptTimestampAnnotationKey: time.Now().Add(-61 * time.Minute).UTC().Format(time.RFC3339Nano),
+			})
+			Expect(hubClient.Create(ctx, policy)).To(Succeed(), "Failed to create placement policy %s", policyKey)
+		})
+
+		AfterAll(func() {
+			// The work resources must go even if removing the policy fails; otherwise they leak into later specs.
+			defer cleanupWorkResourcesOnHubAndMembers()
+			ensurePlacementPolicyRemoved(policyKey)
+		})
+
+		It("should place the initial version on every member cluster", func() {
+			waitForPlacementPolicySynchronized(policyKey, noTermsSelectorsForAllMemberClusters(), 1)
+			Eventually(configMapDataOnClustersActual(cmKey, v0Data, allMemberClusters...), workloadEventuallyDuration, eventuallyInterval).
+				Should(Succeed(), "Failed to place the initial version on every member cluster")
+		})
+
+		It("can change the ConfigMap on the hub", func() {
+			changedAt = time.Now()
+			updateConfigMapDataOnHub(cmKey, v1Data)
+		})
+
+		It("should roll the change out at once, as a wait period above 1h is clamped down to 1h, which has passed", func() {
+			Eventually(configMapDataOnClustersActual(cmKey, v1Data, allMemberClusters...), placementPolicyRolloutEventuallyDuration, eventuallyInterval).
+				Should(Succeed(), "Failed to roll the change out")
+			Eventually(lastAttemptNoEarlierThanActual(changedAt), eventuallyDuration, eventuallyInterval).
+				Should(Succeed(), "Failed to record the auto-rollout attempt")
+		})
+
+		It("can set a wait period below 1m, with the last rollout attempt 30s ago, and change the ConfigMap", func() {
+			lastAttemptAt = time.Now().Add(-30 * time.Second)
+			setWaitPeriodSinceAttempt("1s", lastAttemptAt)
+			updateConfigMapDataOnHub(cmKey, v2Data)
+		})
+
+		It("should hold the change back until 1m after the last attempt, as a wait period below 1m is clamped up to 1m", func() {
+			rolledOutOnlyAfter(v1Data, v2Data, lastAttemptAt.Add(time.Minute))
+		})
+
+		It("can set a malformed wait period, with the last rollout attempt 2m30s ago, and change the ConfigMap", func() {
+			lastAttemptAt = time.Now().Add(-150 * time.Second)
+			setWaitPeriodSinceAttempt("soon", lastAttemptAt)
+			updateConfigMapDataOnHub(cmKey, v3Data)
+		})
+
+		It("should hold the change back until 3m after the last attempt, as a malformed wait period falls back to the 3m default", func() {
+			rolledOutOnlyAfter(v2Data, v3Data, lastAttemptAt.Add(3*time.Minute))
 		})
 	})
 })
