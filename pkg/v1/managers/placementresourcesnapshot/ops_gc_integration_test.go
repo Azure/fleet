@@ -38,6 +38,7 @@ import (
 	placementv1alpha1 "github.com/kubefleet-dev/kubefleet/apis/kubefleet.dev/placement/v1alpha1"
 	"github.com/kubefleet-dev/kubefleet/pkg/utils"
 	kferrors "github.com/kubefleet-dev/kubefleet/pkg/utils/errors"
+	"github.com/kubefleet-dev/kubefleet/pkg/v1/managers/placementresourcesnapshot/uniquename"
 	"github.com/kubefleet-dev/kubefleet/pkg/v1/utils/fieldindexers"
 )
 
@@ -53,13 +54,8 @@ const (
 	deploymentNameTemplate       = "deployment-%s"
 	placementBindingNameTemplate = "placement-binding-%s"
 
-	gcStaleOwnerInUseErrMsg             = "the placement binding and the primary placement resource snapshot are owned by different placement policies with the same name"
-	gcMissingOwnerInUseErrMsg           = "the placement binding is missing the owner reference to its placement policy"
 	latestSnapshotPendingDeletionErrMsg = "the latest primary placement resource snapshot is marked for deletion"
 	revisionHistoryLimitFieldPath       = "spec.resourceRevisionHistoryLimit"
-
-	// The UID of a placement policy that has been deleted and re-created with the same name.
-	staleOwnerUID types.UID = "stale-placement-policy-uid"
 )
 
 var _ = Describe("core ops (placement resource snapshots)", func() {
@@ -153,7 +149,7 @@ var _ = Describe("core ops (placement resource snapshots)", func() {
 		})
 
 		It("should persist the placement resource snapshot as expected", func() {
-			snapshotName := uniqueNameForPrimaryPlacementResourceSnapshot(placementPolicyName, 0)
+			snapshotName := uniquename.PrimaryPlacementResourceSnapshotName(placementPolicyName, placementPolicy.UID, 0)
 
 			// Read the snapshot using the cached client; the cache might take a moment to catch up.
 			gotSnapshot := &placementv1alpha1.PlacementResourceSnapshot{}
@@ -254,7 +250,7 @@ var _ = Describe("core ops (placement resource snapshots)", func() {
 		})
 
 		It("should return the existing snapshot when no snapshot is needed", func() {
-			snapshotName := uniqueNameForPrimaryPlacementResourceSnapshot(placementPolicyName, 0)
+			snapshotName := uniquename.PrimaryPlacementResourceSnapshotName(placementPolicyName, placementPolicy.UID, 0)
 			wantSnapshot := &placementv1alpha1.PlacementResourceSnapshot{}
 			// The previous spec has waited for the snapshot to appear in the cache.
 			Expect(hubClient.Get(ctx, types.NamespacedName{Namespace: appNamespaceName, Name: snapshotName}, wantSnapshot)).To(Succeed(),
@@ -272,13 +268,13 @@ var _ = Describe("core ops (placement resource snapshots)", func() {
 			}
 
 			// No new snapshot should have been created.
-			nextSnapshotName := uniqueNameForPrimaryPlacementResourceSnapshot(placementPolicyName, 1)
+			nextSnapshotName := uniquename.PrimaryPlacementResourceSnapshotName(placementPolicyName, placementPolicy.UID, 1)
 			err = hubUncachedReader.Get(ctx, types.NamespacedName{Namespace: appNamespaceName, Name: nextSnapshotName}, &placementv1alpha1.PlacementResourceSnapshot{})
 			Expect(errors.IsNotFound(err)).To(BeTrue(), "A new placement resource snapshot was created unexpectedly: %v", err)
 		})
 
 		It("should return the existing snapshot when it is not stale", func() {
-			snapshotName := uniqueNameForPrimaryPlacementResourceSnapshot(placementPolicyName, 0)
+			snapshotName := uniquename.PrimaryPlacementResourceSnapshotName(placementPolicyName, placementPolicy.UID, 0)
 			wantSnapshot := &placementv1alpha1.PlacementResourceSnapshot{}
 			Expect(hubClient.Get(ctx, types.NamespacedName{Namespace: appNamespaceName, Name: snapshotName}, wantSnapshot)).To(Succeed(),
 				"Failed to get the placement resource snapshot")
@@ -296,7 +292,7 @@ var _ = Describe("core ops (placement resource snapshots)", func() {
 			}
 
 			// No new snapshot should have been created.
-			nextSnapshotName := uniqueNameForPrimaryPlacementResourceSnapshot(placementPolicyName, 1)
+			nextSnapshotName := uniquename.PrimaryPlacementResourceSnapshotName(placementPolicyName, placementPolicy.UID, 1)
 			err = hubUncachedReader.Get(ctx, types.NamespacedName{Namespace: appNamespaceName, Name: nextSnapshotName}, &placementv1alpha1.PlacementResourceSnapshot{})
 			Expect(errors.IsNotFound(err)).To(BeTrue(), "A new placement resource snapshot was created unexpectedly: %v", err)
 		})
@@ -324,7 +320,7 @@ var _ = Describe("core ops (placement resource snapshots)", func() {
 			Expect(isUpToDate).To(BeTrue(), "The new placement resource snapshot is not up-to-date")
 			Expect(gotSnapshots).To(HaveLen(1), "Unexpected number of placement resource snapshots")
 
-			newSnapshotName := uniqueNameForPrimaryPlacementResourceSnapshot(placementPolicyName, 1)
+			newSnapshotName := uniquename.PrimaryPlacementResourceSnapshotName(placementPolicyName, placementPolicy.UID, 1)
 			Expect(gotSnapshots[0].GetName()).To(Equal(newSnapshotName), "Unexpected name of the new placement resource snapshot")
 		})
 
@@ -333,7 +329,7 @@ var _ = Describe("core ops (placement resource snapshots)", func() {
 			Expect(err).ToNot(HaveOccurred(), "Failed to retrieve and hash the selected resources")
 			Expect(newHash).ToNot(Equal(wantHash), "The hash of the selected resources has not changed after the updates")
 
-			newSnapshotName := uniqueNameForPrimaryPlacementResourceSnapshot(placementPolicyName, 1)
+			newSnapshotName := uniquename.PrimaryPlacementResourceSnapshotName(placementPolicyName, placementPolicy.UID, 1)
 			gotSnapshot := &placementv1alpha1.PlacementResourceSnapshot{}
 			Eventually(func() error {
 				return hubClient.Get(ctx, types.NamespacedName{Namespace: appNamespaceName, Name: newSnapshotName}, gotSnapshot)
@@ -373,7 +369,7 @@ var _ = Describe("core ops (placement resource snapshots)", func() {
 			oldSnapshot := &placementv1alpha1.PlacementResourceSnapshot{}
 			Expect(hubUncachedReader.Get(ctx, types.NamespacedName{
 				Namespace: appNamespaceName,
-				Name:      uniqueNameForPrimaryPlacementResourceSnapshot(placementPolicyName, 0),
+				Name:      uniquename.PrimaryPlacementResourceSnapshotName(placementPolicyName, placementPolicy.UID, 0),
 			}, oldSnapshot)).To(Succeed(), "Failed to get the previous placement resource snapshot")
 			Expect(oldSnapshot.Annotations[placementv1alpha1.PlacementResourceSnapshotContentsHashAnnotationKey]).To(Equal(wantHash),
 				"The previous placement resource snapshot has been modified")
@@ -383,11 +379,11 @@ var _ = Describe("core ops (placement resource snapshots)", func() {
 			// The envtest environment does not run the garbage collector; remove all the objects explicitly.
 			objs := []client.Object{
 				&placementv1alpha1.PlacementResourceSnapshot{ObjectMeta: metav1.ObjectMeta{
-					Name:      uniqueNameForPrimaryPlacementResourceSnapshot(placementPolicyName, 0),
+					Name:      uniquename.PrimaryPlacementResourceSnapshotName(placementPolicyName, placementPolicy.UID, 0),
 					Namespace: appNamespaceName,
 				}},
 				&placementv1alpha1.PlacementResourceSnapshot{ObjectMeta: metav1.ObjectMeta{
-					Name:      uniqueNameForPrimaryPlacementResourceSnapshot(placementPolicyName, 1),
+					Name:      uniquename.PrimaryPlacementResourceSnapshotName(placementPolicyName, placementPolicy.UID, 1),
 					Namespace: appNamespaceName,
 				}},
 				placementPolicy,
@@ -487,8 +483,8 @@ var _ = Describe("core ops (placement resource snapshots)", func() {
 
 			// The snapshots are ordered by their sub-indices.
 			wantNames := []string{
-				uniqueNameForPrimaryPlacementResourceSnapshot(placementPolicyName, 0),
-				uniqueNameForSecondaryPlacementResourceSnapshot(placementPolicyName, 0, 1),
+				uniquename.PrimaryPlacementResourceSnapshotName(placementPolicyName, placementPolicy.UID, 0),
+				uniquename.SecondaryPlacementResourceSnapshotName(placementPolicyName, placementPolicy.UID, 0, 1),
 			}
 			gotNames := []string{createdSnapshots[0].GetName(), createdSnapshots[1].GetName()}
 			if diff := cmp.Diff(gotNames, wantNames); diff != "" {
@@ -520,7 +516,7 @@ var _ = Describe("core ops (placement resource snapshots)", func() {
 				{
 					// Only the primary snapshot carries the count label.
 					name:         "primary",
-					snapshotName: uniqueNameForPrimaryPlacementResourceSnapshot(placementPolicyName, 0),
+					snapshotName: uniquename.PrimaryPlacementResourceSnapshotName(placementPolicyName, placementPolicy.UID, 0),
 					wantLabels: map[string]string{
 						placementv1alpha1.PlacementResourceSnapshotOwnedByLabelKey:         placementPolicyName,
 						placementv1alpha1.PlacementResourceSnapshotIndexLabelKey:           "0",
@@ -531,7 +527,7 @@ var _ = Describe("core ops (placement resource snapshots)", func() {
 				},
 				{
 					name:         "secondary",
-					snapshotName: uniqueNameForSecondaryPlacementResourceSnapshot(placementPolicyName, 0, 1),
+					snapshotName: uniquename.SecondaryPlacementResourceSnapshotName(placementPolicyName, placementPolicy.UID, 0, 1),
 					wantLabels: map[string]string{
 						placementv1alpha1.PlacementResourceSnapshotOwnedByLabelKey:  placementPolicyName,
 						placementv1alpha1.PlacementResourceSnapshotIndexLabelKey:    "0",
@@ -586,8 +582,8 @@ var _ = Describe("core ops (placement resource snapshots)", func() {
 
 			// The existing snapshots (at index 0) are returned, ordered by their sub-indices.
 			wantNames := []string{
-				uniqueNameForPrimaryPlacementResourceSnapshot(placementPolicyName, 0),
-				uniqueNameForSecondaryPlacementResourceSnapshot(placementPolicyName, 0, 1),
+				uniquename.PrimaryPlacementResourceSnapshotName(placementPolicyName, placementPolicy.UID, 0),
+				uniquename.SecondaryPlacementResourceSnapshotName(placementPolicyName, placementPolicy.UID, 0, 1),
 			}
 			gotNames := make([]string, 0, len(gotSnapshots))
 			for _, snapshot := range gotSnapshots {
@@ -599,8 +595,8 @@ var _ = Describe("core ops (placement resource snapshots)", func() {
 
 			// No snapshots should have been created at the next index.
 			nextSnapshotNames := []string{
-				uniqueNameForPrimaryPlacementResourceSnapshot(placementPolicyName, 1),
-				uniqueNameForSecondaryPlacementResourceSnapshot(placementPolicyName, 1, 1),
+				uniquename.PrimaryPlacementResourceSnapshotName(placementPolicyName, placementPolicy.UID, 1),
+				uniquename.SecondaryPlacementResourceSnapshotName(placementPolicyName, placementPolicy.UID, 1, 1),
 			}
 			for _, name := range nextSnapshotNames {
 				err := hubUncachedReader.Get(ctx, types.NamespacedName{Namespace: appNamespaceName, Name: name}, &placementv1alpha1.PlacementResourceSnapshot{})
@@ -639,7 +635,7 @@ var _ = Describe("core ops (placement resource snapshots)", func() {
 
 			persistedSnapshots := make([]*placementv1alpha1.PlacementResourceSnapshot, len(gotSnapshots))
 			for subIdx := range gotSnapshots {
-				snapshotName := uniqueNameForPrimaryPlacementResourceSnapshot(placementPolicyName, snapshotIdx)
+				snapshotName := uniquename.PrimaryPlacementResourceSnapshotName(placementPolicyName, placementPolicy.UID, snapshotIdx)
 				wantLabels := map[string]string{
 					placementv1alpha1.PlacementResourceSnapshotOwnedByLabelKey:  placementPolicyName,
 					placementv1alpha1.PlacementResourceSnapshotIndexLabelKey:    fmt.Sprintf("%d", snapshotIdx),
@@ -649,7 +645,7 @@ var _ = Describe("core ops (placement resource snapshots)", func() {
 					// Only the primary snapshot carries the count label.
 					wantLabels[placementv1alpha1.SubIndexedPlacementResourceSnapshotCountLabelKey] = fmt.Sprintf("%d", wantSnapshotCnt)
 				} else {
-					snapshotName = uniqueNameForSecondaryPlacementResourceSnapshot(placementPolicyName, snapshotIdx, subIdx)
+					snapshotName = uniquename.SecondaryPlacementResourceSnapshotName(placementPolicyName, placementPolicy.UID, snapshotIdx, subIdx)
 				}
 				Expect(gotSnapshots[subIdx].GetName()).To(Equal(snapshotName), "Unexpected name of the placement resource snapshot at sub-index %d", subIdx)
 
@@ -762,20 +758,20 @@ var _ = Describe("core ops (placement resource snapshots)", func() {
 			// The envtest environment does not run the garbage collector; remove all the objects explicitly.
 			objs := []client.Object{
 				&placementv1alpha1.PlacementResourceSnapshot{ObjectMeta: metav1.ObjectMeta{
-					Name:      uniqueNameForPrimaryPlacementResourceSnapshot(placementPolicyName, 0),
+					Name:      uniquename.PrimaryPlacementResourceSnapshotName(placementPolicyName, placementPolicy.UID, 0),
 					Namespace: appNamespaceName,
 				}},
 				&placementv1alpha1.PlacementResourceSnapshot{ObjectMeta: metav1.ObjectMeta{
-					Name:      uniqueNameForSecondaryPlacementResourceSnapshot(placementPolicyName, 0, 1),
+					Name:      uniquename.SecondaryPlacementResourceSnapshotName(placementPolicyName, placementPolicy.UID, 0, 1),
 					Namespace: appNamespaceName,
 				}},
 				placementPolicy,
 			}
 			var snapshotNames []string
 			for snapshotIdx := 1; snapshotIdx <= 3; snapshotIdx++ {
-				snapshotNames = append(snapshotNames, uniqueNameForPrimaryPlacementResourceSnapshot(placementPolicyName, snapshotIdx))
+				snapshotNames = append(snapshotNames, uniquename.PrimaryPlacementResourceSnapshotName(placementPolicyName, placementPolicy.UID, snapshotIdx))
 				for subIdx := 1; subIdx <= 3; subIdx++ {
-					snapshotNames = append(snapshotNames, uniqueNameForSecondaryPlacementResourceSnapshot(placementPolicyName, snapshotIdx, subIdx))
+					snapshotNames = append(snapshotNames, uniquename.SecondaryPlacementResourceSnapshotName(placementPolicyName, placementPolicy.UID, snapshotIdx, subIdx))
 				}
 			}
 			for _, name := range snapshotNames {
@@ -893,8 +889,8 @@ var _ = Describe("core ops (placement resource snapshots)", func() {
 
 			// The snapshots are ordered by their sub-indices.
 			wantNames := []string{
-				uniqueNameForPrimaryPlacementResourceSnapshot(placementPolicyName, 0),
-				uniqueNameForSecondaryPlacementResourceSnapshot(placementPolicyName, 0, 1),
+				uniquename.PrimaryPlacementResourceSnapshotName(placementPolicyName, placementPolicy.UID, 0),
+				uniquename.SecondaryPlacementResourceSnapshotName(placementPolicyName, placementPolicy.UID, 0, 1),
 			}
 			gotNames := []string{createdSnapshots[0].GetName(), createdSnapshots[1].GetName()}
 			if diff := cmp.Diff(gotNames, wantNames); diff != "" {
@@ -928,7 +924,7 @@ var _ = Describe("core ops (placement resource snapshots)", func() {
 				{
 					// Only the primary snapshot carries the count label.
 					name:         "primary",
-					snapshotName: uniqueNameForPrimaryPlacementResourceSnapshot(placementPolicyName, 0),
+					snapshotName: uniquename.PrimaryPlacementResourceSnapshotName(placementPolicyName, placementPolicy.UID, 0),
 					wantLabels: map[string]string{
 						placementv1alpha1.PlacementResourceSnapshotOwnedByLabelKey:         placementPolicyName,
 						placementv1alpha1.PlacementResourceSnapshotIndexLabelKey:           "0",
@@ -940,7 +936,7 @@ var _ = Describe("core ops (placement resource snapshots)", func() {
 				},
 				{
 					name:         "secondary",
-					snapshotName: uniqueNameForSecondaryPlacementResourceSnapshot(placementPolicyName, 0, 1),
+					snapshotName: uniquename.SecondaryPlacementResourceSnapshotName(placementPolicyName, placementPolicy.UID, 0, 1),
 					wantLabels: map[string]string{
 						placementv1alpha1.PlacementResourceSnapshotOwnedByLabelKey:  placementPolicyName,
 						placementv1alpha1.PlacementResourceSnapshotIndexLabelKey:    "0",
@@ -1008,7 +1004,7 @@ var _ = Describe("core ops (placement resource snapshots)", func() {
 			Expect(err).ToNot(HaveOccurred(), "Failed to snapshot resources")
 			Expect(isUpToDate).To(BeTrue(), "The new placement resource snapshot is not up-to-date")
 			Expect(gotSnapshots).To(HaveLen(1), "Unexpected number of created placement resource snapshots")
-			wantName := uniqueNameForPrimaryPlacementResourceSnapshot(placementPolicyName, 1)
+			wantName := uniquename.PrimaryPlacementResourceSnapshotName(placementPolicyName, placementPolicy.UID, 1)
 			Expect(gotSnapshots[0].GetName()).To(Equal(wantName), "Unexpected name of the new placement resource snapshot")
 
 			// Read the snapshot using the cached client; the cache might take a moment to catch up.
@@ -1067,7 +1063,7 @@ var _ = Describe("core ops (placement resource snapshots)", func() {
 			}
 
 			// No secondary snapshot should have been created at the new index.
-			secondaryName := uniqueNameForSecondaryPlacementResourceSnapshot(placementPolicyName, 1, 1)
+			secondaryName := uniquename.SecondaryPlacementResourceSnapshotName(placementPolicyName, placementPolicy.UID, 1, 1)
 			err = hubUncachedReader.Get(ctx, types.NamespacedName{Namespace: appNamespaceName, Name: secondaryName}, &placementv1alpha1.PlacementResourceSnapshot{})
 			Expect(errors.IsNotFound(err)).To(BeTrue(), "A secondary placement resource snapshot was created unexpectedly: %v", err)
 		})
@@ -1075,15 +1071,15 @@ var _ = Describe("core ops (placement resource snapshots)", func() {
 		AfterAll(func() {
 			objs := []client.Object{
 				&placementv1alpha1.PlacementResourceSnapshot{ObjectMeta: metav1.ObjectMeta{
-					Name:      uniqueNameForPrimaryPlacementResourceSnapshot(placementPolicyName, 0),
+					Name:      uniquename.PrimaryPlacementResourceSnapshotName(placementPolicyName, placementPolicy.UID, 0),
 					Namespace: appNamespaceName,
 				}},
 				&placementv1alpha1.PlacementResourceSnapshot{ObjectMeta: metav1.ObjectMeta{
-					Name:      uniqueNameForSecondaryPlacementResourceSnapshot(placementPolicyName, 0, 1),
+					Name:      uniquename.SecondaryPlacementResourceSnapshotName(placementPolicyName, placementPolicy.UID, 0, 1),
 					Namespace: appNamespaceName,
 				}},
 				&placementv1alpha1.PlacementResourceSnapshot{ObjectMeta: metav1.ObjectMeta{
-					Name:      uniqueNameForPrimaryPlacementResourceSnapshot(placementPolicyName, 1),
+					Name:      uniquename.PrimaryPlacementResourceSnapshotName(placementPolicyName, placementPolicy.UID, 1),
 					Namespace: appNamespaceName,
 				}},
 				placementPolicy,
@@ -1150,7 +1146,7 @@ var _ = Describe("core ops (placement resource snapshots)", func() {
 
 			// The orphaned secondary snapshots should have been deleted.
 			for subIdx := 1; subIdx <= 3; subIdx++ {
-				secondarySnapshotName := uniqueNameForSecondaryPlacementResourceSnapshot(placementPolicyName, 0, subIdx)
+				secondarySnapshotName := uniquename.SecondaryPlacementResourceSnapshotName(placementPolicyName, placementPolicy.UID, 0, subIdx)
 				Eventually(func() bool {
 					err := hubUncachedReader.Get(ctx, types.NamespacedName{Namespace: appNamespaceName, Name: secondarySnapshotName}, &placementv1alpha1.PlacementResourceSnapshot{})
 					return errors.IsNotFound(err)
@@ -1209,10 +1205,10 @@ var _ = Describe("core ops (placement resource snapshots)", func() {
 
 			// The snapshots are ordered by their sub-indices.
 			wantNames := []string{
-				uniqueNameForPrimaryPlacementResourceSnapshot(placementPolicyName, 0),
-				uniqueNameForSecondaryPlacementResourceSnapshot(placementPolicyName, 0, 1),
-				uniqueNameForSecondaryPlacementResourceSnapshot(placementPolicyName, 0, 2),
-				uniqueNameForSecondaryPlacementResourceSnapshot(placementPolicyName, 0, 3),
+				uniquename.PrimaryPlacementResourceSnapshotName(placementPolicyName, placementPolicy.UID, 0),
+				uniquename.SecondaryPlacementResourceSnapshotName(placementPolicyName, placementPolicy.UID, 0, 1),
+				uniquename.SecondaryPlacementResourceSnapshotName(placementPolicyName, placementPolicy.UID, 0, 2),
+				uniquename.SecondaryPlacementResourceSnapshotName(placementPolicyName, placementPolicy.UID, 0, 3),
 			}
 			gotNames := make([]string, 0, len(createdSnapshots))
 			for _, snapshot := range createdSnapshots {
@@ -1247,7 +1243,7 @@ var _ = Describe("core ops (placement resource snapshots)", func() {
 			}
 
 			for subIdx := 0; subIdx < 4; subIdx++ {
-				snapshotName := uniqueNameForPrimaryPlacementResourceSnapshot(placementPolicyName, 0)
+				snapshotName := uniquename.PrimaryPlacementResourceSnapshotName(placementPolicyName, placementPolicy.UID, 0)
 				wantLabels := map[string]string{
 					placementv1alpha1.PlacementResourceSnapshotOwnedByLabelKey:  placementPolicyName,
 					placementv1alpha1.PlacementResourceSnapshotIndexLabelKey:    "0",
@@ -1257,7 +1253,7 @@ var _ = Describe("core ops (placement resource snapshots)", func() {
 					// Only the primary snapshot carries the count label.
 					wantLabels[placementv1alpha1.SubIndexedPlacementResourceSnapshotCountLabelKey] = "4"
 				} else {
-					snapshotName = uniqueNameForSecondaryPlacementResourceSnapshot(placementPolicyName, 0, subIdx)
+					snapshotName = uniquename.SecondaryPlacementResourceSnapshotName(placementPolicyName, placementPolicy.UID, 0, subIdx)
 				}
 
 				// Read the snapshot using the cached client; the cache might take a moment to catch up.
@@ -1307,7 +1303,7 @@ var _ = Describe("core ops (placement resource snapshots)", func() {
 			// snapshot in normal operations, so this situation will not occur in practice.
 			primarySnapshot := &placementv1alpha1.PlacementResourceSnapshot{
 				ObjectMeta: metav1.ObjectMeta{
-					Name:      uniqueNameForPrimaryPlacementResourceSnapshot(placementPolicyName, 0),
+					Name:      uniquename.PrimaryPlacementResourceSnapshotName(placementPolicyName, placementPolicy.UID, 0),
 					Namespace: appNamespaceName,
 				},
 			}
@@ -1336,10 +1332,10 @@ var _ = Describe("core ops (placement resource snapshots)", func() {
 			Expect(isUpToDate).To(BeTrue(), "The re-created placement resource snapshots are not up-to-date")
 
 			wantNames := []string{
-				uniqueNameForPrimaryPlacementResourceSnapshot(placementPolicyName, 0),
-				uniqueNameForSecondaryPlacementResourceSnapshot(placementPolicyName, 0, 1),
-				uniqueNameForSecondaryPlacementResourceSnapshot(placementPolicyName, 0, 2),
-				uniqueNameForSecondaryPlacementResourceSnapshot(placementPolicyName, 0, 3),
+				uniquename.PrimaryPlacementResourceSnapshotName(placementPolicyName, placementPolicy.UID, 0),
+				uniquename.SecondaryPlacementResourceSnapshotName(placementPolicyName, placementPolicy.UID, 0, 1),
+				uniquename.SecondaryPlacementResourceSnapshotName(placementPolicyName, placementPolicy.UID, 0, 2),
+				uniquename.SecondaryPlacementResourceSnapshotName(placementPolicyName, placementPolicy.UID, 0, 3),
 			}
 			gotNames := make([]string, 0, len(recreatedSnapshots))
 			for _, snapshot := range recreatedSnapshots {
@@ -1353,7 +1349,7 @@ var _ = Describe("core ops (placement resource snapshots)", func() {
 		It("should have re-created the primary snapshot and the secondary snapshots with new UIDs", func() {
 			// The primary snapshot has been re-created (its UID is not checked).
 			primarySnapshot := &placementv1alpha1.PlacementResourceSnapshot{}
-			primarySnapshotName := uniqueNameForPrimaryPlacementResourceSnapshot(placementPolicyName, 0)
+			primarySnapshotName := uniquename.PrimaryPlacementResourceSnapshotName(placementPolicyName, placementPolicy.UID, 0)
 			Eventually(func() error {
 				return hubClient.Get(ctx, types.NamespacedName{Namespace: appNamespaceName, Name: primarySnapshotName}, primarySnapshot)
 			}, eventuallyDuration, eventuallyInterval).Should(Succeed(), "Failed to get the primary placement resource snapshot")
@@ -1365,7 +1361,7 @@ var _ = Describe("core ops (placement resource snapshots)", func() {
 			// All the secondary snapshots have been re-created with new UIDs.
 			for subIdx := 1; subIdx <= 3; subIdx++ {
 				secondarySnapshot := &placementv1alpha1.PlacementResourceSnapshot{}
-				secondarySnapshotName := uniqueNameForSecondaryPlacementResourceSnapshot(placementPolicyName, 0, subIdx)
+				secondarySnapshotName := uniquename.SecondaryPlacementResourceSnapshotName(placementPolicyName, placementPolicy.UID, 0, subIdx)
 				Eventually(func() error {
 					return hubClient.Get(ctx, types.NamespacedName{Namespace: appNamespaceName, Name: secondarySnapshotName}, secondarySnapshot)
 				}, eventuallyDuration, eventuallyInterval).Should(Succeed(), "Failed to get the secondary placement resource snapshot at sub-index %d", subIdx)
@@ -1383,7 +1379,7 @@ var _ = Describe("core ops (placement resource snapshots)", func() {
 				secondarySnapshot := &placementv1alpha1.PlacementResourceSnapshot{}
 				Expect(hubClient.Get(ctx, types.NamespacedName{
 					Namespace: appNamespaceName,
-					Name:      uniqueNameForSecondaryPlacementResourceSnapshot(placementPolicyName, 0, subIdx),
+					Name:      uniquename.SecondaryPlacementResourceSnapshotName(placementPolicyName, placementPolicy.UID, 0, subIdx),
 				}, secondarySnapshot)).To(Succeed(), "Failed to get the secondary placement resource snapshot at sub-index %d", subIdx)
 				secondarySnapshotUIDs = append(secondarySnapshotUIDs, secondarySnapshot.UID)
 			}
@@ -1393,7 +1389,7 @@ var _ = Describe("core ops (placement resource snapshots)", func() {
 			// snapshot in normal operations, so this situation will not occur in practice.
 			primarySnapshot := &placementv1alpha1.PlacementResourceSnapshot{
 				ObjectMeta: metav1.ObjectMeta{
-					Name:      uniqueNameForPrimaryPlacementResourceSnapshot(placementPolicyName, 0),
+					Name:      uniquename.PrimaryPlacementResourceSnapshotName(placementPolicyName, placementPolicy.UID, 0),
 					Namespace: appNamespaceName,
 				},
 			}
@@ -1454,7 +1450,7 @@ var _ = Describe("core ops (placement resource snapshots)", func() {
 			}
 
 			for subIdx := 0; subIdx < 4; subIdx++ {
-				snapshotName := uniqueNameForPrimaryPlacementResourceSnapshot(placementPolicyName, 0)
+				snapshotName := uniquename.PrimaryPlacementResourceSnapshotName(placementPolicyName, placementPolicy.UID, 0)
 				wantLabels := map[string]string{
 					placementv1alpha1.PlacementResourceSnapshotOwnedByLabelKey:  placementPolicyName,
 					placementv1alpha1.PlacementResourceSnapshotIndexLabelKey:    "0",
@@ -1464,7 +1460,7 @@ var _ = Describe("core ops (placement resource snapshots)", func() {
 					// Only the primary snapshot carries the count label.
 					wantLabels[placementv1alpha1.SubIndexedPlacementResourceSnapshotCountLabelKey] = "4"
 				} else {
-					snapshotName = uniqueNameForSecondaryPlacementResourceSnapshot(placementPolicyName, 0, subIdx)
+					snapshotName = uniquename.SecondaryPlacementResourceSnapshotName(placementPolicyName, placementPolicy.UID, 0, subIdx)
 				}
 
 				// Read the snapshot using the cached client; the cache might take a moment to catch up.
@@ -1527,14 +1523,14 @@ var _ = Describe("core ops (placement resource snapshots)", func() {
 			// The envtest environment does not run the garbage collector; remove all the objects explicitly.
 			objs := []client.Object{
 				&placementv1alpha1.PlacementResourceSnapshot{ObjectMeta: metav1.ObjectMeta{
-					Name:      uniqueNameForPrimaryPlacementResourceSnapshot(placementPolicyName, 0),
+					Name:      uniquename.PrimaryPlacementResourceSnapshotName(placementPolicyName, placementPolicy.UID, 0),
 					Namespace: appNamespaceName,
 				}},
 				placementPolicy,
 			}
 			for subIdx := 1; subIdx <= 3; subIdx++ {
 				objs = append(objs, &placementv1alpha1.PlacementResourceSnapshot{ObjectMeta: metav1.ObjectMeta{
-					Name:      uniqueNameForSecondaryPlacementResourceSnapshot(placementPolicyName, 0, subIdx),
+					Name:      uniquename.SecondaryPlacementResourceSnapshotName(placementPolicyName, placementPolicy.UID, 0, subIdx),
 					Namespace: appNamespaceName,
 				}})
 			}
@@ -1612,7 +1608,7 @@ var _ = Describe("core ops (placement resource snapshots)", func() {
 		It("can create four primary placement resource snapshots", func() {
 			for idx := 0; idx < 4; idx++ {
 				gotSnapshots := updateConfigMapAndSnapshot(fmt.Sprintf("value-%d", idx))
-				wantName := uniqueNameForPrimaryPlacementResourceSnapshot(placementPolicyName, idx)
+				wantName := uniquename.PrimaryPlacementResourceSnapshotName(placementPolicyName, placementPolicy.UID, idx)
 				Expect(gotSnapshots[0].GetName()).To(Equal(wantName), "Unexpected name of the placement resource snapshot at index %d", idx)
 			}
 		})
@@ -1631,7 +1627,7 @@ var _ = Describe("core ops (placement resource snapshots)", func() {
 
 			seenHashes := map[string]bool{}
 			for idx := 0; idx < 4; idx++ {
-				snapshotName := uniqueNameForPrimaryPlacementResourceSnapshot(placementPolicyName, idx)
+				snapshotName := uniquename.PrimaryPlacementResourceSnapshotName(placementPolicyName, placementPolicy.UID, idx)
 				gotSnapshot := &placementv1alpha1.PlacementResourceSnapshot{}
 				Eventually(func() error {
 					return hubClient.Get(ctx, types.NamespacedName{Namespace: appNamespaceName, Name: snapshotName}, gotSnapshot)
@@ -1675,7 +1671,7 @@ var _ = Describe("core ops (placement resource snapshots)", func() {
 		It("should garbage collect the first primary placement resource snapshot", func() {
 			updateConfigMapAndSnapshot("value-4")
 
-			firstSnapshotName := uniqueNameForPrimaryPlacementResourceSnapshot(placementPolicyName, 0)
+			firstSnapshotName := uniquename.PrimaryPlacementResourceSnapshotName(placementPolicyName, placementPolicy.UID, 0)
 			Eventually(func() bool {
 				err := hubUncachedReader.Get(ctx, types.NamespacedName{Namespace: appNamespaceName, Name: firstSnapshotName}, &placementv1alpha1.PlacementResourceSnapshot{})
 				return errors.IsNotFound(err)
@@ -1685,7 +1681,7 @@ var _ = Describe("core ops (placement resource snapshots)", func() {
 		It("should garbage collect the second primary placement resource snapshot", func() {
 			updateConfigMapAndSnapshot("value-5")
 
-			secondSnapshotName := uniqueNameForPrimaryPlacementResourceSnapshot(placementPolicyName, 1)
+			secondSnapshotName := uniquename.PrimaryPlacementResourceSnapshotName(placementPolicyName, placementPolicy.UID, 1)
 			Eventually(func() bool {
 				err := hubUncachedReader.Get(ctx, types.NamespacedName{Namespace: appNamespaceName, Name: secondSnapshotName}, &placementv1alpha1.PlacementResourceSnapshot{})
 				return errors.IsNotFound(err)
@@ -1693,7 +1689,7 @@ var _ = Describe("core ops (placement resource snapshots)", func() {
 		})
 
 		It("can create a placement binding that uses the third primary placement resource snapshot", func() {
-			thirdSnapshotName := uniqueNameForPrimaryPlacementResourceSnapshot(placementPolicyName, 2)
+			thirdSnapshotName := uniquename.PrimaryPlacementResourceSnapshotName(placementPolicyName, placementPolicy.UID, 2)
 			placementBinding := &placementv1alpha1.PlacementBinding{
 				ObjectMeta: metav1.ObjectMeta{
 					Name:      placementBindingName,
@@ -1733,7 +1729,7 @@ var _ = Describe("core ops (placement resource snapshots)", func() {
 			// collection process should skip it as a placement binding is using it.
 			updateConfigMapAndSnapshot("value-6")
 
-			thirdSnapshotName := uniqueNameForPrimaryPlacementResourceSnapshot(placementPolicyName, 2)
+			thirdSnapshotName := uniquename.PrimaryPlacementResourceSnapshotName(placementPolicyName, placementPolicy.UID, 2)
 			Consistently(func() error {
 				return hubUncachedReader.Get(ctx, types.NamespacedName{Namespace: appNamespaceName, Name: thirdSnapshotName}, &placementv1alpha1.PlacementResourceSnapshot{})
 			}, consistentlyDuration, consistentlyInterval).Should(Succeed(), "The third primary placement resource snapshot has been garbage collected unexpectedly")
@@ -1744,7 +1740,7 @@ var _ = Describe("core ops (placement resource snapshots)", func() {
 			// still in use by a placement binding, so only the fourth one should be garbage collected.
 			updateConfigMapAndSnapshot("value-7")
 
-			fourthSnapshotName := uniqueNameForPrimaryPlacementResourceSnapshot(placementPolicyName, 3)
+			fourthSnapshotName := uniquename.PrimaryPlacementResourceSnapshotName(placementPolicyName, placementPolicy.UID, 3)
 			Eventually(func() bool {
 				err := hubUncachedReader.Get(ctx, types.NamespacedName{Namespace: appNamespaceName, Name: fourthSnapshotName}, &placementv1alpha1.PlacementResourceSnapshot{})
 				return errors.IsNotFound(err)
@@ -1752,7 +1748,7 @@ var _ = Describe("core ops (placement resource snapshots)", func() {
 
 			// The garbage collection requests are processed in order; the request for the third snapshot has been
 			// handled by now.
-			thirdSnapshotName := uniqueNameForPrimaryPlacementResourceSnapshot(placementPolicyName, 2)
+			thirdSnapshotName := uniquename.PrimaryPlacementResourceSnapshotName(placementPolicyName, placementPolicy.UID, 2)
 			Consistently(func() error {
 				return hubUncachedReader.Get(ctx, types.NamespacedName{Namespace: appNamespaceName, Name: thirdSnapshotName}, &placementv1alpha1.PlacementResourceSnapshot{})
 			}, consistentlyDuration, consistentlyInterval).Should(Succeed(), "The third primary placement resource snapshot has been garbage collected unexpectedly")
@@ -1769,7 +1765,7 @@ var _ = Describe("core ops (placement resource snapshots)", func() {
 
 			// Wait until the cache (and its field index) has observed the deletion; the garbage collection process
 			// relies on it to tell if a snapshot is still in use.
-			thirdSnapshotName := uniqueNameForPrimaryPlacementResourceSnapshot(placementPolicyName, 2)
+			thirdSnapshotName := uniquename.PrimaryPlacementResourceSnapshotName(placementPolicyName, placementPolicy.UID, 2)
 			Eventually(func() (int, error) {
 				placementBindingList := &placementv1alpha1.PlacementBindingList{}
 				err := hubClient.List(ctx, placementBindingList, client.InNamespace(appNamespaceName), client.MatchingFields{
@@ -1786,7 +1782,7 @@ var _ = Describe("core ops (placement resource snapshots)", func() {
 			updateConfigMapAndSnapshot("value-8")
 
 			for _, idx := range []int{2, 4} {
-				snapshotName := uniqueNameForPrimaryPlacementResourceSnapshot(placementPolicyName, idx)
+				snapshotName := uniquename.PrimaryPlacementResourceSnapshotName(placementPolicyName, placementPolicy.UID, idx)
 				Eventually(func() bool {
 					err := hubUncachedReader.Get(ctx, types.NamespacedName{Namespace: appNamespaceName, Name: snapshotName}, &placementv1alpha1.PlacementResourceSnapshot{})
 					return errors.IsNotFound(err)
@@ -1802,7 +1798,7 @@ var _ = Describe("core ops (placement resource snapshots)", func() {
 			}
 			for idx := 0; idx < 9; idx++ {
 				objs = append(objs, &placementv1alpha1.PlacementResourceSnapshot{ObjectMeta: metav1.ObjectMeta{
-					Name:      uniqueNameForPrimaryPlacementResourceSnapshot(placementPolicyName, idx),
+					Name:      uniquename.PrimaryPlacementResourceSnapshotName(placementPolicyName, placementPolicy.UID, idx),
 					Namespace: appNamespaceName,
 				}})
 			}
@@ -1909,7 +1905,7 @@ var _ = Describe("core ops (cluster placement resource snapshots)", func() {
 		})
 
 		It("should persist the placement resource snapshot as expected", func() {
-			snapshotName := uniqueNameForPrimaryPlacementResourceSnapshot(placementPolicyName, 0)
+			snapshotName := uniquename.PrimaryPlacementResourceSnapshotName(placementPolicyName, placementPolicy.UID, 0)
 
 			// Read the snapshot using the cached client; the cache might take a moment to catch up.
 			gotSnapshot := &placementv1alpha1.ClusterPlacementResourceSnapshot{}
@@ -2010,7 +2006,7 @@ var _ = Describe("core ops (cluster placement resource snapshots)", func() {
 		})
 
 		It("should return the existing snapshot when no snapshot is needed", func() {
-			snapshotName := uniqueNameForPrimaryPlacementResourceSnapshot(placementPolicyName, 0)
+			snapshotName := uniquename.PrimaryPlacementResourceSnapshotName(placementPolicyName, placementPolicy.UID, 0)
 			wantSnapshot := &placementv1alpha1.ClusterPlacementResourceSnapshot{}
 			// The previous spec has waited for the snapshot to appear in the cache.
 			Expect(hubClient.Get(ctx, types.NamespacedName{Name: snapshotName}, wantSnapshot)).To(Succeed(),
@@ -2028,13 +2024,13 @@ var _ = Describe("core ops (cluster placement resource snapshots)", func() {
 			}
 
 			// No new snapshot should have been created.
-			nextSnapshotName := uniqueNameForPrimaryPlacementResourceSnapshot(placementPolicyName, 1)
+			nextSnapshotName := uniquename.PrimaryPlacementResourceSnapshotName(placementPolicyName, placementPolicy.UID, 1)
 			err = hubUncachedReader.Get(ctx, types.NamespacedName{Name: nextSnapshotName}, &placementv1alpha1.ClusterPlacementResourceSnapshot{})
 			Expect(errors.IsNotFound(err)).To(BeTrue(), "A new placement resource snapshot was created unexpectedly: %v", err)
 		})
 
 		It("should return the existing snapshot when it is not stale", func() {
-			snapshotName := uniqueNameForPrimaryPlacementResourceSnapshot(placementPolicyName, 0)
+			snapshotName := uniquename.PrimaryPlacementResourceSnapshotName(placementPolicyName, placementPolicy.UID, 0)
 			wantSnapshot := &placementv1alpha1.ClusterPlacementResourceSnapshot{}
 			Expect(hubClient.Get(ctx, types.NamespacedName{Name: snapshotName}, wantSnapshot)).To(Succeed(),
 				"Failed to get the placement resource snapshot")
@@ -2052,7 +2048,7 @@ var _ = Describe("core ops (cluster placement resource snapshots)", func() {
 			}
 
 			// No new snapshot should have been created.
-			nextSnapshotName := uniqueNameForPrimaryPlacementResourceSnapshot(placementPolicyName, 1)
+			nextSnapshotName := uniquename.PrimaryPlacementResourceSnapshotName(placementPolicyName, placementPolicy.UID, 1)
 			err = hubUncachedReader.Get(ctx, types.NamespacedName{Name: nextSnapshotName}, &placementv1alpha1.ClusterPlacementResourceSnapshot{})
 			Expect(errors.IsNotFound(err)).To(BeTrue(), "A new placement resource snapshot was created unexpectedly: %v", err)
 		})
@@ -2080,7 +2076,7 @@ var _ = Describe("core ops (cluster placement resource snapshots)", func() {
 			Expect(isUpToDate).To(BeTrue(), "The new placement resource snapshot is not up-to-date")
 			Expect(gotSnapshots).To(HaveLen(1), "Unexpected number of placement resource snapshots")
 
-			newSnapshotName := uniqueNameForPrimaryPlacementResourceSnapshot(placementPolicyName, 1)
+			newSnapshotName := uniquename.PrimaryPlacementResourceSnapshotName(placementPolicyName, placementPolicy.UID, 1)
 			Expect(gotSnapshots[0].GetName()).To(Equal(newSnapshotName), "Unexpected name of the new placement resource snapshot")
 		})
 
@@ -2089,7 +2085,7 @@ var _ = Describe("core ops (cluster placement resource snapshots)", func() {
 			Expect(err).ToNot(HaveOccurred(), "Failed to retrieve and hash the selected resources")
 			Expect(newHash).ToNot(Equal(wantHash), "The hash of the selected resources has not changed after the updates")
 
-			newSnapshotName := uniqueNameForPrimaryPlacementResourceSnapshot(placementPolicyName, 1)
+			newSnapshotName := uniquename.PrimaryPlacementResourceSnapshotName(placementPolicyName, placementPolicy.UID, 1)
 			gotSnapshot := &placementv1alpha1.ClusterPlacementResourceSnapshot{}
 			Eventually(func() error {
 				return hubClient.Get(ctx, types.NamespacedName{Name: newSnapshotName}, gotSnapshot)
@@ -2128,7 +2124,7 @@ var _ = Describe("core ops (cluster placement resource snapshots)", func() {
 			// The previous snapshot should be left intact.
 			oldSnapshot := &placementv1alpha1.ClusterPlacementResourceSnapshot{}
 			Expect(hubUncachedReader.Get(ctx, types.NamespacedName{
-				Name: uniqueNameForPrimaryPlacementResourceSnapshot(placementPolicyName, 0),
+				Name: uniquename.PrimaryPlacementResourceSnapshotName(placementPolicyName, placementPolicy.UID, 0),
 			}, oldSnapshot)).To(Succeed(), "Failed to get the previous placement resource snapshot")
 			Expect(oldSnapshot.Annotations[placementv1alpha1.PlacementResourceSnapshotContentsHashAnnotationKey]).To(Equal(wantHash),
 				"The previous placement resource snapshot has been modified")
@@ -2138,10 +2134,10 @@ var _ = Describe("core ops (cluster placement resource snapshots)", func() {
 			// The envtest environment does not run the garbage collector; remove all the objects explicitly.
 			objs := []client.Object{
 				&placementv1alpha1.ClusterPlacementResourceSnapshot{ObjectMeta: metav1.ObjectMeta{
-					Name: uniqueNameForPrimaryPlacementResourceSnapshot(placementPolicyName, 0),
+					Name: uniquename.PrimaryPlacementResourceSnapshotName(placementPolicyName, placementPolicy.UID, 0),
 				}},
 				&placementv1alpha1.ClusterPlacementResourceSnapshot{ObjectMeta: metav1.ObjectMeta{
-					Name: uniqueNameForPrimaryPlacementResourceSnapshot(placementPolicyName, 1),
+					Name: uniquename.PrimaryPlacementResourceSnapshotName(placementPolicyName, placementPolicy.UID, 1),
 				}},
 				placementPolicy,
 				&appsv1.Deployment{ObjectMeta: metav1.ObjectMeta{Name: deploymentName, Namespace: appNamespaceName}},
@@ -2240,8 +2236,8 @@ var _ = Describe("core ops (cluster placement resource snapshots)", func() {
 
 			// The snapshots are ordered by their sub-indices.
 			wantNames := []string{
-				uniqueNameForPrimaryPlacementResourceSnapshot(placementPolicyName, 0),
-				uniqueNameForSecondaryPlacementResourceSnapshot(placementPolicyName, 0, 1),
+				uniquename.PrimaryPlacementResourceSnapshotName(placementPolicyName, placementPolicy.UID, 0),
+				uniquename.SecondaryPlacementResourceSnapshotName(placementPolicyName, placementPolicy.UID, 0, 1),
 			}
 			gotNames := []string{createdSnapshots[0].GetName(), createdSnapshots[1].GetName()}
 			if diff := cmp.Diff(gotNames, wantNames); diff != "" {
@@ -2273,7 +2269,7 @@ var _ = Describe("core ops (cluster placement resource snapshots)", func() {
 				{
 					// Only the primary snapshot carries the count label.
 					name:         "primary",
-					snapshotName: uniqueNameForPrimaryPlacementResourceSnapshot(placementPolicyName, 0),
+					snapshotName: uniquename.PrimaryPlacementResourceSnapshotName(placementPolicyName, placementPolicy.UID, 0),
 					wantLabels: map[string]string{
 						placementv1alpha1.PlacementResourceSnapshotOwnedByLabelKey:         placementPolicyName,
 						placementv1alpha1.PlacementResourceSnapshotIndexLabelKey:           "0",
@@ -2284,7 +2280,7 @@ var _ = Describe("core ops (cluster placement resource snapshots)", func() {
 				},
 				{
 					name:         "secondary",
-					snapshotName: uniqueNameForSecondaryPlacementResourceSnapshot(placementPolicyName, 0, 1),
+					snapshotName: uniquename.SecondaryPlacementResourceSnapshotName(placementPolicyName, placementPolicy.UID, 0, 1),
 					wantLabels: map[string]string{
 						placementv1alpha1.PlacementResourceSnapshotOwnedByLabelKey:  placementPolicyName,
 						placementv1alpha1.PlacementResourceSnapshotIndexLabelKey:    "0",
@@ -2339,8 +2335,8 @@ var _ = Describe("core ops (cluster placement resource snapshots)", func() {
 
 			// The existing snapshots (at index 0) are returned, ordered by their sub-indices.
 			wantNames := []string{
-				uniqueNameForPrimaryPlacementResourceSnapshot(placementPolicyName, 0),
-				uniqueNameForSecondaryPlacementResourceSnapshot(placementPolicyName, 0, 1),
+				uniquename.PrimaryPlacementResourceSnapshotName(placementPolicyName, placementPolicy.UID, 0),
+				uniquename.SecondaryPlacementResourceSnapshotName(placementPolicyName, placementPolicy.UID, 0, 1),
 			}
 			gotNames := make([]string, 0, len(gotSnapshots))
 			for _, snapshot := range gotSnapshots {
@@ -2352,8 +2348,8 @@ var _ = Describe("core ops (cluster placement resource snapshots)", func() {
 
 			// No snapshots should have been created at the next index.
 			nextSnapshotNames := []string{
-				uniqueNameForPrimaryPlacementResourceSnapshot(placementPolicyName, 1),
-				uniqueNameForSecondaryPlacementResourceSnapshot(placementPolicyName, 1, 1),
+				uniquename.PrimaryPlacementResourceSnapshotName(placementPolicyName, placementPolicy.UID, 1),
+				uniquename.SecondaryPlacementResourceSnapshotName(placementPolicyName, placementPolicy.UID, 1, 1),
 			}
 			for _, name := range nextSnapshotNames {
 				err := hubUncachedReader.Get(ctx, types.NamespacedName{Name: name}, &placementv1alpha1.ClusterPlacementResourceSnapshot{})
@@ -2392,7 +2388,7 @@ var _ = Describe("core ops (cluster placement resource snapshots)", func() {
 
 			persistedSnapshots := make([]*placementv1alpha1.ClusterPlacementResourceSnapshot, len(gotSnapshots))
 			for subIdx := range gotSnapshots {
-				snapshotName := uniqueNameForPrimaryPlacementResourceSnapshot(placementPolicyName, snapshotIdx)
+				snapshotName := uniquename.PrimaryPlacementResourceSnapshotName(placementPolicyName, placementPolicy.UID, snapshotIdx)
 				wantLabels := map[string]string{
 					placementv1alpha1.PlacementResourceSnapshotOwnedByLabelKey:  placementPolicyName,
 					placementv1alpha1.PlacementResourceSnapshotIndexLabelKey:    fmt.Sprintf("%d", snapshotIdx),
@@ -2402,7 +2398,7 @@ var _ = Describe("core ops (cluster placement resource snapshots)", func() {
 					// Only the primary snapshot carries the count label.
 					wantLabels[placementv1alpha1.SubIndexedPlacementResourceSnapshotCountLabelKey] = fmt.Sprintf("%d", wantSnapshotCnt)
 				} else {
-					snapshotName = uniqueNameForSecondaryPlacementResourceSnapshot(placementPolicyName, snapshotIdx, subIdx)
+					snapshotName = uniquename.SecondaryPlacementResourceSnapshotName(placementPolicyName, placementPolicy.UID, snapshotIdx, subIdx)
 				}
 				Expect(gotSnapshots[subIdx].GetName()).To(Equal(snapshotName), "Unexpected name of the placement resource snapshot at sub-index %d", subIdx)
 
@@ -2515,18 +2511,18 @@ var _ = Describe("core ops (cluster placement resource snapshots)", func() {
 			// The envtest environment does not run the garbage collector; remove all the objects explicitly.
 			objs := []client.Object{
 				&placementv1alpha1.ClusterPlacementResourceSnapshot{ObjectMeta: metav1.ObjectMeta{
-					Name: uniqueNameForPrimaryPlacementResourceSnapshot(placementPolicyName, 0),
+					Name: uniquename.PrimaryPlacementResourceSnapshotName(placementPolicyName, placementPolicy.UID, 0),
 				}},
 				&placementv1alpha1.ClusterPlacementResourceSnapshot{ObjectMeta: metav1.ObjectMeta{
-					Name: uniqueNameForSecondaryPlacementResourceSnapshot(placementPolicyName, 0, 1),
+					Name: uniquename.SecondaryPlacementResourceSnapshotName(placementPolicyName, placementPolicy.UID, 0, 1),
 				}},
 				placementPolicy,
 			}
 			var snapshotNames []string
 			for snapshotIdx := 1; snapshotIdx <= 3; snapshotIdx++ {
-				snapshotNames = append(snapshotNames, uniqueNameForPrimaryPlacementResourceSnapshot(placementPolicyName, snapshotIdx))
+				snapshotNames = append(snapshotNames, uniquename.PrimaryPlacementResourceSnapshotName(placementPolicyName, placementPolicy.UID, snapshotIdx))
 				for subIdx := 1; subIdx <= 3; subIdx++ {
-					snapshotNames = append(snapshotNames, uniqueNameForSecondaryPlacementResourceSnapshot(placementPolicyName, snapshotIdx, subIdx))
+					snapshotNames = append(snapshotNames, uniquename.SecondaryPlacementResourceSnapshotName(placementPolicyName, placementPolicy.UID, snapshotIdx, subIdx))
 				}
 			}
 			for _, name := range snapshotNames {
@@ -2644,8 +2640,8 @@ var _ = Describe("core ops (cluster placement resource snapshots)", func() {
 
 			// The snapshots are ordered by their sub-indices.
 			wantNames := []string{
-				uniqueNameForPrimaryPlacementResourceSnapshot(placementPolicyName, 0),
-				uniqueNameForSecondaryPlacementResourceSnapshot(placementPolicyName, 0, 1),
+				uniquename.PrimaryPlacementResourceSnapshotName(placementPolicyName, placementPolicy.UID, 0),
+				uniquename.SecondaryPlacementResourceSnapshotName(placementPolicyName, placementPolicy.UID, 0, 1),
 			}
 			gotNames := []string{createdSnapshots[0].GetName(), createdSnapshots[1].GetName()}
 			if diff := cmp.Diff(gotNames, wantNames); diff != "" {
@@ -2679,7 +2675,7 @@ var _ = Describe("core ops (cluster placement resource snapshots)", func() {
 				{
 					// Only the primary snapshot carries the count label.
 					name:         "primary",
-					snapshotName: uniqueNameForPrimaryPlacementResourceSnapshot(placementPolicyName, 0),
+					snapshotName: uniquename.PrimaryPlacementResourceSnapshotName(placementPolicyName, placementPolicy.UID, 0),
 					wantLabels: map[string]string{
 						placementv1alpha1.PlacementResourceSnapshotOwnedByLabelKey:         placementPolicyName,
 						placementv1alpha1.PlacementResourceSnapshotIndexLabelKey:           "0",
@@ -2691,7 +2687,7 @@ var _ = Describe("core ops (cluster placement resource snapshots)", func() {
 				},
 				{
 					name:         "secondary",
-					snapshotName: uniqueNameForSecondaryPlacementResourceSnapshot(placementPolicyName, 0, 1),
+					snapshotName: uniquename.SecondaryPlacementResourceSnapshotName(placementPolicyName, placementPolicy.UID, 0, 1),
 					wantLabels: map[string]string{
 						placementv1alpha1.PlacementResourceSnapshotOwnedByLabelKey:  placementPolicyName,
 						placementv1alpha1.PlacementResourceSnapshotIndexLabelKey:    "0",
@@ -2759,7 +2755,7 @@ var _ = Describe("core ops (cluster placement resource snapshots)", func() {
 			Expect(err).ToNot(HaveOccurred(), "Failed to snapshot resources")
 			Expect(isUpToDate).To(BeTrue(), "The new placement resource snapshot is not up-to-date")
 			Expect(gotSnapshots).To(HaveLen(1), "Unexpected number of created placement resource snapshots")
-			wantName := uniqueNameForPrimaryPlacementResourceSnapshot(placementPolicyName, 1)
+			wantName := uniquename.PrimaryPlacementResourceSnapshotName(placementPolicyName, placementPolicy.UID, 1)
 			Expect(gotSnapshots[0].GetName()).To(Equal(wantName), "Unexpected name of the new placement resource snapshot")
 
 			// Read the snapshot using the cached client; the cache might take a moment to catch up.
@@ -2818,7 +2814,7 @@ var _ = Describe("core ops (cluster placement resource snapshots)", func() {
 			}
 
 			// No secondary snapshot should have been created at the new index.
-			secondaryName := uniqueNameForSecondaryPlacementResourceSnapshot(placementPolicyName, 1, 1)
+			secondaryName := uniquename.SecondaryPlacementResourceSnapshotName(placementPolicyName, placementPolicy.UID, 1, 1)
 			err = hubUncachedReader.Get(ctx, types.NamespacedName{Name: secondaryName}, &placementv1alpha1.ClusterPlacementResourceSnapshot{})
 			Expect(errors.IsNotFound(err)).To(BeTrue(), "A secondary placement resource snapshot was created unexpectedly: %v", err)
 		})
@@ -2826,13 +2822,13 @@ var _ = Describe("core ops (cluster placement resource snapshots)", func() {
 		AfterAll(func() {
 			objs := []client.Object{
 				&placementv1alpha1.ClusterPlacementResourceSnapshot{ObjectMeta: metav1.ObjectMeta{
-					Name: uniqueNameForPrimaryPlacementResourceSnapshot(placementPolicyName, 0),
+					Name: uniquename.PrimaryPlacementResourceSnapshotName(placementPolicyName, placementPolicy.UID, 0),
 				}},
 				&placementv1alpha1.ClusterPlacementResourceSnapshot{ObjectMeta: metav1.ObjectMeta{
-					Name: uniqueNameForSecondaryPlacementResourceSnapshot(placementPolicyName, 0, 1),
+					Name: uniquename.SecondaryPlacementResourceSnapshotName(placementPolicyName, placementPolicy.UID, 0, 1),
 				}},
 				&placementv1alpha1.ClusterPlacementResourceSnapshot{ObjectMeta: metav1.ObjectMeta{
-					Name: uniqueNameForPrimaryPlacementResourceSnapshot(placementPolicyName, 1),
+					Name: uniquename.PrimaryPlacementResourceSnapshotName(placementPolicyName, placementPolicy.UID, 1),
 				}},
 				placementPolicy,
 				&corev1.ConfigMap{ObjectMeta: metav1.ObjectMeta{Name: configMapName, Namespace: appNamespaceName}},
@@ -2898,7 +2894,7 @@ var _ = Describe("core ops (cluster placement resource snapshots)", func() {
 
 			// The orphaned secondary snapshots should have been deleted.
 			for subIdx := 1; subIdx <= 3; subIdx++ {
-				secondarySnapshotName := uniqueNameForSecondaryPlacementResourceSnapshot(placementPolicyName, 0, subIdx)
+				secondarySnapshotName := uniquename.SecondaryPlacementResourceSnapshotName(placementPolicyName, placementPolicy.UID, 0, subIdx)
 				Eventually(func() bool {
 					err := hubUncachedReader.Get(ctx, types.NamespacedName{Name: secondarySnapshotName}, &placementv1alpha1.ClusterPlacementResourceSnapshot{})
 					return errors.IsNotFound(err)
@@ -2957,10 +2953,10 @@ var _ = Describe("core ops (cluster placement resource snapshots)", func() {
 
 			// The snapshots are ordered by their sub-indices.
 			wantNames := []string{
-				uniqueNameForPrimaryPlacementResourceSnapshot(placementPolicyName, 0),
-				uniqueNameForSecondaryPlacementResourceSnapshot(placementPolicyName, 0, 1),
-				uniqueNameForSecondaryPlacementResourceSnapshot(placementPolicyName, 0, 2),
-				uniqueNameForSecondaryPlacementResourceSnapshot(placementPolicyName, 0, 3),
+				uniquename.PrimaryPlacementResourceSnapshotName(placementPolicyName, placementPolicy.UID, 0),
+				uniquename.SecondaryPlacementResourceSnapshotName(placementPolicyName, placementPolicy.UID, 0, 1),
+				uniquename.SecondaryPlacementResourceSnapshotName(placementPolicyName, placementPolicy.UID, 0, 2),
+				uniquename.SecondaryPlacementResourceSnapshotName(placementPolicyName, placementPolicy.UID, 0, 3),
 			}
 			gotNames := make([]string, 0, len(createdSnapshots))
 			for _, snapshot := range createdSnapshots {
@@ -2995,7 +2991,7 @@ var _ = Describe("core ops (cluster placement resource snapshots)", func() {
 			}
 
 			for subIdx := 0; subIdx < 4; subIdx++ {
-				snapshotName := uniqueNameForPrimaryPlacementResourceSnapshot(placementPolicyName, 0)
+				snapshotName := uniquename.PrimaryPlacementResourceSnapshotName(placementPolicyName, placementPolicy.UID, 0)
 				wantLabels := map[string]string{
 					placementv1alpha1.PlacementResourceSnapshotOwnedByLabelKey:  placementPolicyName,
 					placementv1alpha1.PlacementResourceSnapshotIndexLabelKey:    "0",
@@ -3005,7 +3001,7 @@ var _ = Describe("core ops (cluster placement resource snapshots)", func() {
 					// Only the primary snapshot carries the count label.
 					wantLabels[placementv1alpha1.SubIndexedPlacementResourceSnapshotCountLabelKey] = "4"
 				} else {
-					snapshotName = uniqueNameForSecondaryPlacementResourceSnapshot(placementPolicyName, 0, subIdx)
+					snapshotName = uniquename.SecondaryPlacementResourceSnapshotName(placementPolicyName, placementPolicy.UID, 0, subIdx)
 				}
 
 				// Read the snapshot using the cached client; the cache might take a moment to catch up.
@@ -3055,7 +3051,7 @@ var _ = Describe("core ops (cluster placement resource snapshots)", func() {
 			// snapshot in normal operations, so this situation will not occur in practice.
 			primarySnapshot := &placementv1alpha1.ClusterPlacementResourceSnapshot{
 				ObjectMeta: metav1.ObjectMeta{
-					Name: uniqueNameForPrimaryPlacementResourceSnapshot(placementPolicyName, 0),
+					Name: uniquename.PrimaryPlacementResourceSnapshotName(placementPolicyName, placementPolicy.UID, 0),
 				},
 			}
 			Expect(hubClient.Delete(ctx, primarySnapshot)).To(Succeed(), "Failed to delete the primary placement resource snapshot")
@@ -3083,10 +3079,10 @@ var _ = Describe("core ops (cluster placement resource snapshots)", func() {
 			Expect(isUpToDate).To(BeTrue(), "The re-created placement resource snapshots are not up-to-date")
 
 			wantNames := []string{
-				uniqueNameForPrimaryPlacementResourceSnapshot(placementPolicyName, 0),
-				uniqueNameForSecondaryPlacementResourceSnapshot(placementPolicyName, 0, 1),
-				uniqueNameForSecondaryPlacementResourceSnapshot(placementPolicyName, 0, 2),
-				uniqueNameForSecondaryPlacementResourceSnapshot(placementPolicyName, 0, 3),
+				uniquename.PrimaryPlacementResourceSnapshotName(placementPolicyName, placementPolicy.UID, 0),
+				uniquename.SecondaryPlacementResourceSnapshotName(placementPolicyName, placementPolicy.UID, 0, 1),
+				uniquename.SecondaryPlacementResourceSnapshotName(placementPolicyName, placementPolicy.UID, 0, 2),
+				uniquename.SecondaryPlacementResourceSnapshotName(placementPolicyName, placementPolicy.UID, 0, 3),
 			}
 			gotNames := make([]string, 0, len(recreatedSnapshots))
 			for _, snapshot := range recreatedSnapshots {
@@ -3100,7 +3096,7 @@ var _ = Describe("core ops (cluster placement resource snapshots)", func() {
 		It("should have re-created the primary snapshot and the secondary snapshots with new UIDs", func() {
 			// The primary snapshot has been re-created (its UID is not checked).
 			primarySnapshot := &placementv1alpha1.ClusterPlacementResourceSnapshot{}
-			primarySnapshotName := uniqueNameForPrimaryPlacementResourceSnapshot(placementPolicyName, 0)
+			primarySnapshotName := uniquename.PrimaryPlacementResourceSnapshotName(placementPolicyName, placementPolicy.UID, 0)
 			Eventually(func() error {
 				return hubClient.Get(ctx, types.NamespacedName{Name: primarySnapshotName}, primarySnapshot)
 			}, eventuallyDuration, eventuallyInterval).Should(Succeed(), "Failed to get the primary placement resource snapshot")
@@ -3112,7 +3108,7 @@ var _ = Describe("core ops (cluster placement resource snapshots)", func() {
 			// All the secondary snapshots have been re-created with new UIDs.
 			for subIdx := 1; subIdx <= 3; subIdx++ {
 				secondarySnapshot := &placementv1alpha1.ClusterPlacementResourceSnapshot{}
-				secondarySnapshotName := uniqueNameForSecondaryPlacementResourceSnapshot(placementPolicyName, 0, subIdx)
+				secondarySnapshotName := uniquename.SecondaryPlacementResourceSnapshotName(placementPolicyName, placementPolicy.UID, 0, subIdx)
 				Eventually(func() error {
 					return hubClient.Get(ctx, types.NamespacedName{Name: secondarySnapshotName}, secondarySnapshot)
 				}, eventuallyDuration, eventuallyInterval).Should(Succeed(), "Failed to get the secondary placement resource snapshot at sub-index %d", subIdx)
@@ -3129,7 +3125,7 @@ var _ = Describe("core ops (cluster placement resource snapshots)", func() {
 			for subIdx := 1; subIdx <= 3; subIdx++ {
 				secondarySnapshot := &placementv1alpha1.ClusterPlacementResourceSnapshot{}
 				Expect(hubClient.Get(ctx, types.NamespacedName{
-					Name: uniqueNameForSecondaryPlacementResourceSnapshot(placementPolicyName, 0, subIdx),
+					Name: uniquename.SecondaryPlacementResourceSnapshotName(placementPolicyName, placementPolicy.UID, 0, subIdx),
 				}, secondarySnapshot)).To(Succeed(), "Failed to get the secondary placement resource snapshot at sub-index %d", subIdx)
 				secondarySnapshotUIDs = append(secondarySnapshotUIDs, secondarySnapshot.UID)
 			}
@@ -3139,7 +3135,7 @@ var _ = Describe("core ops (cluster placement resource snapshots)", func() {
 			// snapshot in normal operations, so this situation will not occur in practice.
 			primarySnapshot := &placementv1alpha1.ClusterPlacementResourceSnapshot{
 				ObjectMeta: metav1.ObjectMeta{
-					Name: uniqueNameForPrimaryPlacementResourceSnapshot(placementPolicyName, 0),
+					Name: uniquename.PrimaryPlacementResourceSnapshotName(placementPolicyName, placementPolicy.UID, 0),
 				},
 			}
 			Expect(hubClient.Delete(ctx, primarySnapshot)).To(Succeed(), "Failed to delete the primary placement resource snapshot")
@@ -3199,7 +3195,7 @@ var _ = Describe("core ops (cluster placement resource snapshots)", func() {
 			}
 
 			for subIdx := 0; subIdx < 4; subIdx++ {
-				snapshotName := uniqueNameForPrimaryPlacementResourceSnapshot(placementPolicyName, 0)
+				snapshotName := uniquename.PrimaryPlacementResourceSnapshotName(placementPolicyName, placementPolicy.UID, 0)
 				wantLabels := map[string]string{
 					placementv1alpha1.PlacementResourceSnapshotOwnedByLabelKey:  placementPolicyName,
 					placementv1alpha1.PlacementResourceSnapshotIndexLabelKey:    "0",
@@ -3209,7 +3205,7 @@ var _ = Describe("core ops (cluster placement resource snapshots)", func() {
 					// Only the primary snapshot carries the count label.
 					wantLabels[placementv1alpha1.SubIndexedPlacementResourceSnapshotCountLabelKey] = "4"
 				} else {
-					snapshotName = uniqueNameForSecondaryPlacementResourceSnapshot(placementPolicyName, 0, subIdx)
+					snapshotName = uniquename.SecondaryPlacementResourceSnapshotName(placementPolicyName, placementPolicy.UID, 0, subIdx)
 				}
 
 				// Read the snapshot using the cached client; the cache might take a moment to catch up.
@@ -3272,13 +3268,13 @@ var _ = Describe("core ops (cluster placement resource snapshots)", func() {
 			// The envtest environment does not run the garbage collector; remove all the objects explicitly.
 			objs := []client.Object{
 				&placementv1alpha1.ClusterPlacementResourceSnapshot{ObjectMeta: metav1.ObjectMeta{
-					Name: uniqueNameForPrimaryPlacementResourceSnapshot(placementPolicyName, 0),
+					Name: uniquename.PrimaryPlacementResourceSnapshotName(placementPolicyName, placementPolicy.UID, 0),
 				}},
 				placementPolicy,
 			}
 			for subIdx := 1; subIdx <= 3; subIdx++ {
 				objs = append(objs, &placementv1alpha1.ClusterPlacementResourceSnapshot{ObjectMeta: metav1.ObjectMeta{
-					Name: uniqueNameForSecondaryPlacementResourceSnapshot(placementPolicyName, 0, subIdx),
+					Name: uniquename.SecondaryPlacementResourceSnapshotName(placementPolicyName, placementPolicy.UID, 0, subIdx),
 				}})
 			}
 			for _, name := range configMapNames {
@@ -3355,7 +3351,7 @@ var _ = Describe("core ops (cluster placement resource snapshots)", func() {
 		It("can create four primary placement resource snapshots", func() {
 			for idx := 0; idx < 4; idx++ {
 				gotSnapshots := updateConfigMapAndSnapshot(fmt.Sprintf("value-%d", idx))
-				wantName := uniqueNameForPrimaryPlacementResourceSnapshot(placementPolicyName, idx)
+				wantName := uniquename.PrimaryPlacementResourceSnapshotName(placementPolicyName, placementPolicy.UID, idx)
 				Expect(gotSnapshots[0].GetName()).To(Equal(wantName), "Unexpected name of the placement resource snapshot at index %d", idx)
 			}
 		})
@@ -3374,7 +3370,7 @@ var _ = Describe("core ops (cluster placement resource snapshots)", func() {
 
 			seenHashes := map[string]bool{}
 			for idx := 0; idx < 4; idx++ {
-				snapshotName := uniqueNameForPrimaryPlacementResourceSnapshot(placementPolicyName, idx)
+				snapshotName := uniquename.PrimaryPlacementResourceSnapshotName(placementPolicyName, placementPolicy.UID, idx)
 				gotSnapshot := &placementv1alpha1.ClusterPlacementResourceSnapshot{}
 				Eventually(func() error {
 					return hubClient.Get(ctx, types.NamespacedName{Name: snapshotName}, gotSnapshot)
@@ -3418,7 +3414,7 @@ var _ = Describe("core ops (cluster placement resource snapshots)", func() {
 		It("should garbage collect the first primary placement resource snapshot", func() {
 			updateConfigMapAndSnapshot("value-4")
 
-			firstSnapshotName := uniqueNameForPrimaryPlacementResourceSnapshot(placementPolicyName, 0)
+			firstSnapshotName := uniquename.PrimaryPlacementResourceSnapshotName(placementPolicyName, placementPolicy.UID, 0)
 			Eventually(func() bool {
 				err := hubUncachedReader.Get(ctx, types.NamespacedName{Name: firstSnapshotName}, &placementv1alpha1.ClusterPlacementResourceSnapshot{})
 				return errors.IsNotFound(err)
@@ -3428,7 +3424,7 @@ var _ = Describe("core ops (cluster placement resource snapshots)", func() {
 		It("should garbage collect the second primary placement resource snapshot", func() {
 			updateConfigMapAndSnapshot("value-5")
 
-			secondSnapshotName := uniqueNameForPrimaryPlacementResourceSnapshot(placementPolicyName, 1)
+			secondSnapshotName := uniquename.PrimaryPlacementResourceSnapshotName(placementPolicyName, placementPolicy.UID, 1)
 			Eventually(func() bool {
 				err := hubUncachedReader.Get(ctx, types.NamespacedName{Name: secondSnapshotName}, &placementv1alpha1.ClusterPlacementResourceSnapshot{})
 				return errors.IsNotFound(err)
@@ -3436,7 +3432,7 @@ var _ = Describe("core ops (cluster placement resource snapshots)", func() {
 		})
 
 		It("can create a placement binding that uses the third primary placement resource snapshot", func() {
-			thirdSnapshotName := uniqueNameForPrimaryPlacementResourceSnapshot(placementPolicyName, 2)
+			thirdSnapshotName := uniquename.PrimaryPlacementResourceSnapshotName(placementPolicyName, placementPolicy.UID, 2)
 			placementBinding := &placementv1alpha1.ClusterPlacementBinding{
 				ObjectMeta: metav1.ObjectMeta{
 					Name: placementBindingName,
@@ -3475,7 +3471,7 @@ var _ = Describe("core ops (cluster placement resource snapshots)", func() {
 			// collection process should skip it as a placement binding is using it.
 			updateConfigMapAndSnapshot("value-6")
 
-			thirdSnapshotName := uniqueNameForPrimaryPlacementResourceSnapshot(placementPolicyName, 2)
+			thirdSnapshotName := uniquename.PrimaryPlacementResourceSnapshotName(placementPolicyName, placementPolicy.UID, 2)
 			Consistently(func() error {
 				return hubUncachedReader.Get(ctx, types.NamespacedName{Name: thirdSnapshotName}, &placementv1alpha1.ClusterPlacementResourceSnapshot{})
 			}, consistentlyDuration, consistentlyInterval).Should(Succeed(), "The third primary placement resource snapshot has been garbage collected unexpectedly")
@@ -3486,7 +3482,7 @@ var _ = Describe("core ops (cluster placement resource snapshots)", func() {
 			// still in use by a placement binding, so only the fourth one should be garbage collected.
 			updateConfigMapAndSnapshot("value-7")
 
-			fourthSnapshotName := uniqueNameForPrimaryPlacementResourceSnapshot(placementPolicyName, 3)
+			fourthSnapshotName := uniquename.PrimaryPlacementResourceSnapshotName(placementPolicyName, placementPolicy.UID, 3)
 			Eventually(func() bool {
 				err := hubUncachedReader.Get(ctx, types.NamespacedName{Name: fourthSnapshotName}, &placementv1alpha1.ClusterPlacementResourceSnapshot{})
 				return errors.IsNotFound(err)
@@ -3494,7 +3490,7 @@ var _ = Describe("core ops (cluster placement resource snapshots)", func() {
 
 			// The garbage collection requests are processed in order; the request for the third snapshot has been
 			// handled by now.
-			thirdSnapshotName := uniqueNameForPrimaryPlacementResourceSnapshot(placementPolicyName, 2)
+			thirdSnapshotName := uniquename.PrimaryPlacementResourceSnapshotName(placementPolicyName, placementPolicy.UID, 2)
 			Consistently(func() error {
 				return hubUncachedReader.Get(ctx, types.NamespacedName{Name: thirdSnapshotName}, &placementv1alpha1.ClusterPlacementResourceSnapshot{})
 			}, consistentlyDuration, consistentlyInterval).Should(Succeed(), "The third primary placement resource snapshot has been garbage collected unexpectedly")
@@ -3510,7 +3506,7 @@ var _ = Describe("core ops (cluster placement resource snapshots)", func() {
 
 			// Wait until the cache (and its field index) has observed the deletion; the garbage collection process
 			// relies on it to tell if a snapshot is still in use.
-			thirdSnapshotName := uniqueNameForPrimaryPlacementResourceSnapshot(placementPolicyName, 2)
+			thirdSnapshotName := uniquename.PrimaryPlacementResourceSnapshotName(placementPolicyName, placementPolicy.UID, 2)
 			Eventually(func() (int, error) {
 				placementBindingList := &placementv1alpha1.ClusterPlacementBindingList{}
 				err := hubClient.List(ctx, placementBindingList, client.MatchingFields{
@@ -3527,7 +3523,7 @@ var _ = Describe("core ops (cluster placement resource snapshots)", func() {
 			updateConfigMapAndSnapshot("value-8")
 
 			for _, idx := range []int{2, 4} {
-				snapshotName := uniqueNameForPrimaryPlacementResourceSnapshot(placementPolicyName, idx)
+				snapshotName := uniquename.PrimaryPlacementResourceSnapshotName(placementPolicyName, placementPolicy.UID, idx)
 				Eventually(func() bool {
 					err := hubUncachedReader.Get(ctx, types.NamespacedName{Name: snapshotName}, &placementv1alpha1.ClusterPlacementResourceSnapshot{})
 					return errors.IsNotFound(err)
@@ -3543,7 +3539,7 @@ var _ = Describe("core ops (cluster placement resource snapshots)", func() {
 			}
 			for idx := 0; idx < 9; idx++ {
 				objs = append(objs, &placementv1alpha1.ClusterPlacementResourceSnapshot{ObjectMeta: metav1.ObjectMeta{
-					Name: uniqueNameForPrimaryPlacementResourceSnapshot(placementPolicyName, idx),
+					Name: uniquename.PrimaryPlacementResourceSnapshotName(placementPolicyName, placementPolicy.UID, idx),
 				}})
 			}
 			objs = append(objs, &corev1.ConfigMap{ObjectMeta: metav1.ObjectMeta{Name: configMapName, Namespace: appNamespaceName}})
@@ -3567,7 +3563,7 @@ var _ = Describe("GC variants", func() {
 		primarySnapshotNames := func(from, to int) []string {
 			names := make([]string, 0, to-from+1)
 			for idx := from; idx <= to; idx++ {
-				names = append(names, uniqueNameForPrimaryPlacementResourceSnapshot(placementPolicy.Name, idx))
+				names = append(names, uniquename.PrimaryPlacementResourceSnapshotName(placementPolicy.Name, placementPolicy.UID, idx))
 			}
 			return names
 		}
@@ -3652,12 +3648,14 @@ var _ = Describe("GC variants", func() {
 		placementPolicy := newClusterPlacementPolicy(resourceSelector)
 		placementPolicy.Spec.ResourceRevisionHistoryLimit = ptr.To(int32(1))
 
-		extraSecondarySnapshotName := uniqueNameForSecondaryPlacementResourceSnapshot(placementPolicy.Name, 1, 2)
+		// The snapshot name depends on the UID of the placement policy; it is set once the policy is created.
+		var extraSecondarySnapshotName string
 
 		BeforeAll(func() {
 			// Seven config maps make three groups, as each snapshot can hold at most three resources.
 			configMapNames = createLabeledConfigMaps(configMapNamePrefix, 7, groupLabels)
 			Expect(hubClient.Create(ctx, placementPolicy)).To(Succeed(), "Failed to create the placement policy")
+			extraSecondarySnapshotName = uniquename.SecondaryPlacementResourceSnapshotName(placementPolicy.Name, placementPolicy.UID, 1, 2)
 		})
 
 		It("can create snapshots in three groups", func() {
@@ -3750,7 +3748,8 @@ var _ = Describe("GC variants", func() {
 		var pausedMgr *Manager
 		var primarySnapshots []placementv1alpha1.PlacementResourceSnapshotAccessor
 
-		latestSnapshotNames := []string{uniqueNameForPrimaryPlacementResourceSnapshot(placementPolicy.Name, 4)}
+		// The snapshot names depend on the UID of the placement policy; they are set once the policy is created.
+		var latestSnapshotNames []string
 
 		// gcRequestsAt returns the GC requests for the primary snapshots at the given indices.
 		gcRequestsAt := func(idxs ...int) []snapshotGarbageCollectionRequest {
@@ -3764,7 +3763,7 @@ var _ = Describe("GC variants", func() {
 		// the given index.
 		createSnapshot := func(idx int) {
 			updateConfigMapData(appNamespaceName, configMapName, fmt.Sprintf("value-%d", idx))
-			snapshotAndVerify(pausedMgr, placementPolicy, []string{uniqueNameForPrimaryPlacementResourceSnapshot(placementPolicy.Name, idx)})
+			snapshotAndVerify(pausedMgr, placementPolicy, []string{uniquename.PrimaryPlacementResourceSnapshotName(placementPolicy.Name, placementPolicy.UID, idx)})
 			primarySnapshots = append(primarySnapshots, getPrimarySnapshotFromCache(placementPolicy, idx))
 		}
 
@@ -3778,6 +3777,7 @@ var _ = Describe("GC variants", func() {
 			}
 			Expect(hubClient.Create(ctx, configMap)).To(Succeed(), "Failed to create the config map")
 			Expect(hubClient.Create(ctx, placementPolicy)).To(Succeed(), "Failed to create the placement policy")
+			latestSnapshotNames = []string{uniquename.PrimaryPlacementResourceSnapshotName(placementPolicy.Name, placementPolicy.UID, 4)}
 			pausedMgr = newPausedManager()
 		})
 
@@ -3893,10 +3893,10 @@ var _ = Describe("GC variants", func() {
 		var gcRequestForSnapshot0 snapshotGarbageCollectionRequest
 
 		primarySnapshotName := func(idx int) string {
-			return uniqueNameForPrimaryPlacementResourceSnapshot(placementPolicy.Name, idx)
+			return uniquename.PrimaryPlacementResourceSnapshotName(placementPolicy.Name, placementPolicy.UID, idx)
 		}
 		secondarySnapshotName := func(idx int) string {
-			return uniqueNameForSecondaryPlacementResourceSnapshot(placementPolicy.Name, idx, 1)
+			return uniquename.SecondaryPlacementResourceSnapshotName(placementPolicy.Name, placementPolicy.UID, idx, 1)
 		}
 
 		BeforeAll(func() {
@@ -4025,168 +4025,124 @@ var _ = Describe("GC variants", func() {
 		})
 	})
 
-	Context("retryable GC failures", Ordered, func() {
+	Context("snapshots in use by placement bindings", Ordered, func() {
 		configMapName := fmt.Sprintf(configMapNameTemplate, utils.RandStr())
+		placementBindingName := fmt.Sprintf(placementBindingNameTemplate, utils.RandStr())
+		orphanedPlacementBindingName := fmt.Sprintf(placementBindingNameTemplate, utils.RandStr())
 		placementPolicy := newPlacementPolicy(appNamespaceName, configMapNameSelector(configMapName))
 		placementPolicy.Spec.ResourceRevisionHistoryLimit = ptr.To(int32(1))
-		placementBindingName := fmt.Sprintf(placementBindingNameTemplate, utils.RandStr())
 
-		var gcRequestForSnapshot0 snapshotGarbageCollectionRequest
+		var pausedMgr *Manager
 
-		primarySnapshotNames := func(idx int) []string {
-			return []string{uniqueNameForPrimaryPlacementResourceSnapshot(placementPolicy.Name, idx)}
+		primarySnapshotName := func(idx int) string {
+			return uniquename.PrimaryPlacementResourceSnapshotName(placementPolicy.Name, placementPolicy.UID, idx)
+		}
+		// verifySnapshotsKeptWithoutRetries verifies that the placement policy keeps the wanted snapshots, i.e., the
+		// manager under test does not garbage collect the snapshot of the given GC request, and that the GC request
+		// is dropped rather than retried.
+		//
+		// The GC request must have been enqueued before this helper is called.
+		verifySnapshotsKeptWithoutRetries := func(gcRequest snapshotGarbageCollectionRequest, wantNames []string) {
+			GinkgoHelper()
+
+			// Wait until the GC worker has picked up the GC request; otherwise the checks below would also pass with
+			// a GC request that has not been processed at all. A retry, should one happen, comes after the request
+			// is picked up, and the Consistently block below catches it.
+			Eventually(func() int {
+				return resourceSnapshotManager.gcwq.Len()
+			}, eventuallyDuration, eventuallyInterval).Should(BeZero(), "The GC request has not been picked up by the GC worker")
+
+			Consistently(func() error {
+				if err := checkOwnedSnapshots(placementPolicy, wantNames); err != nil {
+					return err
+				}
+				if requeueCnt := resourceSnapshotManager.gcwq.NumRequeues(gcRequest); requeueCnt != 0 {
+					return fmt.Errorf("the GC request has been retried %d time(s)", requeueCnt)
+				}
+				return nil
+			}, consistentlyDuration, consistentlyInterval).Should(Succeed(), "Failed to keep the snapshot in use without retries")
 		}
 
 		BeforeAll(func() {
 			configMap := &corev1.ConfigMap{
-				ObjectMeta: metav1.ObjectMeta{
-					Name:      configMapName,
-					Namespace: appNamespaceName,
-				},
-				Data: map[string]string{"key": "initial-value"},
+				ObjectMeta: metav1.ObjectMeta{Name: configMapName, Namespace: appNamespaceName},
+				Data:       map[string]string{"key": "initial-value"},
 			}
 			Expect(hubClient.Create(ctx, configMap)).To(Succeed(), "Failed to create the config map")
 			Expect(hubClient.Create(ctx, placementPolicy)).To(Succeed(), "Failed to create the placement policy")
+			pausedMgr = newPausedManager()
 		})
 
-		It("can create snapshots at index 0 and 1", func() {
-			snapshotAndVerify(resourceSnapshotManager, placementPolicy, primarySnapshotNames(0))
-			gcRequestForSnapshot0 = gcRequestFor(placementPolicy, getPrimarySnapshotFromCache(placementPolicy, 0))
-
-			// This call does not enqueue any GC request yet, as it has seen only one snapshot.
-			updateConfigMapData(appNamespaceName, configMapName, "changed")
-			snapshotAndVerify(resourceSnapshotManager, placementPolicy, primarySnapshotNames(1))
+		It("can create a snapshot at index 0, and a placement binding that uses it", func() {
+			snapshotAndVerify(resourceSnapshotManager, placementPolicy, []string{primarySnapshotName(0)})
+			createPlacementBinding(placementPolicy, placementBindingName, primarySnapshotName(0), ptr.To(placementPolicy.UID))
+			waitForPlacementBindingCntInCache(placementPolicy, primarySnapshotName(0), 1)
 		})
 
-		It("can create a placement binding owned by a re-created placement policy", func() {
-			createPlacementBinding(placementPolicy, placementBindingName, primarySnapshotNames(0)[0], ptr.To(staleOwnerUID))
-			waitForPlacementBindingCntInCache(placementPolicy, primarySnapshotNames(0)[0], 1)
+		It("can create a snapshot at index 1", func() {
+			updateConfigMapData(appNamespaceName, configMapName, "changed-1")
+			snapshotAndVerify(resourceSnapshotManager, placementPolicy, []string{primarySnapshotName(1)})
 		})
 
-		It("should fail to garbage collect the snapshot with a transient error", func() {
-			err := resourceSnapshotManager.garbageCollect(ctx, gcRequestForSnapshot0)
-			verifyErrCategoryAndMsg(err, kferrors.ErrCategoryTransient, gcStaleOwnerInUseErrMsg)
-		})
-
-		It("should keep retrying with backoff", func() {
+		It("should keep the snapshot at index 0 while the placement binding uses it", func() {
+			gcRequestForSnapshot0 := gcRequestFor(placementPolicy, getPrimarySnapshotFromCache(placementPolicy, 0))
 			// This call enqueues the snapshot at index 0 for GC.
-			snapshotAndVerify(resourceSnapshotManager, placementPolicy, primarySnapshotNames(1))
+			snapshotAndVerify(resourceSnapshotManager, placementPolicy, []string{primarySnapshotName(1)})
+			verifySnapshotsKeptWithoutRetries(gcRequestForSnapshot0, []string{primarySnapshotName(0), primarySnapshotName(1)})
 
-			Eventually(func() int {
-				return resourceSnapshotManager.gcwq.NumRequeues(gcRequestForSnapshot0)
-			}, eventuallyDuration, eventuallyInterval).Should(BeNumerically(">=", 2), "The GC request has not been retried")
-			verifySnapshotExists(appNamespaceName, primarySnapshotNames(0)[0])
+			// A GC attempt on a snapshot in use succeeds without deleting anything.
+			Expect(pausedMgr.garbageCollect(ctx, gcRequestForSnapshot0)).To(Succeed(), "Failed to process the GC request")
+			Expect(checkOwnedSnapshots(placementPolicy, []string{primarySnapshotName(0), primarySnapshotName(1)})).To(Succeed())
 		})
 
-		It("can delete the placement binding", func() {
-			deleteObjectsAndWait([]client.Object{placementBindingObj(appNamespaceName, placementBindingName)})
-			waitForPlacementBindingCntInCache(placementPolicy, primarySnapshotNames(0)[0], 0)
+		It("can point the placement binding to the snapshot at index 1", func() {
+			updatePlacementBindingSnapshot(placementPolicy, placementBindingName, primarySnapshotName(1))
+			waitForPlacementBindingCntInCache(placementPolicy, primarySnapshotName(0), 0)
 		})
 
-		It("should garbage collect the snapshot and reset the backoff", func() {
-			// This call enqueues the snapshot at index 0 again right away, rather than waiting for the backoff
-			// to expire.
-			snapshotAndVerify(resourceSnapshotManager, placementPolicy, primarySnapshotNames(1))
-
+		It("should garbage collect the snapshot at index 0 at the next retrieval", func() {
+			// The GC request dropped earlier is enqueued again by this call.
+			snapshotAndVerify(resourceSnapshotManager, placementPolicy, []string{primarySnapshotName(1)})
 			Eventually(func() error {
-				return checkOwnedSnapshots(placementPolicy, primarySnapshotNames(1))
+				return checkOwnedSnapshots(placementPolicy, []string{primarySnapshotName(1)})
 			}, eventuallyDuration, eventuallyInterval).Should(Succeed(), "Failed to garbage collect the snapshot at index 0")
-			Eventually(func() int {
-				return resourceSnapshotManager.gcwq.NumRequeues(gcRequestForSnapshot0)
-			}, eventuallyDuration, eventuallyInterval).Should(Equal(0), "The backoff of the GC request has not been reset")
+		})
+
+		It("can create a placement binding without an owner reference that uses the snapshot at index 1", func() {
+			createPlacementBinding(placementPolicy, orphanedPlacementBindingName, primarySnapshotName(1), nil)
+			waitForPlacementBindingCntInCache(placementPolicy, primarySnapshotName(1), 2)
+		})
+
+		It("can create a snapshot at index 2, and point the owned placement binding to it", func() {
+			updateConfigMapData(appNamespaceName, configMapName, "changed-2")
+			snapshotAndVerify(resourceSnapshotManager, placementPolicy, []string{primarySnapshotName(2)})
+			updatePlacementBindingSnapshot(placementPolicy, placementBindingName, primarySnapshotName(2))
+			waitForPlacementBindingCntInCache(placementPolicy, primarySnapshotName(1), 1)
+		})
+
+		It("should keep the snapshot at index 1 while the placement binding without an owner reference uses it", func() {
+			// The owners of placement bindings are not checked; any placement binding that names the placement policy
+			// and the snapshot keeps the snapshot in use.
+			gcRequestForSnapshot1 := gcRequestFor(placementPolicy, getPrimarySnapshotFromCache(placementPolicy, 1))
+			// This call enqueues the snapshot at index 1 for GC.
+			snapshotAndVerify(resourceSnapshotManager, placementPolicy, []string{primarySnapshotName(2)})
+			verifySnapshotsKeptWithoutRetries(gcRequestForSnapshot1, []string{primarySnapshotName(1), primarySnapshotName(2)})
 		})
 
 		AfterAll(func() {
-			objs := primarySnapshotObjs(placementPolicy, 2)
-			objs = append(objs,
-				placementBindingObj(appNamespaceName, placementBindingName),
-				placementPolicy,
-				&corev1.ConfigMap{ObjectMeta: metav1.ObjectMeta{Name: configMapName, Namespace: appNamespaceName}},
-			)
-			deleteObjectsAndWait(objs)
-		})
-	})
-
-	Context("non-retryable GC failures", Ordered, func() {
-		configMapName := fmt.Sprintf(configMapNameTemplate, utils.RandStr())
-		resourceSelector := configMapNameSelector(configMapName)
-		resourceSelector.Namespace = appNamespaceName
-		placementPolicy := newClusterPlacementPolicy(resourceSelector)
-		placementPolicy.Spec.ResourceRevisionHistoryLimit = ptr.To(int32(1))
-		placementBindingName := fmt.Sprintf(placementBindingNameTemplate, utils.RandStr())
-
-		var gcRequestForSnapshot0 snapshotGarbageCollectionRequest
-
-		primarySnapshotNames := func(idx int) []string {
-			return []string{uniqueNameForPrimaryPlacementResourceSnapshot(placementPolicy.Name, idx)}
-		}
-
-		BeforeAll(func() {
-			configMap := &corev1.ConfigMap{
-				ObjectMeta: metav1.ObjectMeta{
-					Name:      configMapName,
-					Namespace: appNamespaceName,
+			if pausedMgr != nil {
+				pausedMgr.gcwq.ShutDown()
+			}
+			objs := slices.Concat(
+				[]client.Object{
+					placementBindingObj(appNamespaceName, placementBindingName),
+					placementBindingObj(appNamespaceName, orphanedPlacementBindingName),
 				},
-				Data: map[string]string{"key": "initial-value"},
-			}
-			Expect(hubClient.Create(ctx, configMap)).To(Succeed(), "Failed to create the config map")
-			Expect(hubClient.Create(ctx, placementPolicy)).To(Succeed(), "Failed to create the placement policy")
-		})
-
-		It("can create a snapshot at index 0", func() {
-			snapshotAndVerify(resourceSnapshotManager, placementPolicy, primarySnapshotNames(0))
-			gcRequestForSnapshot0 = gcRequestFor(placementPolicy, getPrimarySnapshotFromCache(placementPolicy, 0))
-		})
-
-		It("can create a cluster placement binding without an owner reference", func() {
-			createPlacementBinding(placementPolicy, placementBindingName, primarySnapshotNames(0)[0], nil)
-			waitForPlacementBindingCntInCache(placementPolicy, primarySnapshotNames(0)[0], 1)
-		})
-
-		It("should fail to garbage collect the snapshot with an unexpected error", func() {
-			err := resourceSnapshotManager.garbageCollect(ctx, gcRequestForSnapshot0)
-			verifyErrCategoryAndMsg(err, kferrors.ErrCategoryUnexpected, gcMissingOwnerInUseErrMsg)
-		})
-
-		It("can create snapshots at index 1 and 2", func() {
-			for idx := 1; idx < 3; idx++ {
-				updateConfigMapData(appNamespaceName, configMapName, fmt.Sprintf("value-%d", idx))
-				snapshotAndVerify(resourceSnapshotManager, placementPolicy, primarySnapshotNames(idx))
-			}
-		})
-
-		It("should not retry the snapshot while still processing later requests", func() {
-			// This call enqueues the snapshots at index 0 and 1 (in this order) for GC.
-			snapshotAndVerify(resourceSnapshotManager, placementPolicy, primarySnapshotNames(2))
-
-			// A single worker processes the GC requests in order; once the snapshot at index 1 is gone, the request
-			// for the snapshot at index 0 has been processed.
-			Eventually(func() bool {
-				err := hubUncachedReader.Get(ctx, types.NamespacedName{Name: primarySnapshotNames(1)[0]}, &placementv1alpha1.ClusterPlacementResourceSnapshot{})
-				return errors.IsNotFound(err)
-			}, eventuallyDuration, eventuallyInterval).Should(BeTrue(), "Failed to garbage collect the snapshot at index 1")
-			Expect(resourceSnapshotManager.gcwq.NumRequeues(gcRequestForSnapshot0)).To(Equal(0), "The GC request has been retried unexpectedly")
-			verifySnapshotExists("", primarySnapshotNames(0)[0])
-		})
-
-		It("can delete the cluster placement binding", func() {
-			deleteObjectsAndWait([]client.Object{placementBindingObj("", placementBindingName)})
-			waitForPlacementBindingCntInCache(placementPolicy, primarySnapshotNames(0)[0], 0)
-		})
-
-		It("should garbage collect the snapshot at the next retrieval", func() {
-			snapshotAndVerify(resourceSnapshotManager, placementPolicy, primarySnapshotNames(2))
-			Eventually(func() error {
-				return checkOwnedSnapshots(placementPolicy, primarySnapshotNames(2))
-			}, eventuallyDuration, eventuallyInterval).Should(Succeed(), "Failed to garbage collect the snapshot at index 0")
-		})
-
-		AfterAll(func() {
-			objs := primarySnapshotObjs(placementPolicy, 3)
-			objs = append(objs,
-				placementBindingObj("", placementBindingName),
-				placementPolicy,
-				&corev1.ConfigMap{ObjectMeta: metav1.ObjectMeta{Name: configMapName, Namespace: appNamespaceName}},
+				primarySnapshotObjs(placementPolicy, 3),
+				[]client.Object{
+					placementPolicy,
+					&corev1.ConfigMap{ObjectMeta: metav1.ObjectMeta{Name: configMapName, Namespace: appNamespaceName}},
+				},
 			)
 			deleteObjectsAndWait(objs)
 		})
@@ -4214,9 +4170,10 @@ var _ = Describe("GC variants", func() {
 
 		placementPolicies := []placementv1alpha1.PlacementPolicyAccessor{appPlacementPolicy, otherPlacementPolicy, clusterPlacementPolicy}
 
-		// All three placement policies share the same snapshot names.
-		primarySnapshotNames := func(idx int) []string {
-			return []string{uniqueNameForPrimaryPlacementResourceSnapshot(placementPolicyName, idx)}
+		// The placement policies share the same name, but their snapshot names differ, as the names factor in the
+		// UIDs of the placement policies.
+		primarySnapshotNames := func(placementPolicy placementv1alpha1.PlacementPolicyAccessor, idx int) []string {
+			return []string{uniquename.PrimaryPlacementResourceSnapshotName(placementPolicy.GetName(), placementPolicy.GetUID(), idx)}
 		}
 
 		BeforeAll(func() {
@@ -4239,15 +4196,18 @@ var _ = Describe("GC variants", func() {
 
 		It("can create snapshots for all three placement policies", func() {
 			for _, placementPolicy := range placementPolicies {
-				snapshotAndVerify(resourceSnapshotManager, placementPolicy, primarySnapshotNames(0))
+				snapshotAndVerify(resourceSnapshotManager, placementPolicy, primarySnapshotNames(placementPolicy, 0))
 			}
 		})
 
-		It("can create a placement binding that uses the snapshot of the placement policy in the other namespace", func() {
-			createPlacementBinding(otherPlacementPolicy, placementBindingName, primarySnapshotNames(0)[0], ptr.To(otherPlacementPolicy.UID))
-			waitForPlacementBindingCntInCache(otherPlacementPolicy, primarySnapshotNames(0)[0], 1)
+		It("can create a placement binding in the other namespace that matches the in-use lookup of the app namespace snapshot", func() {
+			// The placement binding refers to the snapshot name of the placement policy in the app namespace, so
+			// that only the namespace sets it apart from a placement binding that uses that snapshot.
+			appSnapshotName := primarySnapshotNames(appPlacementPolicy, 0)[0]
+			createPlacementBinding(otherPlacementPolicy, placementBindingName, appSnapshotName, ptr.To(otherPlacementPolicy.UID))
+			waitForPlacementBindingCntInCache(otherPlacementPolicy, appSnapshotName, 1)
 			// The same lookup in the app namespace finds no placement binding.
-			waitForPlacementBindingCntInCache(appPlacementPolicy, primarySnapshotNames(0)[0], 0)
+			waitForPlacementBindingCntInCache(appPlacementPolicy, appSnapshotName, 0)
 		})
 
 		It("can update the config map in the app namespace", func() {
@@ -4255,17 +4215,17 @@ var _ = Describe("GC variants", func() {
 		})
 
 		It("should garbage collect only the old snapshot of the placement policy in the app namespace", func() {
-			snapshotAndVerify(resourceSnapshotManager, appPlacementPolicy, primarySnapshotNames(1))
+			snapshotAndVerify(resourceSnapshotManager, appPlacementPolicy, primarySnapshotNames(appPlacementPolicy, 1))
 			// This call enqueues the snapshot at index 0 for GC.
-			snapshotAndVerify(resourceSnapshotManager, appPlacementPolicy, primarySnapshotNames(1))
+			snapshotAndVerify(resourceSnapshotManager, appPlacementPolicy, primarySnapshotNames(appPlacementPolicy, 1))
 
 			// The snapshot would be kept (with the GC request being retried) if the in-use check found the placement
 			// binding in the other namespace.
 			Eventually(func() error {
-				return checkOwnedSnapshots(appPlacementPolicy, primarySnapshotNames(1))
+				return checkOwnedSnapshots(appPlacementPolicy, primarySnapshotNames(appPlacementPolicy, 1))
 			}, eventuallyDuration, eventuallyInterval).Should(Succeed(), "Failed to garbage collect the snapshot at index 0")
-			verifySnapshotExists(otherNamespaceName, primarySnapshotNames(0)[0])
-			verifySnapshotExists("", primarySnapshotNames(0)[0])
+			verifySnapshotExists(otherNamespaceName, primarySnapshotNames(otherPlacementPolicy, 0)[0])
+			verifySnapshotExists("", primarySnapshotNames(clusterPlacementPolicy, 0)[0])
 		})
 
 		It("can update the config map in the other namespace", func() {
@@ -4273,16 +4233,16 @@ var _ = Describe("GC variants", func() {
 		})
 
 		It("should garbage collect only the old snapshot of the cluster placement policy", func() {
-			snapshotAndVerify(resourceSnapshotManager, clusterPlacementPolicy, primarySnapshotNames(1))
+			snapshotAndVerify(resourceSnapshotManager, clusterPlacementPolicy, primarySnapshotNames(clusterPlacementPolicy, 1))
 			// This call enqueues the snapshot at index 0 for GC.
-			snapshotAndVerify(resourceSnapshotManager, clusterPlacementPolicy, primarySnapshotNames(1))
+			snapshotAndVerify(resourceSnapshotManager, clusterPlacementPolicy, primarySnapshotNames(clusterPlacementPolicy, 1))
 
 			Eventually(func() error {
-				return checkOwnedSnapshots(clusterPlacementPolicy, primarySnapshotNames(1))
+				return checkOwnedSnapshots(clusterPlacementPolicy, primarySnapshotNames(clusterPlacementPolicy, 1))
 			}, eventuallyDuration, eventuallyInterval).Should(Succeed(), "Failed to garbage collect the snapshot at index 0")
 			// The placement policy in the other namespace has not been called since its first snapshot.
-			Expect(checkOwnedSnapshots(otherPlacementPolicy, primarySnapshotNames(0))).To(Succeed())
-			Expect(checkOwnedSnapshots(appPlacementPolicy, primarySnapshotNames(1))).To(Succeed())
+			Expect(checkOwnedSnapshots(otherPlacementPolicy, primarySnapshotNames(otherPlacementPolicy, 0))).To(Succeed())
+			Expect(checkOwnedSnapshots(appPlacementPolicy, primarySnapshotNames(appPlacementPolicy, 1))).To(Succeed())
 		})
 
 		AfterAll(func() {

@@ -40,6 +40,7 @@ import (
 	placementv1alpha1 "github.com/kubefleet-dev/kubefleet/apis/kubefleet.dev/placement/v1alpha1"
 	"github.com/kubefleet-dev/kubefleet/pkg/utils"
 	kferrors "github.com/kubefleet-dev/kubefleet/pkg/utils/errors"
+	"github.com/kubefleet-dev/kubefleet/pkg/v1/managers/placementresourcesnapshot/uniquename"
 	"github.com/kubefleet-dev/kubefleet/pkg/v1/utils/fieldindexers"
 )
 
@@ -166,7 +167,7 @@ func primarySnapshotObjs(placementPolicy placementv1alpha1.PlacementPolicyAccess
 	objs := make([]client.Object, 0, cnt)
 	for idx := 0; idx < cnt; idx++ {
 		objs = append(objs, placementResourceSnapshotObj(placementPolicy.GetNamespace(),
-			uniqueNameForPrimaryPlacementResourceSnapshot(placementPolicy.GetName(), idx)))
+			uniquename.PrimaryPlacementResourceSnapshotName(placementPolicy.GetName(), placementPolicy.GetUID(), idx)))
 	}
 	return objs
 }
@@ -324,7 +325,7 @@ func verifyReturnedPrimarySnapshot(
 	Expect(err).ToNot(HaveOccurred(), "Failed to snapshot resources")
 	Expect(isUpToDate).To(BeTrue(), "The placement resource snapshot is not up-to-date")
 	Expect(gotSnapshots).To(HaveLen(1), "Unexpected number of placement resource snapshots")
-	wantName := uniqueNameForPrimaryPlacementResourceSnapshot(placementPolicy.GetName(), wantIdx)
+	wantName := uniquename.PrimaryPlacementResourceSnapshotName(placementPolicy.GetName(), placementPolicy.GetUID(), wantIdx)
 	Expect(gotSnapshots[0].GetName()).To(Equal(wantName), "Unexpected name of the placement resource snapshot")
 }
 
@@ -345,14 +346,14 @@ func getSnapshotFromCache(namespace, name string) placementv1alpha1.PlacementRes
 func getPrimarySnapshotFromCache(placementPolicy placementv1alpha1.PlacementPolicyAccessor, idx int) placementv1alpha1.PlacementResourceSnapshotAccessor {
 	GinkgoHelper()
 
-	return getSnapshotFromCache(placementPolicy.GetNamespace(), uniqueNameForPrimaryPlacementResourceSnapshot(placementPolicy.GetName(), idx))
+	return getSnapshotFromCache(placementPolicy.GetNamespace(), uniquename.PrimaryPlacementResourceSnapshotName(placementPolicy.GetName(), placementPolicy.GetUID(), idx))
 }
 
 // verifyNoPrimarySnapshotAtIdx verifies that no primary placement resource snapshot exists at the given index.
 func verifyNoPrimarySnapshotAtIdx(placementPolicy placementv1alpha1.PlacementPolicyAccessor, idx int) {
 	GinkgoHelper()
 
-	name := uniqueNameForPrimaryPlacementResourceSnapshot(placementPolicy.GetName(), idx)
+	name := uniquename.PrimaryPlacementResourceSnapshotName(placementPolicy.GetName(), placementPolicy.GetUID(), idx)
 	err := hubUncachedReader.Get(ctx, types.NamespacedName{Namespace: placementPolicy.GetNamespace(), Name: name},
 		placementResourceSnapshotObj(placementPolicy.GetNamespace(), name))
 	Expect(errors.IsNotFound(err)).To(BeTrue(), "Placement resource snapshot %s was created unexpectedly: %v", name, err)
@@ -456,6 +457,32 @@ func createDecoySnapshot(namespace, name string, labels, annotations map[string]
 	decoy.SetFinalizers(finalizers)
 	Expect(hubClient.Create(ctx, decoy)).To(Succeed(), "Failed to create the decoy placement resource snapshot %s", name)
 	return decoy
+}
+
+// createOwnedDecoySnapshot creates a decoy (see createDecoySnapshot) in the namespace of the given placement policy,
+// with a controller owner reference to the placement policy, the same way as the snapshots that the manager creates.
+//
+// The manager treats an indexed primary snapshot without owner references as a leftover; decoys that mimic the
+// snapshots of a placement policy must be owned by the placement policy.
+func createOwnedDecoySnapshot(placementPolicy placementv1alpha1.PlacementPolicyAccessor, name string, labels, annotations map[string]string) placementv1alpha1.PlacementResourceSnapshotAccessor {
+	GinkgoHelper()
+
+	decoy := placementResourceSnapshotObj(placementPolicy.GetNamespace(), name)
+	decoy.SetLabels(labels)
+	decoy.SetAnnotations(annotations)
+	decoy.SetOwnerReferences(decoyOwnerRefs(placementPolicy))
+	Expect(hubClient.Create(ctx, decoy)).To(Succeed(), "Failed to create the decoy placement resource snapshot %s", name)
+	return decoy
+}
+
+// decoyOwnerRefs returns the owner references of a placement resource snapshot that the given placement policy
+// controls.
+func decoyOwnerRefs(placementPolicy placementv1alpha1.PlacementPolicyAccessor) []metav1.OwnerReference {
+	kind := placementv1alpha1.PlacementPolicyKind
+	if placementPolicy.GetNamespace() == "" {
+		kind = placementv1alpha1.ClusterPlacementPolicyKind
+	}
+	return []metav1.OwnerReference{*metav1.NewControllerRef(placementPolicy, placementv1alpha1.GroupVersion.WithKind(kind))}
 }
 
 // decoyPrimaryLabels returns the labels of a primary placement resource snapshot; the values are strings so that
@@ -685,20 +712,22 @@ func placementPolicyNameOfLen(l int) string {
 	return strings.Repeat(placementPolicyNameFillerLetter, l-len(suffix)-1) + "-" + suffix
 }
 
-// verifySnapshotName verifies that a generated placement resource snapshot name is valid, and that it is plain or
-// hashed as wanted.
-func verifySnapshotName(gotName, plainName, hashedNamePattern string, wantHashed bool) {
+// verifySnapshotName verifies that a generated placement resource snapshot name is valid and ends with a hash, and
+// that the placement policy name segment in it is sanitized (i.e., with dots dropped and/or truncated) only when
+// wanted. unsanitizedNamePrefix is the wanted snapshot name minus the hash suffix, should no sanitization occur.
+func verifySnapshotName(gotName, unsanitizedNamePrefix, hashedNamePattern string, wantSanitized bool) {
 	GinkgoHelper()
 
 	Expect(validation.IsDNS1123Subdomain(gotName)).To(BeEmpty(), "Snapshot name %s is not a valid DNS subdomain", gotName)
 	Expect(len(gotName)).To(BeNumerically("<=", wantMaxSnapshotNameLen), "Snapshot name %s is too long", gotName)
-	if !wantHashed {
-		Expect(gotName).To(Equal(plainName), "Snapshot name is hashed unexpectedly")
+	Expect(gotName).ToNot(ContainSubstring("."), "Snapshot name %s contains dots", gotName)
+	Expect(gotName).To(MatchRegexp(hashedNamePattern), "Snapshot name %s does not end with a hash", gotName)
+	if !wantSanitized {
+		Expect(gotName).To(HavePrefix(unsanitizedNamePrefix), "Snapshot name %s is sanitized unexpectedly", gotName)
+		Expect(gotName[len(unsanitizedNamePrefix):]).To(MatchRegexp(wantHashSuffixPattern), "Unexpected hash suffix of snapshot name %s", gotName)
 		return
 	}
-	Expect(gotName).ToNot(Equal(plainName), "Snapshot name is not hashed")
-	Expect(gotName).ToNot(ContainSubstring("."), "Hashed snapshot name %s contains dots", gotName)
-	Expect(gotName).To(MatchRegexp(hashedNamePattern), "Hashed snapshot name %s does not end with a hash", gotName)
+	Expect(gotName).ToNot(HavePrefix(unsanitizedNamePrefix), "Snapshot name %s is not sanitized", gotName)
 }
 
 // verifyOwnedByLabelVal verifies the value of the owned-by label for a placement policy.
@@ -824,9 +853,9 @@ func verifyGCRequests(gotReqs, wantReqs []snapshotGarbageCollectionRequest) {
 // snapshotSetNames returns the names of the primary placement resource snapshot at the given index and its
 // secondary snapshots, given the total number of snapshots at the index.
 func snapshotSetNames(placementPolicy placementv1alpha1.PlacementPolicyAccessor, idx, cnt int) []string {
-	names := []string{uniqueNameForPrimaryPlacementResourceSnapshot(placementPolicy.GetName(), idx)}
+	names := []string{uniquename.PrimaryPlacementResourceSnapshotName(placementPolicy.GetName(), placementPolicy.GetUID(), idx)}
 	for subIdx := 1; subIdx < cnt; subIdx++ {
-		names = append(names, uniqueNameForSecondaryPlacementResourceSnapshot(placementPolicy.GetName(), idx, subIdx))
+		names = append(names, uniquename.SecondaryPlacementResourceSnapshotName(placementPolicy.GetName(), placementPolicy.GetUID(), idx, subIdx))
 	}
 	return names
 }
@@ -998,4 +1027,68 @@ func updateRevisionHistoryLimit(placementPolicy placementv1alpha1.PlacementPolic
 
 	placementPolicy.GetSpec().ResourceRevisionHistoryLimit = ptr.To(limit)
 	Expect(hubClient.Update(ctx, placementPolicy)).To(Succeed(), "Failed to update the revision history limit of the placement policy")
+}
+
+// recreatePlacementPolicy deletes the given placement policy, and creates a new one with the same name and spec; it
+// returns the new placement policy, which has a different UID.
+//
+// The envtest environment does not run the Kubernetes GC; the placement resource snapshots of the deleted placement
+// policy stay, along with their owner references (if any).
+func recreatePlacementPolicy(placementPolicy placementv1alpha1.PlacementPolicyAccessor) placementv1alpha1.PlacementPolicyAccessor {
+	GinkgoHelper()
+
+	previousUID := placementPolicy.GetUID()
+	deleteObjectsAndWait([]client.Object{placementPolicy})
+
+	objectMeta := metav1.ObjectMeta{Name: placementPolicy.GetName(), Namespace: placementPolicy.GetNamespace()}
+	var recreatedPlacementPolicy placementv1alpha1.PlacementPolicyAccessor
+	if placementPolicy.GetNamespace() == "" {
+		recreatedPlacementPolicy = &placementv1alpha1.ClusterPlacementPolicy{ObjectMeta: objectMeta, Spec: *placementPolicy.GetSpec().DeepCopy()}
+	} else {
+		recreatedPlacementPolicy = &placementv1alpha1.PlacementPolicy{ObjectMeta: objectMeta, Spec: *placementPolicy.GetSpec().DeepCopy()}
+	}
+	Expect(hubClient.Create(ctx, recreatedPlacementPolicy)).To(Succeed(), "Failed to re-create the placement policy")
+	Expect(recreatedPlacementPolicy.GetUID()).ToNot(Equal(previousUID), "The re-created placement policy has the same UID")
+	return recreatedPlacementPolicy
+}
+
+// setSnapshotOwnerRefs sets the owner references of a placement resource snapshot (nil removes all of them), and
+// waits until the cache has observed the change, as the manager reads placement resource snapshots from the cache.
+func setSnapshotOwnerRefs(namespace, name string, ownerRefs []metav1.OwnerReference) {
+	GinkgoHelper()
+
+	key := types.NamespacedName{Namespace: namespace, Name: name}
+	Eventually(func() error {
+		snapshot := placementResourceSnapshotObj(namespace, name)
+		if err := hubUncachedReader.Get(ctx, key, snapshot); err != nil {
+			return err
+		}
+		snapshot.SetOwnerReferences(ownerRefs)
+		return hubClient.Update(ctx, snapshot)
+	}, eventuallyDuration, eventuallyInterval).Should(Succeed(), "Failed to set the owner references of placement resource snapshot %s", name)
+	Eventually(func() error {
+		snapshot := placementResourceSnapshotObj(namespace, name)
+		if err := hubClient.Get(ctx, key, snapshot); err != nil {
+			return err
+		}
+		if diff := cmp.Diff(snapshot.GetOwnerReferences(), ownerRefs, cmpopts.EquateEmpty()); diff != "" {
+			return fmt.Errorf("owner references in the cache diff (-got +want):\n%s", diff)
+		}
+		return nil
+	}, eventuallyDuration, eventuallyInterval).Should(Succeed(), "The cache has not observed the owner references of placement resource snapshot %s", name)
+}
+
+// updatePlacementBindingSnapshot points a placement binding (of the same scope as the placement policy) to the given
+// primary placement resource snapshot.
+func updatePlacementBindingSnapshot(placementPolicy placementv1alpha1.PlacementPolicyAccessor, name, snapshotName string) {
+	GinkgoHelper()
+
+	Eventually(func() error {
+		placementBinding := placementBindingObj(placementPolicy.GetNamespace(), name)
+		if err := hubUncachedReader.Get(ctx, client.ObjectKeyFromObject(placementBinding), placementBinding); err != nil {
+			return err
+		}
+		placementBinding.GetSpec().ResourceSnapshotName = snapshotName
+		return hubClient.Update(ctx, placementBinding)
+	}, eventuallyDuration, eventuallyInterval).Should(Succeed(), "Failed to update placement binding %s", name)
 }

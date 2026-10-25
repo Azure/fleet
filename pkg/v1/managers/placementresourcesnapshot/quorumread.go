@@ -23,15 +23,16 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/types"
 
-	placementv1alpha1 "go.goms.io/fleet/apis/kubefleet.dev/placement/v1alpha1"
-	errors "go.goms.io/fleet/pkg/utils/errors"
+	placementv1alpha1 "github.com/kubefleet-dev/kubefleet/apis/kubefleet.dev/placement/v1alpha1"
+	errors "github.com/kubefleet-dev/kubefleet/pkg/utils/errors"
+	"github.com/kubefleet-dev/kubefleet/pkg/v1/managers/placementresourcesnapshot/uniquename"
 )
 
 func (m *Manager) primaryPlacementResourceSnapshotExistsAtIdx(
 	ctx context.Context,
 	placementPolicy placementv1alpha1.PlacementPolicyAccessor,
 	idx int) (bool, error) {
-	name := uniqueNameForPrimaryPlacementResourceSnapshot(placementPolicy.GetName(), idx)
+	name := uniquename.PrimaryPlacementResourceSnapshotName(placementPolicy.GetName(), placementPolicy.GetUID(), idx)
 	namespace := placementPolicy.GetNamespace()
 
 	kind := placementv1alpha1.ClusterPlacementResourceSnapshotKind

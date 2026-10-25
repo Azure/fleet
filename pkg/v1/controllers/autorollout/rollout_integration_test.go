@@ -250,7 +250,7 @@ var _ = Describe("rolling out placement policies", func() {
 		randStr := utils.RandStr()
 		configMapName := fmt.Sprintf(configMapNameTemplate, randStr)
 		policyName := fmt.Sprintf(placementPolicyNameTemplate, randStr)
-		snapshotName := primaryPlacementResourceSnapshotName(policyName, 0)
+		var snapshotName string
 
 		var policy placementv1alpha1.PlacementPolicyAccessor
 		var bindingNames []string
@@ -259,6 +259,8 @@ var _ = Describe("rolling out placement policies", func() {
 		BeforeAll(func() {
 			createConfigMap(configMapName)
 			policy = createPlacementPolicy(appNamespaceName, policyName, configMapName, autoRolloutEnabledAnnotations())
+			// The snapshot names factor in the UID of the placement policy, which is only known once it is created.
+			snapshotName = primaryPlacementResourceSnapshotName(policy, 0)
 			bindingNames = createPlacementBindings(policy, randStr, manyBindingCount)
 			waitForObjectsToBeCached(append(placementBindingObjs(appNamespaceName, bindingNames), policy)...)
 		})
@@ -292,7 +294,7 @@ var _ = Describe("rolling out placement policies", func() {
 		randStr := utils.RandStr()
 		configMapName := fmt.Sprintf(configMapNameTemplate, randStr)
 		policyName := fmt.Sprintf(placementPolicyNameTemplate, randStr)
-		snapshotName := primaryPlacementResourceSnapshotName(policyName, 0)
+		var snapshotName string
 
 		var policy placementv1alpha1.PlacementPolicyAccessor
 		var outdatedBindingNames, upToDateBindingNames []string
@@ -301,6 +303,8 @@ var _ = Describe("rolling out placement policies", func() {
 		BeforeAll(func() {
 			createConfigMap(configMapName)
 			policy = createPlacementPolicy(appNamespaceName, policyName, configMapName, autoRolloutEnabledAnnotations())
+			// The snapshot names factor in the UID of the placement policy, which is only known once it is created.
+			snapshotName = primaryPlacementResourceSnapshotName(policy, 0)
 			outdatedBindingNames = createPlacementBindings(policy, randStr, rolloutBindingCount)
 			// These placement bindings point to the resource snapshot that the rollout is about to create (snapshot
 			// names are deterministic).
@@ -339,7 +343,7 @@ var _ = Describe("rolling out placement policies", func() {
 		configMapName := fmt.Sprintf(configMapNameTemplate, randStr)
 		policyName := fmt.Sprintf(placementPolicyNameTemplate, randStr)
 		otherPolicyName := fmt.Sprintf(placementPolicyNameTemplate, randStr+"-other")
-		snapshotName := primaryPlacementResourceSnapshotName(policyName, 0)
+		var snapshotName string
 
 		deletingBindingName, deletingClusterName := variantPlacementBindingNames(randStr, "deleting")
 		noOwnerBindingName, noOwnerClusterName := variantPlacementBindingNames(randStr, "no-owner")
@@ -361,6 +365,8 @@ var _ = Describe("rolling out placement policies", func() {
 		BeforeAll(func() {
 			createConfigMap(configMapName)
 			policy = createPlacementPolicy(appNamespaceName, policyName, configMapName, autoRolloutEnabledAnnotations())
+			// The snapshot names factor in the UID of the placement policy, which is only known once it is created.
+			snapshotName = primaryPlacementResourceSnapshotName(policy, 0)
 			// Another placement policy, with auto-rollout disabled.
 			otherPolicy := createPlacementPolicy(appNamespaceName, otherPolicyName, configMapName, nil)
 
@@ -429,7 +435,7 @@ var _ = Describe("rolling out placement policies", func() {
 		randStr := utils.RandStr()
 		configMapName := fmt.Sprintf(configMapNameTemplate, randStr)
 		policyName := fmt.Sprintf(placementPolicyNameTemplate, randStr)
-		snapshotName := primaryPlacementResourceSnapshotName(policyName, 0)
+		var snapshotName string
 		crossNSOwnerBindingName, crossNSOwnerClusterName := variantPlacementBindingNames(randStr, "cross-namespace-owner")
 
 		var policy placementv1alpha1.PlacementPolicyAccessor
@@ -444,6 +450,8 @@ var _ = Describe("rolling out placement policies", func() {
 			// disabled.
 			otherNSPolicy := createPlacementPolicy(otherAppNamespaceName, policyName, configMapName, nil)
 			clusterPolicy := createPlacementPolicy(clusterScopedNS, policyName, configMapName, nil)
+			// The snapshot names factor in the UID of the placement policy, which is only known once it is created.
+			snapshotName = primaryPlacementResourceSnapshotName(clusterPolicy, 0)
 
 			bindingNames = createPlacementBindings(policy, randStr, rolloutBindingCount)
 			createPlacementBindings(otherNSPolicy, randStr, rolloutBindingCount)
@@ -505,7 +513,7 @@ var _ = Describe("rolling out placement policies", func() {
 		randStr := utils.RandStr()
 		configMapName := fmt.Sprintf(configMapNameTemplate, randStr)
 		policyName := fmt.Sprintf(placementPolicyNameTemplate, randStr)
-		snapshotName := primaryPlacementResourceSnapshotName(policyName, 0)
+		var snapshotName string
 
 		var policy placementv1alpha1.PlacementPolicyAccessor
 		var notBefore time.Time
@@ -513,6 +521,8 @@ var _ = Describe("rolling out placement policies", func() {
 		BeforeAll(func() {
 			createConfigMap(configMapName)
 			policy = createPlacementPolicy(appNamespaceName, policyName, configMapName, autoRolloutEnabledAnnotations())
+			// The snapshot names factor in the UID of the placement policy, which is only known once it is created.
+			snapshotName = primaryPlacementResourceSnapshotName(policy, 0)
 			waitForObjectsToBeCached(policy)
 		})
 
@@ -539,10 +549,7 @@ var _ = Describe("rolling out placement policies", func() {
 		randStr := utils.RandStr()
 		configMapName := fmt.Sprintf(configMapNameTemplate, randStr)
 		policyName := fmt.Sprintf(placementPolicyNameTemplate, randStr)
-		snapshotNames := []string{
-			primaryPlacementResourceSnapshotName(policyName, 0),
-			primaryPlacementResourceSnapshotName(policyName, 1),
-		}
+		var snapshotNames []string
 
 		var policy placementv1alpha1.PlacementPolicyAccessor
 		var bindingNames []string
@@ -551,6 +558,11 @@ var _ = Describe("rolling out placement policies", func() {
 		BeforeAll(func() {
 			createConfigMap(configMapName)
 			policy = createPlacementPolicy(appNamespaceName, policyName, configMapName, autoRolloutEnabledAnnotations())
+			// The snapshot names factor in the UID of the placement policy, which is only known once it is created.
+			snapshotNames = []string{
+				primaryPlacementResourceSnapshotName(policy, 0),
+				primaryPlacementResourceSnapshotName(policy, 1),
+			}
 			bindingNames = createPlacementBindings(policy, randStr, rolloutBindingCount)
 			waitForObjectsToBeCached(append(placementBindingObjs(appNamespaceName, bindingNames), policy)...)
 		})
@@ -642,10 +654,7 @@ var _ = Describe("rolling out placement policies", func() {
 		randStr := utils.RandStr()
 		configMapName := fmt.Sprintf(configMapNameTemplate, randStr)
 		policyName := fmt.Sprintf(placementPolicyNameTemplate, randStr)
-		snapshotNames := []string{
-			primaryPlacementResourceSnapshotName(policyName, 0),
-			primaryPlacementResourceSnapshotName(policyName, 1),
-		}
+		var snapshotNames []string
 
 		var policy placementv1alpha1.PlacementPolicyAccessor
 		var bindingNames []string
@@ -654,6 +663,11 @@ var _ = Describe("rolling out placement policies", func() {
 		BeforeAll(func() {
 			createConfigMap(configMapName)
 			policy = createPlacementPolicy(appNamespaceName, policyName, configMapName, autoRolloutEnabledAnnotations())
+			// The snapshot names factor in the UID of the placement policy, which is only known once it is created.
+			snapshotNames = []string{
+				primaryPlacementResourceSnapshotName(policy, 0),
+				primaryPlacementResourceSnapshotName(policy, 1),
+			}
 			bindingNames = createPlacementBindings(policy, randStr, rolloutBindingCount)
 			waitForObjectsToBeCached(append(placementBindingObjs(appNamespaceName, bindingNames), policy)...)
 		})
@@ -713,10 +727,7 @@ var _ = Describe("rolling out placement policies", func() {
 		randStr := utils.RandStr()
 		configMapName := fmt.Sprintf(configMapNameTemplate, randStr)
 		policyName := fmt.Sprintf(placementPolicyNameTemplate, randStr)
-		snapshotNames := []string{
-			primaryPlacementResourceSnapshotName(policyName, 0),
-			primaryPlacementResourceSnapshotName(policyName, 1),
-		}
+		var snapshotNames []string
 		deniedBindingName, deniedClusterName := variantPlacementBindingNames(randStr, "denied")
 		denyPolicy, denyPolicyBinding := newSnapshotChangeDenyPolicyObjs(randStr)
 
@@ -727,6 +738,11 @@ var _ = Describe("rolling out placement policies", func() {
 		BeforeAll(func() {
 			createConfigMap(configMapName)
 			policy = createPlacementPolicy(appNamespaceName, policyName, configMapName, autoRolloutEnabledAnnotations())
+			// The snapshot names factor in the UID of the placement policy, which is only known once it is created.
+			snapshotNames = []string{
+				primaryPlacementResourceSnapshotName(policy, 0),
+				primaryPlacementResourceSnapshotName(policy, 1),
+			}
 			regularBindingNames = createPlacementBindings(policy, randStr, rolloutBindingCount-1)
 			// The API server denies changes to the resource snapshot of this placement binding (see below).
 			deniedBinding := newOwnedPlacementBinding(policy, deniedBindingName, deniedClusterName, previousResourceSnapshotName)
@@ -804,7 +820,7 @@ var _ = Describe("rolling out cluster placement policies", func() {
 		randStr := utils.RandStr()
 		configMapName := fmt.Sprintf(configMapNameTemplate, randStr)
 		policyName := fmt.Sprintf(placementPolicyNameTemplate, randStr)
-		snapshotName := primaryPlacementResourceSnapshotName(policyName, 0)
+		var snapshotName string
 
 		var policy placementv1alpha1.PlacementPolicyAccessor
 		var bindingNames []string
@@ -813,6 +829,8 @@ var _ = Describe("rolling out cluster placement policies", func() {
 		BeforeAll(func() {
 			createConfigMap(configMapName)
 			policy = createPlacementPolicy(clusterScopedNS, policyName, configMapName, autoRolloutEnabledAnnotations())
+			// The snapshot names factor in the UID of the placement policy, which is only known once it is created.
+			snapshotName = primaryPlacementResourceSnapshotName(policy, 0)
 			bindingNames = createPlacementBindings(policy, randStr, manyBindingCount)
 			waitForObjectsToBeCached(append(placementBindingObjs(clusterScopedNS, bindingNames), policy)...)
 		})
@@ -846,7 +864,7 @@ var _ = Describe("rolling out cluster placement policies", func() {
 		randStr := utils.RandStr()
 		configMapName := fmt.Sprintf(configMapNameTemplate, randStr)
 		policyName := fmt.Sprintf(placementPolicyNameTemplate, randStr)
-		snapshotName := primaryPlacementResourceSnapshotName(policyName, 0)
+		var snapshotName string
 
 		var policy placementv1alpha1.PlacementPolicyAccessor
 		var outdatedBindingNames, upToDateBindingNames []string
@@ -855,6 +873,8 @@ var _ = Describe("rolling out cluster placement policies", func() {
 		BeforeAll(func() {
 			createConfigMap(configMapName)
 			policy = createPlacementPolicy(clusterScopedNS, policyName, configMapName, autoRolloutEnabledAnnotations())
+			// The snapshot names factor in the UID of the placement policy, which is only known once it is created.
+			snapshotName = primaryPlacementResourceSnapshotName(policy, 0)
 			outdatedBindingNames = createPlacementBindings(policy, randStr, rolloutBindingCount)
 			// These cluster placement bindings point to the resource snapshot that the rollout is about to create
 			// (snapshot names are deterministic).
@@ -893,7 +913,7 @@ var _ = Describe("rolling out cluster placement policies", func() {
 		configMapName := fmt.Sprintf(configMapNameTemplate, randStr)
 		policyName := fmt.Sprintf(placementPolicyNameTemplate, randStr)
 		otherPolicyName := fmt.Sprintf(placementPolicyNameTemplate, randStr+"-other")
-		snapshotName := primaryPlacementResourceSnapshotName(policyName, 0)
+		var snapshotName string
 
 		deletingBindingName, deletingClusterName := variantPlacementBindingNames(randStr, "deleting")
 		noOwnerBindingName, noOwnerClusterName := variantPlacementBindingNames(randStr, "no-owner")
@@ -915,6 +935,8 @@ var _ = Describe("rolling out cluster placement policies", func() {
 		BeforeAll(func() {
 			createConfigMap(configMapName)
 			policy = createPlacementPolicy(clusterScopedNS, policyName, configMapName, autoRolloutEnabledAnnotations())
+			// The snapshot names factor in the UID of the placement policy, which is only known once it is created.
+			snapshotName = primaryPlacementResourceSnapshotName(policy, 0)
 			// Another cluster placement policy, with auto-rollout disabled.
 			otherPolicy := createPlacementPolicy(clusterScopedNS, otherPolicyName, configMapName, nil)
 
@@ -984,7 +1006,7 @@ var _ = Describe("rolling out cluster placement policies", func() {
 		randStr := utils.RandStr()
 		configMapName := fmt.Sprintf(configMapNameTemplate, randStr)
 		policyName := fmt.Sprintf(placementPolicyNameTemplate, randStr)
-		snapshotName := primaryPlacementResourceSnapshotName(policyName, 0)
+		var snapshotName string
 
 		var policy placementv1alpha1.PlacementPolicyAccessor
 		// The placement bindings in both scopes share the same names.
@@ -996,6 +1018,8 @@ var _ = Describe("rolling out cluster placement policies", func() {
 			policy = createPlacementPolicy(clusterScopedNS, policyName, configMapName, autoRolloutEnabledAnnotations())
 			// A placement policy of the same name in the app namespace, with auto-rollout disabled.
 			nsPolicy := createPlacementPolicy(appNamespaceName, policyName, configMapName, nil)
+			// The snapshot names factor in the UID of the placement policy, which is only known once it is created.
+			snapshotName = primaryPlacementResourceSnapshotName(nsPolicy, 0)
 
 			bindingNames = createPlacementBindings(policy, randStr, rolloutBindingCount)
 			createPlacementBindings(nsPolicy, randStr, rolloutBindingCount)
@@ -1042,7 +1066,7 @@ var _ = Describe("rolling out cluster placement policies", func() {
 		randStr := utils.RandStr()
 		configMapName := fmt.Sprintf(configMapNameTemplate, randStr)
 		policyName := fmt.Sprintf(placementPolicyNameTemplate, randStr)
-		snapshotName := primaryPlacementResourceSnapshotName(policyName, 0)
+		var snapshotName string
 
 		var policy placementv1alpha1.PlacementPolicyAccessor
 		var notBefore time.Time
@@ -1050,6 +1074,8 @@ var _ = Describe("rolling out cluster placement policies", func() {
 		BeforeAll(func() {
 			createConfigMap(configMapName)
 			policy = createPlacementPolicy(clusterScopedNS, policyName, configMapName, autoRolloutEnabledAnnotations())
+			// The snapshot names factor in the UID of the placement policy, which is only known once it is created.
+			snapshotName = primaryPlacementResourceSnapshotName(policy, 0)
 			waitForObjectsToBeCached(policy)
 		})
 
@@ -1076,10 +1102,7 @@ var _ = Describe("rolling out cluster placement policies", func() {
 		randStr := utils.RandStr()
 		configMapName := fmt.Sprintf(configMapNameTemplate, randStr)
 		policyName := fmt.Sprintf(placementPolicyNameTemplate, randStr)
-		snapshotNames := []string{
-			primaryPlacementResourceSnapshotName(policyName, 0),
-			primaryPlacementResourceSnapshotName(policyName, 1),
-		}
+		var snapshotNames []string
 
 		var policy placementv1alpha1.PlacementPolicyAccessor
 		var bindingNames []string
@@ -1088,6 +1111,11 @@ var _ = Describe("rolling out cluster placement policies", func() {
 		BeforeAll(func() {
 			createConfigMap(configMapName)
 			policy = createPlacementPolicy(clusterScopedNS, policyName, configMapName, autoRolloutEnabledAnnotations())
+			// The snapshot names factor in the UID of the placement policy, which is only known once it is created.
+			snapshotNames = []string{
+				primaryPlacementResourceSnapshotName(policy, 0),
+				primaryPlacementResourceSnapshotName(policy, 1),
+			}
 			bindingNames = createPlacementBindings(policy, randStr, rolloutBindingCount)
 			waitForObjectsToBeCached(append(placementBindingObjs(clusterScopedNS, bindingNames), policy)...)
 		})
@@ -1180,10 +1208,7 @@ var _ = Describe("rolling out cluster placement policies", func() {
 		randStr := utils.RandStr()
 		configMapName := fmt.Sprintf(configMapNameTemplate, randStr)
 		policyName := fmt.Sprintf(placementPolicyNameTemplate, randStr)
-		snapshotNames := []string{
-			primaryPlacementResourceSnapshotName(policyName, 0),
-			primaryPlacementResourceSnapshotName(policyName, 1),
-		}
+		var snapshotNames []string
 
 		var policy placementv1alpha1.PlacementPolicyAccessor
 		var bindingNames []string
@@ -1192,6 +1217,11 @@ var _ = Describe("rolling out cluster placement policies", func() {
 		BeforeAll(func() {
 			createConfigMap(configMapName)
 			policy = createPlacementPolicy(clusterScopedNS, policyName, configMapName, autoRolloutEnabledAnnotations())
+			// The snapshot names factor in the UID of the placement policy, which is only known once it is created.
+			snapshotNames = []string{
+				primaryPlacementResourceSnapshotName(policy, 0),
+				primaryPlacementResourceSnapshotName(policy, 1),
+			}
 			bindingNames = createPlacementBindings(policy, randStr, rolloutBindingCount)
 			waitForObjectsToBeCached(append(placementBindingObjs(clusterScopedNS, bindingNames), policy)...)
 		})
@@ -1251,10 +1281,7 @@ var _ = Describe("rolling out cluster placement policies", func() {
 		randStr := utils.RandStr()
 		configMapName := fmt.Sprintf(configMapNameTemplate, randStr)
 		policyName := fmt.Sprintf(placementPolicyNameTemplate, randStr)
-		snapshotNames := []string{
-			primaryPlacementResourceSnapshotName(policyName, 0),
-			primaryPlacementResourceSnapshotName(policyName, 1),
-		}
+		var snapshotNames []string
 		deniedBindingName, deniedClusterName := variantPlacementBindingNames(randStr, "denied")
 		denyPolicy, denyPolicyBinding := newSnapshotChangeDenyPolicyObjs(randStr)
 
@@ -1265,6 +1292,11 @@ var _ = Describe("rolling out cluster placement policies", func() {
 		BeforeAll(func() {
 			createConfigMap(configMapName)
 			policy = createPlacementPolicy(clusterScopedNS, policyName, configMapName, autoRolloutEnabledAnnotations())
+			// The snapshot names factor in the UID of the placement policy, which is only known once it is created.
+			snapshotNames = []string{
+				primaryPlacementResourceSnapshotName(policy, 0),
+				primaryPlacementResourceSnapshotName(policy, 1),
+			}
 			regularBindingNames = createPlacementBindings(policy, randStr, rolloutBindingCount-1)
 			// The API server denies changes to the resource snapshot of this cluster placement binding (see below).
 			deniedBinding := newOwnedPlacementBinding(policy, deniedBindingName, deniedClusterName, previousResourceSnapshotName)

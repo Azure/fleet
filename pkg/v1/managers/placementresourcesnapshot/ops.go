@@ -25,9 +25,10 @@ import (
 	"k8s.io/klog/v2"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 
-	placementv1alpha1 "go.goms.io/fleet/apis/kubefleet.dev/placement/v1alpha1"
-	errors "go.goms.io/fleet/pkg/utils/errors"
-	"go.goms.io/fleet/pkg/v1/utils/fieldindexers"
+	placementv1alpha1 "github.com/kubefleet-dev/kubefleet/apis/kubefleet.dev/placement/v1alpha1"
+	errors "github.com/kubefleet-dev/kubefleet/pkg/utils/errors"
+	"github.com/kubefleet-dev/kubefleet/pkg/v1/managers/placementresourcesnapshot/uniquename"
+	"github.com/kubefleet-dev/kubefleet/pkg/v1/utils/fieldindexers"
 )
 
 // SnapshotResourcesIfNoSnapshotExists creates a new placement resource snapshot only if no snapshots exist.
@@ -172,6 +173,17 @@ func (m *Manager) retrieveLatestSnapshot(ctx context.Context, placementPolicy pl
 	})
 	if len(sortErrs) > 0 {
 		return nil, errors.NewUnexpectedError(nil, "failed to sort primary placement resource snapshots", "errs", sortErrs)
+	}
+
+	// Check for inconsistent resource snapshots.
+	leftovers, err := m.checkForInconsistentResourceSnapshots(snapshots, placementPolicy)
+	if err != nil {
+		return nil, errors.Wraps(err, "observed inconsistent resource snapshots")
+	}
+	if len(leftovers) > 0 {
+		// Leftover resource snapshots have been found; wait for them to disappear before proceeding.
+		return nil, errors.NewTransientError(nil, "leftover resource snapshots are detected; waiting for garbage collection to complete",
+			"placementPolicy", klog.KObj(placementPolicy), "leftoverPlacementResourceSnapshots", leftovers)
 	}
 
 	// Enqueue the outdated primary resource snapshots for GC.
@@ -332,7 +344,7 @@ func (m *Manager) isSnapshotUpToDate(
 		// A primary placement resource snapshot already exists at the given index; the currently observed primary
 		// resource snapshot is not up-to-date.
 		return false, errors.NewTransientError(nil, "a newer snapshot already exists (found via quorum reads); the client cache might be stale",
-			"primaryPlacementResourceSnapshotName", uniqueNameForPrimaryPlacementResourceSnapshot(placementPolicy.GetName(), nextIdx),
+			"primaryPlacementResourceSnapshotName", uniquename.PrimaryPlacementResourceSnapshotName(placementPolicy.GetName(), placementPolicy.GetUID(), nextIdx),
 			"snapshotIndex", nextIdx)
 	}
 
@@ -402,7 +414,7 @@ func (m *Manager) createResourceSnapshotAnyway(
 		// Create the secondary placement resource snapshots first. Start with the last resource group and work
 		// backwards, so that the primary snapshot (which carries the count label) is created last.
 		for subIdx := len(resGroups) - 1; subIdx >= 1; subIdx-- {
-			secondaryName := uniqueNameForSecondaryPlacementResourceSnapshot(placementPolicy.GetName(), nextSnapshotIdx, subIdx)
+			secondaryName := uniquename.SecondaryPlacementResourceSnapshotName(placementPolicy.GetName(), placementPolicy.GetUID(), nextSnapshotIdx, subIdx)
 			secondarySnapshot, err := secondaryPlacementResourceSnapshot(
 				placementPolicy.GetNamespace(), secondaryName, placementPolicy, nextSnapshotIdx, subIdx, resGroups[subIdx], currentHash, m.hubClient.Scheme())
 			if err != nil {
@@ -422,7 +434,7 @@ func (m *Manager) createResourceSnapshotAnyway(
 	}
 
 	// Create the primary placement resource snapshot last, with the count label.
-	primaryName := uniqueNameForPrimaryPlacementResourceSnapshot(placementPolicy.GetName(), nextSnapshotIdx)
+	primaryName := uniquename.PrimaryPlacementResourceSnapshotName(placementPolicy.GetName(), placementPolicy.GetUID(), nextSnapshotIdx)
 	primarySnapshot, err := primaryPlacementResourceSnapshot(
 		placementPolicy.GetNamespace(), primaryName, placementPolicy, nextSnapshotIdx, resGroups[0], currentHash, len(resGroups), m.hubClient.Scheme())
 	if err != nil {
@@ -499,7 +511,7 @@ func (m *Manager) cleanUpOrphanedSecondarySnapshots(
 		// A primary placement resource snapshot already exists at the given index; the secondary snapshots found
 		// here are not orphans. Report this as an error; the caller should requeue and wait for the cache to catch up.
 		return false, errors.NewTransientError(nil, "a primary placement resource snapshot already exists at the given index (found via quorum read); the client cache might be stale",
-			"primaryPlacementResourceSnapshotName", uniqueNameForPrimaryPlacementResourceSnapshot(placementPolicy.GetName(), nextSnapshotIdx),
+			"primaryPlacementResourceSnapshotName", uniquename.PrimaryPlacementResourceSnapshotName(placementPolicy.GetName(), placementPolicy.GetUID(), nextSnapshotIdx),
 			"snapshotIndex", nextSnapshotIdx)
 	}
 

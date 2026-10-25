@@ -38,7 +38,7 @@ import (
 	clusterv1beta1 "github.com/kubefleet-dev/kubefleet/apis/cluster/v1beta1"
 	placementv1alpha1 "github.com/kubefleet-dev/kubefleet/apis/kubefleet.dev/placement/v1alpha1"
 	rolloutv1alpha1 "github.com/kubefleet-dev/kubefleet/apis/kubefleet.dev/rollout/v1alpha1"
-	"github.com/kubefleet-dev/kubefleet/pkg/v1/managers/placementresourcesnapshot"
+	"github.com/kubefleet-dev/kubefleet/pkg/v1/managers/placementresourcesnapshot/uniquename"
 )
 
 const (
@@ -749,14 +749,14 @@ func getStagedUpdateRun(runNSName, runName string) (rolloutv1alpha1.StagedUpdate
 
 // primaryPlacementResourceSnapshotName returns the name of the primary placement resource snapshot of the given
 // index for a placement policy.
-func primaryPlacementResourceSnapshotName(policyName string, index int) string {
-	return fmt.Sprintf(placementresourcesnapshot.PrimaryPlacementResourceSnapshotNameFmt, policyName, index)
+func primaryPlacementResourceSnapshotName(policy placementv1alpha1.PlacementPolicyAccessor, index int) string {
+	return uniquename.PrimaryPlacementResourceSnapshotName(policy.GetName(), policy.GetUID(), index)
 }
 
 // secondaryPlacementResourceSnapshotName returns the name of the secondary placement resource snapshot of the given
 // index and sub-index for a placement policy.
-func secondaryPlacementResourceSnapshotName(policyName string, index, subIndex int) string {
-	return fmt.Sprintf(placementresourcesnapshot.SecondaryPlacementResourceSnapshotNameFmt, policyName, index, subIndex)
+func secondaryPlacementResourceSnapshotName(policy placementv1alpha1.PlacementPolicyAccessor, index, subIndex int) string {
+	return uniquename.SecondaryPlacementResourceSnapshotName(policy.GetName(), policy.GetUID(), index, subIndex)
 }
 
 // wantPerClusterStatuses builds the per-cluster statuses (with no conditions) of the member clusters at the given
@@ -1596,7 +1596,7 @@ func perStageTaskTimedWaitLastedAtLeastActual(runNSName, runName, stageName stri
 func primaryPlacementResourceSnapshotCreatedActual(policy placementv1alpha1.PlacementPolicyAccessor, index int) func() error {
 	return func() error {
 		// Retrieve the placement resource snapshot.
-		snapshotName := primaryPlacementResourceSnapshotName(policy.GetName(), index)
+		snapshotName := primaryPlacementResourceSnapshotName(policy, index)
 		snapshot := newPlacementResourceSnapshotObj(policy.GetNamespace(), snapshotName)
 		if err := hubClient.Get(ctx, client.ObjectKey{Namespace: policy.GetNamespace(), Name: snapshotName}, snapshot); err != nil {
 			return fmt.Errorf("failed to retrieve the placement resource snapshot: %w", err)

@@ -40,6 +40,7 @@ import (
 	placementv1alpha1 "github.com/kubefleet-dev/kubefleet/apis/kubefleet.dev/placement/v1alpha1"
 	"github.com/kubefleet-dev/kubefleet/pkg/utils"
 	kferrors "github.com/kubefleet-dev/kubefleet/pkg/utils/errors"
+	"github.com/kubefleet-dev/kubefleet/pkg/v1/managers/placementresourcesnapshot/uniquename"
 )
 
 const (
@@ -2035,8 +2036,8 @@ var _ = Describe("resource selection (cluster placement policies)", func() {
 			Expect(isUpToDate).To(BeTrue(), "The placement resource snapshots are not up-to-date")
 
 			wantNames := []string{
-				uniqueNameForPrimaryPlacementResourceSnapshot(placementPolicy.Name, 0),
-				uniqueNameForSecondaryPlacementResourceSnapshot(placementPolicy.Name, 0, 1),
+				uniquename.PrimaryPlacementResourceSnapshotName(placementPolicy.Name, placementPolicy.UID, 0),
+				uniquename.SecondaryPlacementResourceSnapshotName(placementPolicy.Name, placementPolicy.UID, 0, 1),
 			}
 			gotNames := make([]string, 0, len(gotSnapshots))
 			for _, snapshot := range gotSnapshots {
@@ -2048,11 +2049,11 @@ var _ = Describe("resource selection (cluster placement policies)", func() {
 		})
 
 		It("should persist the snapshots with resources in the sorted order", func() {
-			primarySnapshot := getSnapshotFromCache("", uniqueNameForPrimaryPlacementResourceSnapshot(placementPolicy.Name, 0))
+			primarySnapshot := getSnapshotFromCache("", uniquename.PrimaryPlacementResourceSnapshotName(placementPolicy.Name, placementPolicy.UID, 0))
 			verifySnapshotMetadata(primarySnapshot, placementPolicy, 0, 0, 2, wantHash)
 			verifySnapshottedResourceIdentifiers(primarySnapshot.GetSpec().Resources, wantIdentifiers[:3])
 
-			secondarySnapshot := getSnapshotFromCache("", uniqueNameForSecondaryPlacementResourceSnapshot(placementPolicy.Name, 0, 1))
+			secondarySnapshot := getSnapshotFromCache("", uniquename.SecondaryPlacementResourceSnapshotName(placementPolicy.Name, placementPolicy.UID, 0, 1))
 			verifySnapshotMetadata(secondarySnapshot, placementPolicy, 0, 1, 2, wantHash)
 			secondaryResources := secondarySnapshot.GetSpec().Resources
 			verifySnapshottedResourceIdentifiers(secondaryResources, wantIdentifiers[3:])
@@ -2073,8 +2074,8 @@ var _ = Describe("resource selection (cluster placement policies)", func() {
 
 		AfterAll(func() {
 			objs := []client.Object{
-				placementResourceSnapshotObj("", uniqueNameForPrimaryPlacementResourceSnapshot(placementPolicy.Name, 0)),
-				placementResourceSnapshotObj("", uniqueNameForSecondaryPlacementResourceSnapshot(placementPolicy.Name, 0, 1)),
+				placementResourceSnapshotObj("", uniquename.PrimaryPlacementResourceSnapshotName(placementPolicy.Name, placementPolicy.UID, 0)),
+				placementResourceSnapshotObj("", uniquename.SecondaryPlacementResourceSnapshotName(placementPolicy.Name, placementPolicy.UID, 0, 1)),
 				placementPolicy,
 				&corev1.ConfigMap{ObjectMeta: metav1.ObjectMeta{Name: configMapName, Namespace: appNamespaceName}},
 				&corev1.ConfigMap{ObjectMeta: metav1.ObjectMeta{Name: configMapName, Namespace: namespaceName}},

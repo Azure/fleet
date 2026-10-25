@@ -35,6 +35,7 @@ import (
 	placementv1alpha1 "github.com/kubefleet-dev/kubefleet/apis/kubefleet.dev/placement/v1alpha1"
 	"github.com/kubefleet-dev/kubefleet/pkg/utils"
 	kferrors "github.com/kubefleet-dev/kubefleet/pkg/utils/errors"
+	"github.com/kubefleet-dev/kubefleet/pkg/v1/managers/placementresourcesnapshot/uniquename"
 	"github.com/kubefleet-dev/kubefleet/pkg/v1/utils/fieldindexers"
 )
 
@@ -46,18 +47,24 @@ const (
 	secondaryCreationFailedErrMsg  = "failed to create a secondary placement resource snapshot"
 	fewerSubIndexedSnapshotsErrMsg = "there are fewer sub-indexed placement resource snapshots than the count label indicates"
 	mismatchedContentsHashErrMsg   = "a sub-indexed placement resource snapshot has a different contents hash than the primary placement resource snapshot"
+	staleOwnerSnapshotErrMsg       = "found a placement resource snapshot owned by a different placement policy of the same name"
+	leftoverSnapshotsErrMsg        = "leftover resource snapshots are detected"
+	unexpectedOwnerRefsErrMsg      = "that has unexpected owner references"
 
 	// The expected limits on generated snapshot names and owned-by label values; they are spelled out here (rather
 	// than reusing the constants of the package) so that the tests catch unintended changes.
-	wantMaxSnapshotNameLen          = 251
-	wantOwnedByLabelValLen          = 61
-	wantOwnedByLabelValPrefixLen    = 48
-	wantHashSuffixPattern           = `^[0-9a-f]{12}$`
-	wantHashedPrimaryNamePattern    = `-resource-snapshot-0-[0-9a-f]{12}$`
-	wantHashedSecondaryNamePattern  = `-resource-snapshot-0-1-[0-9a-f]{12}$`
-	concurrentSnapshotCallerCnt     = 8
-	malformedPrimarySnapshotSuffix  = "-malformed"
-	placementPolicyNameFillerLetter = "a"
+	wantMaxSnapshotNameLen         = 251
+	wantOwnedByLabelValLen         = 61
+	wantOwnedByLabelValPrefixLen   = 48
+	wantHashSuffixPattern          = `^[0-9a-f]{12}$`
+	wantHashedPrimaryNamePattern   = `-resource-snapshot-0-[0-9a-f]{12}$`
+	wantHashedSecondaryNamePattern = `-resource-snapshot-0-1-[0-9a-f]{12}$`
+	// The snapshot names minus the hash suffix, should the placement policy name need no sanitization.
+	wantUnsanitizedPrimaryNamePrefixFmt   = "%s-resource-snapshot-%d-"
+	wantUnsanitizedSecondaryNamePrefixFmt = "%s-resource-snapshot-%d-%d-"
+	concurrentSnapshotCallerCnt           = 8
+	malformedPrimarySnapshotSuffix        = "-malformed"
+	placementPolicyNameFillerLetter       = "a"
 )
 
 // decoySnapshotSpec describes a hand-crafted placement resource snapshot (a decoy).
@@ -88,8 +95,8 @@ var _ = Describe("corner cases (stale cache and inconsistent states)", func() {
 				placementPolicy = newPlacementPolicy(appNamespaceName, configMapNameSelector(configMapName))
 			}
 			snapshotNS := placementPolicy.GetNamespace()
-			primarySnapshotName0 := uniqueNameForPrimaryPlacementResourceSnapshot(placementPolicy.GetName(), 0)
-			primarySnapshotName1 := uniqueNameForPrimaryPlacementResourceSnapshot(placementPolicy.GetName(), 1)
+			// The snapshot names depend on the UID of the placement policy; they are set once the policy is created.
+			var primarySnapshotName0, primarySnapshotName1 string
 
 			var hash string
 
@@ -100,6 +107,8 @@ var _ = Describe("corner cases (stale cache and inconsistent states)", func() {
 				}
 				Expect(hubClient.Create(ctx, configMap)).To(Succeed(), "Failed to create the config map")
 				Expect(hubClient.Create(ctx, placementPolicy)).To(Succeed(), "Failed to create the placement policy")
+				primarySnapshotName0 = uniquename.PrimaryPlacementResourceSnapshotName(placementPolicy.GetName(), placementPolicy.GetUID(), 0)
+				primarySnapshotName1 = uniquename.PrimaryPlacementResourceSnapshotName(placementPolicy.GetName(), placementPolicy.GetUID(), 1)
 			})
 
 			It("can create a placement resource snapshot", func() {
@@ -126,6 +135,8 @@ var _ = Describe("corner cases (stale cache and inconsistent states)", func() {
 			It("can simulate the cache catching up by turning the decoy into an indexed primary snapshot", func() {
 				decoy := verifySnapshotExists(snapshotNS, primarySnapshotName1)
 				decoy.SetLabels(decoyPrimaryLabels(placementPolicy, "1", "1"))
+				// A snapshot that the manager creates is always owned by the placement policy.
+				decoy.SetOwnerReferences(decoyOwnerRefs(placementPolicy))
 				annotations := decoyOwnedByAnnotations(placementPolicy)
 				// The selected resources have not changed; a real snapshot at the next index would carry the same hash.
 				annotations[placementv1alpha1.PlacementResourceSnapshotContentsHashAnnotationKey] = hash
@@ -165,7 +176,8 @@ var _ = Describe("corner cases (stale cache and inconsistent states)", func() {
 	Context("primary snapshot name taken", Ordered, func() {
 		configMapName := fmt.Sprintf(configMapNameTemplate, utils.RandStr())
 		placementPolicy := newPlacementPolicy(appNamespaceName, configMapNameSelector(configMapName))
-		primarySnapshotName := uniqueNameForPrimaryPlacementResourceSnapshot(placementPolicy.Name, 0)
+		// The snapshot name depends on the UID of the placement policy; it is set once the policy is created.
+		var primarySnapshotName string
 
 		var decoyUID types.UID
 
@@ -176,6 +188,7 @@ var _ = Describe("corner cases (stale cache and inconsistent states)", func() {
 			}
 			Expect(hubClient.Create(ctx, configMap)).To(Succeed(), "Failed to create the config map")
 			Expect(hubClient.Create(ctx, placementPolicy)).To(Succeed(), "Failed to create the placement policy")
+			primarySnapshotName = uniquename.PrimaryPlacementResourceSnapshotName(placementPolicy.Name, placementPolicy.UID, 0)
 
 			// This mimics the situation where the manager has created the primary snapshot, yet the cache has
 			// not observed it.
@@ -224,17 +237,19 @@ var _ = Describe("corner cases (stale cache and inconsistent states)", func() {
 
 		// Seven resources, with at most three resources per snapshot: one primary and two secondary snapshots.
 		placementPolicy := newPlacementPolicy(appNamespaceName, configMapLabelSelector(groupLabels))
-		wantSnapshotNames := []string{
-			uniqueNameForPrimaryPlacementResourceSnapshot(placementPolicy.Name, 0),
-			uniqueNameForSecondaryPlacementResourceSnapshot(placementPolicy.Name, 0, 1),
-			uniqueNameForSecondaryPlacementResourceSnapshot(placementPolicy.Name, 0, 2),
-		}
+		// The snapshot names depend on the UID of the placement policy; they are set once the policy is created.
+		var wantSnapshotNames []string
 
 		var wantHash string
 
 		BeforeAll(func() {
 			configMapNames = createLabeledConfigMaps(configMapNamePrefix, 7, groupLabels)
 			Expect(hubClient.Create(ctx, placementPolicy)).To(Succeed(), "Failed to create the placement policy")
+			wantSnapshotNames = []string{
+				uniquename.PrimaryPlacementResourceSnapshotName(placementPolicy.Name, placementPolicy.UID, 0),
+				uniquename.SecondaryPlacementResourceSnapshotName(placementPolicy.Name, placementPolicy.UID, 0, 1),
+				uniquename.SecondaryPlacementResourceSnapshotName(placementPolicy.Name, placementPolicy.UID, 0, 2),
+			}
 			createDecoySnapshot(appNamespaceName, wantSnapshotNames[1], nil, nil, nil)
 		})
 
@@ -295,8 +310,8 @@ var _ = Describe("corner cases (stale cache and inconsistent states)", func() {
 	Context("orphan clean-up deferred by a quorum read", Ordered, func() {
 		configMapName := fmt.Sprintf(configMapNameTemplate, utils.RandStr())
 		placementPolicy := newPlacementPolicy(appNamespaceName, configMapNameSelector(configMapName))
-		primarySnapshotName := uniqueNameForPrimaryPlacementResourceSnapshot(placementPolicy.Name, 0)
-		secondarySnapshotName := uniqueNameForSecondaryPlacementResourceSnapshot(placementPolicy.Name, 0, 1)
+		// The snapshot names depend on the UID of the placement policy; they are set once the policy is created.
+		var primarySnapshotName, secondarySnapshotName string
 
 		BeforeAll(func() {
 			configMap := &corev1.ConfigMap{
@@ -305,6 +320,8 @@ var _ = Describe("corner cases (stale cache and inconsistent states)", func() {
 			}
 			Expect(hubClient.Create(ctx, configMap)).To(Succeed(), "Failed to create the config map")
 			Expect(hubClient.Create(ctx, placementPolicy)).To(Succeed(), "Failed to create the placement policy")
+			primarySnapshotName = uniquename.PrimaryPlacementResourceSnapshotName(placementPolicy.Name, placementPolicy.UID, 0)
+			secondarySnapshotName = uniquename.SecondaryPlacementResourceSnapshotName(placementPolicy.Name, placementPolicy.UID, 0, 1)
 
 			// An indexed secondary snapshot (the orphan candidate), and an unindexed primary snapshot at the
 			// same index; the latter mimics a primary snapshot that the cache has yet to observe.
@@ -353,8 +370,8 @@ var _ = Describe("corner cases (stale cache and inconsistent states)", func() {
 	Context("orphaned secondary snapshot pending deletion", Ordered, func() {
 		configMapName := fmt.Sprintf(configMapNameTemplate, utils.RandStr())
 		placementPolicy := newPlacementPolicy(appNamespaceName, configMapNameSelector(configMapName))
-		primarySnapshotName := uniqueNameForPrimaryPlacementResourceSnapshot(placementPolicy.Name, 0)
-		secondarySnapshotName := uniqueNameForSecondaryPlacementResourceSnapshot(placementPolicy.Name, 0, 1)
+		// The snapshot names depend on the UID of the placement policy; they are set once the policy is created.
+		var primarySnapshotName, secondarySnapshotName string
 
 		BeforeAll(func() {
 			configMap := &corev1.ConfigMap{
@@ -363,6 +380,8 @@ var _ = Describe("corner cases (stale cache and inconsistent states)", func() {
 			}
 			Expect(hubClient.Create(ctx, configMap)).To(Succeed(), "Failed to create the config map")
 			Expect(hubClient.Create(ctx, placementPolicy)).To(Succeed(), "Failed to create the placement policy")
+			primarySnapshotName = uniquename.PrimaryPlacementResourceSnapshotName(placementPolicy.Name, placementPolicy.UID, 0)
+			secondarySnapshotName = uniquename.SecondaryPlacementResourceSnapshotName(placementPolicy.Name, placementPolicy.UID, 0, 1)
 
 			// An orphaned secondary snapshot that cannot be deleted right away due to a finalizer.
 			createDecoySnapshot(appNamespaceName, secondarySnapshotName,
@@ -425,21 +444,27 @@ var _ = Describe("corner cases (stale cache and inconsistent states)", func() {
 
 		// Four resources, with at most three resources per snapshot: one primary and one secondary snapshot.
 		placementPolicy := newPlacementPolicy(appNamespaceName, configMapLabelSelector(groupLabels))
-		wantSnapshotNames := []string{
-			uniqueNameForPrimaryPlacementResourceSnapshot(placementPolicy.Name, 0),
-			uniqueNameForSecondaryPlacementResourceSnapshot(placementPolicy.Name, 0, 1),
-		}
-		extraSecondarySnapshotName := uniqueNameForSecondaryPlacementResourceSnapshot(placementPolicy.Name, 0, 2)
 
 		// A placement policy that selects a single resource; its snapshot features a count label of 1.
 		singleGroupPlacementPolicy := newPlacementPolicy(appNamespaceName, configMapNameSelector(configMapNamePrefix+"-0"))
-		singleGroupPrimarySnapshotName := uniqueNameForPrimaryPlacementResourceSnapshot(singleGroupPlacementPolicy.Name, 0)
-		singleGroupExtraSecondarySnapshotName := uniqueNameForSecondaryPlacementResourceSnapshot(singleGroupPlacementPolicy.Name, 0, 1)
+
+		// The snapshot names depend on the UIDs of the placement policies; they are set once the policies are created.
+		var wantSnapshotNames []string
+		var extraSecondarySnapshotName string
+		var singleGroupPrimarySnapshotName, singleGroupExtraSecondarySnapshotName string
 
 		BeforeAll(func() {
 			configMapNames = createLabeledConfigMaps(configMapNamePrefix, 4, groupLabels)
 			Expect(hubClient.Create(ctx, placementPolicy)).To(Succeed(), "Failed to create the placement policy")
 			Expect(hubClient.Create(ctx, singleGroupPlacementPolicy)).To(Succeed(), "Failed to create the placement policy")
+
+			wantSnapshotNames = []string{
+				uniquename.PrimaryPlacementResourceSnapshotName(placementPolicy.Name, placementPolicy.UID, 0),
+				uniquename.SecondaryPlacementResourceSnapshotName(placementPolicy.Name, placementPolicy.UID, 0, 1),
+			}
+			extraSecondarySnapshotName = uniquename.SecondaryPlacementResourceSnapshotName(placementPolicy.Name, placementPolicy.UID, 0, 2)
+			singleGroupPrimarySnapshotName = uniquename.PrimaryPlacementResourceSnapshotName(singleGroupPlacementPolicy.Name, singleGroupPlacementPolicy.UID, 0)
+			singleGroupExtraSecondarySnapshotName = uniquename.SecondaryPlacementResourceSnapshotName(singleGroupPlacementPolicy.Name, singleGroupPlacementPolicy.UID, 0, 1)
 		})
 
 		It("can create a primary and a secondary snapshot", func() {
@@ -496,16 +521,18 @@ var _ = Describe("corner cases (stale cache and inconsistent states)", func() {
 		var configMapNames []string
 
 		placementPolicy := newPlacementPolicy(appNamespaceName, configMapLabelSelector(groupLabels))
-		wantSnapshotNames := []string{
-			uniqueNameForPrimaryPlacementResourceSnapshot(placementPolicy.Name, 0),
-			uniqueNameForSecondaryPlacementResourceSnapshot(placementPolicy.Name, 0, 1),
-		}
+		// The snapshot names depend on the UID of the placement policy; they are set once the policy is created.
+		var wantSnapshotNames []string
 
 		var originalPrimarySnapshotUID types.UID
 
 		BeforeAll(func() {
 			configMapNames = createLabeledConfigMaps(configMapNamePrefix, 4, groupLabels)
 			Expect(hubClient.Create(ctx, placementPolicy)).To(Succeed(), "Failed to create the placement policy")
+			wantSnapshotNames = []string{
+				uniquename.PrimaryPlacementResourceSnapshotName(placementPolicy.Name, placementPolicy.UID, 0),
+				uniquename.SecondaryPlacementResourceSnapshotName(placementPolicy.Name, placementPolicy.UID, 0, 1),
+			}
 		})
 
 		It("can create a primary and a secondary snapshot", func() {
@@ -590,10 +617,10 @@ var _ = Describe("corner cases (stale cache and inconsistent states)", func() {
 			return decoySnapshotSpec{name: name, labels: decoySecondaryLabels(placementPolicy, idx, subIdx), annotations: annotations}
 		}
 		primaryName := func(placementPolicy placementv1alpha1.PlacementPolicyAccessor) string {
-			return uniqueNameForPrimaryPlacementResourceSnapshot(placementPolicy.GetName(), 0)
+			return uniquename.PrimaryPlacementResourceSnapshotName(placementPolicy.GetName(), placementPolicy.GetUID(), 0)
 		}
 		secondaryName := func(placementPolicy placementv1alpha1.PlacementPolicyAccessor) string {
-			return uniqueNameForSecondaryPlacementResourceSnapshot(placementPolicy.GetName(), 0, 1)
+			return uniquename.SecondaryPlacementResourceSnapshotName(placementPolicy.GetName(), placementPolicy.GetUID(), 0, 1)
 		}
 		withHash := func(hash string) map[string]string {
 			return map[string]string{placementv1alpha1.PlacementResourceSnapshotContentsHashAnnotationKey: hash}
@@ -698,7 +725,7 @@ var _ = Describe("corner cases (stale cache and inconsistent states)", func() {
 			for idx, tc := range testCases {
 				Expect(hubClient.Create(ctx, tc.placementPolicy)).To(Succeed(), "Failed to create the placement policy (%s)", tc.desc)
 				for _, decoy := range tc.decoys(tc.placementPolicy) {
-					createDecoySnapshot(appNamespaceName, decoy.name, decoy.labels, decoy.annotations, nil)
+					createOwnedDecoySnapshot(tc.placementPolicy, decoy.name, decoy.labels, decoy.annotations)
 					getSnapshotFromCache(appNamespaceName, decoy.name)
 					decoyNames[idx] = append(decoyNames[idx], decoy.name)
 				}
@@ -747,18 +774,20 @@ var _ = Describe("corner cases (stale cache and inconsistent states)", func() {
 
 		// Four resources, with at most three resources per snapshot: one primary and one secondary snapshot.
 		placementPolicy := newPlacementPolicy(appNamespaceName, configMapLabelSelector(groupLabels))
-		wantSnapshotNames0 := []string{
-			uniqueNameForPrimaryPlacementResourceSnapshot(placementPolicy.Name, 0),
-			uniqueNameForSecondaryPlacementResourceSnapshot(placementPolicy.Name, 0, 1),
-		}
-		wantSnapshotNames1 := []string{
-			uniqueNameForPrimaryPlacementResourceSnapshot(placementPolicy.Name, 1),
-			uniqueNameForSecondaryPlacementResourceSnapshot(placementPolicy.Name, 1, 1),
-		}
+		// The snapshot names depend on the UID of the placement policy; they are set once the policy is created.
+		var wantSnapshotNames0, wantSnapshotNames1 []string
 
 		BeforeAll(func() {
 			configMapNames = createLabeledConfigMaps(configMapNamePrefix, 4, groupLabels)
 			Expect(hubClient.Create(ctx, placementPolicy)).To(Succeed(), "Failed to create the placement policy")
+			wantSnapshotNames0 = []string{
+				uniquename.PrimaryPlacementResourceSnapshotName(placementPolicy.Name, placementPolicy.UID, 0),
+				uniquename.SecondaryPlacementResourceSnapshotName(placementPolicy.Name, placementPolicy.UID, 0, 1),
+			}
+			wantSnapshotNames1 = []string{
+				uniquename.PrimaryPlacementResourceSnapshotName(placementPolicy.Name, placementPolicy.UID, 1),
+				uniquename.SecondaryPlacementResourceSnapshotName(placementPolicy.Name, placementPolicy.UID, 1, 1),
+			}
 		})
 
 		It("should create exactly one set of snapshots when called concurrently", func() {
@@ -804,11 +833,11 @@ var _ = Describe("corner cases (long and dotted names)", func() {
 		var configMapNames []string
 
 		type nameLengthTestCase struct {
-			desc                string
-			placementPolicy     placementv1alpha1.PlacementPolicyAccessor
-			wantLabelTruncated  bool
-			wantPrimaryHashed   bool
-			wantSecondaryHashed bool
+			desc                   string
+			placementPolicy        placementv1alpha1.PlacementPolicyAccessor
+			wantLabelTruncated     bool
+			wantPrimarySanitized   bool
+			wantSecondarySanitized bool
 		}
 
 		// Every placement policy selects the same four config maps, which yields one primary and one secondary
@@ -837,42 +866,42 @@ var _ = Describe("corner cases (long and dotted names)", func() {
 				wantLabelTruncated: true,
 			},
 			{
-				desc:               "the longest name with plain snapshot names (229 characters)",
-				placementPolicy:    newNamedPlacementPolicy(229),
+				desc:               "the longest name with untruncated snapshot names (216 characters)",
+				placementPolicy:    newNamedPlacementPolicy(216),
 				wantLabelTruncated: true,
 			},
 			{
-				desc:                "the shortest name with a hashed secondary snapshot name (230 characters)",
-				placementPolicy:     newNamedPlacementPolicy(230),
-				wantLabelTruncated:  true,
-				wantSecondaryHashed: true,
+				desc:                   "the shortest name with a truncated secondary snapshot name (217 characters)",
+				placementPolicy:        newNamedPlacementPolicy(217),
+				wantLabelTruncated:     true,
+				wantSecondarySanitized: true,
 			},
 			{
-				desc:                "the longest name with a plain primary snapshot name (231 characters)",
-				placementPolicy:     newNamedPlacementPolicy(231),
-				wantLabelTruncated:  true,
-				wantSecondaryHashed: true,
+				desc:                   "the longest name with an untruncated primary snapshot name (218 characters)",
+				placementPolicy:        newNamedPlacementPolicy(218),
+				wantLabelTruncated:     true,
+				wantSecondarySanitized: true,
 			},
 			{
-				desc:                "the shortest name with a hashed primary snapshot name (232 characters)",
-				placementPolicy:     newNamedPlacementPolicy(232),
-				wantLabelTruncated:  true,
-				wantPrimaryHashed:   true,
-				wantSecondaryHashed: true,
+				desc:                   "the shortest name with a truncated primary snapshot name (219 characters)",
+				placementPolicy:        newNamedPlacementPolicy(219),
+				wantLabelTruncated:     true,
+				wantPrimarySanitized:   true,
+				wantSecondarySanitized: true,
 			},
 			{
-				desc:                "the longest valid name (253 characters)",
-				placementPolicy:     newNamedPlacementPolicy(253),
-				wantLabelTruncated:  true,
-				wantPrimaryHashed:   true,
-				wantSecondaryHashed: true,
+				desc:                   "the longest valid name (253 characters)",
+				placementPolicy:        newNamedPlacementPolicy(253),
+				wantLabelTruncated:     true,
+				wantPrimarySanitized:   true,
+				wantSecondarySanitized: true,
 			},
 			{
-				desc:                "the longest valid name of a cluster placement policy (253 characters)",
-				placementPolicy:     newNamedClusterPlacementPolicy(253),
-				wantLabelTruncated:  true,
-				wantPrimaryHashed:   true,
-				wantSecondaryHashed: true,
+				desc:                   "the longest valid name of a cluster placement policy (253 characters)",
+				placementPolicy:        newNamedClusterPlacementPolicy(253),
+				wantLabelTruncated:     true,
+				wantPrimarySanitized:   true,
+				wantSecondarySanitized: true,
 			},
 		}
 
@@ -889,17 +918,17 @@ var _ = Describe("corner cases (long and dotted names)", func() {
 				name := placementPolicy.GetName()
 				snapshotNS := placementPolicy.GetNamespace()
 				wantSnapshotNames := []string{
-					uniqueNameForPrimaryPlacementResourceSnapshot(name, 0),
-					uniqueNameForSecondaryPlacementResourceSnapshot(name, 0, 1),
+					uniquename.PrimaryPlacementResourceSnapshotName(name, placementPolicy.GetUID(), 0),
+					uniquename.SecondaryPlacementResourceSnapshotName(name, placementPolicy.GetUID(), 0, 1),
 				}
 
 				gotSnapshots, isUpToDate, err := resourceSnapshotManager.SnapshotResourcesIfNoSnapshotExists(ctx, placementPolicy)
 				verifyReturnedSnapshots(gotSnapshots, isUpToDate, err, wantSnapshotNames)
 
-				verifySnapshotName(wantSnapshotNames[0], fmt.Sprintf(PrimaryPlacementResourceSnapshotNameFmt, name, 0),
-					wantHashedPrimaryNamePattern, tc.wantPrimaryHashed)
-				verifySnapshotName(wantSnapshotNames[1], fmt.Sprintf(SecondaryPlacementResourceSnapshotNameFmt, name, 0, 1),
-					wantHashedSecondaryNamePattern, tc.wantSecondaryHashed)
+				verifySnapshotName(wantSnapshotNames[0], fmt.Sprintf(wantUnsanitizedPrimaryNamePrefixFmt, name, 0),
+					wantHashedPrimaryNamePattern, tc.wantPrimarySanitized)
+				verifySnapshotName(wantSnapshotNames[1], fmt.Sprintf(wantUnsanitizedSecondaryNamePrefixFmt, name, 0, 1),
+					wantHashedSecondaryNamePattern, tc.wantSecondarySanitized)
 				verifyOwnedByLabelVal(placementPolicy, tc.wantLabelTruncated)
 
 				// The labels (possibly truncated) and the owned-by annotation (always the full name) on the snapshots.
@@ -920,10 +949,11 @@ var _ = Describe("corner cases (long and dotted names)", func() {
 			objs := make([]client.Object, 0, 3*len(testCases)+len(configMapNames))
 			for _, tc := range testCases {
 				name := tc.placementPolicy.GetName()
+				uid := tc.placementPolicy.GetUID()
 				snapshotNS := tc.placementPolicy.GetNamespace()
 				objs = append(objs,
-					placementResourceSnapshotObj(snapshotNS, uniqueNameForPrimaryPlacementResourceSnapshot(name, 0)),
-					placementResourceSnapshotObj(snapshotNS, uniqueNameForSecondaryPlacementResourceSnapshot(name, 0, 1)),
+					placementResourceSnapshotObj(snapshotNS, uniquename.PrimaryPlacementResourceSnapshotName(name, uid, 0)),
+					placementResourceSnapshotObj(snapshotNS, uniquename.SecondaryPlacementResourceSnapshotName(name, uid, 0, 1)),
 					tc.placementPolicy,
 				)
 			}
@@ -944,14 +974,8 @@ var _ = Describe("corner cases (long and dotted names)", func() {
 
 		placementBindingName := fmt.Sprintf(placementBindingNameTemplate, utils.RandStr())
 
-		wantSnapshotNames0 := []string{
-			uniqueNameForPrimaryPlacementResourceSnapshot(placementPolicy.Name, 0),
-			uniqueNameForSecondaryPlacementResourceSnapshot(placementPolicy.Name, 0, 1),
-		}
-		wantSnapshotNames1 := []string{
-			uniqueNameForPrimaryPlacementResourceSnapshot(placementPolicy.Name, 1),
-			uniqueNameForSecondaryPlacementResourceSnapshot(placementPolicy.Name, 1, 1),
-		}
+		// The snapshot names depend on the UID of the placement policy; they are set once the policy is created.
+		var wantSnapshotNames0, wantSnapshotNames1 []string
 
 		// placementBindingCntInCache returns the number of placement bindings that use the primary snapshot at
 		// index 0, as found via the cache (and its field index).
@@ -967,14 +991,22 @@ var _ = Describe("corner cases (long and dotted names)", func() {
 		BeforeAll(func() {
 			configMapNames = createLabeledConfigMaps(configMapNamePrefix, 4, groupLabels)
 			Expect(hubClient.Create(ctx, placementPolicy)).To(Succeed(), "Failed to create the placement policy")
+			wantSnapshotNames0 = []string{
+				uniquename.PrimaryPlacementResourceSnapshotName(placementPolicy.Name, placementPolicy.UID, 0),
+				uniquename.SecondaryPlacementResourceSnapshotName(placementPolicy.Name, placementPolicy.UID, 0, 1),
+			}
+			wantSnapshotNames1 = []string{
+				uniquename.PrimaryPlacementResourceSnapshotName(placementPolicy.Name, placementPolicy.UID, 1),
+				uniquename.SecondaryPlacementResourceSnapshotName(placementPolicy.Name, placementPolicy.UID, 1, 1),
+			}
 		})
 
-		It("can create a primary and a secondary snapshot with hashed names", func() {
+		It("can create a primary and a secondary snapshot with truncated names", func() {
 			gotSnapshots, isUpToDate, err := resourceSnapshotManager.SnapshotResourcesIfNoSnapshotExists(ctx, placementPolicy)
 			verifyReturnedSnapshots(gotSnapshots, isUpToDate, err, wantSnapshotNames0)
-			verifySnapshotName(wantSnapshotNames0[0], fmt.Sprintf(PrimaryPlacementResourceSnapshotNameFmt, placementPolicy.Name, 0),
+			verifySnapshotName(wantSnapshotNames0[0], fmt.Sprintf(wantUnsanitizedPrimaryNamePrefixFmt, placementPolicy.Name, 0),
 				wantHashedPrimaryNamePattern, true)
-			verifySnapshotName(wantSnapshotNames0[1], fmt.Sprintf(SecondaryPlacementResourceSnapshotNameFmt, placementPolicy.Name, 0, 1),
+			verifySnapshotName(wantSnapshotNames0[1], fmt.Sprintf(wantUnsanitizedSecondaryNamePrefixFmt, placementPolicy.Name, 0, 1),
 				wantHashedSecondaryNamePattern, true)
 			for _, name := range wantSnapshotNames0 {
 				getSnapshotFromCache(appNamespaceName, name)
@@ -1086,8 +1118,8 @@ var _ = Describe("corner cases (long and dotted names)", func() {
 
 		type dottedNameTestCase struct {
 			placementPolicy *placementv1alpha1.PlacementPolicy
-			wantHashed      bool
-			// The wanted prefix of the (hashed) primary snapshot name.
+			wantSanitized   bool
+			// The wanted prefix of the (sanitized) primary snapshot name.
 			wantPrimaryNamePrefix string
 		}
 
@@ -1100,17 +1132,17 @@ var _ = Describe("corner cases (long and dotted names)", func() {
 		testCases := []dottedNameTestCase{
 			{
 				placementPolicy:       newNamedPlacementPolicy("policy." + suffix + ".v1"),
-				wantHashed:            true,
+				wantSanitized:         true,
 				wantPrimaryNamePrefix: "policy" + suffix + "v1-resource-snapshot-0-",
 			},
 			{
 				placementPolicy:       newNamedPlacementPolicy("ab.c" + suffix),
-				wantHashed:            true,
+				wantSanitized:         true,
 				wantPrimaryNamePrefix: "abc" + suffix + "-resource-snapshot-0-",
 			},
 			{
 				placementPolicy:       newNamedPlacementPolicy("a.bc" + suffix),
-				wantHashed:            true,
+				wantSanitized:         true,
 				wantPrimaryNamePrefix: "abc" + suffix + "-resource-snapshot-0-",
 			},
 			{
@@ -1120,8 +1152,8 @@ var _ = Describe("corner cases (long and dotted names)", func() {
 
 		wantSnapshotNamesOf := func(placementPolicy placementv1alpha1.PlacementPolicyAccessor) []string {
 			return []string{
-				uniqueNameForPrimaryPlacementResourceSnapshot(placementPolicy.GetName(), 0),
-				uniqueNameForSecondaryPlacementResourceSnapshot(placementPolicy.GetName(), 0, 1),
+				uniquename.PrimaryPlacementResourceSnapshotName(placementPolicy.GetName(), placementPolicy.GetUID(), 0),
+				uniquename.SecondaryPlacementResourceSnapshotName(placementPolicy.GetName(), placementPolicy.GetUID(), 0, 1),
 			}
 		}
 
@@ -1140,12 +1172,12 @@ var _ = Describe("corner cases (long and dotted names)", func() {
 				gotSnapshots, isUpToDate, err := resourceSnapshotManager.SnapshotResourcesIfNoSnapshotExists(ctx, placementPolicy)
 				verifyReturnedSnapshots(gotSnapshots, isUpToDate, err, wantSnapshotNames)
 
-				verifySnapshotName(wantSnapshotNames[0], fmt.Sprintf(PrimaryPlacementResourceSnapshotNameFmt, placementPolicy.Name, 0),
-					wantHashedPrimaryNamePattern, tc.wantHashed)
-				verifySnapshotName(wantSnapshotNames[1], fmt.Sprintf(SecondaryPlacementResourceSnapshotNameFmt, placementPolicy.Name, 0, 1),
-					wantHashedSecondaryNamePattern, tc.wantHashed)
-				if tc.wantHashed {
-					Expect(wantSnapshotNames[0]).To(HavePrefix(tc.wantPrimaryNamePrefix), "Unexpected prefix of the hashed snapshot name")
+				verifySnapshotName(wantSnapshotNames[0], fmt.Sprintf(wantUnsanitizedPrimaryNamePrefixFmt, placementPolicy.Name, 0),
+					wantHashedPrimaryNamePattern, tc.wantSanitized)
+				verifySnapshotName(wantSnapshotNames[1], fmt.Sprintf(wantUnsanitizedSecondaryNamePrefixFmt, placementPolicy.Name, 0, 1),
+					wantHashedSecondaryNamePattern, tc.wantSanitized)
+				if tc.wantSanitized {
+					Expect(wantSnapshotNames[0]).To(HavePrefix(tc.wantPrimaryNamePrefix), "Unexpected prefix of the sanitized snapshot name")
 				}
 
 				// The name is short enough; both the owned-by label (dots are allowed in label values) and the
@@ -1215,7 +1247,7 @@ var _ = Describe("corner cases (long and dotted names)", func() {
 			for _, placementPolicy := range placementPolicies {
 				gotSnapshots, isUpToDate, err := resourceSnapshotManager.SnapshotResourcesIfNoSnapshotExists(ctx, placementPolicy)
 				verifyReturnedPrimarySnapshot(gotSnapshots, isUpToDate, err, placementPolicy, 0)
-				verifySnapshotName(gotSnapshots[0].GetName(), fmt.Sprintf(PrimaryPlacementResourceSnapshotNameFmt, placementPolicy.Name, 0),
+				verifySnapshotName(gotSnapshots[0].GetName(), fmt.Sprintf(wantUnsanitizedPrimaryNamePrefixFmt, placementPolicy.Name, 0),
 					wantHashedPrimaryNamePattern, true)
 			}
 		})
@@ -1234,7 +1266,7 @@ var _ = Describe("corner cases (long and dotted names)", func() {
 
 		It("should keep the snapshots apart", func() {
 			for _, placementPolicy := range placementPolicies {
-				wantSnapshotNames := []string{uniqueNameForPrimaryPlacementResourceSnapshot(placementPolicy.Name, 0)}
+				wantSnapshotNames := []string{uniquename.PrimaryPlacementResourceSnapshotName(placementPolicy.Name, placementPolicy.UID, 0)}
 				verifyOwnedSnapshots(placementPolicy, wantSnapshotNames)
 
 				gotSnapshots, isUpToDate, err := resourceSnapshotManager.SnapshotResourcesIfStale(ctx, placementPolicy)
@@ -1269,7 +1301,11 @@ var _ = Describe("corner cases (long and dotted names)", func() {
 		clusterPlacementPolicy.Name = name
 
 		placementPolicies := []placementv1alpha1.PlacementPolicyAccessor{appPlacementPolicy, nsPlacementPolicy, clusterPlacementPolicy}
-		primarySnapshotName0 := uniqueNameForPrimaryPlacementResourceSnapshot(name, 0)
+		// The placement policies share the same name, but their snapshot names differ, as the names factor in
+		// the UIDs of the placement policies.
+		primarySnapshotNameOf := func(placementPolicy placementv1alpha1.PlacementPolicyAccessor, idx int) string {
+			return uniquename.PrimaryPlacementResourceSnapshotName(placementPolicy.GetName(), placementPolicy.GetUID(), idx)
+		}
 
 		BeforeAll(func() {
 			createNamespace(namespaceName)
@@ -1286,10 +1322,10 @@ var _ = Describe("corner cases (long and dotted names)", func() {
 		})
 
 		It("can create snapshots for all three placement policies", func() {
-			// The snapshots share the same name, but live in different namespaces (or at the cluster scope).
+			// The snapshots live in different namespaces (or at the cluster scope).
 			for _, placementPolicy := range placementPolicies {
 				gotSnapshots, isUpToDate, err := resourceSnapshotManager.SnapshotResourcesIfNoSnapshotExists(ctx, placementPolicy)
-				verifyReturnedSnapshots(gotSnapshots, isUpToDate, err, []string{primarySnapshotName0})
+				verifyReturnedSnapshots(gotSnapshots, isUpToDate, err, []string{primarySnapshotNameOf(placementPolicy, 0)})
 				getPrimarySnapshotFromCache(placementPolicy, 0)
 			}
 		})
@@ -1300,11 +1336,11 @@ var _ = Describe("corner cases (long and dotted names)", func() {
 
 		It("should create a new snapshot only for the placement policy that selects the updated config map", func() {
 			gotSnapshots, isUpToDate, err := resourceSnapshotManager.SnapshotResourcesIfStale(ctx, appPlacementPolicy)
-			verifyReturnedSnapshots(gotSnapshots, isUpToDate, err, []string{uniqueNameForPrimaryPlacementResourceSnapshot(name, 1)})
+			verifyReturnedSnapshots(gotSnapshots, isUpToDate, err, []string{primarySnapshotNameOf(appPlacementPolicy, 1)})
 
 			for _, placementPolicy := range []placementv1alpha1.PlacementPolicyAccessor{nsPlacementPolicy, clusterPlacementPolicy} {
 				gotSnapshots, isUpToDate, err := resourceSnapshotManager.SnapshotResourcesIfStale(ctx, placementPolicy)
-				verifyReturnedSnapshots(gotSnapshots, isUpToDate, err, []string{primarySnapshotName0})
+				verifyReturnedSnapshots(gotSnapshots, isUpToDate, err, []string{primarySnapshotNameOf(placementPolicy, 0)})
 				verifyNoPrimarySnapshotAtIdx(placementPolicy, 1)
 			}
 		})
@@ -1338,21 +1374,24 @@ var _ = Describe("corner cases (long and dotted names)", func() {
 		placementPolicyB := newPlacementPolicy(appNamespaceName, configMapLabelSelector(groupBLabels))
 		placementPolicyB.Name = placementPolicyOwnerLabelVal(placementPolicyA)
 
-		wantSnapshotNamesA0 := []string{
-			uniqueNameForPrimaryPlacementResourceSnapshot(placementPolicyA.Name, 0),
-			uniqueNameForSecondaryPlacementResourceSnapshot(placementPolicyA.Name, 0, 1),
-		}
-		wantSnapshotNamesA1 := []string{
-			uniqueNameForPrimaryPlacementResourceSnapshot(placementPolicyA.Name, 1),
-			uniqueNameForSecondaryPlacementResourceSnapshot(placementPolicyA.Name, 1, 1),
-		}
-		wantSnapshotNamesB0 := []string{uniqueNameForPrimaryPlacementResourceSnapshot(placementPolicyB.Name, 0)}
+		// The snapshot names depend on the UIDs of the placement policies; they are set once the policies are created.
+		var wantSnapshotNamesA0, wantSnapshotNamesA1, wantSnapshotNamesB0 []string
 
 		BeforeAll(func() {
 			configMapNames = append(createLabeledConfigMaps(configMapNamePrefixA, 4, groupALabels),
 				createLabeledConfigMaps(configMapNamePrefixB, 1, groupBLabels)...)
 			Expect(hubClient.Create(ctx, placementPolicyA)).To(Succeed(), "Failed to create placement policy A")
 			Expect(hubClient.Create(ctx, placementPolicyB)).To(Succeed(), "Failed to create placement policy B")
+
+			wantSnapshotNamesA0 = []string{
+				uniquename.PrimaryPlacementResourceSnapshotName(placementPolicyA.Name, placementPolicyA.UID, 0),
+				uniquename.SecondaryPlacementResourceSnapshotName(placementPolicyA.Name, placementPolicyA.UID, 0, 1),
+			}
+			wantSnapshotNamesA1 = []string{
+				uniquename.PrimaryPlacementResourceSnapshotName(placementPolicyA.Name, placementPolicyA.UID, 1),
+				uniquename.SecondaryPlacementResourceSnapshotName(placementPolicyA.Name, placementPolicyA.UID, 1, 1),
+			}
+			wantSnapshotNamesB0 = []string{uniquename.PrimaryPlacementResourceSnapshotName(placementPolicyB.Name, placementPolicyB.UID, 0)}
 		})
 
 		It("can create snapshots for the long-named placement policy", func() {
@@ -1411,6 +1450,420 @@ var _ = Describe("corner cases (long and dotted names)", func() {
 				[]client.Object{placementPolicyA, placementPolicyB},
 				configMapObjs(configMapNames),
 			))
+		})
+	})
+})
+
+var _ = Describe("corner cases (leftover snapshots from previous placement policies)", func() {
+	// The envtest environment does not run the Kubernetes GC: deleting a placement policy leaves its placement resource
+	// snapshots behind, still owned by the deleted placement policy, which is exactly the state where the Kubernetes GC
+	// has yet to collect them. Where needed, the test cases below stand in for the Kubernetes GC: they delete the
+	// snapshots by hand, or remove their owner references to simulate a deletion with the orphan propagation policy.
+
+	Context("placement policy re-created before the snapshots of the previous one are gone", Ordered, func() {
+		configMapName := fmt.Sprintf(configMapNameTemplate, utils.RandStr())
+		var placementPolicy placementv1alpha1.PlacementPolicyAccessor = newPlacementPolicy(appNamespaceName, configMapNameSelector(configMapName))
+
+		var pausedMgr *Manager
+		// The snapshot name depends on the UID of the (previous) placement policy; it is set once the policy is created.
+		var previousSnapshotName string
+
+		BeforeAll(func() {
+			configMap := &corev1.ConfigMap{
+				ObjectMeta: metav1.ObjectMeta{Name: configMapName, Namespace: appNamespaceName},
+				Data:       map[string]string{"key": "value"},
+			}
+			Expect(hubClient.Create(ctx, configMap)).To(Succeed(), "Failed to create the config map")
+			Expect(hubClient.Create(ctx, placementPolicy)).To(Succeed(), "Failed to create the placement policy")
+			previousSnapshotName = uniquename.PrimaryPlacementResourceSnapshotName(placementPolicy.GetName(), placementPolicy.GetUID(), 0)
+			pausedMgr = newPausedManager()
+		})
+
+		It("can create a snapshot", func() {
+			snapshotAndVerify(pausedMgr, placementPolicy, []string{previousSnapshotName})
+		})
+
+		It("can delete and re-create the placement policy", func() {
+			placementPolicy = recreatePlacementPolicy(placementPolicy)
+			// The snapshot is still owned by the previous placement policy.
+			verifySnapshotExists(appNamespaceName, previousSnapshotName)
+		})
+
+		It("should block snapshotting with a transient error", func() {
+			gotSnapshots, isUpToDate, err := pausedMgr.SnapshotResourcesIfStale(ctx, placementPolicy)
+			verifySnapshotCallFailed(gotSnapshots, isUpToDate, err, kferrors.ErrCategoryTransient, staleOwnerSnapshotErrMsg)
+			gotSnapshots, isUpToDate, err = pausedMgr.SnapshotResourcesIfNoSnapshotExists(ctx, placementPolicy)
+			verifySnapshotCallFailed(gotSnapshots, isUpToDate, err, kferrors.ErrCategoryTransient, staleOwnerSnapshotErrMsg)
+
+			// The snapshot of the previous placement policy is left to the Kubernetes GC; no GC request is enqueued.
+			verifyGCRequests(drainGCRequests(pausedMgr), nil)
+			verifyNoPrimarySnapshotAtIdx(placementPolicy, 0)
+			Expect(checkOwnedSnapshots(placementPolicy, []string{previousSnapshotName})).To(Succeed())
+		})
+
+		It("should keep blocking snapshotting after a resource change", func() {
+			updateConfigMapData(appNamespaceName, configMapName, "changed")
+			gotSnapshots, isUpToDate, err := pausedMgr.SnapshotResourcesIfStale(ctx, placementPolicy)
+			verifySnapshotCallFailed(gotSnapshots, isUpToDate, err, kferrors.ErrCategoryTransient, staleOwnerSnapshotErrMsg)
+			verifyNoPrimarySnapshotAtIdx(placementPolicy, 0)
+			verifyNoPrimarySnapshotAtIdx(placementPolicy, 1)
+			verifyGCRequests(drainGCRequests(pausedMgr), nil)
+		})
+
+		It("can delete the snapshot of the previous placement policy (in place of the Kubernetes GC)", func() {
+			deleteObjectsAndWait(snapshotObjs(appNamespaceName, previousSnapshotName))
+			waitForSnapshotGoneFromCache(appNamespaceName, previousSnapshotName)
+		})
+
+		It("should create a snapshot owned by the re-created placement policy, under a new name", func() {
+			snapshotName := uniquename.PrimaryPlacementResourceSnapshotName(placementPolicy.GetName(), placementPolicy.GetUID(), 0)
+			Expect(snapshotName).ToNot(Equal(previousSnapshotName), "The snapshot name of the previous placement policy is reused")
+
+			snapshotAndVerify(pausedMgr, placementPolicy, []string{snapshotName})
+			if diff := cmp.Diff(getPrimarySnapshotFromCache(placementPolicy, 0).GetOwnerReferences(), wantPlacementPolicyOwnerRefs(placementPolicy)); diff != "" {
+				Fail(fmt.Sprintf("Placement resource snapshot %s owner references diff (-got +want):\n%s", snapshotName, diff))
+			}
+			verifyGCRequests(drainGCRequests(pausedMgr), nil)
+		})
+
+		AfterAll(func() {
+			if pausedMgr != nil {
+				pausedMgr.gcwq.ShutDown()
+			}
+			objs := snapshotObjs(appNamespaceName,
+				previousSnapshotName,
+				uniquename.PrimaryPlacementResourceSnapshotName(placementPolicy.GetName(), placementPolicy.GetUID(), 0),
+			)
+			objs = append(objs, placementPolicy, &corev1.ConfigMap{ObjectMeta: metav1.ObjectMeta{Name: configMapName, Namespace: appNamespaceName}})
+			deleteObjectsAndWait(objs)
+		})
+	})
+
+	// The scenario is run for both placement policies and cluster placement policies.
+	for _, clusterScoped := range []bool{false, true} {
+		desc := "placement policy re-created after the previous one is deleted with the orphan propagation policy"
+		if clusterScoped {
+			desc = "cluster placement policy re-created after the previous one is deleted with the orphan propagation policy"
+		}
+
+		Context(desc, Ordered, func() {
+			groupLabels := map[string]string{placementGroupLabelKey: utils.RandStr()}
+			configMapNamePrefix := fmt.Sprintf(configMapNameTemplate, utils.RandStr())
+			placementBindingName := fmt.Sprintf(placementBindingNameTemplate, utils.RandStr())
+			var configMapNames []string
+
+			resourceSelector := configMapLabelSelector(groupLabels)
+			var placementPolicy placementv1alpha1.PlacementPolicyAccessor
+			if clusterScoped {
+				resourceSelector.Namespace = appNamespaceName
+				placementPolicy = newClusterPlacementPolicy(resourceSelector)
+			} else {
+				placementPolicy = newPlacementPolicy(appNamespaceName, resourceSelector)
+			}
+			snapshotNS := placementPolicy.GetNamespace()
+
+			var pausedMgr *Manager
+			// The snapshots of the previous placement policy; the names are set once the policy is created.
+			var previousSnapshotNames []string
+			var previousPrimarySnapshots []placementv1alpha1.PlacementResourceSnapshotAccessor
+
+			BeforeAll(func() {
+				// Four config maps make two groups, as each snapshot can hold at most three resources.
+				configMapNames = createLabeledConfigMaps(configMapNamePrefix, 4, groupLabels)
+				Expect(hubClient.Create(ctx, placementPolicy)).To(Succeed(), "Failed to create the placement policy")
+				previousSnapshotNames = slices.Concat(snapshotSetNames(placementPolicy, 0, 2), snapshotSetNames(placementPolicy, 1, 2))
+				pausedMgr = newPausedManager()
+			})
+
+			It("can create snapshots at index 0 and 1", func() {
+				snapshotAndVerify(resourceSnapshotManager, placementPolicy, snapshotSetNames(placementPolicy, 0, 2))
+				updateConfigMapData(appNamespaceName, configMapNames[0], "changed")
+				snapshotAndVerify(resourceSnapshotManager, placementPolicy, snapshotSetNames(placementPolicy, 1, 2))
+				previousPrimarySnapshots = []placementv1alpha1.PlacementResourceSnapshotAccessor{
+					getPrimarySnapshotFromCache(placementPolicy, 0),
+					getPrimarySnapshotFromCache(placementPolicy, 1),
+				}
+			})
+
+			It("can create a placement binding without an owner reference that uses the snapshot at index 1", func() {
+				// The placement binding mimics one orphaned along with the snapshots.
+				createPlacementBinding(placementPolicy, placementBindingName, previousPrimarySnapshots[1].GetName(), nil)
+				waitForPlacementBindingCntInCache(placementPolicy, previousPrimarySnapshots[1].GetName(), 1)
+			})
+
+			It("can orphan the snapshots and re-create the placement policy", func() {
+				for _, name := range previousSnapshotNames {
+					setSnapshotOwnerRefs(snapshotNS, name, nil)
+				}
+				placementPolicy = recreatePlacementPolicy(placementPolicy)
+			})
+
+			It("should block snapshotting and enqueue the orphaned primary snapshots for GC", func() {
+				wantGCRequests := []snapshotGarbageCollectionRequest{
+					gcRequestFor(placementPolicy, previousPrimarySnapshots[0]),
+					gcRequestFor(placementPolicy, previousPrimarySnapshots[1]),
+				}
+
+				gotSnapshots, isUpToDate, err := pausedMgr.SnapshotResourcesIfStale(ctx, placementPolicy)
+				verifySnapshotCallFailed(gotSnapshots, isUpToDate, err, kferrors.ErrCategoryTransient, leftoverSnapshotsErrMsg)
+				verifyGCRequests(drainGCRequests(pausedMgr), wantGCRequests)
+
+				gotSnapshots, isUpToDate, err = pausedMgr.SnapshotResourcesIfNoSnapshotExists(ctx, placementPolicy)
+				verifySnapshotCallFailed(gotSnapshots, isUpToDate, err, kferrors.ErrCategoryTransient, leftoverSnapshotsErrMsg)
+				verifyGCRequests(drainGCRequests(pausedMgr), wantGCRequests)
+
+				verifyNoPrimarySnapshotAtIdx(placementPolicy, 0)
+			})
+
+			It("should garbage collect all the orphaned snapshots, even though a placement binding uses one of them", func() {
+				// Unlike the paused manager, the manager under test runs its GC worker.
+				gotSnapshots, isUpToDate, err := resourceSnapshotManager.SnapshotResourcesIfStale(ctx, placementPolicy)
+				verifySnapshotCallFailed(gotSnapshots, isUpToDate, err, kferrors.ErrCategoryTransient, leftoverSnapshotsErrMsg)
+				Eventually(func() error {
+					return checkOwnedSnapshots(placementPolicy, nil)
+				}, eventuallyDuration, eventuallyInterval).Should(Succeed(), "Failed to garbage collect the orphaned snapshots")
+			})
+
+			It("should create snapshots owned by the re-created placement policy, under new names", func() {
+				wantNames := snapshotSetNames(placementPolicy, 0, 2)
+				for _, name := range wantNames {
+					Expect(previousSnapshotNames).ToNot(ContainElement(name), "A snapshot name of the previous placement policy is reused")
+				}
+
+				// The cache might take a moment to observe the removal of the orphaned snapshots.
+				Eventually(func() error {
+					gotSnapshots, isUpToDate, err := resourceSnapshotManager.SnapshotResourcesIfStale(ctx, placementPolicy)
+					if err != nil {
+						return err
+					}
+					if diff := cmp.Diff(snapshotNamesOf(gotSnapshots), wantNames); diff != "" || !isUpToDate {
+						return fmt.Errorf("unexpected snapshots (up-to-date %t), names diff (-got +want):\n%s", isUpToDate, diff)
+					}
+					return nil
+				}, eventuallyDuration, eventuallyInterval).Should(Succeed(), "Failed to create snapshots for the re-created placement policy")
+				Expect(checkOwnedSnapshots(placementPolicy, wantNames)).To(Succeed())
+				if diff := cmp.Diff(getPrimarySnapshotFromCache(placementPolicy, 0).GetOwnerReferences(), wantPlacementPolicyOwnerRefs(placementPolicy)); diff != "" {
+					Fail(fmt.Sprintf("Placement resource snapshot %s owner references diff (-got +want):\n%s", wantNames[0], diff))
+				}
+			})
+
+			It("should leave the placement binding untouched", func() {
+				placementBinding := placementBindingObj(snapshotNS, placementBindingName)
+				Expect(hubUncachedReader.Get(ctx, client.ObjectKeyFromObject(placementBinding), placementBinding)).To(Succeed(),
+					"Failed to get the placement binding")
+				Expect(placementBinding.GetSpec().ResourceSnapshotName).To(Equal(previousPrimarySnapshots[1].GetName()),
+					"The placement binding has been changed")
+			})
+
+			AfterAll(func() {
+				if pausedMgr != nil {
+					pausedMgr.gcwq.ShutDown()
+				}
+				objs := snapshotObjs(snapshotNS, slices.Concat(previousSnapshotNames, snapshotSetNames(placementPolicy, 0, 2))...)
+				objs = append(objs, placementBindingObj(snapshotNS, placementBindingName), placementPolicy)
+				objs = append(objs, configMapObjs(configMapNames)...)
+				deleteObjectsAndWait(objs)
+			})
+		})
+	}
+
+	Context("orphaned primary snapshot pending deletion", Ordered, func() {
+		configMapName := fmt.Sprintf(configMapNameTemplate, utils.RandStr())
+		var placementPolicy placementv1alpha1.PlacementPolicyAccessor = newPlacementPolicy(appNamespaceName, configMapNameSelector(configMapName))
+
+		// The snapshot name depends on the UID of the (previous) placement policy; it is set once the policy is created.
+		var previousSnapshotName string
+
+		BeforeAll(func() {
+			configMap := &corev1.ConfigMap{
+				ObjectMeta: metav1.ObjectMeta{Name: configMapName, Namespace: appNamespaceName},
+				Data:       map[string]string{"key": "value"},
+			}
+			Expect(hubClient.Create(ctx, configMap)).To(Succeed(), "Failed to create the config map")
+			Expect(hubClient.Create(ctx, placementPolicy)).To(Succeed(), "Failed to create the placement policy")
+			previousSnapshotName = uniquename.PrimaryPlacementResourceSnapshotName(placementPolicy.GetName(), placementPolicy.GetUID(), 0)
+		})
+
+		It("can create a snapshot", func() {
+			snapshotAndVerify(resourceSnapshotManager, placementPolicy, []string{previousSnapshotName})
+		})
+
+		It("can orphan the snapshot, block its deletion with a finalizer, and re-create the placement policy", func() {
+			addSnapshotFinalizer(appNamespaceName, previousSnapshotName)
+			setSnapshotOwnerRefs(appNamespaceName, previousSnapshotName, nil)
+			placementPolicy = recreatePlacementPolicy(placementPolicy)
+		})
+
+		It("should keep blocking snapshotting while the orphaned snapshot is pending deletion", func() {
+			gotSnapshots, isUpToDate, err := resourceSnapshotManager.SnapshotResourcesIfStale(ctx, placementPolicy)
+			verifySnapshotCallFailed(gotSnapshots, isUpToDate, err, kferrors.ErrCategoryTransient, leftoverSnapshotsErrMsg)
+
+			// The GC process deletes the orphaned snapshot, which the finalizer keeps around.
+			Eventually(func() error {
+				snapshot := placementResourceSnapshotObj(appNamespaceName, previousSnapshotName)
+				if err := hubClient.Get(ctx, types.NamespacedName{Namespace: appNamespaceName, Name: previousSnapshotName}, snapshot); err != nil {
+					return err
+				}
+				if snapshot.GetDeletionTimestamp().IsZero() {
+					return fmt.Errorf("the orphaned snapshot has not been marked for deletion yet")
+				}
+				return nil
+			}, eventuallyDuration, eventuallyInterval).Should(Succeed(), "Failed to mark the orphaned snapshot for deletion")
+
+			Consistently(func() error {
+				gotSnapshots, isUpToDate, err := resourceSnapshotManager.SnapshotResourcesIfStale(ctx, placementPolicy)
+				return checkSnapshotCallFailed(gotSnapshots, isUpToDate, err, kferrors.ErrCategoryTransient, leftoverSnapshotsErrMsg)
+			}, consistentlyDuration, consistentlyInterval).Should(Succeed(), "Snapshotting is not blocked while the orphaned snapshot is pending deletion")
+			verifyNoPrimarySnapshotAtIdx(placementPolicy, 0)
+		})
+
+		It("should create a snapshot once the orphaned snapshot is gone", func() {
+			removeFinalizersAndDelete(placementResourceSnapshotObj(appNamespaceName, previousSnapshotName))
+			waitForSnapshotGoneFromCache(appNamespaceName, previousSnapshotName)
+
+			snapshotAndVerify(resourceSnapshotManager, placementPolicy,
+				[]string{uniquename.PrimaryPlacementResourceSnapshotName(placementPolicy.GetName(), placementPolicy.GetUID(), 0)})
+		})
+
+		AfterAll(func() {
+			removeFinalizersAndDelete(placementResourceSnapshotObj(appNamespaceName, previousSnapshotName))
+			objs := snapshotObjs(appNamespaceName, uniquename.PrimaryPlacementResourceSnapshotName(placementPolicy.GetName(), placementPolicy.GetUID(), 0))
+			objs = append(objs, placementPolicy, &corev1.ConfigMap{ObjectMeta: metav1.ObjectMeta{Name: configMapName, Namespace: appNamespaceName}})
+			deleteObjectsAndWait(objs)
+		})
+	})
+
+	Context("snapshot with unexpected owner references", Ordered, func() {
+		configMapName := fmt.Sprintf(configMapNameTemplate, utils.RandStr())
+		placementPolicy := newPlacementPolicy(appNamespaceName, configMapNameSelector(configMapName))
+
+		var pausedMgr *Manager
+		// The snapshot names depend on the UID of the placement policy; they are set once the policy is created.
+		var snapshotName0, snapshotName1 string
+
+		BeforeAll(func() {
+			configMap := &corev1.ConfigMap{
+				ObjectMeta: metav1.ObjectMeta{Name: configMapName, Namespace: appNamespaceName},
+				Data:       map[string]string{"key": "value"},
+			}
+			Expect(hubClient.Create(ctx, configMap)).To(Succeed(), "Failed to create the config map")
+			Expect(hubClient.Create(ctx, placementPolicy)).To(Succeed(), "Failed to create the placement policy")
+			snapshotName0 = uniquename.PrimaryPlacementResourceSnapshotName(placementPolicy.Name, placementPolicy.UID, 0)
+			snapshotName1 = uniquename.PrimaryPlacementResourceSnapshotName(placementPolicy.Name, placementPolicy.UID, 1)
+			pausedMgr = newPausedManager()
+		})
+
+		It("can create a snapshot", func() {
+			snapshotAndVerify(pausedMgr, placementPolicy, []string{snapshotName0})
+		})
+
+		It("can add a second owner reference to the snapshot", func() {
+			configMap := &corev1.ConfigMap{}
+			Expect(hubUncachedReader.Get(ctx, types.NamespacedName{Namespace: appNamespaceName, Name: configMapName}, configMap)).To(Succeed(),
+				"Failed to get the config map")
+			ownerRefs := append(wantPlacementPolicyOwnerRefs(placementPolicy), metav1.OwnerReference{
+				APIVersion: "v1",
+				Kind:       "ConfigMap",
+				Name:       configMap.Name,
+				UID:        configMap.UID,
+			})
+			setSnapshotOwnerRefs(appNamespaceName, snapshotName0, ownerRefs)
+		})
+
+		It("should block snapshotting with a user error that names the snapshot", func() {
+			gotSnapshots, isUpToDate, err := pausedMgr.SnapshotResourcesIfStale(ctx, placementPolicy)
+			verifySnapshotCallFailed(gotSnapshots, isUpToDate, err, kferrors.ErrCategoryUser, unexpectedOwnerRefsErrMsg, snapshotName0)
+			gotSnapshots, isUpToDate, err = pausedMgr.SnapshotResourcesIfNoSnapshotExists(ctx, placementPolicy)
+			verifySnapshotCallFailed(gotSnapshots, isUpToDate, err, kferrors.ErrCategoryUser, unexpectedOwnerRefsErrMsg, snapshotName0)
+			verifyGCRequests(drainGCRequests(pausedMgr), nil)
+		})
+
+		It("should keep blocking snapshotting after a resource change", func() {
+			updateConfigMapData(appNamespaceName, configMapName, "changed")
+			gotSnapshots, isUpToDate, err := pausedMgr.SnapshotResourcesIfStale(ctx, placementPolicy)
+			verifySnapshotCallFailed(gotSnapshots, isUpToDate, err, kferrors.ErrCategoryUser, unexpectedOwnerRefsErrMsg, snapshotName0)
+			verifyNoPrimarySnapshotAtIdx(placementPolicy, 1)
+			verifyGCRequests(drainGCRequests(pausedMgr), nil)
+		})
+
+		It("can remove the extra owner reference", func() {
+			setSnapshotOwnerRefs(appNamespaceName, snapshotName0, wantPlacementPolicyOwnerRefs(placementPolicy))
+		})
+
+		It("should create a snapshot for the resource change", func() {
+			snapshotAndVerify(pausedMgr, placementPolicy, []string{snapshotName1})
+			verifyGCRequests(drainGCRequests(pausedMgr), nil)
+		})
+
+		AfterAll(func() {
+			if pausedMgr != nil {
+				pausedMgr.gcwq.ShutDown()
+			}
+			objs := snapshotObjs(appNamespaceName, snapshotName0, snapshotName1)
+			objs = append(objs, placementPolicy, &corev1.ConfigMap{ObjectMeta: metav1.ObjectMeta{Name: configMapName, Namespace: appNamespaceName}})
+			deleteObjectsAndWait(objs)
+		})
+	})
+
+	Context("leftover secondary snapshots without a primary snapshot", Ordered, func() {
+		configMapName := fmt.Sprintf(configMapNameTemplate, utils.RandStr())
+		placementPolicy := newPlacementPolicy(appNamespaceName, configMapNameSelector(configMapName))
+
+		// The leftover secondary snapshots mimic ones created by a previous placement policy of the same name in
+		// interrupted snapshot creation attempts, and then orphaned; they are named after the previous placement policy.
+		previousPlacementPolicyUID := types.UID(utils.RandStr())
+		leftoverSnapshotName0 := uniquename.SecondaryPlacementResourceSnapshotName(placementPolicy.Name, previousPlacementPolicyUID, 0, 1)
+		leftoverSnapshotName1 := uniquename.SecondaryPlacementResourceSnapshotName(placementPolicy.Name, previousPlacementPolicyUID, 1, 1)
+
+		// The snapshot names depend on the UID of the placement policy; they are set once the policy is created.
+		var snapshotName0, snapshotName1 string
+
+		BeforeAll(func() {
+			configMap := &corev1.ConfigMap{
+				ObjectMeta: metav1.ObjectMeta{Name: configMapName, Namespace: appNamespaceName},
+				Data:       map[string]string{"key": "value"},
+			}
+			Expect(hubClient.Create(ctx, configMap)).To(Succeed(), "Failed to create the config map")
+
+			// The leftover secondary snapshots are indexed (they carry the owned-by annotation and the index labels),
+			// but have no owners.
+			createDecoySnapshot(appNamespaceName, leftoverSnapshotName0, decoySecondaryLabels(placementPolicy, "0", "1"), decoyOwnedByAnnotations(placementPolicy), nil)
+			createDecoySnapshot(appNamespaceName, leftoverSnapshotName1, decoySecondaryLabels(placementPolicy, "1", "1"), decoyOwnedByAnnotations(placementPolicy), nil)
+			getSnapshotFromCache(appNamespaceName, leftoverSnapshotName0)
+			getSnapshotFromCache(appNamespaceName, leftoverSnapshotName1)
+
+			Expect(hubClient.Create(ctx, placementPolicy)).To(Succeed(), "Failed to create the placement policy")
+			snapshotName0 = uniquename.PrimaryPlacementResourceSnapshotName(placementPolicy.Name, placementPolicy.UID, 0)
+			snapshotName1 = uniquename.PrimaryPlacementResourceSnapshotName(placementPolicy.Name, placementPolicy.UID, 1)
+		})
+
+		It("should not block snapshotting, but clean up the leftover secondary snapshot at index 0 first", func() {
+			// Only primary snapshots are checked for leftovers; the leftover secondary snapshot at index 0 is cleaned
+			// up as an orphan right before the manager creates snapshots at index 0.
+			gotSnapshots, isUpToDate, err := resourceSnapshotManager.SnapshotResourcesIfStale(ctx, placementPolicy)
+			verifySnapshotCallFailed(gotSnapshots, isUpToDate, err, kferrors.ErrCategoryTransient, orphansCleanedUpErrMsg)
+			waitForSnapshotGoneFromCache(appNamespaceName, leftoverSnapshotName0)
+			verifySnapshotExists(appNamespaceName, leftoverSnapshotName1)
+		})
+
+		It("should create a snapshot at index 0, leaving the leftover secondary snapshot at index 1 behind", func() {
+			snapshotAndVerify(resourceSnapshotManager, placementPolicy, []string{snapshotName0})
+			verifySnapshotExists(appNamespaceName, leftoverSnapshotName1)
+		})
+
+		It("should clean up the leftover secondary snapshot at index 1 before creating a snapshot there", func() {
+			updateConfigMapData(appNamespaceName, configMapName, "changed")
+			gotSnapshots, isUpToDate, err := resourceSnapshotManager.SnapshotResourcesIfStale(ctx, placementPolicy)
+			verifySnapshotCallFailed(gotSnapshots, isUpToDate, err, kferrors.ErrCategoryTransient, orphansCleanedUpErrMsg)
+			waitForSnapshotGoneFromCache(appNamespaceName, leftoverSnapshotName1)
+
+			snapshotAndVerify(resourceSnapshotManager, placementPolicy, []string{snapshotName1})
+		})
+
+		AfterAll(func() {
+			objs := snapshotObjs(appNamespaceName, leftoverSnapshotName0, leftoverSnapshotName1, snapshotName0, snapshotName1)
+			objs = append(objs, placementPolicy, &corev1.ConfigMap{ObjectMeta: metav1.ObjectMeta{Name: configMapName, Namespace: appNamespaceName}})
+			deleteObjectsAndWait(objs)
 		})
 	})
 })

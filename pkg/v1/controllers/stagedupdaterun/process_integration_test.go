@@ -71,7 +71,7 @@ var _ = Describe("processing staged update runs", func() {
 		policyName := fmt.Sprintf(placementPolicyNameTemplate, randStr)
 		strategyName := fmt.Sprintf(stagedUpdateStrategyNameTemplate, randStr)
 		runName := fmt.Sprintf(stagedUpdateRunNameTemplate, randStr)
-		snapshotName := primaryPlacementResourceSnapshotName(policyName, 0)
+		var snapshotName string
 
 		// Member cluster 0 is the only canary cluster; member clusters 1, 2, and 3 are production clusters, which
 		// the prod stage sorts by their order labels. That is, the rollout order is member cluster 0 (in the canary
@@ -97,6 +97,8 @@ var _ = Describe("processing staged update runs", func() {
 		BeforeAll(func() {
 			createConfigMap(configMapName)
 			policy := createPlacementPolicy(appNamespaceName, policyName, configMapName)
+			// The snapshot names factor in the UID of the placement policy, which is only known once it is created.
+			snapshotName = primaryPlacementResourceSnapshotName(policy, 0)
 			fixtures := createMemberClustersAndBindings(appNamespaceName, policyName, memberClusterNames, bindingNames, memberClusterLabels)
 			strategy := createStagedUpdateStrategy(appNamespaceName, strategyName, []rolloutv1alpha1.Stage{
 				{
@@ -316,7 +318,7 @@ var _ = Describe("processing staged update runs", func() {
 		policyName := fmt.Sprintf(placementPolicyNameTemplate, randStr)
 		strategyName := fmt.Sprintf(stagedUpdateStrategyNameTemplate, randStr)
 		runName := fmt.Sprintf(stagedUpdateRunNameTemplate, randStr)
-		snapshotName := primaryPlacementResourceSnapshotName(policyName, 0)
+		var snapshotName string
 
 		// Member clusters 0-2 are canary clusters, which the canary stage updates two at a time; member clusters
 		// 3-5 are production clusters, which the prod stage updates all at once.
@@ -333,6 +335,8 @@ var _ = Describe("processing staged update runs", func() {
 		BeforeAll(func() {
 			createConfigMap(configMapName)
 			policy := createPlacementPolicy(appNamespaceName, policyName, configMapName)
+			// The snapshot names factor in the UID of the placement policy, which is only known once it is created.
+			snapshotName = primaryPlacementResourceSnapshotName(policy, 0)
 			fixtures := createMemberClustersAndBindings(appNamespaceName, policyName, memberClusterNames, bindingNames, memberClusterLabels)
 			strategy := createStagedUpdateStrategy(appNamespaceName, strategyName, []rolloutv1alpha1.Stage{
 				{
@@ -513,14 +517,13 @@ var _ = Describe("processing staged update runs", func() {
 		policyName := fmt.Sprintf(placementPolicyNameTemplate, randStr)
 		strategyName := fmt.Sprintf(stagedUpdateStrategyNameTemplate, randStr)
 		runName := fmt.Sprintf(stagedUpdateRunNameTemplate, randStr)
-		snapshotName := primaryPlacementResourceSnapshotName(policyName, 0)
+		var snapshotName string
 
 		memberClusterNames, bindingNames := memberClusterAndBindingNames(randStr, 1)
 
 		// The status of the staged update run while the (only) member cluster is being updated.
 		wantInProgressStatus := &rolloutv1alpha1.StagedUpdateRunStatus{
-			Conditions:                    []metav1.Condition{stagedUpdateRunInitializedCond(), stagedUpdateRunStartedCond()},
-			ResourceSnapshotNameToRollout: snapshotName,
+			Conditions: []metav1.Condition{stagedUpdateRunInitializedCond(), stagedUpdateRunStartedCond()},
 			Stages: []rolloutv1alpha1.PerStageStatus{
 				{
 					StageName: restStageName,
@@ -536,6 +539,9 @@ var _ = Describe("processing staged update runs", func() {
 		BeforeAll(func() {
 			createConfigMap(configMapName)
 			policy := createPlacementPolicy(appNamespaceName, policyName, configMapName)
+			// The snapshot names factor in the UID of the placement policy, which is only known once it is created.
+			snapshotName = primaryPlacementResourceSnapshotName(policy, 0)
+			wantInProgressStatus.ResourceSnapshotNameToRollout = snapshotName
 			fixtures := createMemberClustersAndBindings(appNamespaceName, policyName, memberClusterNames, bindingNames, []map[string]string{nil})
 			strategy := createStagedUpdateStrategy(appNamespaceName, strategyName, []rolloutv1alpha1.Stage{
 				{
@@ -626,7 +632,7 @@ var _ = Describe("processing staged update runs", func() {
 		policyName := fmt.Sprintf(placementPolicyNameTemplate, randStr)
 		strategyName := fmt.Sprintf(stagedUpdateStrategyNameTemplate, randStr)
 		runName := fmt.Sprintf(stagedUpdateRunNameTemplate, randStr)
-		snapshotName := primaryPlacementResourceSnapshotName(policyName, 0)
+		var snapshotName string
 
 		// The placement binding of member cluster 0 already points to the resource snapshot that the staged update
 		// run is going to roll out, and has been marked as available; the one of member cluster 1 points to the
@@ -636,6 +642,8 @@ var _ = Describe("processing staged update runs", func() {
 		BeforeAll(func() {
 			createConfigMap(configMapName)
 			policy := createPlacementPolicy(appNamespaceName, policyName, configMapName)
+			// The snapshot names factor in the UID of the placement policy, which is only known once it is created.
+			snapshotName = primaryPlacementResourceSnapshotName(policy, 0)
 			memberCluster0 := createMemberCluster(memberClusterNames[0], nil)
 			binding0 := createPlacementBinding(appNamespaceName, bindingNames[0], policyName, memberClusterNames[0], snapshotName)
 			markPlacementBindingAsAvailable(appNamespaceName, bindingNames[0], snapshotName)
@@ -734,7 +742,7 @@ var _ = Describe("processing staged update runs", func() {
 		policyName := fmt.Sprintf(placementPolicyNameTemplate, randStr)
 		strategyName := fmt.Sprintf(stagedUpdateStrategyNameTemplate, randStr)
 		runName := fmt.Sprintf(stagedUpdateRunNameTemplate, randStr)
-		snapshotName := primaryPlacementResourceSnapshotName(policyName, 0)
+		var snapshotName string
 
 		// The placement binding of member cluster 0 is suspended before the rollout starts; the one of member
 		// cluster 1 is suspended while the member cluster is being updated.
@@ -743,6 +751,8 @@ var _ = Describe("processing staged update runs", func() {
 		BeforeAll(func() {
 			createConfigMap(configMapName)
 			policy := createPlacementPolicy(appNamespaceName, policyName, configMapName)
+			// The snapshot names factor in the UID of the placement policy, which is only known once it is created.
+			snapshotName = primaryPlacementResourceSnapshotName(policy, 0)
 			fixtures := createMemberClustersAndBindings(appNamespaceName, policyName, memberClusterNames, bindingNames, []map[string]string{nil, nil})
 			updatePlacementBindingSuspended(appNamespaceName, bindingNames[0], true)
 			strategy := createStagedUpdateStrategy(appNamespaceName, strategyName, []rolloutv1alpha1.Stage{
@@ -824,7 +834,7 @@ var _ = Describe("processing staged update runs", func() {
 		policyName := fmt.Sprintf(placementPolicyNameTemplate, randStr)
 		strategyName := fmt.Sprintf(stagedUpdateStrategyNameTemplate, randStr)
 		runName := fmt.Sprintf(stagedUpdateRunNameTemplate, randStr)
-		snapshotName := primaryPlacementResourceSnapshotName(policyName, 0)
+		var snapshotName string
 
 		// Member cluster 0 is a canary cluster, and member cluster 1 is a production cluster; the empty stage, which
 		// comes between the canary stage and the prod stage, includes no clusters, but has an after-stage timed wait
@@ -848,6 +858,8 @@ var _ = Describe("processing staged update runs", func() {
 		BeforeAll(func() {
 			createConfigMap(configMapName)
 			policy := createPlacementPolicy(appNamespaceName, policyName, configMapName)
+			// The snapshot names factor in the UID of the placement policy, which is only known once it is created.
+			snapshotName = primaryPlacementResourceSnapshotName(policy, 0)
 			fixtures := createMemberClustersAndBindings(appNamespaceName, policyName, memberClusterNames, bindingNames, memberClusterLabels)
 			strategy := createStagedUpdateStrategy(appNamespaceName, strategyName, []rolloutv1alpha1.Stage{
 				{
@@ -991,7 +1003,7 @@ var _ = Describe("processing staged update runs", func() {
 		policyName := fmt.Sprintf(placementPolicyNameTemplate, randStr)
 		strategyName := fmt.Sprintf(stagedUpdateStrategyNameTemplate, randStr)
 		runName := fmt.Sprintf(stagedUpdateRunNameTemplate, randStr)
-		snapshotName := primaryPlacementResourceSnapshotName(policyName, 0)
+		var snapshotName string
 
 		// While member cluster 0 is being updated, its placement binding is pointed to another resource snapshot,
 		// as if another staged update run has rolled out to it.
@@ -1000,6 +1012,8 @@ var _ = Describe("processing staged update runs", func() {
 		BeforeAll(func() {
 			createConfigMap(configMapName)
 			policy := createPlacementPolicy(appNamespaceName, policyName, configMapName)
+			// The snapshot names factor in the UID of the placement policy, which is only known once it is created.
+			snapshotName = primaryPlacementResourceSnapshotName(policy, 0)
 			fixtures := createMemberClustersAndBindings(appNamespaceName, policyName, memberClusterNames, bindingNames, []map[string]string{nil, nil})
 			strategy := createStagedUpdateStrategy(appNamespaceName, strategyName, []rolloutv1alpha1.Stage{
 				{
@@ -1118,7 +1132,7 @@ var _ = Describe("processing staged update runs", func() {
 		policyName := fmt.Sprintf(placementPolicyNameTemplate, randStr)
 		strategyName := fmt.Sprintf(stagedUpdateStrategyNameTemplate, randStr)
 		runName := fmt.Sprintf(stagedUpdateRunNameTemplate, randStr)
-		snapshotName := primaryPlacementResourceSnapshotName(policyName, 0)
+		var snapshotName string
 
 		// The placement binding of member cluster 0 is deleted after the staged update run has been initialized.
 		memberClusterNames, bindingNames := memberClusterAndBindingNames(randStr, 2)
@@ -1126,6 +1140,8 @@ var _ = Describe("processing staged update runs", func() {
 		BeforeAll(func() {
 			createConfigMap(configMapName)
 			policy := createPlacementPolicy(appNamespaceName, policyName, configMapName)
+			// The snapshot names factor in the UID of the placement policy, which is only known once it is created.
+			snapshotName = primaryPlacementResourceSnapshotName(policy, 0)
 			fixtures := createMemberClustersAndBindings(appNamespaceName, policyName, memberClusterNames, bindingNames, []map[string]string{nil, nil})
 			strategy := createStagedUpdateStrategy(appNamespaceName, strategyName, []rolloutv1alpha1.Stage{
 				{
@@ -1229,7 +1245,7 @@ var _ = Describe("processing staged update runs", func() {
 		policyName := fmt.Sprintf(placementPolicyNameTemplate, randStr)
 		strategyName := fmt.Sprintf(stagedUpdateStrategyNameTemplate, randStr)
 		runName := fmt.Sprintf(stagedUpdateRunNameTemplate, randStr)
-		snapshotName := primaryPlacementResourceSnapshotName(policyName, 0)
+		var snapshotName string
 
 		// After the staged update run has been initialized, the placement binding of member cluster 0 is marked
 		// for deletion, and the one of member cluster 1 is retargeted to another member cluster.
@@ -1238,6 +1254,8 @@ var _ = Describe("processing staged update runs", func() {
 		BeforeAll(func() {
 			createConfigMap(configMapName)
 			policy := createPlacementPolicy(appNamespaceName, policyName, configMapName)
+			// The snapshot names factor in the UID of the placement policy, which is only known once it is created.
+			snapshotName = primaryPlacementResourceSnapshotName(policy, 0)
 			fixtures := createMemberClustersAndBindings(appNamespaceName, policyName, memberClusterNames, bindingNames, []map[string]string{nil, nil, nil})
 			strategy := createStagedUpdateStrategy(appNamespaceName, strategyName, []rolloutv1alpha1.Stage{
 				{
@@ -1359,7 +1377,7 @@ var _ = Describe("processing staged update runs", func() {
 		policyName := fmt.Sprintf(placementPolicyNameTemplate, randStr)
 		strategyName := fmt.Sprintf(stagedUpdateStrategyNameTemplate, randStr)
 		runName := fmt.Sprintf(stagedUpdateRunNameTemplate, randStr)
-		snapshotName := primaryPlacementResourceSnapshotName(policyName, 0)
+		var snapshotName string
 
 		// Member clusters 0-2 are canary clusters, which the canary stage updates two at a time; member cluster 3 is
 		// a production cluster. The staged update run tolerates no cluster failures: the update on member cluster 0
@@ -1375,6 +1393,8 @@ var _ = Describe("processing staged update runs", func() {
 		BeforeAll(func() {
 			createConfigMap(configMapName)
 			policy := createPlacementPolicy(appNamespaceName, policyName, configMapName)
+			// The snapshot names factor in the UID of the placement policy, which is only known once it is created.
+			snapshotName = primaryPlacementResourceSnapshotName(policy, 0)
 			fixtures := createMemberClustersAndBindings(appNamespaceName, policyName, memberClusterNames, bindingNames, memberClusterLabels)
 			strategy := createStagedUpdateStrategy(appNamespaceName, strategyName, []rolloutv1alpha1.Stage{
 				{
@@ -1518,7 +1538,7 @@ var _ = Describe("processing staged update runs", func() {
 		policyName := fmt.Sprintf(placementPolicyNameTemplate, randStr)
 		strategyName := fmt.Sprintf(stagedUpdateStrategyNameTemplate, randStr)
 		runName := fmt.Sprintf(stagedUpdateRunNameTemplate, randStr)
-		snapshotName := primaryPlacementResourceSnapshotName(policyName, 0)
+		var snapshotName string
 
 		// Member clusters 0 and 1 are canary clusters; member clusters 2 and 3 are production clusters. The staged
 		// update run tolerates one cluster failure: the update on member cluster 0 fails in the canary stage, and
@@ -1548,6 +1568,8 @@ var _ = Describe("processing staged update runs", func() {
 		BeforeAll(func() {
 			createConfigMap(configMapName)
 			policy := createPlacementPolicy(appNamespaceName, policyName, configMapName)
+			// The snapshot names factor in the UID of the placement policy, which is only known once it is created.
+			snapshotName = primaryPlacementResourceSnapshotName(policy, 0)
 			fixtures := createMemberClustersAndBindings(appNamespaceName, policyName, memberClusterNames, bindingNames, memberClusterLabels)
 			strategy := createStagedUpdateStrategy(appNamespaceName, strategyName, []rolloutv1alpha1.Stage{
 				{
@@ -1713,7 +1735,7 @@ var _ = Describe("processing staged update runs", func() {
 		policyName := fmt.Sprintf(placementPolicyNameTemplate, randStr)
 		strategyName := fmt.Sprintf(stagedUpdateStrategyNameTemplate, randStr)
 		runName := fmt.Sprintf(stagedUpdateRunNameTemplate, randStr)
-		snapshotName := primaryPlacementResourceSnapshotName(policyName, 0)
+		var snapshotName string
 
 		// The (only) member cluster stays unavailable for multiple processing time budgets, so that the controller
 		// picks up the in-flight update in new reconciliations.
@@ -1721,8 +1743,7 @@ var _ = Describe("processing staged update runs", func() {
 
 		// The status of the staged update run while the member cluster is being updated.
 		wantInProgressStatus := &rolloutv1alpha1.StagedUpdateRunStatus{
-			Conditions:                    []metav1.Condition{stagedUpdateRunInitializedCond(), stagedUpdateRunStartedCond()},
-			ResourceSnapshotNameToRollout: snapshotName,
+			Conditions: []metav1.Condition{stagedUpdateRunInitializedCond(), stagedUpdateRunStartedCond()},
 			Stages: []rolloutv1alpha1.PerStageStatus{
 				{
 					StageName: restStageName,
@@ -1744,6 +1765,9 @@ var _ = Describe("processing staged update runs", func() {
 		BeforeAll(func() {
 			createConfigMap(configMapName)
 			policy := createPlacementPolicy(appNamespaceName, policyName, configMapName)
+			// The snapshot names factor in the UID of the placement policy, which is only known once it is created.
+			snapshotName = primaryPlacementResourceSnapshotName(policy, 0)
+			wantInProgressStatus.ResourceSnapshotNameToRollout = snapshotName
 			fixtures := createMemberClustersAndBindings(appNamespaceName, policyName, memberClusterNames, bindingNames, []map[string]string{nil})
 			strategy := createStagedUpdateStrategy(appNamespaceName, strategyName, []rolloutv1alpha1.Stage{
 				{
@@ -1846,7 +1870,7 @@ var _ = Describe("processing cluster staged update runs", func() {
 		policyName := fmt.Sprintf(placementPolicyNameTemplate, randStr)
 		strategyName := fmt.Sprintf(stagedUpdateStrategyNameTemplate, randStr)
 		runName := fmt.Sprintf(stagedUpdateRunNameTemplate, randStr)
-		snapshotName := primaryPlacementResourceSnapshotName(policyName, 0)
+		var snapshotName string
 
 		// Member cluster 0 is the only canary cluster; member clusters 1, 2, and 3 are production clusters, which
 		// the prod stage sorts by their order labels. That is, the rollout order is member cluster 0 (in the canary
@@ -1872,6 +1896,8 @@ var _ = Describe("processing cluster staged update runs", func() {
 		BeforeAll(func() {
 			createConfigMap(configMapName)
 			policy := createPlacementPolicy(clusterScopedNS, policyName, configMapName)
+			// The snapshot names factor in the UID of the placement policy, which is only known once it is created.
+			snapshotName = primaryPlacementResourceSnapshotName(policy, 0)
 			fixtures := createMemberClustersAndBindings(clusterScopedNS, policyName, memberClusterNames, bindingNames, memberClusterLabels)
 			strategy := createStagedUpdateStrategy(clusterScopedNS, strategyName, []rolloutv1alpha1.Stage{
 				{
@@ -2091,7 +2117,7 @@ var _ = Describe("processing cluster staged update runs", func() {
 		policyName := fmt.Sprintf(placementPolicyNameTemplate, randStr)
 		strategyName := fmt.Sprintf(stagedUpdateStrategyNameTemplate, randStr)
 		runName := fmt.Sprintf(stagedUpdateRunNameTemplate, randStr)
-		snapshotName := primaryPlacementResourceSnapshotName(policyName, 0)
+		var snapshotName string
 
 		// Member clusters 0-2 are canary clusters, which the canary stage updates two at a time; member clusters
 		// 3-5 are production clusters, which the prod stage updates all at once.
@@ -2108,6 +2134,8 @@ var _ = Describe("processing cluster staged update runs", func() {
 		BeforeAll(func() {
 			createConfigMap(configMapName)
 			policy := createPlacementPolicy(clusterScopedNS, policyName, configMapName)
+			// The snapshot names factor in the UID of the placement policy, which is only known once it is created.
+			snapshotName = primaryPlacementResourceSnapshotName(policy, 0)
 			fixtures := createMemberClustersAndBindings(clusterScopedNS, policyName, memberClusterNames, bindingNames, memberClusterLabels)
 			strategy := createStagedUpdateStrategy(clusterScopedNS, strategyName, []rolloutv1alpha1.Stage{
 				{
@@ -2288,14 +2316,13 @@ var _ = Describe("processing cluster staged update runs", func() {
 		policyName := fmt.Sprintf(placementPolicyNameTemplate, randStr)
 		strategyName := fmt.Sprintf(stagedUpdateStrategyNameTemplate, randStr)
 		runName := fmt.Sprintf(stagedUpdateRunNameTemplate, randStr)
-		snapshotName := primaryPlacementResourceSnapshotName(policyName, 0)
+		var snapshotName string
 
 		memberClusterNames, bindingNames := memberClusterAndBindingNames(randStr, 1)
 
 		// The status of the cluster staged update run while the (only) member cluster is being updated.
 		wantInProgressStatus := &rolloutv1alpha1.StagedUpdateRunStatus{
-			Conditions:                    []metav1.Condition{stagedUpdateRunInitializedCond(), stagedUpdateRunStartedCond()},
-			ResourceSnapshotNameToRollout: snapshotName,
+			Conditions: []metav1.Condition{stagedUpdateRunInitializedCond(), stagedUpdateRunStartedCond()},
 			Stages: []rolloutv1alpha1.PerStageStatus{
 				{
 					StageName: restStageName,
@@ -2311,6 +2338,9 @@ var _ = Describe("processing cluster staged update runs", func() {
 		BeforeAll(func() {
 			createConfigMap(configMapName)
 			policy := createPlacementPolicy(clusterScopedNS, policyName, configMapName)
+			// The snapshot names factor in the UID of the placement policy, which is only known once it is created.
+			snapshotName = primaryPlacementResourceSnapshotName(policy, 0)
+			wantInProgressStatus.ResourceSnapshotNameToRollout = snapshotName
 			fixtures := createMemberClustersAndBindings(clusterScopedNS, policyName, memberClusterNames, bindingNames, []map[string]string{nil})
 			strategy := createStagedUpdateStrategy(clusterScopedNS, strategyName, []rolloutv1alpha1.Stage{
 				{
@@ -2401,7 +2431,7 @@ var _ = Describe("processing cluster staged update runs", func() {
 		policyName := fmt.Sprintf(placementPolicyNameTemplate, randStr)
 		strategyName := fmt.Sprintf(stagedUpdateStrategyNameTemplate, randStr)
 		runName := fmt.Sprintf(stagedUpdateRunNameTemplate, randStr)
-		snapshotName := primaryPlacementResourceSnapshotName(policyName, 0)
+		var snapshotName string
 
 		// The placement binding of member cluster 0 already points to the resource snapshot that the staged update
 		// run is going to roll out, and has been marked as available; the one of member cluster 1 points to the
@@ -2411,6 +2441,8 @@ var _ = Describe("processing cluster staged update runs", func() {
 		BeforeAll(func() {
 			createConfigMap(configMapName)
 			policy := createPlacementPolicy(clusterScopedNS, policyName, configMapName)
+			// The snapshot names factor in the UID of the placement policy, which is only known once it is created.
+			snapshotName = primaryPlacementResourceSnapshotName(policy, 0)
 			memberCluster0 := createMemberCluster(memberClusterNames[0], nil)
 			binding0 := createPlacementBinding(clusterScopedNS, bindingNames[0], policyName, memberClusterNames[0], snapshotName)
 			markPlacementBindingAsAvailable(clusterScopedNS, bindingNames[0], snapshotName)
@@ -2509,7 +2541,7 @@ var _ = Describe("processing cluster staged update runs", func() {
 		policyName := fmt.Sprintf(placementPolicyNameTemplate, randStr)
 		strategyName := fmt.Sprintf(stagedUpdateStrategyNameTemplate, randStr)
 		runName := fmt.Sprintf(stagedUpdateRunNameTemplate, randStr)
-		snapshotName := primaryPlacementResourceSnapshotName(policyName, 0)
+		var snapshotName string
 
 		// The placement binding of member cluster 0 is suspended before the rollout starts; the one of member
 		// cluster 1 is suspended while the member cluster is being updated.
@@ -2518,6 +2550,8 @@ var _ = Describe("processing cluster staged update runs", func() {
 		BeforeAll(func() {
 			createConfigMap(configMapName)
 			policy := createPlacementPolicy(clusterScopedNS, policyName, configMapName)
+			// The snapshot names factor in the UID of the placement policy, which is only known once it is created.
+			snapshotName = primaryPlacementResourceSnapshotName(policy, 0)
 			fixtures := createMemberClustersAndBindings(clusterScopedNS, policyName, memberClusterNames, bindingNames, []map[string]string{nil, nil})
 			updatePlacementBindingSuspended(clusterScopedNS, bindingNames[0], true)
 			strategy := createStagedUpdateStrategy(clusterScopedNS, strategyName, []rolloutv1alpha1.Stage{
@@ -2599,7 +2633,7 @@ var _ = Describe("processing cluster staged update runs", func() {
 		policyName := fmt.Sprintf(placementPolicyNameTemplate, randStr)
 		strategyName := fmt.Sprintf(stagedUpdateStrategyNameTemplate, randStr)
 		runName := fmt.Sprintf(stagedUpdateRunNameTemplate, randStr)
-		snapshotName := primaryPlacementResourceSnapshotName(policyName, 0)
+		var snapshotName string
 
 		// Member cluster 0 is a canary cluster, and member cluster 1 is a production cluster; the empty stage, which
 		// comes between the canary stage and the prod stage, includes no clusters, but has an after-stage timed wait
@@ -2623,6 +2657,8 @@ var _ = Describe("processing cluster staged update runs", func() {
 		BeforeAll(func() {
 			createConfigMap(configMapName)
 			policy := createPlacementPolicy(clusterScopedNS, policyName, configMapName)
+			// The snapshot names factor in the UID of the placement policy, which is only known once it is created.
+			snapshotName = primaryPlacementResourceSnapshotName(policy, 0)
 			fixtures := createMemberClustersAndBindings(clusterScopedNS, policyName, memberClusterNames, bindingNames, memberClusterLabels)
 			strategy := createStagedUpdateStrategy(clusterScopedNS, strategyName, []rolloutv1alpha1.Stage{
 				{
@@ -2766,7 +2802,7 @@ var _ = Describe("processing cluster staged update runs", func() {
 		policyName := fmt.Sprintf(placementPolicyNameTemplate, randStr)
 		strategyName := fmt.Sprintf(stagedUpdateStrategyNameTemplate, randStr)
 		runName := fmt.Sprintf(stagedUpdateRunNameTemplate, randStr)
-		snapshotName := primaryPlacementResourceSnapshotName(policyName, 0)
+		var snapshotName string
 
 		// While member cluster 0 is being updated, its placement binding is pointed to another resource snapshot,
 		// as if another cluster staged update run has rolled out to it.
@@ -2775,6 +2811,8 @@ var _ = Describe("processing cluster staged update runs", func() {
 		BeforeAll(func() {
 			createConfigMap(configMapName)
 			policy := createPlacementPolicy(clusterScopedNS, policyName, configMapName)
+			// The snapshot names factor in the UID of the placement policy, which is only known once it is created.
+			snapshotName = primaryPlacementResourceSnapshotName(policy, 0)
 			fixtures := createMemberClustersAndBindings(clusterScopedNS, policyName, memberClusterNames, bindingNames, []map[string]string{nil, nil})
 			strategy := createStagedUpdateStrategy(clusterScopedNS, strategyName, []rolloutv1alpha1.Stage{
 				{
@@ -2893,7 +2931,7 @@ var _ = Describe("processing cluster staged update runs", func() {
 		policyName := fmt.Sprintf(placementPolicyNameTemplate, randStr)
 		strategyName := fmt.Sprintf(stagedUpdateStrategyNameTemplate, randStr)
 		runName := fmt.Sprintf(stagedUpdateRunNameTemplate, randStr)
-		snapshotName := primaryPlacementResourceSnapshotName(policyName, 0)
+		var snapshotName string
 
 		// The placement binding of member cluster 0 is deleted after the cluster staged update run has been initialized.
 		memberClusterNames, bindingNames := memberClusterAndBindingNames(randStr, 2)
@@ -2901,6 +2939,8 @@ var _ = Describe("processing cluster staged update runs", func() {
 		BeforeAll(func() {
 			createConfigMap(configMapName)
 			policy := createPlacementPolicy(clusterScopedNS, policyName, configMapName)
+			// The snapshot names factor in the UID of the placement policy, which is only known once it is created.
+			snapshotName = primaryPlacementResourceSnapshotName(policy, 0)
 			fixtures := createMemberClustersAndBindings(clusterScopedNS, policyName, memberClusterNames, bindingNames, []map[string]string{nil, nil})
 			strategy := createStagedUpdateStrategy(clusterScopedNS, strategyName, []rolloutv1alpha1.Stage{
 				{
@@ -3004,7 +3044,7 @@ var _ = Describe("processing cluster staged update runs", func() {
 		policyName := fmt.Sprintf(placementPolicyNameTemplate, randStr)
 		strategyName := fmt.Sprintf(stagedUpdateStrategyNameTemplate, randStr)
 		runName := fmt.Sprintf(stagedUpdateRunNameTemplate, randStr)
-		snapshotName := primaryPlacementResourceSnapshotName(policyName, 0)
+		var snapshotName string
 
 		// After the cluster staged update run has been initialized, the placement binding of member cluster 0 is marked
 		// for deletion, and the one of member cluster 1 is retargeted to another member cluster.
@@ -3013,6 +3053,8 @@ var _ = Describe("processing cluster staged update runs", func() {
 		BeforeAll(func() {
 			createConfigMap(configMapName)
 			policy := createPlacementPolicy(clusterScopedNS, policyName, configMapName)
+			// The snapshot names factor in the UID of the placement policy, which is only known once it is created.
+			snapshotName = primaryPlacementResourceSnapshotName(policy, 0)
 			fixtures := createMemberClustersAndBindings(clusterScopedNS, policyName, memberClusterNames, bindingNames, []map[string]string{nil, nil, nil})
 			strategy := createStagedUpdateStrategy(clusterScopedNS, strategyName, []rolloutv1alpha1.Stage{
 				{
@@ -3134,7 +3176,7 @@ var _ = Describe("processing cluster staged update runs", func() {
 		policyName := fmt.Sprintf(placementPolicyNameTemplate, randStr)
 		strategyName := fmt.Sprintf(stagedUpdateStrategyNameTemplate, randStr)
 		runName := fmt.Sprintf(stagedUpdateRunNameTemplate, randStr)
-		snapshotName := primaryPlacementResourceSnapshotName(policyName, 0)
+		var snapshotName string
 
 		// Member clusters 0-2 are canary clusters, which the canary stage updates two at a time; member cluster 3 is
 		// a production cluster. The cluster staged update run tolerates no cluster failures: the update on member cluster 0
@@ -3150,6 +3192,8 @@ var _ = Describe("processing cluster staged update runs", func() {
 		BeforeAll(func() {
 			createConfigMap(configMapName)
 			policy := createPlacementPolicy(clusterScopedNS, policyName, configMapName)
+			// The snapshot names factor in the UID of the placement policy, which is only known once it is created.
+			snapshotName = primaryPlacementResourceSnapshotName(policy, 0)
 			fixtures := createMemberClustersAndBindings(clusterScopedNS, policyName, memberClusterNames, bindingNames, memberClusterLabels)
 			strategy := createStagedUpdateStrategy(clusterScopedNS, strategyName, []rolloutv1alpha1.Stage{
 				{
@@ -3293,7 +3337,7 @@ var _ = Describe("processing cluster staged update runs", func() {
 		policyName := fmt.Sprintf(placementPolicyNameTemplate, randStr)
 		strategyName := fmt.Sprintf(stagedUpdateStrategyNameTemplate, randStr)
 		runName := fmt.Sprintf(stagedUpdateRunNameTemplate, randStr)
-		snapshotName := primaryPlacementResourceSnapshotName(policyName, 0)
+		var snapshotName string
 
 		// Member clusters 0 and 1 are canary clusters; member clusters 2 and 3 are production clusters. The staged
 		// update run tolerates one cluster failure: the update on member cluster 0 fails in the canary stage, and
@@ -3323,6 +3367,8 @@ var _ = Describe("processing cluster staged update runs", func() {
 		BeforeAll(func() {
 			createConfigMap(configMapName)
 			policy := createPlacementPolicy(clusterScopedNS, policyName, configMapName)
+			// The snapshot names factor in the UID of the placement policy, which is only known once it is created.
+			snapshotName = primaryPlacementResourceSnapshotName(policy, 0)
 			fixtures := createMemberClustersAndBindings(clusterScopedNS, policyName, memberClusterNames, bindingNames, memberClusterLabels)
 			strategy := createStagedUpdateStrategy(clusterScopedNS, strategyName, []rolloutv1alpha1.Stage{
 				{
@@ -3488,7 +3534,7 @@ var _ = Describe("processing cluster staged update runs", func() {
 		policyName := fmt.Sprintf(placementPolicyNameTemplate, randStr)
 		strategyName := fmt.Sprintf(stagedUpdateStrategyNameTemplate, randStr)
 		runName := fmt.Sprintf(stagedUpdateRunNameTemplate, randStr)
-		snapshotName := primaryPlacementResourceSnapshotName(policyName, 0)
+		var snapshotName string
 
 		// The (only) member cluster stays unavailable for multiple processing time budgets, so that the controller
 		// picks up the in-flight update in new reconciliations.
@@ -3496,8 +3542,7 @@ var _ = Describe("processing cluster staged update runs", func() {
 
 		// The status of the cluster staged update run while the member cluster is being updated.
 		wantInProgressStatus := &rolloutv1alpha1.StagedUpdateRunStatus{
-			Conditions:                    []metav1.Condition{stagedUpdateRunInitializedCond(), stagedUpdateRunStartedCond()},
-			ResourceSnapshotNameToRollout: snapshotName,
+			Conditions: []metav1.Condition{stagedUpdateRunInitializedCond(), stagedUpdateRunStartedCond()},
 			Stages: []rolloutv1alpha1.PerStageStatus{
 				{
 					StageName: restStageName,
@@ -3519,6 +3564,9 @@ var _ = Describe("processing cluster staged update runs", func() {
 		BeforeAll(func() {
 			createConfigMap(configMapName)
 			policy := createPlacementPolicy(clusterScopedNS, policyName, configMapName)
+			// The snapshot names factor in the UID of the placement policy, which is only known once it is created.
+			snapshotName = primaryPlacementResourceSnapshotName(policy, 0)
+			wantInProgressStatus.ResourceSnapshotNameToRollout = snapshotName
 			fixtures := createMemberClustersAndBindings(clusterScopedNS, policyName, memberClusterNames, bindingNames, []map[string]string{nil})
 			strategy := createStagedUpdateStrategy(clusterScopedNS, strategyName, []rolloutv1alpha1.Stage{
 				{
@@ -3650,7 +3698,6 @@ var _ = Describe("processing staged update runs and cluster staged update runs (
 				policyName:                policyName,
 				strategyName:              fmt.Sprintf(stagedUpdateStrategyNameTemplate, randStr),
 				runName:                   fmt.Sprintf(stagedUpdateRunNameTemplate, randStr),
-				snapshotName:              primaryPlacementResourceSnapshotName(policyName, 0),
 				memberClusterNames:        memberClusterNames,
 				bindingNames:              bindingNames,
 			}
@@ -3668,6 +3715,8 @@ var _ = Describe("processing staged update runs and cluster staged update runs (
 			for _, tc := range testCases {
 				createConfigMap(tc.configMapName)
 				policy := createPlacementPolicy(tc.ns, tc.policyName, tc.configMapName)
+				// The snapshot name factors in the UID of the placement policy, which is only known once it is created.
+				tc.snapshotName = primaryPlacementResourceSnapshotName(policy, 0)
 				fixtures := createMemberClustersAndBindings(tc.ns, tc.policyName, tc.memberClusterNames, tc.bindingNames,
 					make([]map[string]string, len(tc.memberClusterNames)))
 				// All the member clusters in the stage are updated at the same time.

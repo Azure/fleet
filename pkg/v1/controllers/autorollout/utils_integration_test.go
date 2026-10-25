@@ -33,7 +33,7 @@ import (
 
 	placementv1alpha1 "github.com/kubefleet-dev/kubefleet/apis/kubefleet.dev/placement/v1alpha1"
 	rolloutv1alpha1 "github.com/kubefleet-dev/kubefleet/apis/kubefleet.dev/rollout/v1alpha1"
-	"github.com/kubefleet-dev/kubefleet/pkg/v1/managers/placementresourcesnapshot"
+	"github.com/kubefleet-dev/kubefleet/pkg/v1/managers/placementresourcesnapshot/uniquename"
 )
 
 const (
@@ -545,8 +545,8 @@ func waitForObjectsToBeCached(objs ...client.Object) {
 
 // primaryPlacementResourceSnapshotName returns the name of the primary placement resource snapshot of the given
 // index for a placement policy.
-func primaryPlacementResourceSnapshotName(policyName string, index int) string {
-	return fmt.Sprintf(placementresourcesnapshot.PrimaryPlacementResourceSnapshotNameFmt, policyName, index)
+func primaryPlacementResourceSnapshotName(policy placementv1alpha1.PlacementPolicyAccessor, index int) string {
+	return uniquename.PrimaryPlacementResourceSnapshotName(policy.GetName(), policy.GetUID(), index)
 }
 
 // allActual combines the given checks into one, which fails with the error of the first failing check.
@@ -566,7 +566,7 @@ func allActual(actuals ...func() error) func() error {
 func primaryPlacementResourceSnapshotCreatedActual(policy placementv1alpha1.PlacementPolicyAccessor, index int) func() error {
 	return func() error {
 		// Retrieve the placement resource snapshot.
-		snapshotName := primaryPlacementResourceSnapshotName(policy.GetName(), index)
+		snapshotName := primaryPlacementResourceSnapshotName(policy, index)
 		snapshot := newPlacementResourceSnapshotObj(policy.GetNamespace(), snapshotName)
 		if err := hubClient.Get(ctx, client.ObjectKey{Namespace: policy.GetNamespace(), Name: snapshotName}, snapshot); err != nil {
 			return fmt.Errorf("failed to retrieve the placement resource snapshot: %w", err)
@@ -692,7 +692,7 @@ func rolledOutActual(
 ) func() error {
 	return allActual(
 		primaryPlacementResourceSnapshotCreatedActual(policy, snapshotIndex),
-		placementBindingsResourceSnapshotActual(policy.GetNamespace(), bindingNames, primaryPlacementResourceSnapshotName(policy.GetName(), snapshotIndex)),
+		placementBindingsResourceSnapshotActual(policy.GetNamespace(), bindingNames, primaryPlacementResourceSnapshotName(policy, snapshotIndex)),
 		placementPolicyRolledOutActual(policy.GetNamespace(), policy.GetName(), notBefore),
 	)
 }
