@@ -59,6 +59,8 @@ const (
 	snapshotNotPrimaryMsgSubstr     = "is not a primary resource snapshot"
 	snapshotNotOwnedMsgSubstr       = "is not owned by the linked placement policy"
 	snapshotDeletedMsgSubstr        = "has been marked for deletion"
+	// The placement resource snapshot manager reports a resource selected by name that does not exist as a user error.
+	selectedResourceNotFoundMsgSubstr = "selected resource does not exist"
 )
 
 var _ = Describe("initializing staged update runs", func() {
@@ -1237,6 +1239,97 @@ var _ = Describe("initializing staged update runs", func() {
 					newStagedUpdateStrategyObj(appNamespaceName, strategyName),
 					newPlacementPolicyObj(appNamespaceName, policyName),
 					newPlacementPolicyObj(appNamespaceName, otherPolicyName),
+					newConfigMapObj(configMapName),
+				},
+				memberClusterAndBindingObjs(appNamespaceName, memberClusterNames, bindingNames),
+			)...)
+		})
+	})
+
+	Context("selected resource missing", Ordered, func() {
+		randStr := utils.RandStr()
+		configMapName := fmt.Sprintf(configMapNameTemplate, randStr)
+		policyName := fmt.Sprintf(placementPolicyNameTemplate, randStr)
+		strategyName := fmt.Sprintf(stagedUpdateStrategyNameTemplate, randStr)
+		runName := fmt.Sprintf(stagedUpdateRunNameTemplate, randStr)
+		triggerApprovalRequestName := fmt.Sprintf(triggerApprovalRequestNameTemplate, randStr)
+		var snapshotName string
+
+		memberClusterNames, bindingNames := memberClusterAndBindingNames(randStr, 1)
+
+		BeforeAll(func() {
+			// The placement policy selects (by name) a ConfigMap that has not been created yet.
+			policy := createPlacementPolicy(appNamespaceName, policyName, configMapName)
+			// The snapshot names factor in the UID of the placement policy, which is only known once it is created.
+			snapshotName = primaryPlacementResourceSnapshotName(policy, 0)
+			fixtures := createMemberClustersAndBindings(appNamespaceName, policyName, memberClusterNames, bindingNames, []map[string]string{nil})
+			strategy := createStagedUpdateStrategy(appNamespaceName, strategyName, []rolloutv1alpha1.Stage{
+				{
+					Name:          restStageName,
+					LabelSelector: &metav1.LabelSelector{},
+				},
+			})
+			waitForObjectsToBeCached(append(fixtures, policy, strategy)...)
+
+			createStagedUpdateRun(appNamespaceName, runName, rolloutv1alpha1.StagedUpdateRunSpec{
+				PlacementPolicyName:      policyName,
+				StagedUpdateStrategyName: strategyName,
+			})
+		})
+
+		It("should fail to initialize the staged update run", func() {
+			failedToInitializeActual := stagedUpdateRunFailedToInitializeActual(appNamespaceName, runName, selectedResourceNotFoundMsgSubstr)
+			Eventually(failedToInitializeActual, eventuallyDuration, eventuallyInterval).Should(Succeed(), "Failed to report the initialization failure")
+		})
+
+		It("should release the binding manager role of the placement policy", func() {
+			// The controller claims the role before it initializes the run, and releases it once the run has failed
+			// to initialize.
+			roleReleasedActual := bindingManagerRoleReleasedActual(appNamespaceName, policyName)
+			Eventually(roleReleasedActual, eventuallyDuration, eventuallyInterval).Should(Succeed(), "Failed to release the binding manager role")
+		})
+
+		It("can create the selected ConfigMap", func() {
+			// No need to wait for the cache; the placement resource snapshot manager reads selected resources from the
+			// API server directly in the test environment.
+			createConfigMap(configMapName)
+		})
+
+		It("can trigger a new reconciliation of the staged update run", func() {
+			// The controller does not watch selected resources. The trigger leaves the run as is (in particular, the
+			// run is not suspended): had the controller initialized the run now that the ConfigMap exists, it would
+			// snapshot the ConfigMap, claim the binding manager role, and roll out, which the check below would catch.
+			triggerStagedUpdateRunReconciliation(appNamespaceName, runName, restStageName, triggerApprovalRequestName)
+		})
+
+		It("should not initialize the staged update run again", func() {
+			failedToInitializeActual := stagedUpdateRunFailedToInitializeActual(appNamespaceName, runName, selectedResourceNotFoundMsgSubstr)
+			roleReleasedActual := bindingManagerRoleReleasedActual(appNamespaceName, policyName)
+			bindingUntouchedActual := placementBindingResourceSnapshotActual(appNamespaceName, bindingNames[0], previousResourceSnapshotName)
+			snapshotAbsentActual := objectRemovedActual(newPlacementResourceSnapshotObj(appNamespaceName, snapshotName))
+			Consistently(func() error {
+				if err := failedToInitializeActual(); err != nil {
+					return err
+				}
+				if err := roleReleasedActual(); err != nil {
+					return err
+				}
+				if err := bindingUntouchedActual(); err != nil {
+					return err
+				}
+				return snapshotAbsentActual()
+			}, consistentlyDuration, consistentlyInterval).Should(Succeed(), "Initialized the staged update run, snapshotted resources, claimed the binding manager role, or rolled out unexpectedly")
+		})
+
+		AfterAll(func() {
+			removeObjects(slices.Concat(
+				[]client.Object{
+					newStagedUpdateRunObj(appNamespaceName, runName),
+					newApprovalRequestObj(appNamespaceName, triggerApprovalRequestName),
+					// Not expected to exist; removed in case a failed run of the test case created it.
+					newPlacementResourceSnapshotObj(appNamespaceName, snapshotName),
+					newStagedUpdateStrategyObj(appNamespaceName, strategyName),
+					newPlacementPolicyObj(appNamespaceName, policyName),
 					newConfigMapObj(configMapName),
 				},
 				memberClusterAndBindingObjs(appNamespaceName, memberClusterNames, bindingNames),
@@ -2546,6 +2639,97 @@ var _ = Describe("initializing cluster staged update runs", func() {
 					newStagedUpdateStrategyObj(clusterScopedNS, strategyName),
 					newPlacementPolicyObj(clusterScopedNS, policyName),
 					newPlacementPolicyObj(clusterScopedNS, otherPolicyName),
+					newConfigMapObj(configMapName),
+				},
+				memberClusterAndBindingObjs(clusterScopedNS, memberClusterNames, bindingNames),
+			)...)
+		})
+	})
+
+	Context("selected resource missing", Ordered, func() {
+		randStr := utils.RandStr()
+		configMapName := fmt.Sprintf(configMapNameTemplate, randStr)
+		policyName := fmt.Sprintf(placementPolicyNameTemplate, randStr)
+		strategyName := fmt.Sprintf(stagedUpdateStrategyNameTemplate, randStr)
+		runName := fmt.Sprintf(stagedUpdateRunNameTemplate, randStr)
+		triggerApprovalRequestName := fmt.Sprintf(triggerApprovalRequestNameTemplate, randStr)
+		var snapshotName string
+
+		memberClusterNames, bindingNames := memberClusterAndBindingNames(randStr, 1)
+
+		BeforeAll(func() {
+			// The cluster placement policy selects (by name) a ConfigMap that has not been created yet.
+			policy := createPlacementPolicy(clusterScopedNS, policyName, configMapName)
+			// The snapshot names factor in the UID of the placement policy, which is only known once it is created.
+			snapshotName = primaryPlacementResourceSnapshotName(policy, 0)
+			fixtures := createMemberClustersAndBindings(clusterScopedNS, policyName, memberClusterNames, bindingNames, []map[string]string{nil})
+			strategy := createStagedUpdateStrategy(clusterScopedNS, strategyName, []rolloutv1alpha1.Stage{
+				{
+					Name:          restStageName,
+					LabelSelector: &metav1.LabelSelector{},
+				},
+			})
+			waitForObjectsToBeCached(append(fixtures, policy, strategy)...)
+
+			createStagedUpdateRun(clusterScopedNS, runName, rolloutv1alpha1.StagedUpdateRunSpec{
+				PlacementPolicyName:      policyName,
+				StagedUpdateStrategyName: strategyName,
+			})
+		})
+
+		It("should fail to initialize the cluster staged update run", func() {
+			failedToInitializeActual := stagedUpdateRunFailedToInitializeActual(clusterScopedNS, runName, selectedResourceNotFoundMsgSubstr)
+			Eventually(failedToInitializeActual, eventuallyDuration, eventuallyInterval).Should(Succeed(), "Failed to report the initialization failure")
+		})
+
+		It("should release the binding manager role of the cluster placement policy", func() {
+			// The controller claims the role before it initializes the run, and releases it once the run has failed
+			// to initialize.
+			roleReleasedActual := bindingManagerRoleReleasedActual(clusterScopedNS, policyName)
+			Eventually(roleReleasedActual, eventuallyDuration, eventuallyInterval).Should(Succeed(), "Failed to release the binding manager role")
+		})
+
+		It("can create the selected ConfigMap", func() {
+			// No need to wait for the cache; the placement resource snapshot manager reads selected resources from the
+			// API server directly in the test environment.
+			createConfigMap(configMapName)
+		})
+
+		It("can trigger a new reconciliation of the cluster staged update run", func() {
+			// The controller does not watch selected resources. The trigger leaves the run as is (in particular, the
+			// run is not suspended): had the controller initialized the run now that the ConfigMap exists, it would
+			// snapshot the ConfigMap, claim the binding manager role, and roll out, which the check below would catch.
+			triggerStagedUpdateRunReconciliation(clusterScopedNS, runName, restStageName, triggerApprovalRequestName)
+		})
+
+		It("should not initialize the cluster staged update run again", func() {
+			failedToInitializeActual := stagedUpdateRunFailedToInitializeActual(clusterScopedNS, runName, selectedResourceNotFoundMsgSubstr)
+			roleReleasedActual := bindingManagerRoleReleasedActual(clusterScopedNS, policyName)
+			bindingUntouchedActual := placementBindingResourceSnapshotActual(clusterScopedNS, bindingNames[0], previousResourceSnapshotName)
+			snapshotAbsentActual := objectRemovedActual(newPlacementResourceSnapshotObj(clusterScopedNS, snapshotName))
+			Consistently(func() error {
+				if err := failedToInitializeActual(); err != nil {
+					return err
+				}
+				if err := roleReleasedActual(); err != nil {
+					return err
+				}
+				if err := bindingUntouchedActual(); err != nil {
+					return err
+				}
+				return snapshotAbsentActual()
+			}, consistentlyDuration, consistentlyInterval).Should(Succeed(), "Initialized the cluster staged update run, snapshotted resources, claimed the binding manager role, or rolled out unexpectedly")
+		})
+
+		AfterAll(func() {
+			removeObjects(slices.Concat(
+				[]client.Object{
+					newStagedUpdateRunObj(clusterScopedNS, runName),
+					newApprovalRequestObj(clusterScopedNS, triggerApprovalRequestName),
+					// Not expected to exist; removed in case a failed run of the test case created it.
+					newPlacementResourceSnapshotObj(clusterScopedNS, snapshotName),
+					newStagedUpdateStrategyObj(clusterScopedNS, strategyName),
+					newPlacementPolicyObj(clusterScopedNS, policyName),
 					newConfigMapObj(configMapName),
 				},
 				memberClusterAndBindingObjs(clusterScopedNS, memberClusterNames, bindingNames),

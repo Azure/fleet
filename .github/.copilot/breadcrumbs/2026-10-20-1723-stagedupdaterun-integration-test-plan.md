@@ -38,7 +38,9 @@ Reconcile flow (see `controller.go`):
      name; missing / non-integer sort label → user error;
    - `maxConcurrency`: int or percent (rounded down), min 1, default 1;
    - snapshot: explicit `resourceSnapshotName` must exist, not be deleting, be primary (sub-index `"0"`), and be
-     controlled by the policy; otherwise `SnapshotResourcesIfStale` (create index 0 / reuse latest / create next).
+     controlled by the policy; otherwise `SnapshotResourcesIfStale` (create index 0 / reuse latest / create next),
+     whose user errors also fail the initialization, e.g., a resource selected by name that does not exist (the
+     snapshot manager confirms a cache miss with a read from the API server before reporting it).
 7. Re-check skip (a run created suspended is initialized, then suspended and cleaned up).
 8. `process`, bounded by `refreshPeriod` (30s minimum in `New`; the suite overrides it to 5s, see decision 1):
    - run `Started`; per stage: `StartedTimestamp`, `Started`, then before-stage tasks (approval only);
@@ -328,6 +330,9 @@ the claim), then compare the full status.
   and add a binding; resume → stages unchanged.
 - **B10** Created suspended → `Initialized=True`, `Suspended=True/Suspended`, no `Started`, bindings untouched,
   claim released, finalizer removed.
+- **B11** Selected resource missing: the policy selects (by name) a ConfigMap that does not exist →
+  `SnapshotResourcesIfStale` returns a user error ("selected resource does not exist") → init failed, claim released,
+  no snapshot created; creating the ConfigMap later does not help (terminal, like B6).
 
 ### C. `process_integration_test.go`: rollout execution
 
@@ -483,7 +488,8 @@ The tests should assert the current behavior below as-is. None of these items is
    on resume this surfaces as `FailedToUpdate` (conflict).
 4. Suspension only takes effect after the in-flight reconcile ends; until then it may keep starting clusters and
    stages.
-5. A missing policy at creation is terminal, even if the policy appears later.
+5. A missing policy at creation is terminal, even if the policy appears later. The same holds for a resource selected
+   by name that is missing at initialization (B11).
 6. **Resolved (October 20, 2026).** Previously, in a run that failed on the threshold, in-flight clusters kept
    `Started` without `Completed`. They are now marked `Completed=True/UpdateCanceled` (C10). Verified against envtest
    with a throwaway test (A conflict → `FailedToUpdate`, in-flight B → `UpdateCanceled`, unstarted C untouched).
@@ -522,7 +528,8 @@ In CI (`.github/workflows/ci.yml`), the package is skipped in the `make test` st
 exits early when `KUBEFLEET_CI_TEST_RUNNER_NAME` is `default`, as the work applier tests do) and runs in its own step
 instead: `ginkgo -v -p --procs=4 --race --cover -coverprofile=staged-update-run-it-coverage.out
 ./pkg/v1/controllers/stagedupdaterun/` with `KUBEFLEET_CI_TEST_RUNNER_NAME=ginkgo`. Run locally the same way (with
-the v2.23.4 CLI that CI installs): 610 of 610 specs pass, ~207s of spec time, ~3m44s wall, 85.9% coverage.
+the v2.23.4 CLI that CI installs): 610 of 610 specs pass, ~207s of spec time, ~3m44s wall, 85.9% coverage (measured
+before B11, which brought the total to 620 specs).
 
 ## Estimated runtime
 
@@ -531,12 +538,12 @@ E ~1 min), so ~12 min for both scopes, plus ~1.5 min for C12: roughly 13–14 mi
 `ginkgo -p`, wall time drops to roughly the longest context (C12, ~1.5 min) plus the share of the rest per process;
 measured after group C: ~80s of spec time, ~1m33s wall (including compilation), dominated by C12; after group D:
 ~115s of spec time, ~2m07s wall; after group A: ~102s of spec time, ~1m55s wall; with everything (606 specs): ~99s of
-spec time, ~1m51s wall.
+spec time, ~1m51s wall; after B11 (620 specs, October 27): ~150s of spec time, ~2m39s wall.
 Outside CI, `make local-unit-test` still runs this package serially under `go test` within the 30m timeout.
 
 ## Status
 
-Plan approved with the decisions above. **All planned scenarios (A1–A10, B1–B10, C1–C13, D1–D8, E1–E3) are
+Plan approved with the decisions above. **All planned scenarios (A1–A10, B1–B11, C1–C13, D1–D8, E1–E3) are
 implemented**; see the last entry below for the final validation.
 
 - October 20, 2026: updated for the per-cluster `Canceled` reason (behavior to note 6 resolved; C10 and the
@@ -830,3 +837,19 @@ implemented**; see the last entry below for the final validation.
     specs pass (~106s spec time, ~2m01s wall); go vet and golangci-lint: no findings in the test files.
   - Validation: `ginkgo -p --race --focus=...` on A1, A3, A4, E1, E2, and D3 (108 specs): all pass; go vet and
     golangci-lint: no findings in the test files (608 specs in total).
+- October 27, 2026: **B11 implemented** in `initialize_integration_test.go` (context "selected resource missing",
+  both scopes, after B8), following the placement resource snapshot manager change that reports a resource selected
+  by name that does not exist as a user error (after confirming a cache miss with a read from the API server; the
+  suite registers no informers, so the manager reads ConfigMaps from the API server directly). The policy selects a
+  ConfigMap that is never created up front; the run (not suspended) ends with only `Initialized=False/Failed`, message
+  containing "selected resource does not exist" (`selectedResourceNotFoundMsgSubstr`), and the binding manager role is
+  released. Then the ConfigMap is created and a reconciliation triggered (without suspending the run, as in B6); a
+  Consistently check covers the run status, the role, the binding (still on the previous snapshot), and the absence
+  of the index 0 snapshot (which a re-initialization would create).
+  - No existing test covered this: B7 always creates the selected ConfigMap, and B8's "not found" is about an
+    explicitly specified snapshot.
+  - Mutation check: with the snapshot manager reporting the missing resource as an API server error again (the
+    previous behavior), the run is never marked as failed and both scopes fail at "should fail to initialize".
+  - Validation: `ginkgo -p --race --focus="selected resource missing"`: 10 of 10 specs pass;
+    `ginkgo -p --race ./pkg/v1/controllers/stagedupdaterun`: 620 of 620 specs pass (~150s spec time, ~2m39s wall);
+    go vet and golangci-lint: no findings.

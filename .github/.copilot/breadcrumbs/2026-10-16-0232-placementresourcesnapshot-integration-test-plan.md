@@ -5,6 +5,8 @@
 [Revision: leftover snapshots and UID-based names](#revision-leftover-snapshots-and-uid-based-names)).
 **Revised**: October 27, 2026 02:13 AEDT, for Service and Job sanitization (PP-13 and PP-14; see
 [E. Manifest sanitization](#e-manifest-sanitization-snapshotresource)).
+**Revised**: October 27, 2026 03:35 AEDT, for the API server fallback on cache misses in name-based selection (see the
+last [Status](#status) entry).
 **Task**: Plan additional envtest-based integration tests for `pkg/v1/managers/placementresourcesnapshot/`.
 
 ## Baseline
@@ -67,7 +69,7 @@ and asserts no snapshot was created.
 | A9 | Neither `name` nor `labelSelector` (allowed by CEL) | User |
 | A10 | Invalid label selector (`In` with no values; unknown operator) | User |
 | A11 | Unknown kind (typo) | Currently Unexpected (see open question 1) |
-| A12 | Named resource does not exist; then create it | APIServer error, then success on retry |
+| A12 | Named resource does not exist; then create it | User error ("selected resource does not exist"), then success on retry (an APIServer error before October 27) |
 | A13 | In-memory accessor with empty selectors (CRD enforces MinItems=1); nil accessor | Unexpected |
 
 ### B. Object eligibility, name-based (explicit selection fails)
@@ -144,9 +146,11 @@ Assert on raw JSON (`map[string]any`) so that the absence of keys is checked, no
 
 **Not implemented as planned.** At 07:30 the shared suite started reading Deployments through the cache instead (see
 Status). That covers name-based and label-based reads from the cache, and mixed policies that read ConfigMaps from
-the API server. These planned checks are still uncovered: identical hashes from the cache and API server paths for
-the same policy, a cache miss returning an APIServer error, the fallback for a registered but unsynced informer, and
-ineligible objects read through the cache.
+the API server. Since October 27, a name-based cache miss is confirmed with a read from the API server (see the last
+Status entry): PP-2b covers a name in neither the cache nor the API server, and the unit test
+`TestRetrieveResourceByName` covers the fallback itself and an unsynced informer. These planned checks are still
+uncovered: identical hashes from the cache and API server paths for the same policy, and ineligible objects read
+through the cache.
 
 The original plan:
 
@@ -155,7 +159,8 @@ The original plan:
   It does not need to be added to `hubMgr`.
 - Name-based and label-based selection through the cache must yield resources and a hash identical to the
   API-server-path manager for the same policy. This is the key invariant, and it also guards the informer transform.
-- A name not in the cache returns an APIServer error.
+- A name not in the cache returns an APIServer error. (Superseded on October 27: a cache miss falls back to the API
+  server, and a name missing there too is a User error.)
 - One representative ineligible object each for name-based (error) and label-based (skip).
 - A mixed policy reads the ConfigMap from the cache and the Deployment via the API server fallback.
 - An informer that is registered but not started falls back to the API server and succeeds.
@@ -279,6 +284,7 @@ Unindexed decoys (no owned-by annotation) are never scanned and need no owner re
 | `TestGarbageCollect` | Owned and orphaned groups, in use, re-created primary, primary not found, Get failure, skipped snapshots at the same index (another primary, a different or missing policy owner) |
 | `TestStart` | The GC worker loop: retry with backoff, drop on Unexpected errors, stop on context cancellation (added with this revision; see below) |
 | `TestSnapshotResource` | Service and Job sanitization in `snapshotResource`: assigned cluster IPs and node ports, a headless Service, a Job with and without `manualSelector`, and that the input is not modified (added October 27) |
+| `TestRetrieveResourceByName` | Name-based retrieval: a cache hit; the API server fallback on a cache miss (both scopes); a name missing from both (a User error wrapping NotFound); non-NotFound errors from either side; an unsynced informer (added October 27) |
 
 **Not covered anywhere:** `IsSnapshotSynchronized` (a gap that predates this change, including its owner-UID check).
 At planning time, the `Start` worker loop was not covered either; `TestStart` now covers it.
@@ -428,7 +434,11 @@ The detailed P0, P1, and P2 plans mentioned below were working documents and wer
 to test contexts by position, in file order: PP-n and CPP-n are the n-th `Context` of the two `Describe`s in
 `resources_integration_test.go`; SC-n and NM-n are those of the two `Describe`s in `corner_cases_integration_test.go`
 (SC-1 runs once per scope, as the first two contexts); and GC-n are those of `Describe("GC variants")` in
-`ops_gc_integration_test.go`.
+`ops_gc_integration_test.go`. Contexts added after the IDs were assigned are skipped when counting: in the PP
+`Describe`, "resources with non-controller owner references" (not in the plan) and "named resource not found
+(informer-backed)" (October 27, referred to as PP-2b). PP-13 and PP-14 ("manifest sanitization (services)" and
+"(jobs)", October 27) are the exception: they were numbered by their positions in the file at the time, which counted
+the non-controller owner references context; they are the last two contexts of the PP `Describe`.
 
 - 02:32: High-level plan drafted.
 - 02:48: The existing IT file has been renamed to `ops_gc_integration_test.go`.
@@ -571,6 +581,9 @@ to test contexts by position, in file order: PP-n and CPP-n are the n-th `Contex
         - A terminating latest primary is Transient.
         - The orphan-cleanup sanity check is Transient.
         - A contents-hash mismatch is Unexpected.
+        - A resource selected by name that does not exist is a User error (added October 27; a cache miss is
+          confirmed with a read from the API server first). Auto-rollout then waits for its next rollout window
+          instead of retrying, and a staged update run fails its initialization.
       - The `Checker` API changed: `AllowsObject` also returns a reason, and `New` takes `CheckerOptions`.
     - PR #974 also edits `guard_test.go`, so a merge conflict is expected.
 - October 24, 07:20: The plan was revised for leftover snapshot detection and UID-based snapshot names; see
@@ -664,3 +677,32 @@ to test contexts by position, in file order: PP-n and CPP-n are the n-th `Contex
       Per the user, the whole suite was not run.
     - `gofmt` and `go vet` are clean. `golangci-lint --fast-only` reported 0 issues. In the new code, the full run
       flags only `goconst` findings, the same style as the rest of the files.
+- October 27, 03:19: A cache miss in name-based selection is now confirmed with a read from the API server
+  (`resources.go`).
+  - `retrieveResourceByName`: when the informer cache returns NotFound, the resource is read again through the
+    dynamic client by `retrieveResourceByNameWithNoCache` (renamed from `getSelectedResourceFromAPIServer` at 03:28),
+    which the no-informer path now shares. A NotFound from that read is a User error ("selected resource does not
+    exist") that still wraps the NotFound; any other error stays an APIServer error. Other cache errors are unchanged.
+  - The cache and the direct read produce the same snapshot: the informer transform only strips `managedFields`,
+    which `snapshotResource` strips anyway.
+  - Test updates:
+    - A12 (PP-2, and the not-found case in CPP-1's table) now expects a User error with the new message.
+    - New context PP-2b "named resource not found (informer-backed)": a nonexistent Deployment (read through the
+      cache) is a User error; once the Deployment is created, a snapshot is taken right away, without waiting for the
+      cache.
+    - New unit test `TestRetrieveResourceByName` (9 cases, in `resources_test.go` next to `TestSnapshotResource`),
+      with `test/utils/informer.FakeManager` and a fake dynamic client; see the unit test table.
+    - `placementpolicy/controller_test.go`: the "selected resource gone" fixture uses the new error shape.
+  - Callers: the placement policy controller already treated NotFound as a selection error (no change); auto-rollout
+    now reports `FailedToSnapshotResourcesDuringAutoRollout` and waits for the next rollout window instead of
+    retrying; a staged update run fails its initialization (B11 in the staged update run plan).
+  - Validation: `ginkgo -p --race ./pkg/v1/managers/placementresourcesnapshot`: 350 of 350 specs pass; the focused
+    unit tests pass with `-race`; `go vet` and `golangci-lint --fast-only` report 0 issues.
+  - 03:35: breadcrumb fixes: A12, section F, the unit test table, the PR description list, and the note on contexts
+    skipped by the positional IDs (which also corrects PP-5 and PP-9, shifted by the non-controller owner references
+    context).
+  - 03:45: merged `main` (#1018, the Service and Job sanitization in the 02:13 and 02:20 entries above).
+    `resources_test.go` was added on both sides; it now holds both `TestRetrieveResourceByName` and
+    `TestSnapshotResource`. Validation: both unit tests pass with `-race`; `ginkgo -p --race
+    ./pkg/v1/managers/placementresourcesnapshot` passes 358 of 358 specs (347, plus 3 for PP-2b and 8 for PP-13 and
+    PP-14).

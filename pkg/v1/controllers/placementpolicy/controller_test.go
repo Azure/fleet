@@ -207,8 +207,8 @@ func TestReconcileSchedulesWithoutSnapshot(t *testing.T) {
 		},
 		{
 			name: "selected resource gone",
-			// Wrapped as the snapshot manager wraps a failed read of a resource selected by name.
-			snapshotErr: kferrors.Wraps(kferrors.NewAPIServerError(apierrors.NewNotFound(schema.GroupResource{Resource: "configmaps"}, "app"), "failed to get selected resource", true),
+			// Wrapped as the snapshot manager wraps a resource selected by name that does not exist.
+			snapshotErr: kferrors.Wraps(kferrors.NewUserError(apierrors.NewNotFound(schema.GroupResource{Resource: "configmaps"}, "app"), "selected resource does not exist"),
 				"failed to retrieve selected resources (name-based selector)"),
 			wantSyncCond:      metav1.ConditionFalse,
 			wantCollectedCond: metav1.ConditionFalse,

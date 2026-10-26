@@ -82,7 +82,7 @@ const (
 	ineligibleGVKErrMsg               = "resource selector specifies a GVK that is ineligible for placement"
 	invalidLabelSelectorErrMsg        = "invalid label selector"
 	noMatchForGVKErrMsg               = "no match found for GVK"
-	resourceNotFoundErrMsg            = "failed to get selected resource directly from the API server"
+	resourceNotFoundErrMsg            = "selected resource does not exist"
 )
 
 var _ = Describe("resource selection (placement policies)", func() {
@@ -322,9 +322,9 @@ var _ = Describe("resource selection (placement policies)", func() {
 			Expect(hubClient.Create(ctx, placementPolicy)).To(Succeed(), "Failed to create the placement policy")
 		})
 
-		It("should return an API server error when the selected resource does not exist", func() {
+		It("should return a user error when the selected resource does not exist", func() {
 			err := snapshotResourcesAndExpectErr(placementPolicy)
-			verifyErrCategoryAndMsg(err, kferrors.ErrCategoryAPIServer, resourceNotFoundErrMsg)
+			verifyErrCategoryAndMsg(err, kferrors.ErrCategoryUser, resourceNotFoundErrMsg)
 			Expect(errors.IsNotFound(err)).To(BeTrue(), "The error does not wrap a not found error: %v", err)
 		})
 
@@ -360,6 +360,61 @@ var _ = Describe("resource selection (placement policies)", func() {
 			objs = append(objs,
 				placementPolicy,
 				&corev1.ConfigMap{ObjectMeta: metav1.ObjectMeta{Name: configMapName, Namespace: appNamespaceName}},
+			)
+			deleteObjectsAndWait(objs)
+		})
+	})
+
+	Context("named resource not found (informer-backed)", Ordered, func() {
+		// Unlike config maps, Deployments are watched by an informer in the test environment; the snapshot manager
+		// reads them from the cache first, and reads from the API server directly when they are not found there.
+		deploymentName := fmt.Sprintf(deploymentNameTemplate, utils.RandStr())
+
+		placementPolicy := newPlacementPolicy(appNamespaceName, placementv1alpha1.ResourceSelector{
+			APIGroup:   appsv1.GroupName,
+			APIVersion: "v1",
+			Kind:       "Deployment",
+			Name:       deploymentName,
+		})
+
+		BeforeAll(func() {
+			// Create a placement policy that selects a Deployment which does not exist yet.
+			Expect(hubClient.Create(ctx, placementPolicy)).To(Succeed(), "Failed to create the placement policy")
+		})
+
+		It("should return a user error when the selected resource is in neither the cache nor the API server", func() {
+			err := snapshotResourcesAndExpectErr(placementPolicy)
+			verifyErrCategoryAndMsg(err, kferrors.ErrCategoryUser, resourceNotFoundErrMsg)
+			Expect(errors.IsNotFound(err)).To(BeTrue(), "The error does not wrap a not found error: %v", err)
+		})
+
+		It("can create the selected Deployment", func() {
+			// Do not wait for the Deployment to reach the cache.
+			Expect(hubClient.Create(ctx, newDeployment(deploymentName, appNamespaceName))).To(Succeed(), "Failed to create the Deployment")
+		})
+
+		It("can create a placement resource snapshot right away, whether or not the cache has caught up", func() {
+			gotSnapshots, isUpToDate, err := resourceSnapshotManager.SnapshotResourcesIfNoSnapshotExists(ctx, placementPolicy)
+			verifyReturnedPrimarySnapshot(gotSnapshots, isUpToDate, err, placementPolicy, 0)
+
+			snapshot := getPrimarySnapshotFromCache(placementPolicy, 0)
+			wantIdentifiers := []placementv1alpha1.ObjectReference{
+				{
+					Namespace:  appNamespaceName,
+					Name:       deploymentName,
+					APIGroup:   appsv1.GroupName,
+					APIVersion: "v1",
+					Kind:       "Deployment",
+				},
+			}
+			verifySnapshottedResourceIdentifiers(snapshot.GetSpec().Resources, wantIdentifiers)
+		})
+
+		AfterAll(func() {
+			objs := primarySnapshotObjs(placementPolicy, 1)
+			objs = append(objs,
+				placementPolicy,
+				&appsv1.Deployment{ObjectMeta: metav1.ObjectMeta{Name: deploymentName, Namespace: appNamespaceName}},
 			)
 			deleteObjectsAndWait(objs)
 		})
@@ -1908,7 +1963,7 @@ var _ = Describe("resource selection (cluster placement policies)", func() {
 					Namespace:  appNamespaceName,
 					Name:       configMapName,
 				}),
-				wantErrCategory:   kferrors.ErrCategoryAPIServer,
+				wantErrCategory:   kferrors.ErrCategoryUser,
 				wantErrMsgSubstrs: []string{resourceNotFoundErrMsg},
 			},
 		}
