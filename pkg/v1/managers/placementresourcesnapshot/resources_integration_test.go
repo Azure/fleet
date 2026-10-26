@@ -28,10 +28,12 @@ import (
 	appsv1 "k8s.io/api/apps/v1"
 	autoscalingv1 "k8s.io/api/autoscaling/v1"
 	autoscalingv2 "k8s.io/api/autoscaling/v2"
+	batchv1 "k8s.io/api/batch/v1"
 	corev1 "k8s.io/api/core/v1"
 	rbacv1 "k8s.io/api/rbac/v1"
 	"k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
 	"k8s.io/apimachinery/pkg/types"
 	deploymentutil "k8s.io/kubectl/pkg/util/deployment"
 	"k8s.io/utils/ptr"
@@ -50,9 +52,15 @@ const (
 	secretNameTemplate         = "secret-%s"
 	hpaNameTemplate            = "hpa-%s"
 	clusterRoleNameTemplate    = "clusterrole-%s"
+	serviceNameTemplate        = "service-%s"
+	jobNameTemplate            = "job-%s"
 
 	placementGroupLabelKey = "placement-group"
 	customAnnotationKey    = "custom-annotation"
+
+	// The legacy controller UID label, which the API server still adds to the pod template of a Job (without a
+	// manual selector) alongside batchv1.ControllerUidLabel.
+	legacyJobControllerUIDLabel = "controller-uid"
 
 	// The default namespace and the Kubernetes API service within it are created by the API server itself,
 	// including the one that the envtest package runs.
@@ -1596,6 +1604,199 @@ var _ = Describe("resource selection (placement policies)", func() {
 				&corev1.ConfigMap{ObjectMeta: metav1.ObjectMeta{Name: labeledConfigMapName, Namespace: defaultNamespaceName}},
 			)
 			deleteObjectsAndWait(objs)
+		})
+	})
+
+	Context("manifest sanitization (services)", Ordered, func() {
+		serviceName := fmt.Sprintf(serviceNameTemplate, utils.RandStr())
+		serviceKey := types.NamespacedName{Namespace: appNamespaceName, Name: serviceName}
+
+		placementPolicy := newPlacementPolicy(appNamespaceName, placementv1alpha1.ResourceSelector{
+			APIVersion: "v1",
+			Kind:       "Service",
+			Name:       serviceName,
+		})
+
+		BeforeAll(func() {
+			Expect(hubClient.Create(ctx, newLoadBalancerService(serviceName, appNamespaceName))).To(Succeed(), "Failed to create the Service")
+
+			// The fields to strip must be present on the live object; otherwise the specs below would pass trivially.
+			service := &corev1.Service{}
+			Expect(hubUncachedReader.Get(ctx, serviceKey, service)).To(Succeed(), "Failed to get the Service")
+			verifyServiceFieldsFilledIn(service)
+
+			Expect(hubClient.Create(ctx, placementPolicy)).To(Succeed(), "Failed to create the placement policy")
+		})
+
+		It("can create a placement resource snapshot", func() {
+			gotSnapshots, isUpToDate, err := resourceSnapshotManager.SnapshotResourcesIfNoSnapshotExists(ctx, placementPolicy)
+			verifyReturnedPrimarySnapshot(gotSnapshots, isUpToDate, err, placementPolicy, 0)
+		})
+
+		It("should strip the cluster IPs and the node ports filled in by the API server", func() {
+			snapshot := getPrimarySnapshotFromCache(placementPolicy, 0)
+			resources := snapshot.GetSpec().Resources
+			Expect(resources).To(HaveLen(1), "Unexpected number of snapshotted resources")
+
+			// Check the raw manifest, so that the absence of the keys is verified, not just their zero values.
+			gotManifest := manifestAsMap(resources[0].Manifest.Raw)
+			Expect(gotManifest).ToNot(HaveKey("status"), "The status of the Service has not been stripped")
+			wantMetadata := map[string]interface{}{
+				"name":      serviceName,
+				"namespace": appNamespaceName,
+				"labels":    map[string]interface{}{"app": "demo"},
+			}
+			if diff := cmp.Diff(gotManifest["metadata"], wantMetadata); diff != "" {
+				Fail(fmt.Sprintf("Snapshotted Service metadata diff (-got +want):\n%s", diff))
+			}
+
+			gotSpec, found, err := unstructured.NestedMap(gotManifest, "spec")
+			Expect(err).ToNot(HaveOccurred(), "Failed to read the spec of the Service manifest")
+			Expect(found).To(BeTrue(), "The Service manifest has no spec")
+			for _, key := range []string{"clusterIP", "clusterIPs", "healthCheckNodePort"} {
+				Expect(gotSpec).ToNot(HaveKey(key), "Field spec.%s of the Service has not been stripped", key)
+			}
+			gotPorts, found, err := unstructured.NestedSlice(gotManifest, "spec", "ports")
+			Expect(err).ToNot(HaveOccurred(), "Failed to read the ports of the Service manifest")
+			Expect(found).To(BeTrue(), "The Service manifest has no ports")
+			Expect(gotPorts).To(HaveLen(2), "Unexpected number of ports in the Service manifest")
+			for idx := range gotPorts {
+				Expect(gotPorts[idx]).ToNot(HaveKey("nodePort"), "Field spec.ports[%d].nodePort of the Service has not been stripped", idx)
+			}
+
+			// The rest of the spec should match that of the live object (which carries the defaulted fields).
+			liveService := &corev1.Service{}
+			Expect(hubUncachedReader.Get(ctx, serviceKey, liveService)).To(Succeed(), "Failed to get the Service")
+			gotService := &corev1.Service{}
+			Expect(json.Unmarshal(resources[0].Manifest.Raw, gotService)).To(Succeed(), "Failed to unmarshal the Service manifest")
+			if diff := cmp.Diff(gotService.Spec, serviceSpecWithoutFilledInFields(&liveService.Spec), cmpopts.EquateEmpty()); diff != "" {
+				Fail(fmt.Sprintf("Snapshotted Service spec diff (-got +want):\n%s", diff))
+			}
+		})
+
+		It("can re-create the Service with the same spec", func() {
+			oldService := &corev1.Service{}
+			Expect(hubUncachedReader.Get(ctx, serviceKey, oldService)).To(Succeed(), "Failed to get the Service")
+
+			deleteObjectsAndWait([]client.Object{&corev1.Service{ObjectMeta: metav1.ObjectMeta{Name: serviceName, Namespace: appNamespaceName}}})
+			Expect(hubClient.Create(ctx, newLoadBalancerService(serviceName, appNamespaceName))).To(Succeed(), "Failed to re-create the Service")
+
+			recreatedService := &corev1.Service{}
+			Expect(hubUncachedReader.Get(ctx, serviceKey, recreatedService)).To(Succeed(), "Failed to get the re-created Service")
+			verifyServiceFieldsFilledIn(recreatedService)
+			// The API server fills in new values; it is all but impossible for it to pick the same cluster IP and
+			// node ports again.
+			Expect(recreatedService.Spec).ToNot(Equal(oldService.Spec), "The API server has filled in the same values for the re-created Service")
+		})
+
+		It("should return the existing snapshot as only the stripped fields have changed", func() {
+			gotSnapshots, isUpToDate, err := resourceSnapshotManager.SnapshotResourcesIfStale(ctx, placementPolicy)
+			verifyReturnedPrimarySnapshot(gotSnapshots, isUpToDate, err, placementPolicy, 0)
+			verifyNoPrimarySnapshotAtIdx(placementPolicy, 1)
+		})
+
+		AfterAll(func() {
+			objs := primarySnapshotObjs(placementPolicy, 2)
+			objs = append(objs,
+				placementPolicy,
+				&corev1.Service{ObjectMeta: metav1.ObjectMeta{Name: serviceName, Namespace: appNamespaceName}},
+			)
+			deleteObjectsAndWait(objs)
+		})
+	})
+
+	Context("manifest sanitization (jobs)", Ordered, func() {
+		jobName := fmt.Sprintf(jobNameTemplate, utils.RandStr())
+		jobKey := types.NamespacedName{Namespace: appNamespaceName, Name: jobName}
+
+		placementPolicy := newPlacementPolicy(appNamespaceName, placementv1alpha1.ResourceSelector{
+			APIGroup:   batchv1.GroupName,
+			APIVersion: "v1",
+			Kind:       "Job",
+			Name:       jobName,
+		})
+
+		// Jobs in batch/v1 default to orphan propagation, which adds the orphan finalizer; the envtest environment
+		// runs no garbage collector to remove it.
+		backgroundPropagation := client.PropagationPolicy(metav1.DeletePropagationBackground)
+
+		BeforeAll(func() {
+			Expect(hubClient.Create(ctx, newJob(jobName, appNamespaceName))).To(Succeed(), "Failed to create the Job")
+
+			// The labels to strip must be present on the live object; otherwise the specs below would pass trivially.
+			job := &batchv1.Job{}
+			Expect(hubUncachedReader.Get(ctx, jobKey, job)).To(Succeed(), "Failed to get the Job")
+			verifyJobControllerUIDLabelsAdded(job)
+
+			Expect(hubClient.Create(ctx, placementPolicy)).To(Succeed(), "Failed to create the placement policy")
+		})
+
+		It("can create a placement resource snapshot", func() {
+			gotSnapshots, isUpToDate, err := resourceSnapshotManager.SnapshotResourcesIfNoSnapshotExists(ctx, placementPolicy)
+			verifyReturnedPrimarySnapshot(gotSnapshots, isUpToDate, err, placementPolicy, 0)
+		})
+
+		It("should strip the controller UID labels added by the API server", func() {
+			snapshot := getPrimarySnapshotFromCache(placementPolicy, 0)
+			resources := snapshot.GetSpec().Resources
+			Expect(resources).To(HaveLen(1), "Unexpected number of snapshotted resources")
+
+			gotManifest := manifestAsMap(resources[0].Manifest.Raw)
+			Expect(gotManifest).ToNot(HaveKey("status"), "The status of the Job has not been stripped")
+			wantMetadata := map[string]interface{}{
+				"name":      jobName,
+				"namespace": appNamespaceName,
+				"labels":    map[string]interface{}{"app": "demo"},
+			}
+			if diff := cmp.Diff(gotManifest["metadata"], wantMetadata); diff != "" {
+				Fail(fmt.Sprintf("Snapshotted Job metadata diff (-got +want):\n%s", diff))
+			}
+
+			// Check the raw manifest for the creation timestamp of the pod template, as an absent key and its zero
+			// value cannot be told apart once unmarshalled.
+			gotTemplateMetadata, found, err := unstructured.NestedMap(gotManifest, "spec", "template", "metadata")
+			Expect(err).ToNot(HaveOccurred(), "Failed to read the pod template metadata of the Job manifest")
+			Expect(found).To(BeTrue(), "The Job manifest has no pod template metadata")
+			Expect(gotTemplateMetadata).ToNot(HaveKey("creationTimestamp"), "The creation timestamp of the pod template has not been stripped")
+
+			// The rest of the spec, including the job-name labels that the API server adds as well, should match
+			// that of the live object.
+			liveJob := &batchv1.Job{}
+			Expect(hubUncachedReader.Get(ctx, jobKey, liveJob)).To(Succeed(), "Failed to get the Job")
+			gotJob := &batchv1.Job{}
+			Expect(json.Unmarshal(resources[0].Manifest.Raw, gotJob)).To(Succeed(), "Failed to unmarshal the Job manifest")
+			if diff := cmp.Diff(gotJob.Spec, jobSpecWithoutControllerUIDLabels(&liveJob.Spec), cmpopts.EquateEmpty()); diff != "" {
+				Fail(fmt.Sprintf("Snapshotted Job spec diff (-got +want):\n%s", diff))
+			}
+		})
+
+		It("can re-create the Job with the same spec", func() {
+			oldJob := &batchv1.Job{}
+			Expect(hubUncachedReader.Get(ctx, jobKey, oldJob)).To(Succeed(), "Failed to get the Job")
+
+			deleteObjectsAndWait([]client.Object{&batchv1.Job{ObjectMeta: metav1.ObjectMeta{Name: jobName, Namespace: appNamespaceName}}}, backgroundPropagation)
+			Expect(hubClient.Create(ctx, newJob(jobName, appNamespaceName))).To(Succeed(), "Failed to re-create the Job")
+
+			// The re-created Job has a new UID, and so new controller UID labels.
+			recreatedJob := &batchv1.Job{}
+			Expect(hubUncachedReader.Get(ctx, jobKey, recreatedJob)).To(Succeed(), "Failed to get the re-created Job")
+			Expect(recreatedJob.UID).ToNot(Equal(oldJob.UID), "The re-created Job has the same UID")
+			verifyJobControllerUIDLabelsAdded(recreatedJob)
+		})
+
+		It("should return the existing snapshot as only the stripped labels have changed", func() {
+			gotSnapshots, isUpToDate, err := resourceSnapshotManager.SnapshotResourcesIfStale(ctx, placementPolicy)
+			verifyReturnedPrimarySnapshot(gotSnapshots, isUpToDate, err, placementPolicy, 0)
+			verifyNoPrimarySnapshotAtIdx(placementPolicy, 1)
+		})
+
+		AfterAll(func() {
+			objs := primarySnapshotObjs(placementPolicy, 2)
+			objs = append(objs,
+				placementPolicy,
+				&batchv1.Job{ObjectMeta: metav1.ObjectMeta{Name: jobName, Namespace: appNamespaceName}},
+			)
+			deleteObjectsAndWait(objs, backgroundPropagation)
 		})
 	})
 })

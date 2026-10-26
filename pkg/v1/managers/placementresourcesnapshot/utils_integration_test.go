@@ -28,11 +28,13 @@ import (
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
 	appsv1 "k8s.io/api/apps/v1"
+	batchv1 "k8s.io/api/batch/v1"
 	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/api/errors"
 	"k8s.io/apimachinery/pkg/api/meta"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/types"
+	"k8s.io/apimachinery/pkg/util/intstr"
 	"k8s.io/apimachinery/pkg/util/validation"
 	"k8s.io/utils/ptr"
 	"sigs.k8s.io/controller-runtime/pkg/client"
@@ -152,6 +154,119 @@ func waitForDeploymentsRemovedFromCache(deployments ...*appsv1.Deployment) {
 	}
 }
 
+// newLoadBalancerService returns a LoadBalancer Service with two ports and the Local external traffic policy in
+// the given namespace. For such a Service, the API server fills in the cluster IP(s), a node port for each port,
+// and the health check node port.
+func newLoadBalancerService(name, namespace string) *corev1.Service {
+	return &corev1.Service{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      name,
+			Namespace: namespace,
+			Labels:    map[string]string{"app": "demo"},
+		},
+		Spec: corev1.ServiceSpec{
+			Type:                  corev1.ServiceTypeLoadBalancer,
+			ExternalTrafficPolicy: corev1.ServiceExternalTrafficPolicyLocal,
+			Selector:              map[string]string{"app": "demo"},
+			Ports: []corev1.ServicePort{
+				{
+					Name:       "http",
+					Protocol:   corev1.ProtocolTCP,
+					Port:       80,
+					TargetPort: intstr.FromInt32(8080),
+				},
+				{
+					Name:       "https",
+					Protocol:   corev1.ProtocolTCP,
+					Port:       443,
+					TargetPort: intstr.FromInt32(8443),
+				},
+			},
+		},
+	}
+}
+
+// verifyServiceFieldsFilledIn verifies that the API server has filled in the cluster IP(s), the node ports, and
+// the health check node port of the given Service.
+func verifyServiceFieldsFilledIn(service *corev1.Service) {
+	GinkgoHelper()
+
+	Expect(service.Spec.ClusterIP).ToNot(BeElementOf("", corev1.ClusterIPNone), "The API server has not assigned a cluster IP")
+	Expect(service.Spec.ClusterIPs).ToNot(BeEmpty(), "The API server has not assigned any cluster IPs")
+	Expect(service.Spec.HealthCheckNodePort).ToNot(BeZero(), "The API server has not assigned a health check node port")
+	for _, port := range service.Spec.Ports {
+		Expect(port.NodePort).ToNot(BeZero(), "The API server has not assigned a node port to port %s", port.Name)
+	}
+}
+
+// serviceSpecWithoutFilledInFields returns a copy of the given Service spec without the fields that the API
+// server fills in and the snapshot strips: the cluster IP(s), the node ports, and the health check node port.
+func serviceSpecWithoutFilledInFields(spec *corev1.ServiceSpec) corev1.ServiceSpec {
+	specCopy := spec.DeepCopy()
+	specCopy.ClusterIP = ""
+	specCopy.ClusterIPs = nil
+	specCopy.HealthCheckNodePort = 0
+	for idx := range specCopy.Ports {
+		specCopy.Ports[idx].NodePort = 0
+	}
+	return *specCopy
+}
+
+// newJob returns a minimal Job, without a manual selector, with the given name in the given namespace.
+func newJob(name, namespace string) *batchv1.Job {
+	return &batchv1.Job{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      name,
+			Namespace: namespace,
+			Labels:    map[string]string{"app": "demo"},
+		},
+		Spec: batchv1.JobSpec{
+			Template: corev1.PodTemplateSpec{
+				ObjectMeta: metav1.ObjectMeta{
+					Labels: map[string]string{"app": "demo"},
+				},
+				Spec: corev1.PodSpec{
+					RestartPolicy: corev1.RestartPolicyNever,
+					Containers: []corev1.Container{
+						{
+							Name:  "busybox",
+							Image: "busybox:1.36",
+						},
+					},
+				},
+			},
+		},
+	}
+}
+
+// verifyJobControllerUIDLabelsAdded verifies that the API server has added the controller UID labels, set to the
+// UID of the given Job: the current label to both its selector and its pod template, and the legacy label to its
+// pod template.
+func verifyJobControllerUIDLabelsAdded(job *batchv1.Job) {
+	GinkgoHelper()
+
+	Expect(job.Spec.Selector).ToNot(BeNil(), "The API server has not generated a selector for the Job")
+	Expect(job.Spec.Selector.MatchLabels).To(HaveKeyWithValue(batchv1.ControllerUidLabel, string(job.UID)),
+		"The API server has not added the controller UID label to the selector of the Job")
+	Expect(job.Spec.Template.Labels).To(HaveKeyWithValue(batchv1.ControllerUidLabel, string(job.UID)),
+		"The API server has not added the controller UID label to the pod template of the Job")
+	Expect(job.Spec.Template.Labels).To(HaveKeyWithValue(legacyJobControllerUIDLabel, string(job.UID)),
+		"The API server has not added the legacy controller UID label to the pod template of the Job")
+}
+
+// jobSpecWithoutControllerUIDLabels returns a copy of the given Job spec without the controller UID labels (both
+// the current and the legacy ones) that the API server adds and the snapshot strips.
+func jobSpecWithoutControllerUIDLabels(spec *batchv1.JobSpec) batchv1.JobSpec {
+	specCopy := spec.DeepCopy()
+	for _, key := range []string{legacyJobControllerUIDLabel, batchv1.ControllerUidLabel} {
+		if specCopy.Selector != nil {
+			delete(specCopy.Selector.MatchLabels, key)
+		}
+		delete(specCopy.Template.Labels, key)
+	}
+	return *specCopy
+}
+
 // placementResourceSnapshotObj returns an (empty) placement resource snapshot object of the matching scope with
 // the given name; it is used for retrievals and clean-ups.
 func placementResourceSnapshotObj(namespace, name string) placementv1alpha1.PlacementResourceSnapshotAccessor {
@@ -211,14 +326,14 @@ func createDeletingConfigMap(name, namespace string, labels map[string]string) {
 	}, eventuallyDuration, eventuallyInterval).Should(Succeed(), "Failed to mark the config map for deletion")
 }
 
-// deleteObjectsAndWait deletes the given objects and waits until they are gone.
+// deleteObjectsAndWait deletes the given objects (with the given delete options, if any) and waits until they are gone.
 //
 // The envtest environment does not run the garbage collector; objects must be removed explicitly.
-func deleteObjectsAndWait(objs []client.Object) {
+func deleteObjectsAndWait(objs []client.Object, opts ...client.DeleteOption) {
 	GinkgoHelper()
 
 	for _, obj := range objs {
-		Expect(client.IgnoreNotFound(hubClient.Delete(ctx, obj))).To(Succeed(), "Failed to delete object %T %s", obj, client.ObjectKeyFromObject(obj))
+		Expect(client.IgnoreNotFound(hubClient.Delete(ctx, obj, opts...))).To(Succeed(), "Failed to delete object %T %s", obj, client.ObjectKeyFromObject(obj))
 		Eventually(func() bool {
 			return errors.IsNotFound(hubUncachedReader.Get(ctx, client.ObjectKeyFromObject(obj), obj))
 		}, eventuallyDuration, eventuallyInterval).Should(BeTrue(), "Failed to remove object %T %s", obj, client.ObjectKeyFromObject(obj))

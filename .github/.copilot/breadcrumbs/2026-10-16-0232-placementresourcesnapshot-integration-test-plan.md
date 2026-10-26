@@ -3,6 +3,8 @@
 **Date**: October 16, 2026 02:32 AEDT
 **Revised**: October 24, 2026 07:20 AEDT, for leftover snapshot detection and UID-based snapshot names (see
 [Revision: leftover snapshots and UID-based names](#revision-leftover-snapshots-and-uid-based-names)).
+**Revised**: October 27, 2026 02:13 AEDT, for Service and Job sanitization (PP-13 and PP-14; see
+[E. Manifest sanitization](#e-manifest-sanitization-snapshotresource)).
 **Task**: Plan additional envtest-based integration tests for `pkg/v1/managers/placementresourcesnapshot/`.
 
 ## Baseline
@@ -112,6 +114,31 @@ Assert on raw JSON (`map[string]any`) so that the absence of keys is checked, no
 - Changes that must not trigger a new snapshot:
   - Updating only the last-applied annotation keeps the hash unchanged.
   - A status-only update keeps the hash unchanged.
+- Services and Jobs (added October 27). `snapshotResource` strips the values that the hub API server fills in, as
+  they would conflict with the ones each member cluster's API server generates. `TestSnapshotResource` (unit) covers
+  every branch with hand-built objects, including the paths that change nothing (a headless Service, a Job with
+  `manualSelector: true`). The two contexts below check the stripping against what envtest's API server actually
+  fills in, and that re-creating the object with the same spec does not produce a new snapshot. They are appended
+  to the end of the first `Describe`, so the existing positional IDs do not shift.
+  - **PP-13, `manifest sanitization (services)`**: create a `LoadBalancer` Service with two ports and
+    `externalTrafficPolicy: Local`, so that the API server fills in `clusterIP`, `clusterIPs`, a `nodePort` per
+    port, and `healthCheckNodePort`. Assert that the live object carries all of them, so the spec can't pass
+    trivially.
+    1. Snapshot. These keys are absent from the raw manifest; the rest of the spec equals the live spec with them
+       cleared, and the metadata keeps the user's labels.
+    2. Delete the Service and re-create it with the same spec. The API server fills in new values.
+    3. `SnapshotResourcesIfStale` returns index 0, and there is no index 1.
+  - **PP-14, `manifest sanitization (jobs)`**: create a Job without `manualSelector`. Assert that the API server
+    added `batch.kubernetes.io/controller-uid` to the selector and to the pod template labels, and the legacy
+    `controller-uid` to the pod template labels.
+    1. Snapshot. Neither `controller-uid` nor `batch.kubernetes.io/controller-uid` is left in the selector or the
+       pod template labels, and the pod template has no `creationTimestamp`. The user's labels and the `job-name`
+       labels are kept, and the rest of the spec equals the live spec.
+    2. Delete the Job and re-create it with the same spec. It gets a new UID, and so new controller-uid labels.
+    3. `SnapshotResourcesIfStale` returns index 0, and there is no index 1.
+    - Envtest constraint: `batch/v1` Jobs default to orphan propagation, which adds the `orphan` finalizer, and
+      envtest runs no garbage collector to remove it. Jobs are therefore deleted with background propagation:
+      `deleteObjectsAndWait` takes optional `client.DeleteOption`s.
 
 ### F. Informer (cache) path, with a dedicated `Manager`
 
@@ -251,6 +278,7 @@ Unindexed decoys (no owned-by annotation) are never scanned and need no owner re
 | `TestIsSnapshotInUseByAnyPlacementBinding` | Orphan bypass, other-name and wrong-kind owners, cross-namespace bindings, list failure |
 | `TestGarbageCollect` | Owned and orphaned groups, in use, re-created primary, primary not found, Get failure, skipped snapshots at the same index (another primary, a different or missing policy owner) |
 | `TestStart` | The GC worker loop: retry with backoff, drop on Unexpected errors, stop on context cancellation (added with this revision; see below) |
+| `TestSnapshotResource` | Service and Job sanitization in `snapshotResource`: assigned cluster IPs and node ports, a headless Service, a Job with and without `manualSelector`, and that the input is not modified (added October 27) |
 
 **Not covered anywhere:** `IsSnapshotSynchronized` (a gap that predates this change, including its owner-UID check).
 At planning time, the `Start` worker loop was not covered either; `TestStart` now covers it.
@@ -391,6 +419,8 @@ Q5 to Q9 came up during the P1 and P2 planning; their questions and answers are 
 - Suite runtime increase of about 60s or less (baseline is about 58s).
 - `make reviewable`.
 - Final runs use `ginkgo -p --race` instead of `go test`.
+- From October 27, per the user: integration runs are always focused (`ginkgo -p --race --focus=...`) on the specs
+  being changed. The whole suite is not run.
 
 ## Status
 
@@ -611,3 +641,26 @@ to test contexts by position, in file order: PP-n and CPP-n are the n-th `Contex
     - The leftover check and GC-5 descriptions match the current behavior.
   - Validation: `gofmt` and `go vet` are clean, and the `gc_test.go` unit tests pass with `-race`. The integration
     suite was not re-run.
+- October 27, 02:13: `snapshotResource` now strips Service and Job fields filled in by the hub API server, matching
+  `generateRawContent` in `pkg/utils/controller/resource_selector_resolver.go`:
+  - Services: `clusterIP` and `clusterIPs` (unless headless), `healthCheckNodePort`, and each port's `nodePort`.
+  - Jobs without `manualSelector`: the `controller-uid` and `batch.kubernetes.io/controller-uid` labels in the
+    selector and the pod template, and the pod template's `creationTimestamp`.
+  - The new unit test `TestSnapshotResource` (in the new file `resources_test.go`) passes with `-race`.
+  - The plan adds PP-13 (Services) and PP-14 (Jobs) to section E; implementation follows.
+  - Another entry for the PR description: Service and Job manifests in snapshots no longer carry these fields.
+- October 27, 02:20: PP-13 and PP-14 were implemented at the end of the first `Describe` in
+  `resources_integration_test.go`. There are two ordered contexts with 4 specs each.
+  - New constants: `serviceNameTemplate`, `jobNameTemplate`, and `legacyJobControllerUIDLabel`.
+  - New helpers in `utils_integration_test.go`, next to `newDeployment`: `newLoadBalancerService`,
+    `verifyServiceFieldsFilledIn`, `serviceSpecWithoutFilledInFields`, `newJob`, `verifyJobControllerUIDLabelsAdded`,
+    and `jobSpecWithoutControllerUIDLabels`.
+  - `deleteObjectsAndWait` takes optional `client.DeleteOption`s; existing callers are unchanged. The Job context
+    deletes with background propagation.
+  - Envtest facts confirmed by the preconditions: the API server (1.33) fills in all of the Service fields, and it
+    adds both the current and the legacy controller UID labels to the Job's pod template.
+  - Validation:
+    - `ginkgo -p --race --focus='manifest sanitization \((services|jobs)\)'` passed 8 of 355 specs (347 skipped).
+      Per the user, the whole suite was not run.
+    - `gofmt` and `go vet` are clean. `golangci-lint --fast-only` reported 0 issues. In the new code, the full run
+      flags only `goconst` findings, the same style as the rest of the files.
