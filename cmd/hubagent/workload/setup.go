@@ -395,7 +395,7 @@ func SetupControllers(ctx context.Context, wg *sync.WaitGroup, mgr ctrl.Manager,
 				return err
 			}
 			klog.Info("Setting up the placement policy work generator")
-			if err := v1workgenerator.New(mgr.GetClient(), parallelizer.DefaultNumOfWorkers).
+			if err := v1workgenerator.New(mgr.GetClient(), parallelizer.DefaultNumOfWorkers, nil).
 				SetupWithManager(mgr, placementPolicyWorkGeneratorConcurrentReconciles); err != nil {
 				klog.ErrorS(err, "Unable to set up the placement policy work generator")
 				return err

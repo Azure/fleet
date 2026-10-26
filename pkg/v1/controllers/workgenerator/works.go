@@ -30,6 +30,7 @@ import (
 	"k8s.io/apimachinery/pkg/runtime/schema"
 	"k8s.io/apimachinery/pkg/util/sets"
 	"k8s.io/klog/v2"
+	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/controller/controllerutil"
 
 	placementv1alpha1 "go.goms.io/fleet/apis/kubefleet.dev/placement/v1alpha1"
@@ -60,11 +61,16 @@ const (
 	// objects are linked to that primary snapshot, the number of work objects matches the linked work count, and the
 	// work objects have the sync strategy dictated by the placement binding.
 	workSyncStatusInSync workSyncStatus = "InSync"
-	// workSyncStatusOutOfSync signals that the work objects for the placement binding are out of sync, i.e., the last
-	// processed placement resource snapshot differs from the primary snapshot in the placement binding spec, some
-	// work objects are missing (the count does not match the linked work count), are not linked to the expected
-	// primary placement resource snapshot, or have an inconsistent sync strategy.
-	workSyncStatusOutOfSync workSyncStatus = "OutOfSync"
+	// workSyncStatusResourcesOutOfSync signals that the work objects for the placement binding need to be
+	// (re)generated from the placement resource snapshots, i.e., the last processed placement resource snapshot differs
+	// from the primary snapshot in the placement binding spec, no work objects are found, some work objects are not
+	// linked to the expected primary placement resource snapshot, or the number of work objects does not match the
+	// linked work count.
+	workSyncStatusResourcesOutOfSync workSyncStatus = "ResourcesOutOfSync"
+	// workSyncStatusStrategyOutOfSync signals that the work objects for the placement binding are in sync resource-wise,
+	// but some of them have a sync strategy different from the one dictated by the placement binding; only the sync
+	// strategy needs to be updated, and the placement resource snapshots do not need to be read.
+	workSyncStatusStrategyOutOfSync workSyncStatus = "StrategyOutOfSync"
 	// workSyncStatusErred signals that there was an error while checking the synchronization status of the work objects.
 	// This is a value added for completeness reasons only; it is not checked.
 	workSyncStatusErred workSyncStatus = "Erred"
@@ -73,7 +79,8 @@ const (
 // areWorksInSync checks if the work objects for a placement binding are in sync with the current placement binding
 // spec, i.e., if all the work objects needed have been created/updated. It returns workSyncStatusInSync if so, in
 // which case the work generation can skip the work object create/update ops and go straight to refreshing the
-// placement binding status; workSyncStatusOutOfSync if the work objects need to be (re)generated; or
+// placement binding status; workSyncStatusResourcesOutOfSync if the work objects need to be (re)generated;
+// workSyncStatusStrategyOutOfSync if only the sync strategy of some work objects needs to be updated; or
 // workSyncStatusErred (along with an error) if the work objects are in an unexpected state.
 func areWorksInSync(placementBinding placementv1alpha1.PlacementBindingAccessor, works []placementv1alpha1.Work) (workSyncStatus, error) {
 	// Check if the last processed placement resource snapshot name in the placement binding status matches the
@@ -90,7 +97,7 @@ func areWorksInSync(placementBinding placementv1alpha1.PlacementBindingAccessor,
 			"placementBinding", klog.KObj(placementBinding),
 			"lastProcessedSnapshotName", lastProcessedSnapshotName, "observedPrimarySnapshotName", primarySnapshotName,
 			"controller", controllerName)
-		return workSyncStatusOutOfSync, nil
+		return workSyncStatusResourcesOutOfSync, nil
 	}
 
 	// Do some sanity checks, just to make sure that the cache is up to date.
@@ -101,13 +108,13 @@ func areWorksInSync(placementBinding placementv1alpha1.PlacementBindingAccessor,
 		klog.V(2).InfoS("No work objects are found for the placement binding; the cache might be stale or the work objects might be tampered with",
 			"placementBinding", klog.KObj(placementBinding), "targetCluster", placementBinding.GetSpec().ClusterName,
 			"controller", controllerName)
-		return workSyncStatusOutOfSync, nil
+		return workSyncStatusResourcesOutOfSync, nil
 	}
 
 	// Check if all the work objects have been linked to the expected placement resource snapshot (in the spec),
 	// and verify that the linked work count recorded on the primary work matches the number of listed works.
 	linkedWorkCount := -1
-	foundOutOfSyncWorks := false
+	foundResOutOfSyncWorks := false
 	for idx := range works {
 		work := &works[idx]
 		annotations := work.GetAnnotations()
@@ -117,7 +124,7 @@ func areWorksInSync(placementBinding placementv1alpha1.PlacementBindingAccessor,
 			klog.V(2).InfoS("Found a work object that is not linked to the expected primary placement resource snapshot",
 				"work", klog.KObj(work), "placementBinding", klog.KObj(placementBinding),
 				"linkedPlacementResourceSnapshotName", linked, "expectedPlacementResourceSnapshotName", primarySnapshotName)
-			foundOutOfSyncWorks = true
+			foundResOutOfSyncWorks = true
 			continue
 		}
 
@@ -139,15 +146,15 @@ func areWorksInSync(placementBinding placementv1alpha1.PlacementBindingAccessor,
 		}
 	}
 
-	if foundOutOfSyncWorks {
-		return workSyncStatusOutOfSync, nil
+	if foundResOutOfSyncWorks {
+		return workSyncStatusResourcesOutOfSync, nil
 	}
 	if linkedWorkCount != len(works) {
 		klog.V(2).InfoS("The number of work objects is not as expected",
 			"expectedWorkCount", linkedWorkCount, "actualWorkCount", len(works),
 			"placementBinding", klog.KObj(placementBinding), "targetCluster", placementBinding.GetSpec().ClusterName,
 			"controller", controllerName)
-		return workSyncStatusOutOfSync, nil
+		return workSyncStatusResourcesOutOfSync, nil
 	}
 
 	// Check if the sync strategy of the placement binding still matches that on the work objects.
@@ -155,7 +162,7 @@ func areWorksInSync(placementBinding placementv1alpha1.PlacementBindingAccessor,
 	for idx := range works {
 		work := &works[idx]
 		if !equality.Semantic.DeepEqual(work.Spec.SyncStrategy, syncStrategy) {
-			return workSyncStatusOutOfSync, nil
+			return workSyncStatusStrategyOutOfSync, nil
 		}
 	}
 
@@ -454,4 +461,39 @@ func workOwnerLabelValue(ownerName string) string {
 		name = name[:prefixLength]
 	}
 	return fmt.Sprintf("%s-%s", name, hash)
+}
+
+// refreshSyncStrategyOnlyForWorks patches only the sync strategy of out-of-sync work objects in parallel.
+func (r *Reconciler) refreshSyncStrategyOnlyForWorks(
+	ctx context.Context,
+	placementBinding placementv1alpha1.PlacementBindingAccessor,
+	works []placementv1alpha1.Work,
+) error {
+	childCtx, childCancel := context.WithCancel(ctx)
+	defer childCancel()
+
+	syncStrategy := placementBinding.GetSpec().SyncStrategy
+	errFlag := parallelizer.NewErrorFlag()
+	r.parallelizer.ParallelizeUntil(childCtx, len(works), func(idx int) {
+		work := &works[idx]
+		if equality.Semantic.DeepEqual(work.Spec.SyncStrategy, syncStrategy) {
+			return
+		}
+
+		patchedWork := work.DeepCopy()
+		patchedWork.Spec.SyncStrategy = syncStrategy.DeepCopy()
+		if err := r.hubClient.Patch(childCtx, patchedWork, client.MergeFromWithOptions(work, client.MergeFromWithOptimisticLock{})); err != nil {
+			wrappedErr := errors.NewAPIServerError(err, "failed to update sync strategy of work object", false,
+				"work", klog.KObj(work), "placementBinding", klog.KObj(placementBinding))
+			errFlag.Raise(wrappedErr)
+			childCancel()
+			return
+		}
+		klog.V(2).InfoS("Successfully patched sync strategy of work object",
+			"work", klog.KObj(patchedWork), "placementBinding", klog.KObj(placementBinding))
+	}, "refreshSyncStrategyOnlyForWorks")
+	if err := errFlag.Lower(); err != nil {
+		return err
+	}
+	return ctx.Err()
 }

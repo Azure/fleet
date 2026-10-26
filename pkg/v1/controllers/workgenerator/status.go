@@ -19,6 +19,7 @@ package workgenerator
 import (
 	"cmp"
 	"context"
+	"fmt"
 	"slices"
 
 	"k8s.io/apimachinery/pkg/api/equality"
@@ -30,6 +31,10 @@ import (
 	placementv1alpha1 "go.goms.io/fleet/apis/kubefleet.dev/placement/v1alpha1"
 	"go.goms.io/fleet/pkg/utils/condition"
 	"go.goms.io/fleet/pkg/utils/errors"
+)
+
+const (
+	maxFailedResourcesToReport = 50
 )
 
 func (r *Reconciler) refreshPlacementBindingStatus(
@@ -52,10 +57,11 @@ func (r *Reconciler) refreshPlacementBindingStatus(
 	placementBinding.GetStatus().SelectedResources = ptr.To(total)
 	placementBinding.GetStatus().SynchronizedResources = ptr.To(synced)
 	placementBinding.GetStatus().AvailableResources = ptr.To(available)
-	if len(failed) > 50 {
-		klog.V(2).InfoS("Too many failed resources to report in placement binding status; truncating the list to 50",
-			"placementBinding", klog.KObj(placementBinding), "totalFailedResources", len(failed))
-		failed = failed[:50]
+	if len(failed) > maxFailedResourcesToReport {
+		klog.V(2).InfoS("Too many failed resources to report in placement binding status; truncating the list",
+			"placementBinding", klog.KObj(placementBinding), "totalFailedResources", len(failed),
+			"maxFailedResourcesToReport", maxFailedResourcesToReport)
+		failed = failed[:maxFailedResourcesToReport]
 	}
 	placementBinding.GetStatus().FailedResources = failed
 
@@ -73,6 +79,80 @@ func (r *Reconciler) refreshPlacementBindingStatus(
 	}
 	klog.V(2).InfoS("Updated placement binding status",
 		"placementBinding", klog.KObj(placementBinding),
+		"selectedResources", total, "synchronizedResources", synced, "availableResources", available,
+		"failedResources", len(failed))
+	return nil
+}
+
+// markPlacementBindingAsFailedToSynchronizeDueToInvalidSnapshots marks the placement binding as failed to
+// synchronize due to invalid placement resource snapshots. The resource counters are tallied only from the work
+// objects linked to the last processed placement resource snapshot, i.e., the resources that have been placed.
+func (r *Reconciler) markPlacementBindingAsFailedToSynchronizeDueToInvalidSnapshots(
+	ctx context.Context,
+	placementBinding placementv1alpha1.PlacementBindingAccessor,
+	works []placementv1alpha1.Work,
+	errDetails string,
+) error {
+	placementBindingStatus := placementBinding.GetStatus()
+	oldStatus := placementBindingStatus.DeepCopy()
+
+	// Set a false Synchronized condition with the InvalidSnapshots reason.
+	meta.SetStatusCondition(&placementBindingStatus.Conditions, metav1.Condition{
+		Type:               placementv1alpha1.PlacementBindingCondTypeSynchronized,
+		Status:             metav1.ConditionFalse,
+		ObservedGeneration: placementBinding.GetGeneration(),
+		Reason:             placementv1alpha1.PlacementBindingSynchronizedCondReasonInvalidSnapshots,
+		Message:            fmt.Sprintf("Failed to synchronize resources as the given placement resource snapshots are invalid: %s", errDetails),
+	})
+	// Set a false Available condition with the IncompleteSetOfResources reason, if the last processed placement
+	// resource snapshot is the same as the primary snapshot in the spec; otherwise the existing condition
+	// is left stale.
+	lastProcessedSnapshotName := placementBindingStatus.LastProcessedResourceSnapshotName
+	if lastProcessedSnapshotName == nil || *lastProcessedSnapshotName == placementBinding.GetSpec().ResourceSnapshotName {
+		meta.SetStatusCondition(&placementBindingStatus.Conditions, metav1.Condition{
+			Type:               placementv1alpha1.PlacementBindingCondTypeAvailable,
+			Status:             metav1.ConditionFalse,
+			ObservedGeneration: placementBinding.GetGeneration(),
+			Reason:             placementv1alpha1.PlacementBindingAvailableCondReasonIncompleteSetOfResources,
+			Message:            "Cannot check the availability of resources as the given placement resource snapshots are invalid; some resources might be missing from the target cluster",
+		})
+	}
+
+	// Tally the counters using only the work objects linked to the last processed placement resource snapshot.
+	var lastProcessedWorks []placementv1alpha1.Work
+	if lastProcessedSnapshotName != nil {
+		lastProcessedWorks = make([]placementv1alpha1.Work, 0, len(works))
+		for idx := range works {
+			linked := works[idx].GetAnnotations()[placementv1alpha1.WorkLinkedToPrimaryPlacementResourceSnapshotAnnotationKey]
+			if linked == *lastProcessedSnapshotName {
+				lastProcessedWorks = append(lastProcessedWorks, works[idx])
+			}
+		}
+	}
+	total, synced, available, failed := countResourcesInWorksByProcessingResults(lastProcessedWorks)
+	placementBindingStatus.SelectedResources = ptr.To(total)
+	placementBindingStatus.SynchronizedResources = ptr.To(synced)
+	placementBindingStatus.AvailableResources = ptr.To(available)
+	if len(failed) > maxFailedResourcesToReport {
+		klog.V(2).InfoS("Too many failed resources to report in placement binding status; truncating the list",
+			"placementBinding", klog.KObj(placementBinding), "totalFailedResources", len(failed),
+			"maxFailedResourcesToReport", maxFailedResourcesToReport)
+		failed = failed[:maxFailedResourcesToReport]
+	}
+	placementBindingStatus.FailedResources = failed
+
+	// Skip the update if the status has not changed.
+	if equality.Semantic.DeepEqual(oldStatus, placementBindingStatus) {
+		klog.V(2).InfoS("No need to update placement binding status as it has not changed",
+			"placementBinding", klog.KObj(placementBinding), "errDetails", errDetails)
+		return nil
+	}
+
+	if err := r.hubClient.Status().Update(ctx, placementBinding); err != nil {
+		return errors.NewAPIServerError(err, "failed to update placement binding status", true)
+	}
+	klog.V(2).InfoS("Marked placement binding as failed to synchronize due to invalid placement resource snapshots",
+		"placementBinding", klog.KObj(placementBinding), "errDetails", errDetails,
 		"selectedResources", total, "synchronizedResources", synced, "availableResources", available,
 		"failedResources", len(failed))
 	return nil

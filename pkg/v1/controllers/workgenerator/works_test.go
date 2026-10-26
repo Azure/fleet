@@ -17,14 +17,25 @@ limitations under the License.
 package workgenerator
 
 import (
+	"context"
+	"fmt"
+	"slices"
 	"strings"
+	"sync"
 	"testing"
 
+	"github.com/google/go-cmp/cmp"
+	"github.com/google/go-cmp/cmp/cmpopts"
+	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/util/validation"
 	"k8s.io/utils/ptr"
+	"sigs.k8s.io/controller-runtime/pkg/client"
+	"sigs.k8s.io/controller-runtime/pkg/client/interceptor"
 
 	placementv1alpha1 "github.com/kubefleet-dev/kubefleet/apis/kubefleet.dev/placement/v1alpha1"
+	kferrors "github.com/kubefleet-dev/kubefleet/pkg/utils/errors"
 )
 
 // TestWorkOwnerLabelValue tests the workOwnerLabelValue function.
@@ -164,7 +175,7 @@ func TestAreWorksInSync(t *testing.T) {
 			works: []placementv1alpha1.Work{
 				newWork("work-0", primarySnapshotName, "1", nil),
 			},
-			wantStatus: workSyncStatusOutOfSync,
+			wantStatus: workSyncStatusResourcesOutOfSync,
 		},
 		{
 			name:    "last processed snapshot differs from the primary snapshot",
@@ -172,12 +183,12 @@ func TestAreWorksInSync(t *testing.T) {
 			works: []placementv1alpha1.Work{
 				newWork("work-0", primarySnapshotName, "1", nil),
 			},
-			wantStatus: workSyncStatusOutOfSync,
+			wantStatus: workSyncStatusResourcesOutOfSync,
 		},
 		{
 			name:       "no work objects",
 			binding:    newBinding(ptr.To(primarySnapshotName), nil),
-			wantStatus: workSyncStatusOutOfSync,
+			wantStatus: workSyncStatusResourcesOutOfSync,
 		},
 		{
 			name:    "a work object is linked to another snapshot",
@@ -186,7 +197,7 @@ func TestAreWorksInSync(t *testing.T) {
 				newWork("work-0", primarySnapshotName, "2", nil),
 				newWork("work-1", staleSnapshotName, "", nil),
 			},
-			wantStatus: workSyncStatusOutOfSync,
+			wantStatus: workSyncStatusResourcesOutOfSync,
 		},
 		{
 			name:    "a work object has no link annotation",
@@ -195,7 +206,7 @@ func TestAreWorksInSync(t *testing.T) {
 				newWork("work-0", primarySnapshotName, "2", nil),
 				{ObjectMeta: metav1.ObjectMeta{Name: "work-1"}},
 			},
-			wantStatus: workSyncStatusOutOfSync,
+			wantStatus: workSyncStatusResourcesOutOfSync,
 		},
 		{
 			name:    "the primary work object is missing (no linked work count)",
@@ -203,7 +214,7 @@ func TestAreWorksInSync(t *testing.T) {
 			works: []placementv1alpha1.Work{
 				newWork("work-1", primarySnapshotName, "", nil),
 			},
-			wantStatus: workSyncStatusOutOfSync,
+			wantStatus: workSyncStatusResourcesOutOfSync,
 		},
 		{
 			name:    "fewer work objects than the linked work count",
@@ -211,7 +222,7 @@ func TestAreWorksInSync(t *testing.T) {
 			works: []placementv1alpha1.Work{
 				newWork("work-0", primarySnapshotName, "2", nil),
 			},
-			wantStatus: workSyncStatusOutOfSync,
+			wantStatus: workSyncStatusResourcesOutOfSync,
 		},
 		{
 			name:    "more work objects than the linked work count",
@@ -220,7 +231,7 @@ func TestAreWorksInSync(t *testing.T) {
 				newWork("work-0", primarySnapshotName, "1", nil),
 				newWork("work-1", primarySnapshotName, "", nil),
 			},
-			wantStatus: workSyncStatusOutOfSync,
+			wantStatus: workSyncStatusResourcesOutOfSync,
 		},
 		{
 			name:    "sync strategy is set on the binding but not on the work objects",
@@ -228,7 +239,7 @@ func TestAreWorksInSync(t *testing.T) {
 			works: []placementv1alpha1.Work{
 				newWork("work-0", primarySnapshotName, "1", nil),
 			},
-			wantStatus: workSyncStatusOutOfSync,
+			wantStatus: workSyncStatusStrategyOutOfSync,
 		},
 		{
 			name:    "sync strategy is unset on the binding but set on a secondary work object",
@@ -237,7 +248,7 @@ func TestAreWorksInSync(t *testing.T) {
 				newWork("work-0", primarySnapshotName, "2", nil),
 				newWork("work-1", primarySnapshotName, "", serverSideApplyStrategy),
 			},
-			wantStatus: workSyncStatusOutOfSync,
+			wantStatus: workSyncStatusStrategyOutOfSync,
 		},
 		{
 			name:    "multiple work objects have the linked work count annotation",
@@ -294,6 +305,436 @@ func TestAreWorksInSync(t *testing.T) {
 			}
 			if gotStatus != tc.wantStatus {
 				t.Errorf("areWorksInSync() = %q, want %q", gotStatus, tc.wantStatus)
+			}
+		})
+	}
+}
+
+// configMapManifestForUnitTest returns the manifest of a ConfigMap of the given name.
+func configMapManifestForUnitTest(name string) runtime.RawExtension {
+	return runtime.RawExtension{Raw: fmt.Appendf(nil, `{"apiVersion":"v1","kind":"ConfigMap","metadata":{"name":%q,"namespace":%q}}`, name, unitTestResourceNS)}
+}
+
+// configMapResourcesForUnitTest returns the snapshotted resources for ConfigMaps of the given names, and the
+// manifests that the work generator is expected to build from them.
+func configMapResourcesForUnitTest(names ...string) ([]placementv1alpha1.SnapshottedResource, []placementv1alpha1.Manifest) {
+	resources := make([]placementv1alpha1.SnapshottedResource, len(names))
+	manifests := make([]placementv1alpha1.Manifest, len(names))
+	for idx, name := range names {
+		resources[idx] = placementv1alpha1.SnapshottedResource{
+			Identifier: placementv1alpha1.ObjectReference{Namespace: unitTestResourceNS, Name: name, APIVersion: "v1", Kind: configMapKind},
+			Manifest:   configMapManifestForUnitTest(name),
+		}
+		manifests[idx] = placementv1alpha1.Manifest{RawExtension: configMapManifestForUnitTest(name)}
+	}
+	return resources, manifests
+}
+
+// TestBuildWorkObjectFor tests the buildWorkObjectFor function.
+func TestBuildWorkObjectFor(t *testing.T) {
+	serverSideApplyStrategy := &placementv1alpha1.SyncStrategy{
+		ApplyMethod: placementv1alpha1.ApplyMethodServerSideApply,
+	}
+	newSnapshot := func(subIdx string, resources []placementv1alpha1.SnapshottedResource) placementv1alpha1.PlacementResourceSnapshotAccessor {
+		labels := map[string]string{}
+		if subIdx != "" {
+			labels[placementv1alpha1.PlacementResourceSnapshotSubIndexLabelKey] = subIdx
+		}
+		return &placementv1alpha1.PlacementResourceSnapshot{
+			ObjectMeta: metav1.ObjectMeta{Namespace: appNamespaceName, Name: "snapshot", Labels: labels},
+			Spec:       placementv1alpha1.PlacementResourceSnapshotSpec{Resources: resources},
+		}
+	}
+
+	// A namespace-scoped binding with short names and a sync strategy.
+	nsBinding := &placementv1alpha1.PlacementBinding{
+		ObjectMeta: metav1.ObjectMeta{Namespace: appNamespaceName, Name: unitTestBindingName},
+		Spec: placementv1alpha1.PlacementBindingSpec{
+			PlacementPolicyName:  unitTestPolicyName,
+			ClusterName:          memberCluster1Name,
+			ResourceSnapshotName: unitTestSnapshotName1,
+			SyncStrategy:         serverSideApplyStrategy,
+		},
+	}
+	// A cluster-scoped binding with long, dotted names and no sync strategy.
+	longBindingName := dottedName(100, 3)
+	longPolicyName := dottedName(120, 5)
+	clusterBinding := &placementv1alpha1.ClusterPlacementBinding{
+		ObjectMeta: metav1.ObjectMeta{Name: longBindingName},
+		Spec: placementv1alpha1.PlacementBindingSpec{
+			PlacementPolicyName:  longPolicyName,
+			ClusterName:          memberCluster2Name,
+			ResourceSnapshotName: unitTestSnapshotName1,
+		},
+	}
+	primaryResources, primaryManifests := configMapResourcesForUnitTest("configmap-a", "configmap-b")
+	secondaryResources, secondaryManifests := configMapResourcesForUnitTest("configmap-c")
+
+	testCases := []struct {
+		name     string
+		snapshot placementv1alpha1.PlacementResourceSnapshotAccessor
+		binding  placementv1alpha1.PlacementBindingAccessor
+		want     *placementv1alpha1.Work
+		wantErr  bool
+	}{
+		{
+			name:     "primary snapshot, namespace-scoped binding with a sync strategy",
+			snapshot: newSnapshot("0", primaryResources),
+			binding:  nsBinding,
+			want: &placementv1alpha1.Work{
+				ObjectMeta: metav1.ObjectMeta{
+					Namespace: fmt.Sprintf("fleet-member-%s", memberCluster1Name),
+					Name: uniqueNameForWorkDerivedFromPlacementResourceSnapshot(nsBinding, true,
+						&placementResourceSnapshotDerivedFromSourceFormatter{snapshotSubIdx: "0"}),
+					Labels: map[string]string{
+						placementv1alpha1.WorkOwnerNamespaceLabelKey:          appNamespaceName,
+						placementv1alpha1.WorkOwnedByPlacementPolicyLabelKey:  unitTestPolicyName,
+						placementv1alpha1.WorkOwnedByPlacementBindingLabelKey: unitTestBindingName,
+					},
+					Annotations: map[string]string{
+						placementv1alpha1.WorkLinkedToPrimaryPlacementResourceSnapshotAnnotationKey: unitTestSnapshotName1,
+						placementv1alpha1.WorkDerivedFromSourceAnnotationKey:                        "placement-resource-snapshot/0",
+						placementv1alpha1.WorkOwnedByPlacementPolicyAnnotationKey:                   unitTestPolicyName,
+						placementv1alpha1.WorkOwnedByPlacementBindingAnnotationKey:                  unitTestBindingName,
+					},
+				},
+				Spec: placementv1alpha1.WorkSpec{
+					Manifests:    primaryManifests,
+					SyncStrategy: serverSideApplyStrategy.DeepCopy(),
+				},
+			},
+		},
+		{
+			name:     "secondary snapshot, cluster-scoped binding with long dotted names",
+			snapshot: newSnapshot("2", secondaryResources),
+			binding:  clusterBinding,
+			want: &placementv1alpha1.Work{
+				ObjectMeta: metav1.ObjectMeta{
+					Namespace: fmt.Sprintf("fleet-member-%s", memberCluster2Name),
+					Name: uniqueNameForWorkDerivedFromPlacementResourceSnapshot(clusterBinding, false,
+						&placementResourceSnapshotDerivedFromSourceFormatter{snapshotSubIdx: "2"}),
+					Labels: map[string]string{
+						placementv1alpha1.WorkOwnerNamespaceLabelKey:          "",
+						placementv1alpha1.WorkOwnedByPlacementPolicyLabelKey:  workOwnerLabelValue(longPolicyName),
+						placementv1alpha1.WorkOwnedByPlacementBindingLabelKey: workOwnerLabelValue(longBindingName),
+					},
+					// The annotations carry the full names.
+					Annotations: map[string]string{
+						placementv1alpha1.WorkLinkedToPrimaryPlacementResourceSnapshotAnnotationKey: unitTestSnapshotName1,
+						placementv1alpha1.WorkDerivedFromSourceAnnotationKey:                        "placement-resource-snapshot/2",
+						placementv1alpha1.WorkOwnedByPlacementPolicyAnnotationKey:                   longPolicyName,
+						placementv1alpha1.WorkOwnedByPlacementBindingAnnotationKey:                  longBindingName,
+					},
+				},
+				Spec: placementv1alpha1.WorkSpec{
+					Manifests: secondaryManifests,
+				},
+			},
+		},
+		{
+			name:     "snapshot without a sub-index label",
+			snapshot: newSnapshot("", primaryResources),
+			binding:  nsBinding,
+			wantErr:  true,
+		},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			got, err := buildWorkObjectFor(tc.snapshot, tc.binding, unitTestSnapshotName1)
+			if (err != nil) != tc.wantErr {
+				t.Fatalf("buildWorkObjectFor() = (%v, %v), want error: %t", got, err, tc.wantErr)
+			}
+			if err != nil {
+				if kferrors.Category(err) != kferrors.ErrCategoryUnexpected {
+					t.Errorf("buildWorkObjectFor() error category = %q, want %q", kferrors.Category(err), kferrors.ErrCategoryUnexpected)
+				}
+				return
+			}
+			if diff := cmp.Diff(got, tc.want); diff != "" {
+				t.Errorf("buildWorkObjectFor() mismatch (-got +want):\n%s", diff)
+			}
+			if got.Spec.SyncStrategy != nil && got.Spec.SyncStrategy == tc.binding.GetSpec().SyncStrategy {
+				t.Errorf("buildWorkObjectFor() shares the sync strategy with the placement binding, want a copy")
+			}
+		})
+	}
+}
+
+// TestUpdateWorkObjectMetadataAndSpec tests the updateWorkObjectMetadataAndSpec function.
+func TestUpdateWorkObjectMetadataAndSpec(t *testing.T) {
+	serverSideApplyStrategy := &placementv1alpha1.SyncStrategy{
+		ApplyMethod: placementv1alpha1.ApplyMethodServerSideApply,
+	}
+	_, oldManifests := configMapResourcesForUnitTest("configmap-old-a", "configmap-old-b")
+	newResources, newManifests := configMapResourcesForUnitTest("configmap-new")
+	workNS := fmt.Sprintf("fleet-member-%s", memberCluster1Name)
+	const (
+		workName          = "work"
+		wantDerivedFromID = "placement-resource-snapshot/1"
+	)
+
+	testCases := []struct {
+		name         string
+		work         *placementv1alpha1.Work
+		syncStrategy *placementv1alpha1.SyncStrategy
+		want         *placementv1alpha1.Work
+	}{
+		{
+			name:         "work object without metadata or spec",
+			work:         &placementv1alpha1.Work{ObjectMeta: metav1.ObjectMeta{Namespace: workNS, Name: workName}},
+			syncStrategy: serverSideApplyStrategy,
+			want: &placementv1alpha1.Work{
+				ObjectMeta: metav1.ObjectMeta{
+					Namespace: workNS,
+					Name:      workName,
+					Labels: map[string]string{
+						placementv1alpha1.WorkOwnerNamespaceLabelKey:          appNamespaceName,
+						placementv1alpha1.WorkOwnedByPlacementPolicyLabelKey:  unitTestPolicyName,
+						placementv1alpha1.WorkOwnedByPlacementBindingLabelKey: unitTestBindingName,
+					},
+					Annotations: map[string]string{
+						placementv1alpha1.WorkLinkedToPrimaryPlacementResourceSnapshotAnnotationKey: unitTestSnapshotName1,
+						placementv1alpha1.WorkDerivedFromSourceAnnotationKey:                        wantDerivedFromID,
+						placementv1alpha1.WorkOwnedByPlacementPolicyAnnotationKey:                   unitTestPolicyName,
+						placementv1alpha1.WorkOwnedByPlacementBindingAnnotationKey:                  unitTestBindingName,
+					},
+				},
+				Spec: placementv1alpha1.WorkSpec{
+					Manifests:    newManifests,
+					SyncStrategy: serverSideApplyStrategy,
+				},
+			},
+		},
+		{
+			name: "work object with existing metadata and spec",
+			work: &placementv1alpha1.Work{
+				ObjectMeta: metav1.ObjectMeta{
+					Namespace: workNS,
+					Name:      workName,
+					Labels: map[string]string{
+						placementv1alpha1.WorkOwnerNamespaceLabelKey:          appNamespaceName,
+						placementv1alpha1.WorkOwnedByPlacementPolicyLabelKey:  unitTestPolicyName,
+						placementv1alpha1.WorkOwnedByPlacementBindingLabelKey: unitTestBindingName,
+						"unrelated-label": "foo",
+					},
+					Annotations: map[string]string{
+						placementv1alpha1.WorkLinkedToPrimaryPlacementResourceSnapshotAnnotationKey: unitTestSnapshotName0,
+						placementv1alpha1.WorkDerivedFromSourceAnnotationKey:                        wantDerivedFromID,
+						placementv1alpha1.WorkOwnedByPlacementPolicyAnnotationKey:                   unitTestPolicyName,
+						placementv1alpha1.WorkOwnedByPlacementBindingAnnotationKey:                  unitTestBindingName,
+						placementv1alpha1.LinkedWorkCountAnnotationKey:                              "2",
+					},
+				},
+				Spec: placementv1alpha1.WorkSpec{
+					Manifests:    oldManifests,
+					SyncStrategy: serverSideApplyStrategy,
+				},
+			},
+			// The owned labels and annotations, the manifests, and the sync strategy are overwritten (the sync
+			// strategy is unset); the other labels and annotations are kept.
+			want: &placementv1alpha1.Work{
+				ObjectMeta: metav1.ObjectMeta{
+					Namespace: workNS,
+					Name:      workName,
+					Labels: map[string]string{
+						placementv1alpha1.WorkOwnerNamespaceLabelKey:          appNamespaceName,
+						placementv1alpha1.WorkOwnedByPlacementPolicyLabelKey:  unitTestPolicyName,
+						placementv1alpha1.WorkOwnedByPlacementBindingLabelKey: unitTestBindingName,
+						"unrelated-label": "foo",
+					},
+					Annotations: map[string]string{
+						placementv1alpha1.WorkLinkedToPrimaryPlacementResourceSnapshotAnnotationKey: unitTestSnapshotName1,
+						placementv1alpha1.WorkDerivedFromSourceAnnotationKey:                        wantDerivedFromID,
+						placementv1alpha1.WorkOwnedByPlacementPolicyAnnotationKey:                   unitTestPolicyName,
+						placementv1alpha1.WorkOwnedByPlacementBindingAnnotationKey:                  unitTestBindingName,
+						placementv1alpha1.LinkedWorkCountAnnotationKey:                              "2",
+					},
+				},
+				Spec: placementv1alpha1.WorkSpec{
+					Manifests: newManifests,
+				},
+			},
+		},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			work := tc.work.DeepCopy()
+			updateWorkObjectMetadataAndSpec(work, appNamespaceName, unitTestPolicyName, unitTestBindingName, unitTestSnapshotName1,
+				&placementResourceSnapshotDerivedFromSourceFormatter{snapshotSubIdx: "1"}, newResources, tc.syncStrategy)
+			if diff := cmp.Diff(work, tc.want); diff != "" {
+				t.Errorf("updateWorkObjectMetadataAndSpec() mismatch (-got +want):\n%s", diff)
+			}
+		})
+	}
+}
+
+// TestRefreshSyncStrategyOnlyForWorks tests the refreshSyncStrategyOnlyForWorks method.
+func TestRefreshSyncStrategyOnlyForWorks(t *testing.T) {
+	serverSideApplyStrategy := &placementv1alpha1.SyncStrategy{
+		ApplyMethod: placementv1alpha1.ApplyMethodServerSideApply,
+	}
+	_, manifests := configMapResourcesForUnitTest("configmap-a")
+	const (
+		workName0 = "work-0"
+		workName1 = "work-1"
+		workName2 = "work-2"
+	)
+	newStoredWork := func(name string, syncStrategy *placementv1alpha1.SyncStrategy) *placementv1alpha1.Work {
+		return &placementv1alpha1.Work{
+			ObjectMeta: metav1.ObjectMeta{
+				Namespace: fmt.Sprintf("fleet-member-%s", memberCluster1Name),
+				Name:      name,
+				Annotations: map[string]string{
+					placementv1alpha1.WorkLinkedToPrimaryPlacementResourceSnapshotAnnotationKey: unitTestSnapshotName0,
+				},
+			},
+			Spec: placementv1alpha1.WorkSpec{
+				Manifests:    manifests,
+				SyncStrategy: syncStrategy.DeepCopy(),
+			},
+		}
+	}
+
+	testCases := []struct {
+		name            string
+		bindingStrategy *placementv1alpha1.SyncStrategy
+		storedWorks     []*placementv1alpha1.Work
+		// The name of a work object that is updated out of band after it has been read, i.e., the copy passed to
+		// the method is stale.
+		staleWorkName    string
+		wantPatchedNames []string
+		// The sync strategies of the work objects as stored afterwards, keyed by work name.
+		wantStrategies map[string]*placementv1alpha1.SyncStrategy
+		wantConflict   bool
+	}{
+		{
+			name:            "set a sync strategy",
+			bindingStrategy: serverSideApplyStrategy,
+			storedWorks: []*placementv1alpha1.Work{
+				newStoredWork(workName0, nil),
+				newStoredWork(workName1, nil),
+				newStoredWork(workName2, serverSideApplyStrategy),
+			},
+			wantPatchedNames: []string{workName0, workName1},
+			wantStrategies: map[string]*placementv1alpha1.SyncStrategy{
+				workName0: serverSideApplyStrategy,
+				workName1: serverSideApplyStrategy,
+				workName2: serverSideApplyStrategy,
+			},
+		},
+		{
+			name: "unset the sync strategy",
+			storedWorks: []*placementv1alpha1.Work{
+				newStoredWork(workName0, serverSideApplyStrategy),
+				newStoredWork(workName1, nil),
+			},
+			wantPatchedNames: []string{workName0},
+			wantStrategies: map[string]*placementv1alpha1.SyncStrategy{
+				workName0: nil,
+				workName1: nil,
+			},
+		},
+		{
+			name:            "all work objects in sync",
+			bindingStrategy: serverSideApplyStrategy,
+			storedWorks: []*placementv1alpha1.Work{
+				newStoredWork(workName0, serverSideApplyStrategy),
+			},
+			wantStrategies: map[string]*placementv1alpha1.SyncStrategy{
+				workName0: serverSideApplyStrategy,
+			},
+		},
+		{
+			name:            "a work object has been updated since it was read",
+			bindingStrategy: serverSideApplyStrategy,
+			storedWorks: []*placementv1alpha1.Work{
+				newStoredWork(workName0, nil),
+			},
+			staleWorkName:    workName0,
+			wantPatchedNames: []string{workName0},
+			wantStrategies: map[string]*placementv1alpha1.SyncStrategy{
+				workName0: nil,
+			},
+			wantConflict: true,
+		},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			ctx := context.Background()
+
+			var mu sync.Mutex
+			var gotPatchedNames []string
+			objs := make([]client.Object, len(tc.storedWorks))
+			for idx := range tc.storedWorks {
+				objs[idx] = tc.storedWorks[idx]
+			}
+			c := newUnitTestHubClient(t, interceptor.Funcs{
+				Patch: func(ctx context.Context, c client.WithWatch, obj client.Object, patch client.Patch, opts ...client.PatchOption) error {
+					mu.Lock()
+					gotPatchedNames = append(gotPatchedNames, obj.GetName())
+					mu.Unlock()
+					return c.Patch(ctx, obj, patch, opts...)
+				},
+			}, objs...)
+
+			// Read the work objects, as the work generator would do.
+			workList := &placementv1alpha1.WorkList{}
+			if err := c.List(ctx, workList); err != nil {
+				t.Fatalf("List() = %v, want no error", err)
+			}
+			if tc.staleWorkName != "" {
+				work := &placementv1alpha1.Work{}
+				if err := c.Get(ctx, client.ObjectKey{Namespace: fmt.Sprintf("fleet-member-%s", memberCluster1Name), Name: tc.staleWorkName}, work); err != nil {
+					t.Fatalf("Get() = %v, want no error", err)
+				}
+				work.Labels = map[string]string{"updated-out-of-band": "true"}
+				if err := c.Update(ctx, work); err != nil {
+					t.Fatalf("Update() = %v, want no error", err)
+				}
+			}
+
+			binding := newBindingWithStatus(1, unitTestSnapshotName0, placementv1alpha1.PlacementBindingStatus{})
+			binding.Spec.SyncStrategy = tc.bindingStrategy.DeepCopy()
+			r := New(c, 2, nil)
+			err := r.refreshSyncStrategyOnlyForWorks(ctx, binding, workList.Items)
+			if (err != nil) != tc.wantConflict {
+				t.Fatalf("refreshSyncStrategyOnlyForWorks() = %v, want error: %t", err, tc.wantConflict)
+			}
+			if err != nil {
+				if !apierrors.IsConflict(err) {
+					t.Errorf("refreshSyncStrategyOnlyForWorks() = %v, want a conflict error", err)
+				}
+				if kferrors.Category(err) != kferrors.ErrCategoryAPIServer {
+					t.Errorf("refreshSyncStrategyOnlyForWorks() error category = %q, want %q", kferrors.Category(err), kferrors.ErrCategoryAPIServer)
+				}
+			}
+
+			slices.Sort(gotPatchedNames)
+			if diff := cmp.Diff(gotPatchedNames, tc.wantPatchedNames, cmpopts.EquateEmpty()); diff != "" {
+				t.Errorf("refreshSyncStrategyOnlyForWorks() patched work objects mismatch (-got +want):\n%s", diff)
+			}
+
+			// Only the sync strategies should have changed.
+			gotWorkList := &placementv1alpha1.WorkList{}
+			if err := c.List(ctx, gotWorkList); err != nil {
+				t.Fatalf("List() = %v, want no error", err)
+			}
+			if len(gotWorkList.Items) != len(tc.storedWorks) {
+				t.Fatalf("List() returned %d work objects, want %d", len(gotWorkList.Items), len(tc.storedWorks))
+			}
+			for idx := range gotWorkList.Items {
+				gotWork := &gotWorkList.Items[idx]
+				wantSpec := newStoredWork(gotWork.Name, tc.wantStrategies[gotWork.Name]).Spec
+				if diff := cmp.Diff(gotWork.Spec, wantSpec); diff != "" {
+					t.Errorf("work object %s spec mismatch (-got +want):\n%s", gotWork.Name, diff)
+				}
+				wantAnnotations := newStoredWork(gotWork.Name, nil).Annotations
+				if diff := cmp.Diff(gotWork.Annotations, wantAnnotations); diff != "" {
+					t.Errorf("work object %s annotations mismatch (-got +want):\n%s", gotWork.Name, diff)
+				}
 			}
 		})
 	}

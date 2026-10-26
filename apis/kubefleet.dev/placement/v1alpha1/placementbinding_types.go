@@ -29,10 +29,12 @@ const (
 // The reasons for each condition type of the PlacementBinding and ClusterPlacementBinding APIs.
 const (
 	PlacementBindingSynchronizedCondReasonAllResourcesSynchronized         = "AllResourcesSynchronized"
+	PlacementBindingSynchronizedCondReasonInvalidSnapshots                 = "InvalidSnapshots"
 	PlacementBindingSynchronizedCondReasonFailedToSynchronizeSomeResources = "FailedToSynchronizeSomeResources"
 	PlacementBindingSynchronizedCondReasonWaitingForSynchronization        = "WaitingForSynchronization"
 
 	PlacementBindingAvailableCondReasonAllResourcesAvailable       = "AllResourcesAvailable"
+	PlacementBindingAvailableCondReasonIncompleteSetOfResources    = "IncompleteSetOfResources"
 	PlacementBindingAvailableCondReasonSomeResourcesUnavailable    = "SomeResourcesUnavailable"
 	PlacementBindingAvailableCondReasonWaitingForAvailabilityCheck = "WaitingForAvailabilityCheck"
 )
@@ -87,6 +89,7 @@ type PlacementBindingSpec struct {
 	// The name of the placement policy that this binding is associated with.
 	//
 	// +kubebuilder:validation:Required
+	// +kubebuilder:validation:MinLength=1
 	PlacementPolicyName string `json:"placementPolicyName"`
 
 	// The cluster selectors associated with (fulfilled by) this binding.
@@ -100,6 +103,7 @@ type PlacementBindingSpec struct {
 	// The name of the member cluster that this binding is associated with.
 	//
 	// +kubebuilder:validation:Required
+	// +kubebuilder:validation:MinLength=1
 	ClusterName string `json:"clusterName"`
 
 	// The name of the resource snapshot that this binding is associated with.
@@ -108,6 +112,7 @@ type PlacementBindingSpec struct {
 	// the name of the primary resource snapshot that this binding is associated with.
 	//
 	// +kubebuilder:validation:Required
+	// +kubebuilder:validation:MinLength=1
 	ResourceSnapshotName string `json:"resourceSnapshotName"`
 
 	// The strategy to synchronize the resources to the member cluster.

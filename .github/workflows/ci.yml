@@ -92,6 +92,15 @@ jobs:
           ginkgo -v -p --procs=4 --race --cover -coverprofile=work-applier-v1-it-coverage.out ./pkg/v1/controllers/workapplier/
         env:
           KUBEFLEET_CI_TEST_RUNNER_NAME: 'ginkgo'
+
+      # The work generator (v1) integration tests also use in-memory Kubernetes environment setup (one per Ginkgo
+      # process), and many of them wait for retries, requeues, or consistency checks; run the suite with parallel
+      # Ginkgo processes instead.
+      - name: Run work generator (v1) unit and integration tests with Ginkgo CLI & generate coverage
+        run: |
+          ginkgo -v -p --procs=4 --race --cover -coverprofile=work-generator-v1-it-coverage.out ./pkg/v1/controllers/workgenerator/
+        env:
+          KUBEFLEET_CI_TEST_RUNNER_NAME: 'ginkgo'
       
       - name: Upload Codecov report
         uses: codecov/codecov-action@303a32d7a59b442fa8d48b6a1cc6825c09c847a5 # v7.1.1

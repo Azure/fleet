@@ -1434,10 +1434,14 @@ var _ = Describe("reconciling placement bindings (multiple placement resource sn
 		snapshotsIdx2 := make([]placementv1alpha1.PlacementResourceSnapshotAccessor, len(snapshotNamesIdx2))
 
 		var primaryWorkUID types.UID
-		// The expected state of the work objects and the placement binding status before any rollout
-		// attempt; neither should change as long as the snapshots in use are inconsistent.
+		// The expected state of the work objects before any rollout attempt; it should not change as long as the
+		// snapshots in use are inconsistent.
 		var wantWorksBeforeRollouts []placementv1alpha1.Work
-		var wantStatusBeforeRollouts *placementv1alpha1.PlacementBindingStatus
+		// The expected placement binding status (with the observed generations set) once the work generator has
+		// marked the placement binding as failed to synchronize after a rollout attempt; it should not change until
+		// the next rollout attempt.
+		var wantStatusAfterRollout *placementv1alpha1.PlacementBindingStatus
+		var statusBeforeRollouts *placementv1alpha1.PlacementBindingStatus
 
 		// The differently named NS, Deployment, and ConfigMap objects to place, one set per sub-index.
 		nsNames := make([]string, len(snapshotNamesIdx2))
@@ -1455,11 +1459,46 @@ var _ = Describe("reconciling placement bindings (multiple placement resource sn
 			}
 		}
 
+		// After a rollout to the given primary snapshot, the placement binding should be marked as failed to synchronize
+		// due to the missing secondary snapshots, with the resource counters tallied from the work object of index 0
+		// (the last processed snapshot). The spec is checked first, so that the observed generations are not verified
+		// against a stale (pre-rollout) generation from the cache; the status before and after the second rollout
+		// differs only in the Synchronized condition's observed generation.
+		markedAsFailedToSynchronizeActual := func(wantSnapshotName string) func() error {
+			return func() error {
+				binding, err := getPlacementBinding(appNamespaceName, bindingName)
+				if err != nil {
+					return err
+				}
+				if got := binding.GetSpec().ResourceSnapshotName; got != wantSnapshotName {
+					return fmt.Errorf("the placement binding points to snapshot %s, want %s", got, wantSnapshotName)
+				}
+
+				wantStatus := wantPlacementBindingStatusInvalidSnapshots(3, snapshotNameIdx0, statusBeforeRollouts)
+				wantStatus.Conditions[0].ObservedGeneration = binding.GetGeneration()
+				if err := placementBindingStatusMatchesActual(appNamespaceName, bindingName, wantStatus)(); err != nil {
+					return err
+				}
+				return placementBindingSyncCondMessageActual(appNamespaceName, bindingName, fewerSnapshotsErrMsg)()
+			}
+		}
+
+		recordStatusAfterRollout := func() {
+			binding, err := getPlacementBinding(appNamespaceName, bindingName)
+			Expect(err).To(Succeed(), "Failed to retrieve the placement binding")
+			wantStatusAfterRollout = wantPlacementBindingStatusInvalidSnapshots(3, snapshotNameIdx0, statusBeforeRollouts)
+			wantStatusAfterRollout.Conditions[0].ObservedGeneration = binding.GetGeneration()
+		}
+
 		bindingAndWorksUnchangedActual := func() error {
 			if err := worksGeneratedActual(memberCluster1Name, appNamespaceName, bindingName, wantWorksBeforeRollouts)(); err != nil {
 				return err
 			}
-			return placementBindingStatusMatchesActual(appNamespaceName, bindingName, wantStatusBeforeRollouts)()
+			if err := placementBindingStatusMatchesActual(appNamespaceName, bindingName, wantStatusAfterRollout)(); err != nil {
+				return err
+			}
+			// The status comparison ignores condition messages; the message should still report the missing snapshots.
+			return placementBindingSyncCondMessageActual(appNamespaceName, bindingName, fewerSnapshotsErrMsg)()
 		}
 
 		BeforeAll(func() {
@@ -1513,15 +1552,9 @@ var _ = Describe("reconciling placement bindings (multiple placement resource sn
 
 			statusUpdatedActual := placementBindingStatusUpdatedActual(appNamespaceName, bindingName, wantStatus)
 			Eventually(statusUpdatedActual, eventuallyDuration, eventuallyInterval).Should(Succeed(), "Failed to refresh the placement binding status")
-
-			// Record the status (with the current observed generation), which should be kept as long as the
-			// snapshots in use are inconsistent.
 			binding, err := getPlacementBinding(appNamespaceName, bindingName)
 			Expect(err).To(Succeed(), "Failed to retrieve the placement binding")
-			wantStatusBeforeRollouts = wantStatus.DeepCopy()
-			for idx := range wantStatusBeforeRollouts.Conditions {
-				wantStatusBeforeRollouts.Conditions[idx].ObservedGeneration = binding.GetGeneration()
-			}
+			statusBeforeRollouts = binding.GetStatus().DeepCopy()
 		})
 
 		It("can roll out a new primary snapshot (index 1) without its secondary snapshot", func() {
@@ -1538,6 +1571,11 @@ var _ = Describe("reconciling placement bindings (multiple placement resource sn
 			updatePlacementBindingResourceSnapshot(appNamespaceName, bindingName, snapshotNamesIdx1[0])
 		})
 
+		It("should mark the placement binding as failed to synchronize due to the missing secondary snapshot", func() {
+			Eventually(markedAsFailedToSynchronizeActual(snapshotNamesIdx1[0]), eventuallyDuration, eventuallyInterval).Should(Succeed(), "Failed to mark the placement binding as failed to synchronize")
+			recordStatusAfterRollout()
+		})
+
 		It("should not update the placement binding status or the work objects", func() {
 			Consistently(bindingAndWorksUnchangedActual, consistentlyDuration, consistentlyInterval).Should(Succeed(), "The placement binding status or the work objects have been updated unexpectedly")
 		})
@@ -1551,6 +1589,8 @@ var _ = Describe("reconciling placement bindings (multiple placement resource sn
 			)
 		})
 
+		// A contents hash mismatch is not reported on the placement binding; the status, including the message about
+		// the missing snapshot, should stay as it is.
 		It("should not update the placement binding status or the work objects", func() {
 			Consistently(bindingAndWorksUnchangedActual, consistentlyDuration, consistentlyInterval).Should(Succeed(), "The placement binding status or the work objects have been updated unexpectedly")
 		})
@@ -1567,6 +1607,11 @@ var _ = Describe("reconciling placement bindings (multiple placement resource sn
 
 			// Point the placement binding to the new primary snapshot.
 			updatePlacementBindingResourceSnapshot(appNamespaceName, bindingName, snapshotNamesIdx2[0])
+		})
+
+		It("should mark the placement binding as failed to synchronize due to the missing secondary snapshots", func() {
+			Eventually(markedAsFailedToSynchronizeActual(snapshotNamesIdx2[0]), eventuallyDuration, eventuallyInterval).Should(Succeed(), "Failed to mark the placement binding as failed to synchronize")
+			recordStatusAfterRollout()
 		})
 
 		It("should not update the placement binding status or the work objects", func() {
@@ -1600,9 +1645,9 @@ var _ = Describe("reconciling placement bindings (multiple placement resource sn
 			}
 
 			// The work generator does not watch placement resource snapshots; it picks up the newly added secondary
-			// snapshots only when it retries the failed reconciliation, which is subject to exponential backoff.
+			// snapshots only when it retries the failed reconciliation, whose backoff is capped at a second in this suite (see requeueMaxDelay).
 			worksUpdatedActual := worksGeneratedActual(memberCluster1Name, appNamespaceName, bindingName, wantWorks)
-			Eventually(worksUpdatedActual, eventuallyDurationForBackoffRetries, eventuallyInterval).Should(Succeed(), "Failed to update and create the work objects")
+			Eventually(worksUpdatedActual, eventuallyDuration, eventuallyInterval).Should(Succeed(), "Failed to update and create the work objects")
 		})
 
 		It("should update the primary work object in place (not re-create it)", func() {
@@ -3514,10 +3559,14 @@ var _ = Describe("reconciling cluster placement bindings (multiple placement res
 		snapshotsIdx2 := make([]placementv1alpha1.PlacementResourceSnapshotAccessor, len(snapshotNamesIdx2))
 
 		var primaryWorkUID types.UID
-		// The expected state of the work objects and the cluster placement binding status before any rollout
-		// attempt; neither should change as long as the snapshots in use are inconsistent.
+		// The expected state of the work objects before any rollout attempt; it should not change as long as the
+		// snapshots in use are inconsistent.
 		var wantWorksBeforeRollouts []placementv1alpha1.Work
-		var wantStatusBeforeRollouts *placementv1alpha1.PlacementBindingStatus
+		// The expected cluster placement binding status (with the observed generations set) once the work generator
+		// has marked the cluster placement binding as failed to synchronize after a rollout attempt; it should not
+		// change until the next rollout attempt.
+		var wantStatusAfterRollout *placementv1alpha1.PlacementBindingStatus
+		var statusBeforeRollouts *placementv1alpha1.PlacementBindingStatus
 
 		// The differently named NS, Deployment, and ConfigMap objects to place, one set per sub-index.
 		nsNames := make([]string, len(snapshotNamesIdx2))
@@ -3535,11 +3584,46 @@ var _ = Describe("reconciling cluster placement bindings (multiple placement res
 			}
 		}
 
+		// After a rollout to the given primary snapshot, the cluster placement binding should be marked as failed to
+		// synchronize due to the missing secondary snapshots, with the resource counters tallied from the work object of
+		// index 0 (the last processed snapshot). The spec is checked first, so that the observed generations are not
+		// verified against a stale (pre-rollout) generation from the cache; the status before and after the second
+		// rollout differs only in the Synchronized condition's observed generation.
+		markedAsFailedToSynchronizeActual := func(wantSnapshotName string) func() error {
+			return func() error {
+				binding, err := getPlacementBinding(clusterScopedNS, bindingName)
+				if err != nil {
+					return err
+				}
+				if got := binding.GetSpec().ResourceSnapshotName; got != wantSnapshotName {
+					return fmt.Errorf("the cluster placement binding points to snapshot %s, want %s", got, wantSnapshotName)
+				}
+
+				wantStatus := wantPlacementBindingStatusInvalidSnapshots(3, snapshotNameIdx0, statusBeforeRollouts)
+				wantStatus.Conditions[0].ObservedGeneration = binding.GetGeneration()
+				if err := placementBindingStatusMatchesActual(clusterScopedNS, bindingName, wantStatus)(); err != nil {
+					return err
+				}
+				return placementBindingSyncCondMessageActual(clusterScopedNS, bindingName, fewerSnapshotsErrMsg)()
+			}
+		}
+
+		recordStatusAfterRollout := func() {
+			binding, err := getPlacementBinding(clusterScopedNS, bindingName)
+			Expect(err).To(Succeed(), "Failed to retrieve the cluster placement binding")
+			wantStatusAfterRollout = wantPlacementBindingStatusInvalidSnapshots(3, snapshotNameIdx0, statusBeforeRollouts)
+			wantStatusAfterRollout.Conditions[0].ObservedGeneration = binding.GetGeneration()
+		}
+
 		bindingAndWorksUnchangedActual := func() error {
 			if err := worksGeneratedActual(memberCluster1Name, clusterScopedNS, bindingName, wantWorksBeforeRollouts)(); err != nil {
 				return err
 			}
-			return placementBindingStatusMatchesActual(clusterScopedNS, bindingName, wantStatusBeforeRollouts)()
+			if err := placementBindingStatusMatchesActual(clusterScopedNS, bindingName, wantStatusAfterRollout)(); err != nil {
+				return err
+			}
+			// The status comparison ignores condition messages; the message should still report the missing snapshots.
+			return placementBindingSyncCondMessageActual(clusterScopedNS, bindingName, fewerSnapshotsErrMsg)()
 		}
 
 		BeforeAll(func() {
@@ -3593,15 +3677,9 @@ var _ = Describe("reconciling cluster placement bindings (multiple placement res
 
 			statusUpdatedActual := placementBindingStatusUpdatedActual(clusterScopedNS, bindingName, wantStatus)
 			Eventually(statusUpdatedActual, eventuallyDuration, eventuallyInterval).Should(Succeed(), "Failed to refresh the cluster placement binding status")
-
-			// Record the status (with the current observed generation), which should be kept as long as the
-			// snapshots in use are inconsistent.
 			binding, err := getPlacementBinding(clusterScopedNS, bindingName)
 			Expect(err).To(Succeed(), "Failed to retrieve the cluster placement binding")
-			wantStatusBeforeRollouts = wantStatus.DeepCopy()
-			for idx := range wantStatusBeforeRollouts.Conditions {
-				wantStatusBeforeRollouts.Conditions[idx].ObservedGeneration = binding.GetGeneration()
-			}
+			statusBeforeRollouts = binding.GetStatus().DeepCopy()
 		})
 
 		It("can roll out a new primary snapshot (index 1) without its secondary snapshot", func() {
@@ -3618,6 +3696,11 @@ var _ = Describe("reconciling cluster placement bindings (multiple placement res
 			updatePlacementBindingResourceSnapshot(clusterScopedNS, bindingName, snapshotNamesIdx1[0])
 		})
 
+		It("should mark the cluster placement binding as failed to synchronize due to the missing secondary snapshot", func() {
+			Eventually(markedAsFailedToSynchronizeActual(snapshotNamesIdx1[0]), eventuallyDuration, eventuallyInterval).Should(Succeed(), "Failed to mark the cluster placement binding as failed to synchronize")
+			recordStatusAfterRollout()
+		})
+
 		It("should not update the cluster placement binding status or the work objects", func() {
 			Consistently(bindingAndWorksUnchangedActual, consistentlyDuration, consistentlyInterval).Should(Succeed(), "The cluster placement binding status or the work objects have been updated unexpectedly")
 		})
@@ -3631,6 +3714,8 @@ var _ = Describe("reconciling cluster placement bindings (multiple placement res
 			)
 		})
 
+		// A contents hash mismatch is not reported on the cluster placement binding; the status, including the
+		// message about the missing snapshot, should stay as it is.
 		It("should not update the cluster placement binding status or the work objects", func() {
 			Consistently(bindingAndWorksUnchangedActual, consistentlyDuration, consistentlyInterval).Should(Succeed(), "The cluster placement binding status or the work objects have been updated unexpectedly")
 		})
@@ -3647,6 +3732,11 @@ var _ = Describe("reconciling cluster placement bindings (multiple placement res
 
 			// Point the cluster placement binding to the new primary snapshot.
 			updatePlacementBindingResourceSnapshot(clusterScopedNS, bindingName, snapshotNamesIdx2[0])
+		})
+
+		It("should mark the cluster placement binding as failed to synchronize due to the missing secondary snapshots", func() {
+			Eventually(markedAsFailedToSynchronizeActual(snapshotNamesIdx2[0]), eventuallyDuration, eventuallyInterval).Should(Succeed(), "Failed to mark the cluster placement binding as failed to synchronize")
+			recordStatusAfterRollout()
 		})
 
 		It("should not update the cluster placement binding status or the work objects", func() {
@@ -3680,9 +3770,9 @@ var _ = Describe("reconciling cluster placement bindings (multiple placement res
 			}
 
 			// The work generator does not watch placement resource snapshots; it picks up the newly added secondary
-			// snapshots only when it retries the failed reconciliation, which is subject to exponential backoff.
+			// snapshots only when it retries the failed reconciliation, whose backoff is capped at a second in this suite (see requeueMaxDelay).
 			worksUpdatedActual := worksGeneratedActual(memberCluster1Name, clusterScopedNS, bindingName, wantWorks)
-			Eventually(worksUpdatedActual, eventuallyDurationForBackoffRetries, eventuallyInterval).Should(Succeed(), "Failed to update and create the work objects")
+			Eventually(worksUpdatedActual, eventuallyDuration, eventuallyInterval).Should(Succeed(), "Failed to update and create the work objects")
 		})
 
 		It("should update the primary work object in place (not re-create it)", func() {

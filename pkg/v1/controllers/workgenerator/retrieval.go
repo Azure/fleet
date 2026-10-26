@@ -161,16 +161,53 @@ func (r *Reconciler) retrievePrimaryAndSecondaryPlacementResourceSnapshots(
 		return nil, errors.NewUnexpectedError(nil, "failed to sort placement resource snapshots by sub-index", "errs", sortErrs)
 	}
 
-	// Do some sanity checks; verify that all snapshots dictated by the count label are present and they have
-	// the same snapshotted resource hash.
+	// Do some sanity checks; verify that all snapshots dictated by the count label are present with consecutive
+	// sub-indices starting from 0 (no duplicates or gaps), and that they have the same snapshotted resource hash.
 
+	// First, verify the sub-indices. After sorting, the sub-index of each snapshot dictated by the count label should
+	// match its position in the listing. The snapshot right after them (if any) is also checked for being a duplicate
+	// of the last one, as the sorting is not stable: such a duplicate might otherwise take the place of the last
+	// snapshot in the result at random. Snapshots further down the listing are orphans from an overwritten resource
+	// change; they are not returned, and no checks are needed.
+	prevSubIdx := -1
+	for i := 0; i < len(snapshots) && i <= count; i++ {
+		subIdxStr := snapshots[i].GetLabels()[placementv1alpha1.PlacementResourceSnapshotSubIndexLabelKey]
+		subIdx, err := strconv.Atoi(subIdxStr)
+		if err != nil {
+			return nil, errors.NewUnexpectedError(err, "failed to convert sub-index label to integer",
+				"placementResourceSnapshot", klog.KObj(snapshots[i]), "observedSubIndex", subIdxStr)
+		}
+
+		switch {
+		case i > 0 && subIdx == prevSubIdx:
+			// A duplicate sub-index signals a stray snapshot (e.g., a leftover from a previous placement policy of
+			// the same name) at the same index. After sorting, duplicates (if any) are adjacent to each other.
+			return nil, errors.NewUserError(nil, "found placement resource snapshots with duplicate sub-indices; some snapshots might have been orphaned from previous placements, and a rollout might be needed to fix the situation",
+				"primaryPlacementResourceSnapshot", klog.KObj(primarySnapshot),
+				"placementResourceSnapshot", klog.KObj(snapshots[i]),
+				"duplicatePlacementResourceSnapshot", klog.KObj(snapshots[i-1]),
+				"duplicateSubIndex", subIdx)
+		case i < count && subIdx != i:
+			// A gap signals a missing snapshot.
+			return nil, errors.NewUserError(nil, "found placement resource snapshots with inconsistent sub-indices; some snapshots might have been orphaned from previous placements, and a rollout might be needed to fix the situation",
+				"primaryPlacementResourceSnapshot", klog.KObj(primarySnapshot),
+				"placementResourceSnapshot", klog.KObj(snapshots[i]),
+				"expectedSubIndex", i, "observedSubIndex", subIdx)
+		}
+		prevSubIdx = subIdx
+	}
+
+	// Next, verify that all snapshots dictated by the count label are present.
+	//
+	// The placement resource snapshot manager creates secondary snapshots first, then the primary snapshot with the
+	// count label, and all snapshots are observed via the same informer; the secondary snapshots are always visible
+	// once the primary one is. A shortfall here (like a gap above) signals that some snapshots have been deleted.
 	if len(snapshots) < count {
-		// Normally this branch will never run, as the placement resource snapshot manager creates secondary
-		// snapshots first, then the primary snapshot with the count label.
-		return nil, errors.NewUnexpectedError(nil, "there are fewer placement resource snapshots than the count label indicates",
+		return nil, errors.NewUserError(nil, "there are fewer placement resource snapshots than the count label indicates; some snapshots might have been deleted, and a rollout might be needed to fix the situation",
 			"primaryPlacementResourceSnapshot", klog.KObj(primarySnapshot), "expectedCount", count, "actualCount", len(snapshots))
 	}
 
+	// Finally, verify that all snapshots dictated by the count label have the same snapshotted resource hash.
 	primarySnapshottedResHash := primarySnapshot.GetAnnotations()[placementv1alpha1.PlacementResourceSnapshotContentsHashAnnotationKey]
 	for i := range snapshots[:count] {
 		snapshottedResHash := snapshots[i].GetAnnotations()[placementv1alpha1.PlacementResourceSnapshotContentsHashAnnotationKey]

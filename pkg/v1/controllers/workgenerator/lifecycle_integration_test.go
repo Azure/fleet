@@ -18,286 +18,15 @@ package workgenerator
 
 import (
 	"fmt"
-	"strconv"
 
 	"github.com/google/go-cmp/cmp"
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
-	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/types"
-	"k8s.io/utils/ptr"
-	"sigs.k8s.io/controller-runtime/pkg/client"
 
 	placementv1alpha1 "github.com/kubefleet-dev/kubefleet/apis/kubefleet.dev/placement/v1alpha1"
 	"github.com/kubefleet-dev/kubefleet/pkg/utils"
 )
-
-// scope describes the scope (namespace-scoped or cluster-scoped) of the placement bindings (and their placement
-// resource snapshots) that a test runs against.
-type scope struct {
-	name                string
-	bindingNS           string
-	bindingNameTemplate string
-	policyNameTemplate  string
-}
-
-var scopes = []scope{
-	{
-		name:                "namespace-scoped",
-		bindingNS:           appNamespaceName,
-		bindingNameTemplate: placementBindingNameTemplate,
-		policyNameTemplate:  placementPolicyNameTemplate,
-	},
-	{
-		name:                "cluster-scoped",
-		bindingNS:           clusterScopedNS,
-		bindingNameTemplate: clusterPlacementBindingNameTemplate,
-		policyNameTemplate:  clusterPlacementPolicyNameTemplate,
-	},
-}
-
-// Every placement resource snapshot in this file carries a NS, a Deployment, and a ConfigMap.
-const resourcesPerSnapshot = 3
-
-// snapshotSet is a set of placement resource snapshots that share the same index; the first one is the
-// primary snapshot (sub-index 0).
-type snapshotSet struct {
-	names       []string
-	snapshots   []placementv1alpha1.PlacementResourceSnapshotAccessor
-	identifiers [][]placementv1alpha1.ManifestIdentifier
-}
-
-func (s *snapshotSet) primaryName() string {
-	return s.names[0]
-}
-
-func (s *snapshotSet) resourceCount() int32 {
-	return int32(len(s.names) * resourcesPerSnapshot) //nolint:gosec // safe: the counts are tiny.
-}
-
-// bindingFixture bundles the objects and the expectations of a placement binding bound to a member cluster.
-// Its methods that touch the API server must be called at spec run time (not at tree construction time).
-type bindingFixture struct {
-	scope       scope
-	clusterName string
-	bindingName string
-	policyName  string
-	workNS      string
-
-	// The snapshot sets created so far, keyed by snapshot index.
-	sets map[int]*snapshotSet
-	// The UIDs of the work objects, keyed by work name; recorded by tests that check if work objects are
-	// updated in place or re-created.
-	workUIDs map[string]types.UID
-}
-
-func newBindingFixture(sc scope, clusterName string) *bindingFixture {
-	return &bindingFixture{
-		scope:       sc,
-		clusterName: clusterName,
-		bindingName: fmt.Sprintf(sc.bindingNameTemplate, utils.RandStr()),
-		policyName:  fmt.Sprintf(sc.policyNameTemplate, utils.RandStr()),
-		workNS:      fmt.Sprintf(utils.NamespaceNameFormat, clusterName),
-		sets:        map[int]*snapshotSet{},
-	}
-}
-
-// createSnapshots creates `count` placement resource snapshots of the given index, each with its own NS, Deployment,
-// and ConfigMap.
-func (f *bindingFixture) createSnapshots(index, count int) *snapshotSet {
-	set := &snapshotSet{
-		names:       make([]string, count),
-		snapshots:   make([]placementv1alpha1.PlacementResourceSnapshotAccessor, count),
-		identifiers: make([][]placementv1alpha1.ManifestIdentifier, count),
-	}
-	suffix := utils.RandStr()
-	resources := make([][]placementv1alpha1.SnapshottedResource, count)
-	for subIdx := 0; subIdx < count; subIdx++ {
-		if subIdx == 0 {
-			set.names[subIdx] = fmt.Sprintf(placementResourceSnapshotNameTemplate, f.policyName, index)
-		} else {
-			set.names[subIdx] = fmt.Sprintf(subIndexedPlacementResourceSnapshotNameTemplate, f.policyName, index, subIdx)
-		}
-
-		nsName := fmt.Sprintf("ns-%s-%d", suffix, subIdx)
-		deployName := fmt.Sprintf(deployNameTemplate, subIdx)
-		configMapName := fmt.Sprintf(configMapNameTemplate, subIdx)
-		resources[subIdx] = []placementv1alpha1.SnapshottedResource{
-			nsSnapshottedResource(nsName),
-			deploySnapshottedResource(nsName, deployName),
-			configMapSnapshottedResource(nsName, configMapName),
-		}
-		set.identifiers[subIdx] = []placementv1alpha1.ManifestIdentifier{
-			nsManifestIdentifier(0, nsName),
-			deployManifestIdentifier(1, nsName, deployName),
-			configMapManifestIdentifier(2, nsName, configMapName),
-		}
-	}
-
-	// Create the secondary snapshots first, as the placement resource snapshot manager would do.
-	for subIdx := count - 1; subIdx >= 0; subIdx-- {
-		set.snapshots[subIdx] = createSubIndexedPlacementResourceSnapshot(f.scope.bindingNS, set.names[subIdx], f.policyName,
-			index, subIdx, count, resources[subIdx]...)
-	}
-	f.sets[index] = set
-	return set
-}
-
-// createBinding creates the placement binding, bound to the primary snapshot of the given snapshot set.
-func (f *bindingFixture) createBinding(setIdx int) {
-	createPlacementBinding(f.scope.bindingNS, f.bindingName, f.policyName, f.clusterName, f.sets[setIdx].primaryName())
-}
-
-// workName returns the name of the work object derived from the snapshot with the given sub-index.
-func (f *bindingFixture) workName(subIdx int) string {
-	binding := newPlacementBindingObj(f.scope.bindingNS, f.bindingName)
-	binding.SetSpec(placementv1alpha1.PlacementBindingSpec{PlacementPolicyName: f.policyName})
-	return uniqueNameForWorkDerivedFromPlacementResourceSnapshot(binding, subIdx == 0,
-		&placementResourceSnapshotDerivedFromSourceFormatter{snapshotSubIdx: strconv.Itoa(subIdx)})
-}
-
-// worksMatchActual verifies that the work objects of the binding are exactly those derived from the given snapshot
-// set, with the given sync strategy.
-func (f *bindingFixture) worksMatchActual(setIdx int, syncStrategy *placementv1alpha1.SyncStrategy) func() error {
-	return func() error {
-		set := f.sets[setIdx]
-
-		// The secondary work objects should be owned by the primary work object; retrieve its current UID as it
-		// changes whenever the primary work object is re-created.
-		primaryWork := &placementv1alpha1.Work{}
-		if err := hubClient.Get(ctx, client.ObjectKey{Namespace: f.workNS, Name: f.workName(0)}, primaryWork); err != nil {
-			return fmt.Errorf("failed to retrieve the primary work object: %w", err)
-		}
-		ownerRef := &metav1.OwnerReference{
-			APIVersion:         placementv1alpha1.GroupVersion.String(),
-			Kind:               workKind,
-			Name:               primaryWork.Name,
-			UID:                primaryWork.UID,
-			Controller:         ptr.To(true),
-			BlockOwnerDeletion: ptr.To(true),
-		}
-
-		wantWorks := make([]placementv1alpha1.Work, len(set.names))
-		for subIdx := range set.names {
-			wantWorks[subIdx] = wantWorkForPlacementResourceSnapshot(f.workNS, f.workName(subIdx), f.scope.bindingNS, f.bindingName, f.policyName,
-				set.primaryName(), subIdx, len(set.names), ownerRef, set.snapshots[subIdx])
-			wantWorks[subIdx].Spec.SyncStrategy = syncStrategy.DeepCopy()
-		}
-		return worksGeneratedActual(f.clusterName, f.scope.bindingNS, f.bindingName, wantWorks)()
-	}
-}
-
-// noWorksActual verifies that there is no work object for the binding.
-func (f *bindingFixture) noWorksActual() func() error {
-	return worksGeneratedActual(f.clusterName, f.scope.bindingNS, f.bindingName, nil)
-}
-
-func (f *bindingFixture) waitingStatusActual(setIdx int) func() error {
-	set := f.sets[setIdx]
-	return placementBindingStatusUpdatedActual(f.scope.bindingNS, f.bindingName,
-		wantPlacementBindingStatusWaitingForSync(set.resourceCount(), set.primaryName()))
-}
-
-func (f *bindingFixture) syncedStatusActual(setIdx int) func() error {
-	set := f.sets[setIdx]
-	return placementBindingStatusUpdatedActual(f.scope.bindingNS, f.bindingName,
-		wantPlacementBindingStatusSyncedAndAvailable(set.resourceCount(), set.primaryName()))
-}
-
-// markWorks marks the work objects with the given sub-indices (all of them if none is given) as applied and
-// available.
-func (f *bindingFixture) markWorks(setIdx int, subIdxs ...int) {
-	set := f.sets[setIdx]
-	if len(subIdxs) == 0 {
-		for subIdx := range set.names {
-			subIdxs = append(subIdxs, subIdx)
-		}
-	}
-	for _, subIdx := range subIdxs {
-		markWorkAsAppliedAndAvailable(f.workNS, f.workName(subIdx), set.identifiers[subIdx])
-	}
-}
-
-// listWorkUIDs returns the UIDs of the work objects of the binding, keyed by work name.
-func (f *bindingFixture) listWorkUIDs() (map[string]types.UID, error) {
-	workList := &placementv1alpha1.WorkList{}
-	if err := hubClient.List(ctx, workList,
-		client.InNamespace(f.workNS),
-		client.MatchingLabels{
-			placementv1alpha1.WorkOwnerNamespaceLabelKey:          f.scope.bindingNS,
-			placementv1alpha1.WorkOwnedByPlacementBindingLabelKey: f.bindingName,
-		},
-	); err != nil {
-		return nil, fmt.Errorf("failed to list work objects: %w", err)
-	}
-	uids := make(map[string]types.UID, len(workList.Items))
-	for idx := range workList.Items {
-		uids[workList.Items[idx].Name] = workList.Items[idx].UID
-	}
-	return uids, nil
-}
-
-// recordWorkUIDs records the current UIDs of the work objects of the binding.
-func (f *bindingFixture) recordWorkUIDs() {
-	uids, err := f.listWorkUIDs()
-	Expect(err).To(Succeed(), "Failed to list the work objects")
-	f.workUIDs = uids
-}
-
-// registerBaselineSpecs registers the specs that generate the work objects from the given snapshot set and bring the
-// binding to the synchronized and available state.
-func (f *bindingFixture) registerBaselineSpecs(setIdx int) {
-	It("should add cleanup finalizer to the placement binding", func() {
-		finalizerAddedActual := placementBindingFinalizerAddedActual(f.scope.bindingNS, f.bindingName)
-		Eventually(finalizerAddedActual, eventuallyDuration, eventuallyInterval).Should(Succeed(), "Failed to add cleanup finalizer to the placement binding")
-	})
-
-	It("should generate the work objects", func() {
-		Eventually(f.worksMatchActual(setIdx, nil), eventuallyDuration, eventuallyInterval).Should(Succeed(), "Failed to generate the work objects")
-	})
-
-	It("should refresh the placement binding status", func() {
-		Eventually(f.waitingStatusActual(setIdx), eventuallyDuration, eventuallyInterval).Should(Succeed(), "Failed to refresh the placement binding status")
-	})
-
-	It("can mark the work objects as applied and available", func() {
-		f.markWorks(setIdx)
-	})
-
-	It("should refresh the placement binding status", func() {
-		Eventually(f.syncedStatusActual(setIdx), eventuallyDuration, eventuallyInterval).Should(Succeed(), "Failed to refresh the placement binding status")
-	})
-}
-
-// syncWorks generates the work objects from the given snapshot set and brings the binding to the synchronized and
-// available state in one go; it is for bindings that are not the focus of a test.
-func (f *bindingFixture) syncWorks(setIdx int) {
-	Eventually(f.worksMatchActual(setIdx, nil), eventuallyDuration, eventuallyInterval).Should(Succeed(), "Failed to generate the work objects")
-	Eventually(f.waitingStatusActual(setIdx), eventuallyDuration, eventuallyInterval).Should(Succeed(), "Failed to refresh the placement binding status")
-	f.markWorks(setIdx)
-	Eventually(f.syncedStatusActual(setIdx), eventuallyDuration, eventuallyInterval).Should(Succeed(), "Failed to refresh the placement binding status")
-}
-
-// teardown removes the binding, its leftover work objects, and the snapshots.
-func (f *bindingFixture) teardown() {
-	Expect(client.IgnoreNotFound(hubClient.Delete(ctx, newPlacementBindingObj(f.scope.bindingNS, f.bindingName)))).To(Succeed(), "Failed to delete the placement binding")
-	Eventually(placementBindingRemovedActual(f.scope.bindingNS, f.bindingName), eventuallyDuration, eventuallyInterval).Should(Succeed(), "Failed to remove the placement binding")
-
-	// The work generator deletes only the primary work object upon cleanup, and the secondary work objects are left to
-	// K8s' garbage collection, which does not run in the test environment; delete any leftover explicitly.
-	uids, err := f.listWorkUIDs()
-	Expect(err).To(Succeed(), "Failed to list the work objects")
-	for workName := range uids {
-		deleteWork(f.workNS, workName)
-		Eventually(workRemovedActual(f.workNS, workName), eventuallyDuration, eventuallyInterval).Should(Succeed(), "Failed to remove the work object")
-	}
-
-	for _, set := range f.sets {
-		for _, snapshotName := range set.names {
-			Eventually(placementResourceSnapshotRemovedActual(f.scope.bindingNS, snapshotName), eventuallyDuration, eventuallyInterval).Should(Succeed(), "Failed to remove the placement resource snapshot")
-		}
-	}
-}
 
 var _ = Describe("deleting placement bindings", func() {
 	for _, sc := range scopes {
@@ -549,6 +278,10 @@ var _ = Describe("changing sync strategies of placement bindings", func() {
 					Expect(f.workUIDs).To(HaveLen(snapshotCount), "Unexpected number of work objects")
 				})
 
+				It("can record the placement binding status", func() {
+					f.recordStatus()
+				})
+
 				It("can set a sync strategy on the placement binding", func() {
 					updatePlacementBindingSyncStrategy(sc.bindingNS, f.bindingName, serverSideApplyStrategy)
 				})
@@ -575,8 +308,10 @@ var _ = Describe("changing sync strategies of placement bindings", func() {
 					}
 				})
 
-				It("should refresh the placement binding status", func() {
-					Eventually(f.waitingStatusActual(0), eventuallyDuration, eventuallyInterval).Should(Succeed(), "Failed to refresh the placement binding status")
+				// A sync strategy change alone is applied to the work objects without resetting the placement binding
+				// status; the status is refreshed only after the updated work objects have been processed.
+				It("should not refresh the placement binding status before the work objects are processed", func() {
+					Consistently(f.statusUnchangedActual(), consistentlyDuration, consistentlyInterval).Should(Succeed(), "The placement binding status has been refreshed unexpectedly")
 				})
 
 				It("can mark the work objects as applied and available", func() {
@@ -585,6 +320,10 @@ var _ = Describe("changing sync strategies of placement bindings", func() {
 
 				It("should refresh the placement binding status", func() {
 					Eventually(f.syncedStatusActual(0), eventuallyDuration, eventuallyInterval).Should(Succeed(), "Failed to refresh the placement binding status")
+				})
+
+				It("can record the placement binding status again", func() {
+					f.recordStatus()
 				})
 
 				It("can unset the sync strategy on the placement binding", func() {
@@ -601,8 +340,8 @@ var _ = Describe("changing sync strategies of placement bindings", func() {
 					}
 				})
 
-				It("should refresh the placement binding status", func() {
-					Eventually(f.waitingStatusActual(0), eventuallyDuration, eventuallyInterval).Should(Succeed(), "Failed to refresh the placement binding status")
+				It("should not refresh the placement binding status before the work objects are processed", func() {
+					Consistently(f.statusUnchangedActual(), consistentlyDuration, consistentlyInterval).Should(Succeed(), "The placement binding status has been refreshed unexpectedly")
 				})
 
 				It("can mark the work objects as applied and available", func() {
@@ -785,4 +524,292 @@ var _ = Describe("handling work object events", func() {
 			})
 		}
 	}
+})
+
+var _ = Describe("binding a placement policy to multiple clusters", func() {
+	for _, sc := range scopes {
+		Context(fmt.Sprintf("two bindings of the same placement policy (%s)", sc.name), Ordered, func() {
+			f := newBindingFixture(sc, memberCluster1Name)
+			// Another binding of the same placement policy (sharing the same snapshots), on another member cluster.
+			other := f.newFixtureOfSamePolicy(memberCluster2Name)
+
+			BeforeAll(func() {
+				f.createSnapshots(0, 2)
+				f.createBinding(0)
+				other.createBinding(0)
+			})
+
+			f.registerBaselineSpecs(0)
+
+			It("should generate the work objects of the other placement binding, with the same names", func() {
+				Eventually(other.worksMatchActual(0, nil), eventuallyDuration, eventuallyInterval).Should(Succeed(), "Failed to generate the work objects of the other placement binding")
+				for subIdx := 0; subIdx < 2; subIdx++ {
+					Expect(other.workName(subIdx)).To(Equal(f.workName(subIdx)), "The work objects of the two placement bindings should have the same names")
+				}
+			})
+
+			It("should keep the other placement binding waiting, as its work objects have not been processed", func() {
+				Eventually(other.waitingStatusActual(0), eventuallyDuration, eventuallyInterval).Should(Succeed(), "Failed to refresh the status of the other placement binding")
+				Consistently(other.waitingStatusActual(0), consistentlyDuration, consistentlyInterval).Should(Succeed(), "The status of the other placement binding has changed unexpectedly")
+			})
+
+			It("can record the UIDs of the work objects and the status of the other placement binding", func() {
+				other.recordWorkUIDs()
+				other.recordStatus()
+			})
+
+			It("can roll out a new snapshot set to the first placement binding only", func() {
+				set := f.createSnapshots(1, 2)
+				updatePlacementBindingResourceSnapshot(sc.bindingNS, f.bindingName, set.primaryName())
+			})
+
+			It("should update the work objects of the first placement binding", func() {
+				Eventually(f.worksMatchActual(1, nil), eventuallyDuration, eventuallyInterval).Should(Succeed(), "Failed to update the work objects")
+			})
+
+			It("should refresh the status of the first placement binding", func() {
+				Eventually(f.waitingStatusActual(1), eventuallyDuration, eventuallyInterval).Should(Succeed(), "Failed to refresh the placement binding status")
+			})
+
+			It("can mark the work objects of the first placement binding as applied and available", func() {
+				f.markWorks(1)
+			})
+
+			It("should refresh the status of the first placement binding", func() {
+				Eventually(f.syncedStatusActual(1), eventuallyDuration, eventuallyInterval).Should(Succeed(), "Failed to refresh the placement binding status")
+			})
+
+			It("should leave the other placement binding untouched", func() {
+				Consistently(func() error {
+					if err := other.worksMatchActual(0, nil)(); err != nil {
+						return err
+					}
+					return other.resourceVersionUnchangedActual()()
+				}, consistentlyDuration, consistentlyInterval).Should(Succeed(), "The other placement binding or its work objects have changed")
+				other.expectWorksNotRecreated()
+			})
+
+			It("can delete the first placement binding", func() {
+				removePlacementBinding(sc.bindingNS, f.bindingName)
+			})
+
+			It("should remove the primary work object of the first placement binding and the placement binding itself", func() {
+				Eventually(workRemovedActual(f.workNS, f.workName(0)), eventuallyDuration, eventuallyInterval).Should(Succeed(), "Failed to remove the primary work object")
+				Eventually(placementBindingRemovedActual(sc.bindingNS, f.bindingName), eventuallyDuration, eventuallyInterval).Should(Succeed(), "Failed to remove the placement binding")
+			})
+
+			It("should leave the other placement binding untouched", func() {
+				Consistently(func() error {
+					if err := other.worksMatchActual(0, nil)(); err != nil {
+						return err
+					}
+					return other.resourceVersionUnchangedActual()()
+				}, consistentlyDuration, consistentlyInterval).Should(Succeed(), "The other placement binding or its work objects have changed")
+				other.expectWorksNotRecreated()
+			})
+
+			AfterAll(func() {
+				f.teardown()
+				other.teardown()
+			})
+		})
+	}
+})
+
+var _ = Describe("placement bindings with long and dotted names", func() {
+	for _, sc := range scopes {
+		Context(fmt.Sprintf("names over the label value length limit, with dots (%s)", sc.name), Ordered, func() {
+			// The placement policy name is long enough for the work names to be truncated, while keeping the
+			// snapshot names (`[POLICY-NAME]-snapshot-[INDEX]-[SUB-INDEX]`) within the 253-character limit; both names
+			// are too long (and dotted) to be used as label values as they are.
+			f := newBindingFixtureWithNames(sc, memberCluster1Name, longDottedName("binding", 100), longDottedName("policy", 240))
+
+			BeforeAll(func() {
+				f.createSnapshots(0, 2)
+				f.createBinding(0)
+			})
+
+			// The work objects are listed through the owner binding field index (keyed on the hashed owner label
+			// value), and their events are mapped to the placement binding through the owner annotation (which
+			// carries the full name); the baseline specs exercise both.
+			f.registerBaselineSpecs(0)
+
+			It("should use names long enough to exercise label value hashing and work name truncation", func() {
+				Expect(workOwnerLabelValue(f.bindingName)).NotTo(Equal(f.bindingName), "The owner label value of the placement binding should be hashed")
+				Expect(workOwnerLabelValue(f.policyName)).NotTo(Equal(f.policyName), "The owner label value of the placement policy should be hashed")
+				Expect(f.workName(0)).To(HaveLen(nameLenLimit), "The name of the primary work object should be truncated")
+			})
+
+			It("can record the UIDs of the work objects", func() {
+				f.recordWorkUIDs()
+			})
+
+			It("can roll out a new snapshot set", func() {
+				set := f.createSnapshots(1, 2)
+				updatePlacementBindingResourceSnapshot(sc.bindingNS, f.bindingName, set.primaryName())
+			})
+
+			It("should update the work objects in place", func() {
+				Eventually(f.worksMatchActual(1, nil), eventuallyDuration, eventuallyInterval).Should(Succeed(), "Failed to update the work objects")
+				f.expectWorksNotRecreated()
+			})
+
+			It("should refresh the placement binding status", func() {
+				Eventually(f.waitingStatusActual(1), eventuallyDuration, eventuallyInterval).Should(Succeed(), "Failed to refresh the placement binding status")
+			})
+
+			It("can mark the work objects as applied and available", func() {
+				f.markWorks(1)
+			})
+
+			It("should refresh the placement binding status", func() {
+				Eventually(f.syncedStatusActual(1), eventuallyDuration, eventuallyInterval).Should(Succeed(), "Failed to refresh the placement binding status")
+			})
+
+			It("can delete the placement binding", func() {
+				removePlacementBinding(sc.bindingNS, f.bindingName)
+			})
+
+			It("should remove the primary work object and the placement binding", func() {
+				Eventually(workRemovedActual(f.workNS, f.workName(0)), eventuallyDuration, eventuallyInterval).Should(Succeed(), "Failed to remove the primary work object")
+				Eventually(placementBindingRemovedActual(sc.bindingNS, f.bindingName), eventuallyDuration, eventuallyInterval).Should(Succeed(), "Failed to remove the placement binding")
+			})
+
+			AfterAll(func() {
+				f.teardown()
+			})
+		})
+	}
+})
+
+var _ = Describe("re-creating placement bindings", func() {
+	for _, sc := range scopes {
+		Context(fmt.Sprintf("re-create a binding while the secondary work objects of the previous one linger (%s)", sc.name), Ordered, func() {
+			f := newBindingFixture(sc, memberCluster1Name)
+
+			BeforeAll(func() {
+				f.createSnapshots(0, 3)
+				f.createBinding(0)
+			})
+
+			f.registerBaselineSpecs(0)
+
+			It("can record the UIDs of the work objects", func() {
+				f.recordWorkUIDs()
+			})
+
+			It("can delete the placement binding", func() {
+				removePlacementBinding(sc.bindingNS, f.bindingName)
+			})
+
+			It("should remove the primary work object and the placement binding", func() {
+				Eventually(workRemovedActual(f.workNS, f.workName(0)), eventuallyDuration, eventuallyInterval).Should(Succeed(), "Failed to remove the primary work object")
+				Eventually(placementBindingRemovedActual(sc.bindingNS, f.bindingName), eventuallyDuration, eventuallyInterval).Should(Succeed(), "Failed to remove the placement binding")
+			})
+
+			// The secondary work objects are owned by the primary work object and are left to K8s' garbage collection,
+			// which does not run in the test environment; this simulates a garbage collector that has yet to catch up.
+			It("should leave the secondary work objects behind", func() {
+				uids, err := f.listWorkUIDs()
+				Expect(err).To(Succeed(), "Failed to list the work objects")
+				wantUIDs := map[string]types.UID{
+					f.workName(1): f.workUIDs[f.workName(1)],
+					f.workName(2): f.workUIDs[f.workName(2)],
+				}
+				Expect(cmp.Diff(uids, wantUIDs)).To(BeEmpty(), "Unexpected work objects (-got +want)")
+			})
+
+			It("can re-create the placement binding with a new snapshot set of fewer snapshots", func() {
+				f.createSnapshots(1, 2)
+				f.createBinding(1)
+			})
+
+			It("should add cleanup finalizer to the placement binding", func() {
+				Eventually(placementBindingFinalizerAddedActual(sc.bindingNS, f.bindingName), eventuallyDuration, eventuallyInterval).Should(Succeed(), "Failed to add cleanup finalizer to the placement binding")
+			})
+
+			It("should adopt the lingering secondary work object still needed, and delete the other one", func() {
+				// The work objects should match the new snapshot set exactly, i.e., the secondary work object of
+				// sub-index 1 now points to the new primary work object, and the one of sub-index 2 is gone.
+				Eventually(f.worksMatchActual(1, nil), eventuallyDuration, eventuallyInterval).Should(Succeed(), "Failed to update the work objects")
+
+				uids, err := f.listWorkUIDs()
+				Expect(err).To(Succeed(), "Failed to list the work objects")
+				Expect(uids[f.workName(1)]).To(Equal(f.workUIDs[f.workName(1)]), "The lingering secondary work object has been re-created")
+			})
+
+			It("should refresh the placement binding status", func() {
+				Eventually(f.waitingStatusActual(1), eventuallyDuration, eventuallyInterval).Should(Succeed(), "Failed to refresh the placement binding status")
+			})
+
+			It("can mark the work objects as applied and available", func() {
+				f.markWorks(1)
+			})
+
+			It("should refresh the placement binding status", func() {
+				Eventually(f.syncedStatusActual(1), eventuallyDuration, eventuallyInterval).Should(Succeed(), "Failed to refresh the placement binding status")
+			})
+
+			AfterAll(func() {
+				f.teardown()
+			})
+		})
+	}
+})
+
+var _ = Describe("missing reserved namespaces", func() {
+	// The handling of reserved namespaces does not depend on the scope of the placement binding; the namespace-scoped
+	// one is used.
+	sc := scopes[0]
+
+	Context("the reserved namespace of the target cluster does not exist yet", Ordered, func() {
+		// A member cluster whose reserved namespace has not been created (namespaces cannot be deleted in the test
+		// environment, so a new one is used each time).
+		clusterName := fmt.Sprintf("member-%s", utils.RandStr())
+		f := newBindingFixture(sc, clusterName)
+
+		BeforeAll(func() {
+			f.createSnapshots(0, 1)
+			f.createBinding(0)
+		})
+
+		It("should add cleanup finalizer to the placement binding", func() {
+			Eventually(placementBindingFinalizerAddedActual(sc.bindingNS, f.bindingName), eventuallyDuration, eventuallyInterval).Should(Succeed(), "Failed to add cleanup finalizer to the placement binding")
+		})
+
+		It("should not generate any work object or report any status", func() {
+			Consistently(func() error {
+				if err := f.noWorksActual()(); err != nil {
+					return err
+				}
+				return placementBindingStatusMatchesActual(sc.bindingNS, f.bindingName, &placementv1alpha1.PlacementBindingStatus{})()
+			}, consistentlyDuration, consistentlyInterval).Should(Succeed(), "Work objects have been generated or the status has been reported unexpectedly")
+		})
+
+		It("can create the reserved namespace", func() {
+			createReservedNamespace(clusterName)
+		})
+
+		// The work generator does not watch namespaces; it picks up the new namespace when it retries the failed
+		// reconciliation, whose backoff is capped at a second in this suite (see requeueMaxDelay).
+		It("should generate the work objects", func() {
+			Eventually(f.worksMatchActual(0, nil), eventuallyDuration, eventuallyInterval).Should(Succeed(), "Failed to generate the work objects")
+		})
+
+		It("should refresh the placement binding status", func() {
+			Eventually(f.waitingStatusActual(0), eventuallyDuration, eventuallyInterval).Should(Succeed(), "Failed to refresh the placement binding status")
+		})
+
+		It("can mark the work objects as applied and available", func() {
+			f.markWorks(0)
+		})
+
+		It("should refresh the placement binding status", func() {
+			Eventually(f.syncedStatusActual(0), eventuallyDuration, eventuallyInterval).Should(Succeed(), "Failed to refresh the placement binding status")
+		})
+
+		AfterAll(func() {
+			f.teardown()
+		})
+	})
 })

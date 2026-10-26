@@ -1,13 +1,16 @@
-# Placement Resource Snapshot Manager: Integration Test Plan
+# Placement Resource Snapshot Manager: Integration and Unit Test Plan
 
 **Date**: October 16, 2026 02:32 AEDT
 **Revised**: October 24, 2026 07:20 AEDT, for leftover snapshot detection and UID-based snapshot names (see
 [Revision: leftover snapshots and UID-based names](#revision-leftover-snapshots-and-uid-based-names)).
+**Revised**: October 26, 2026 16:20 AEDT, for latest-index checks and secondary snapshot GC, and to add a unit test
+plan (see [Revision: latest-index checks, secondary GC, and unit tests](#revision-latest-index-checks-secondary-gc-and-unit-tests)).
 **Revised**: October 27, 2026 02:13 AEDT, for Service and Job sanitization (PP-13 and PP-14; see
 [E. Manifest sanitization](#e-manifest-sanitization-snapshotresource)).
 **Revised**: October 27, 2026 03:35 AEDT, for the API server fallback on cache misses in name-based selection (see the
-last [Status](#status) entry).
+October 27, 03:19 [Status](#status) entry).
 **Task**: Plan additional envtest-based integration tests for `pkg/v1/managers/placementresourcesnapshot/`.
+Revised October 26: unit tests are planned as well.
 
 ## Baseline
 
@@ -22,10 +25,10 @@ Measured with `go test ./pkg/v1/managers/placementresourcesnapshot/... -coverpro
 | `resources.go` `retrieveAndHashSelectedResources` | 77.3% |
 | `uniquename.go` (both functions) | 20.0% |
 | `snapshots.go` `placementPolicyOwnerLabelVal` | 50.0% |
-| `ops.go` `retrieveLatestSnapshot` / `isSnapshotUpToDate` / `cleanUpOrphanedSecondarySnapshots` | 74–79% |
+| `ops.go` `retrieveLatestSnapshot` / `isSnapshotUpToDate` / `cleanUpDanglingSecondarySnapshots` | 74–79% |
 
 The existing suite (`manager_integration_test.go`, ~3.5k lines) covers the snapshot lifecycle for both scopes:
-create, up-to-date, stale, split by count/size, oversized resource, orphaned secondaries, and default-limit GC.
+create, up-to-date, stale, split by count/size, oversized resource, dangling secondaries, and default-limit GC.
 Every test selects only ConfigMaps/Deployments in the `app` namespace, so these paths are never run:
 
 - The resource eligibility checks (new, uncommitted): namespace, GVK, and object-level checks.
@@ -146,8 +149,8 @@ Assert on raw JSON (`map[string]any`) so that the absence of keys is checked, no
 
 **Not implemented as planned.** At 07:30 the shared suite started reading Deployments through the cache instead (see
 Status). That covers name-based and label-based reads from the cache, and mixed policies that read ConfigMaps from
-the API server. Since October 27, a name-based cache miss is confirmed with a read from the API server (see the last
-Status entry): PP-2b covers a name in neither the cache nor the API server, and the unit test
+the API server. Since October 27, a name-based cache miss is confirmed with a read from the API server (see the
+October 27, 03:19 Status entry): PP-2b covers a name in neither the cache nor the API server, and the unit test
 `TestRetrieveResourceByName` covers the fallback itself and an unsynced informer. These planned checks are still
 uncovered: identical hashes from the cache and API server paths for the same policy, and ineligible objects read
 through the cache.
@@ -180,13 +183,16 @@ field-index lists never see them, while the uncached quorum reads by name do. Th
    After the decoy is removed, the call succeeds.
 4. A labeled secondary at the next index plus an unlabeled primary decoy at the same index returns Transient,
    and the secondary is **not** deleted.
-5. An orphaned secondary with a finalizer returns Transient repeatedly while it is terminating.
+5. A dangling secondary with a finalizer returns Transient repeatedly while it is terminating.
    After the finalizer is removed, creation proceeds.
 6. An extra labeled secondary beyond the count label at the latest index: the call returns exactly `count`
-   snapshots, sorted by sub-index, with no error.
+   snapshots, sorted by sub-index, with no error. (Revised October 26: the extra must be owned by the policy, since
+   an ownerless one is now a leftover, and it is also enqueued for GC and deleted; see SC-6 in the October 26
+   revision.)
 7. Deleting one secondary after creation returns Unexpected ("fewer sub-indexed ... than the count label").
 8. Hand-crafted labeled primaries with a count of `abc`, a count of `0`, or an index of `abc` return Unexpected.
-   The index case needs at least 2 primaries so that the sort comparator runs.
+   The index case needs at least 2 primaries so that the sort comparator runs. (Revised October 26: the count-label
+   messages were reworded, and a non-contiguous sub-index case is added; see SC-8 in the October 26 revision.)
 9. Concurrency: N goroutines call `SnapshotResourcesIfStale` on one policy.
    - Exactly one snapshot exists per index.
    - Any errors are retryable (Transient or APIServer).
@@ -210,7 +216,8 @@ field-index lists never see them, while the uncached quorum reads by name do. Th
 - `ResourceRevisionHistoryLimit=1`: the previous snapshot is GC'd after the next retrieval.
   With a limit of 5, five snapshots are kept. Lowering the limit from 5 to 1 triggers bulk GC.
 - GC of multi-group snapshots removes the primary and all of its secondaries.
-  Existing GC tests cover only single-group snapshots.
+  Existing GC tests cover only single-group snapshots. (Revised October 26: GC-2 adds its extra secondary only once
+  that index is no longer the latest, since an extra at the latest index is now collected on its own.)
 - A terminating snapshot (with a finalizer) is not re-enqueued, and GC completes once the finalizer is removed.
 
 ## Revision: leftover snapshots and UID-based names
@@ -227,15 +234,15 @@ re-created with the same name.
     that has been deleted); waiting for garbage collection to complete". The scan stops.
   - **No owner references** (left over from a policy deleted with orphan propagation): a GC request is enqueued,
     unless the snapshot is already marked for deletion. Either way, after the scan, the call fails as Transient,
-    "leftover resource snapshots are detected; waiting for garbage collection to complete"; the error names the
-    leftover snapshots.
+    "orphaned resource snapshots are detected; waiting for garbage collection to complete"; the error names the
+    orphaned snapshots.
   - **Other owner references** (a differently named owner, an extra owner, the wrong kind): User, "found a placement
     resource snapshot (NAME) that has unexpected owner references". The name is in the message, so it reaches the
     policy status.
   - While blocked, no history GC requests are enqueued and no snapshot is created.
 - `garbageCollect` no longer requires the snapshots at the primary's index to be owned by the policy; orphaned groups
   are deleted too. The comment at the top of `garbageCollect` explains why this is safe in normal operations: the block
-  above, plus `cleanUpOrphanedSecondarySnapshots`. As a sanity check against heavy cache lag, it skips (and logs) any
+  above, plus `cleanUpDanglingSecondarySnapshots`. As a sanity check against heavy cache lag, it skips (and logs) any
   listed snapshot that is another primary, or whose policy owner (or lack of one) differs from the primary's. Since
   snapshot names include the policy UID, the API server no longer stops two policy generations from sharing an index.
 - `isSnapshotInUseByAnyPlacementBinding` takes the policy's namespaced name from the GC request.
@@ -248,7 +255,8 @@ re-created with the same name.
   12-character hash of the policy name, index, sub-index (secondaries only), and **policy UID**. Long or dotted names
   are truncated and sanitized; there is no longer a separate "hashed" form.
 - Known gap, accepted and documented on `checkForInconsistentResourceSnapshots`: an ownerless secondary without a
-  primary is not detected. It lingers until the policy creates snapshots at that index.
+  primary is not detected. It lingers until the policy creates snapshots at that index. (Revised October 26: the gap
+  is narrower; ownerless secondaries at the latest index are now detected. See LO-6.)
 
 ### Existing tests: already adapted, no action needed
 
@@ -275,6 +283,9 @@ Unindexed decoys (no owned-by annotation) are never scanned and need no owner re
 - The out-of-scope entry for "the GC owner-UID mismatch case" (rewritten in Out of Scope).
 
 ### Unit test coverage (do not duplicate in integration)
+
+(Revised October 26: this table lists the unit tests as of October 24, plus the two added October 27 on `main`. The
+full unit test plan, including new tests, is in the [October 26 revision](#unit-test-plan).)
 
 | Unit test | Covers |
 |---|---|
@@ -306,7 +317,7 @@ points.
 
 ### Cases to add
 
-- **Placement:** LO-1 to LO-5 go in a new `Describe("corner cases (leftover snapshots from previous placement
+- **Placement:** LO-1 to LO-5 go in a new `Describe("corner cases (snapshots of previous placement
   policies)")` in `corner_cases_integration_test.go`. GC-5 goes back into `Describe("GC variants")`, reusing the freed
   slot.
 - Wherever a call should fail, check **both entry points**.
@@ -327,7 +338,7 @@ points.
 1. Create the policy and snapshots at index 0 and 1, with two groups at index 1 so secondaries are covered.
 2. Create a binding with no owner that names the old index-1 primary (an orphaned binding).
 3. Remove the owner references from all snapshots, delete the policy, and re-create it.
-4. With a paused manager, the call fails as Transient ("leftover resource snapshots are detected"). The drained queue
+4. With a paused manager, the call fails as Transient ("orphaned resource snapshots are detected"). The drained queue
    holds exactly one request per old primary, each carrying the policy's namespaced name.
 5. With the suite manager, every old snapshot, primary and secondary, is `Eventually` gone, even though the binding
    still names one.
@@ -358,7 +369,7 @@ The other owner variants are unit-tested; one representative is enough here.
 1. Before creating the policy, create two ownerless indexed secondaries for its name, named with an old UID: index 0
    sub-index 1, and index 1 sub-index 1.
 2. Create the policy. The leftovers don't block the first call. That call removes the index-0 leftover and fails as
-   Transient ("cleaned up orphaned secondary ..."); the next call creates index 0. The index-1 leftover is still there.
+   Transient ("cleaned up dangling secondary ..."); the next call creates index 0. The index-1 leftover is still there.
 3. Change the selected resources. The index-1 leftover is cleaned up the same way, then index 1 is created.
 
 **GC-5. Snapshots in use by placement bindings** (PP; replaces the removed GC-5)
@@ -391,11 +402,306 @@ this moves to a unit test.
 - a snapshot owned by another policy;
 - a stale owner UID (Transient).
 
+## Revision: latest-index checks, secondary GC, and unit tests
+
+Added October 26. It revises the plan for the working-tree changes to `ops.go` and `gc.go` (not yet committed), and
+adds a unit test plan for the package; earlier revisions left most of the package to integration tests.
+
+### What changed in the code
+
+- `retrieveLatestSnapshot` (`ops.go`) now ends in a new `allSnapshotsFor`, which always lists every snapshot at the
+  latest primary's index. The fast path that returned the primary alone when its count label was `1` is gone. On
+  that listing, in order:
+  1. Sort by sub-index; a malformed sub-index is Unexpected (unchanged).
+  2. **`checkForInconsistentResourceSnapshots` now also runs on the listing**, so the owner checks cover secondaries
+     at the latest index: an ownerless one is orphaned (Transient "orphaned resource snapshots are detected", and
+     enqueued for GC unless it is pending deletion); one owned by a stale policy UID is Transient; one with
+     unexpected owners is a User error.
+  3. **New:** the given primary must be the first listed snapshot (same name and UID); otherwise Transient
+     ("…is not found as the first snapshot listed at its index; the client cache might have changed between reads").
+  4. The count label is parsed; the messages now read "count label **value** to integer" and "count label **has a
+     value** less than 1" (Unexpected).
+  5. Fewer snapshots than the count: Unexpected (unchanged).
+  6. **Extras beyond the count are now enqueued for GC** (`enqueueLeftoverResourceSnapshotsForGC`; extras pending
+     deletion are skipped), instead of only being ignored. The call still succeeds and logs a warning.
+  7. **New:** the returned snapshots must have contiguous sub-indices `0` to `count-1`; otherwise Unexpected
+     ("…the sub-indices are not contiguous"). The contents-hash check follows (unchanged).
+  - Ordering: history GC (`enqueueOldResourceSnapshotsForGC`) runs **before** `allSnapshotsFor`. The two never
+    overlap: history GC only takes primaries at older indices (the latest is excluded), while `allSnapshotsFor` only
+    enqueues snapshots at the latest index, in practice always secondaries. So a block at the latest index leaves
+    history GC alone, whereas leftover primaries block it, as they would skew the history itself (Q10, resolved).
+- `garbageCollect` (`gc.go`) accepts requests for **secondary** snapshots. After the shared Get, UID, and
+  pending-deletion checks, a target whose sub-index is not `0` is deleted right away, with a UID precondition and no
+  in-use check. Requests for primaries behave as before. Log messages on the shared path no longer say "primary".
+- `cleanUpDanglingSecondarySnapshots` deletes with a UID precondition, as GC already did, and (since 16:31) ignores
+  NotFound, like GC (Q11, resolved).
+- Refactor, no behavior change: `enqueueResourceSnapshotForGC` is the single place that builds GC requests;
+  `checkForInconsistentResourceSnapshots`, `enqueueOldResourceSnapshotsForGC`, and the new
+  `enqueueLeftoverResourceSnapshotsForGC` call it.
+- Docs: the rationale at the top of `garbageCollect` was restored and extended to secondaries, and
+  `checkForInconsistentResourceSnapshots` documents the narrower known gap (ownerless secondaries at indices other
+  than the latest).
+
+### Existing tests: adapted October 26 (done)
+
+| Spec | Change |
+|---|---|
+| SC-6 | The extras are owned decoys (`createOwnedDecoySnapshot`); both "extra" specs also assert that the extra is deleted. The count-1 spec was renamed (it was "should ignore extra secondary snapshots when the count label is 1") |
+| SC-8 | The two count-label messages match the new wording |
+| GC-2 | The extra secondary at index 1 is added after index 2 exists, so it survives until index 1 is collected; the index-0 expectation no longer lists it |
+| SC-7, LO-5 | Comments corrected: the manager can delete a single secondary, but never one within the count; leftover secondaries are detected at the latest index only |
+
+Validation: `ginkgo -p` (without `--race`) passed 347 of 347 specs, none skipped, in about 38s. The `gc_test.go` unit
+tests pass.
+
+### Cross-reference: plan items vs. the change
+
+| Plan item (spec) | Affected? | Action |
+|---|---|---|
+| P1-1 to P1-3, P1-9 (SC-1 to SC-3, SC-9) | No | None |
+| P1-4, P1-5 (SC-4, SC-5): dangling-secondary cleanup | Only the UID precondition, which envtest can't observe deterministically | U3, U8 |
+| P1-6 (SC-6): extras | Yes | Adapted; extend (SC-6 below) |
+| P1-7 (SC-7): fewer than the count | No; the primary-first check passes before the count check | None |
+| P1-8 (SC-8): malformed labels | Messages reworded; new contiguity check | Adapted; extend (SC-8 below) |
+| GC-1, GC-3 to GC-6 | No; GC-3's queue assertions only involve primaries | None; the SC-6 extension covers requests for secondaries |
+| GC-2: multi-group GC | Yes | Adapted |
+| LO-1 to LO-4 | No; they are blocked at the primary level, before `allSnapshotsFor` | None; the owner variants on secondaries go to U1 |
+| LO-5, and the known gap | The gap is narrower; LO-5's leftovers are never at the latest index (none exists yet, or they sit at the next index), so it still holds | Comment adapted; add LO-6 |
+| `TestCheckForInconsistentResourceSnapshots` | No; the function never reads sub-indices, and its fixtures carry none | None; secondaries are covered through U1 |
+| `TestGarbageCollect` | Every case targets a primary | U2, U3 |
+| `TestIsSnapshotInUseByAnyPlacementBinding`, `TestStart` | No | None |
+| The primary missing from the latest-index listing | Not reproducible in envtest (the cache must change between two reads) | U1 |
+
+### Integration cases to add
+
+(Implemented at 16:40; see Status.)
+
+Wherever a call should fail, check both entry points (as before).
+
+**SC-6 (extend). Extras beyond the count label** (PP; in the existing context, before the suite manager's call
+collects the extra)
+
+1. With a paused manager, the call succeeds with the `count` snapshots, and the drained queue holds exactly one
+   request: for the extra, with its namespaced name and UID and the policy's namespaced name. No request targets the
+   primary or the sub-index-1 secondary.
+2. A second extra with a finalizer, marked for deletion: the call still succeeds, since an owned extra does not block
+   (unlike an ownerless leftover), and no request is enqueued for it. Remove the finalizer; it is gone.
+   `createOwnedDecoySnapshot` takes no finalizers, so this needs a variant or a follow-up update.
+
+**SC-8 (extend). Non-contiguous sub-indices**
+
+- A primary with a count of `2`, plus a secondary at sub-index `2` and none at `1`: Unexpected, "the sub-indices are
+  not contiguous". Append it to the end of the table, so that `staleMalformedIndexTestCaseIdx` stays valid.
+
+**LO-6. An orphaned secondary at the latest index** (PP; a new context in `Describe("corner cases (snapshots of
+previous placement policies)")`, after LO-5)
+
+The suite manager's GC worker would collect the leftover right away and race the assertions, so steps 3 to 5 use a
+paused manager.
+
+1. Create the policy and a two-group snapshot at index 0.
+2. Create an ownerless indexed secondary at index 0, sub-index 1, named with an old UID. It duplicates a sub-index,
+   mimicking a previous policy's secondary that slipped past the dangling-secondary cleanup under cache lag.
+3. Both entry points fail as Transient ("orphaned resource snapshots are detected"), and the error names the
+   leftover. The drained queue holds exactly one request, for the leftover.
+4. Change the selected resources: the calls still fail the same way, and nothing is created at index 1
+   (`verifyNoPrimarySnapshotAtIdx(1)`).
+5. Process the request with the paused manager's `garbageCollect`: only the leftover is deleted, and the index-0
+   primary and its owned secondary keep their UIDs.
+6. `SnapshotResourcesIfNoSnapshotExists` returns the original index-0 set (stale), and `SnapshotResourcesIfStale`
+   creates index 1.
+
+That history GC still runs while the latest index is blocked (Q10) is covered in U5, not here.
+
+### Unit test plan
+
+(Implemented at 16:59, U1 to U15; see Status.)
+
+Unit tests cover branch-level behavior and what envtest can't observe: delete options, call order, divergence between
+the cache and the API server, and a primary missing from a listing. Integration tests keep the end-to-end flows.
+Conventions as in `CLAUDE.md`: table-driven, `cmp.Diff` and no assert libraries, `want` and `got`, and messages of
+the form `"Func(...) = %v, want %v"`.
+
+**Techniques and helpers**
+
+- **Field indexes.** `newFakeHubClientWithIndexes` (`gc_test.go`) registers only the "owned by and indexed" snapshot
+  index. Tests that go through `retrieveLatestSnapshot` also need the "owned by and sub-indexed" index; extend the
+  helper or add a variant.
+- **Cache lag.** `hubClient` and `hubUncachedReader` are separate fields, so a test can back them with two fake
+  clients holding different objects; for example, a primary that only the "API server" store has, for the quorum-read
+  branches.
+- **Delete options.** The fake client enforces `ResourceVersion` preconditions but not `UID` ones. An interceptor
+  records each Delete's `client.DeleteOptions`, and the test compares their `Preconditions.UID`s.
+- **Create order.** An interceptor records the names of Create calls, in order.
+- **GC requests.** Use `newTestGCQueue`; drain the queue and compare with `cmp.Diff`, as
+  `TestCheckForInconsistentResourceSnapshots` does.
+- **Fixtures.** A snapshot builder with the index, sub-index, count label (primaries only), contents hash, owner
+  references, and an optional deletion timestamp, for both scopes. `TestGarbageCollect`'s local `snapshot` builder can
+  be promoted. The fake client rejects an object with a deletion timestamp but no finalizers, so pending-deletion
+  fixtures need a finalizer.
+- **Layout.** New tests go in `ops_test.go`, `snapshots_test.go`, `resources_test.go`, and `manager_test.go`, matching
+  the source files; the GC additions stay in `gc_test.go`. New shared unit helpers go in a new `utils_test.go`; the
+  existing ones stay in `gc_test.go`, as decided at 06:52.
+
+**UT-P0: the October 26 changes**
+
+U1. `TestAllSnapshotsFor` (`ops_test.go`, new). Cluster-scoped unless noted:
+
+| Case | Want |
+|---|---|
+| Primary only, count 1 | `[primary]`; no requests |
+| Primary and 2 secondaries, listed out of order, count 3 | Sorted by sub-index, primary first |
+| Same, for a namespaced policy | Same; covers the namespaced list branch |
+| Extras at sub-indices 2 and 3, count 2 | The first 2; one request per extra, carrying the policy's namespaced name; none for the primary or sub-index 1 |
+| An extra pending deletion | Success; no request for it |
+| An ownerless secondary (old-UID name, duplicate sub-index 1) | Transient, naming the leftover; one request, for it |
+| An ownerless secondary pending deletion | Transient; no request |
+| A secondary owned by a stale policy UID | Transient (stale owner); no requests |
+| A secondary with an extra owner | User |
+| The given primary is not in the store | Transient ("not found as the first snapshot listed"); no requests |
+| The stored primary has a different UID from the given one | Transient |
+| A count label of `abc` or `0`, or none | Unexpected |
+| Fewer snapshots than the count | Unexpected |
+| Sub-indices `0` and `2`, count 2 | Unexpected ("not contiguous") |
+| A secondary with a different contents hash | Unexpected |
+| A malformed sub-index label | Unexpected (sort) |
+
+U2. `TestGarbageCollect` (`gc_test.go`, extend). Give each case an optional GC request; the default stays the
+primary's. New cases, each targeting a secondary:
+
+| Case | Want |
+|---|---|
+| An owned extra (sub-index 2), next to an owned primary and sub-index 1 | Only the extra is deleted |
+| An ownerless secondary next to an owned primary | Only it is deleted |
+| An owned extra while a binding uses the primary | The extra is deleted; secondaries skip the in-use check |
+| The secondary was re-created (UID mismatch) | Kept; no error |
+| The secondary is pending deletion | Kept; no error and no Delete call |
+| Delete fails (interceptor) | APIServer error; kept |
+| Delete returns NotFound (interceptor) | No error |
+| A namespaced secondary | Deleted; covers the namespaced Get branch |
+
+A secondary that is not found takes the same path as the existing "primary snapshot not found" case; no new case.
+
+U3. **Delete preconditions** (`gc_test.go`, a subtest of U2; and a U8 case). With the recording interceptor, every
+Delete carries `Preconditions.UID` equal to the object's UID, on all three paths: a secondary target; the primary
+path's secondaries and primary; and `cleanUpDanglingSecondarySnapshots`.
+
+U4. `TestEnqueueResourceSnapshotForGC` (`gc_test.go`, new; one table that also covers
+`enqueueLeftoverResourceSnapshotsForGC`):
+
+- A cluster-scoped and a namespaced snapshot: the request carries the snapshot's namespaced name and UID, and the
+  policy's namespaced name.
+- A snapshot pending deletion: no request.
+- `enqueueLeftoverResourceSnapshotsForGC` with three snapshots, one of them pending deletion: two requests.
+  Enqueueing the same snapshot twice yields one request (the workqueue deduplicates).
+
+**UT-P1: functions near the change that have no unit tests**
+
+U5. `TestRetrieveLatestSnapshot` (`ops_test.go`, new). Integration covers most branches; this covers the ordering.
+
+- No primaries: `nil` and no error.
+- Primaries out of order: the highest index wins.
+- A leftover primary: Transient, and **no** history requests, only the leftover's own (blocked before history GC).
+- The latest primary pending deletion: Transient, and history requests **are** enqueued (expected; Q10).
+- An ownerless secondary at the latest index: Transient; history requests are enqueued, plus one for the leftover
+  (expected; Q10).
+- A history limit of 1 with three indices: requests for the two older primaries only.
+
+U6. `TestEnqueueOldResourceSnapshotsForGC` (`gc_test.go`, new; pure):
+
+- No limit set means the default of 3; a limit of `0` or less means 1.
+- History within the limit: no requests. A limit of 1 with four primaries: the three oldest.
+- Primaries pending deletion are skipped.
+
+U7. `TestIsSnapshotUpToDate` (`ops_test.go`, new; two stores):
+
+- Hash mismatch: false, with no quorum read (an interceptor on the uncached reader sees no Get).
+- Hash match, nothing at the next index: true.
+- Hash match, and the next primary exists only in the uncached store: Transient ("a newer snapshot already exists").
+- A malformed index label: Unexpected. An uncached Get failure: APIServer.
+
+U8. `TestCleanUpDanglingSecondarySnapshots` (`ops_test.go`, new; two stores):
+
+- Nothing at the index: false.
+- A primary at the index in the cache: Transient; nothing is deleted.
+- A primary only in the uncached store: Transient; nothing is deleted.
+- Owned, ownerless, and stale-owner secondaries alike (there is no owner check): all deleted, with UID preconditions;
+  true.
+- Only secondaries pending deletion: nothing is deleted, and it still returns true, so the caller requeues.
+- Delete fails: APIServer. Delete returns NotFound: no error, and it still returns true, so the caller requeues
+  (Q11).
+
+U9. `TestCreateResourceSnapshotAnyway` (`ops_test.go`, new; a Create-recording interceptor and a small
+`maxPerSnapshotResourceCnt`):
+
+- No latest primary: index 0. A latest primary at index 4: index 5. A malformed latest index: Unexpected.
+- Three groups: Creates run in the order sub-index 2, sub-index 1, then the primary. The primary has a count of 3,
+  names come from `uniquename`, and every snapshot has a controller owner reference to the policy.
+- Dangling secondaries at the next index are deleted, the call is Transient ("cleaned up dangling secondary …"), and
+  nothing is created.
+- A secondary Create fails (AlreadyExists): APIServer, and the primary is not created. The primary Create fails:
+  APIServer.
+
+U10. `TestIsSnapshotSynchronized` (`ops_test.go`, new; the checks that run before any resource is read):
+
+- A nil snapshot or policy: Unexpected. A non-primary snapshot: Unexpected.
+- Not owned by the policy, or in another namespace: Unexpected.
+- Owned by a stale policy UID: Transient.
+- No contents hash: Unexpected.
+- The hash comparison itself reads the selected resources (REST mapper, dynamic client), so it stays with integration
+  (optional, as before).
+
+U11. `TestPlacementPolicyOwnerRef` and `TestIsSamePlacementPolicyOwner` (`gc_test.go`, new; pure):
+
+- Owner selection: a malformed API version is skipped; the kind must match the scope (`ClusterPlacementPolicy` for
+  cluster-scoped objects); the name must match; the matching reference is returned from among several; no match
+  returns nil.
+- Same owner: both nil is true, one nil is false, the same UID is true, and different UIDs are false.
+
+**UT-P2: earlier gaps elsewhere in the package (optional)**
+
+U12. `TestSnapshotResource` (`resources_test.go`): strips the last-applied and deployment-revision annotations
+(dropping `metadata.annotations` when nothing else is left), owner references, managed fields, read-only metadata,
+finalizers, and status; keeps other annotations, labels, and the spec; and sets the identifier from the GVK. Assert on
+raw JSON, as P0-E does.
+
+U13. `TestSplitResourcesIntoSizeControlledGroups` (`resources_test.go`): empty input gives one empty group; splits by
+count and by size (`AdditionalInfo` counts toward the size); a resource exactly at the size limit fits; one over the
+limit is a User error.
+
+U14. `TestPrimaryPlacementResourceSnapshot`, `TestSecondaryPlacementResourceSnapshot`, and
+`TestPlacementPolicyOwnerLabelVal` (`snapshots_test.go`): labels (owned-by value, index, sub-index, and the count on
+primaries only), annotations (contents hash, full owned-by name), the controller owner reference, and the type per
+scope; the owned-by label is truncated and hashed at its length limit.
+
+U15. `TestNew` (`manager_test.go`): each argument check fails with the right category (mutex slot count, size and
+count bounds, a nil eligibility checker). The checks run before the controller manager is used, so a nil manager
+works for the failure cases.
+
+### Open questions (October 26)
+
+10. **History GC while blocked at the latest index.** `retrieveLatestSnapshot` enqueues history GC before
+    `allSnapshotsFor`, so leftovers at the latest index (and, as before, a latest primary pending deletion) do not
+    stop history GC, whereas leftover primaries do. Should `enqueueOldResourceSnapshotsForGC` move after
+    `allSnapshotsFor`? **Resolved at 16:30**: no; the order does not matter, as the two never overlap.
+    - History GC only takes primaries (from the primary scan) at older indices; the latest is excluded, and
+      collecting a primary touches only its own index.
+    - `allSnapshotsFor` only enqueues snapshots at the latest index, and in practice only secondaries: extras always
+      are (the count is at least 1, and the primary is verified to come first), and an ownerless primary there would
+      already have been caught by the primary scan, barring a cache change between the two reads.
+    - Leftover primaries block history GC for a different reason: they would skew the history itself.
+    - U5 covers the behavior as expected, not as a pin.
+11. **NotFound in `cleanUpDanglingSecondarySnapshots`.** Its Delete fails with an APIServer error on NotFound (the
+    caller requeues), while every GC delete ignores NotFound. Pin it (U8), or align it with GC? **Resolved at
+    16:31**: aligned with GC; the Delete now ignores NotFound (`!apierrors.IsNotFound(err)`). The method still
+    returns true, so the caller still requeues. A re-created snapshot (new UID) still fails the UID precondition with
+    a conflict, not NotFound. U8 expects no error.
+
 ## Out of Scope
 
 These are unit-test territory or unreachable:
 
-- `New()` argument validation.
+- `New()` argument validation. (Revised October 26: now planned as unit test U15.)
 - Hash, marshal, and `SetControllerReference` failures.
 - API server transport errors.
 - `AdditionalInfo` sizing.
@@ -415,7 +721,8 @@ These are unit-test territory or unreachable:
 4. A label selection that matches nothing produces an empty primary snapshot. Is that intended?
    **Resolved at 03:07**: an empty selection is now a User error.
 
-Q5 to Q9 came up during the P1 and P2 planning; their questions and answers are in the Status log.
+Q5 to Q9 came up during the P1 and P2 planning; their questions and answers are in the Status log. Q10 and Q11 came
+up during the October 26 revision and are resolved; see [Open questions (October 26)](#open-questions-october-26).
 
 ## Validation
 
@@ -425,6 +732,10 @@ Q5 to Q9 came up during the P1 and P2 planning; their questions and answers are 
 - Suite runtime increase of about 60s or less (baseline is about 58s).
 - `make reviewable`.
 - Final runs use `ginkgo -p --race` instead of `go test`.
+- Unit tests (added October 26) need no envtest when filtered by name, for example
+  `go test -race -count=1 -run '^Test(AllSnapshotsFor|GarbageCollect|EnqueueResourceSnapshotForGC)$' ./pkg/v1/managers/placementresourcesnapshot/`.
+  Without `-run`, `go test` also starts the envtest suite (`TestAPIs`), which needs `KUBEBUILDER_ASSETS`. Run the
+  queue-based tests with `-count=30` as well, as was done for `TestStart`.
 - From October 27, per the user: integration runs are always focused (`ginkgo -p --race --focus=...`) on the specs
   being changed. The whole suite is not run.
 
@@ -654,6 +965,146 @@ the non-controller owner references context; they are the last two contexts of t
     - The leftover check and GC-5 descriptions match the current behavior.
   - Validation: `gofmt` and `go vet` are clean, and the `gc_test.go` unit tests pass with `-race`. The integration
     suite was not re-run.
+- October 26, 16:20: The plan was revised for latest-index checks and secondary snapshot GC (working-tree changes to
+  `ops.go` and `gc.go`), and a unit test plan was added; see
+  [Revision: latest-index checks, secondary GC, and unit tests](#revision-latest-index-checks-secondary-gc-and-unit-tests).
+  - Before the revision, the three specs that the change broke (SC-6, SC-8, GC-2) were adapted, and two outdated test
+    comments (SC-7, LO-5) were corrected. `ginkgo -p` passed 347 of 347 specs.
+  - To add:
+    - Integration: extend SC-6 and SC-8, and add LO-6.
+    - Unit, by priority: U1 to U4 for the change itself; U5 to U11 for nearby functions without unit tests; U12 to
+      U15 (optional) for earlier gaps elsewhere in the package.
+  - Open: Q10 (recommendation: pin) and Q11 (recommendation: align with GC).
+  - More entries for the PR description:
+    - Ownerless or stale-owner secondaries at the latest index now block snapshot creation (Transient), and
+      ownerless ones are garbage-collected; unexpected owners on them are a User error.
+    - Extra secondaries beyond the count label are garbage-collected.
+    - New errors: the primary missing from the latest-index listing (Transient), and non-contiguous sub-indices
+      (Unexpected).
+    - The count-label error messages were reworded.
+    - `garbageCollect` deletes secondary targets directly, and orphan cleanup deletes with UID preconditions.
+  - Implementation is waiting for approval.
+- October 26, 16:30: The user resolved Q10: the order of history GC and the latest-index checks does not matter.
+  History GC only takes primaries at older indices, while `allSnapshotsFor` only enqueues snapshots at the latest
+  index (in practice, secondaries), so the two never overlap. U5 now covers the behavior as expected rather than
+  pinning it. Q11 is still open.
+- October 26, 16:31: The user resolved Q11 by aligning orphan cleanup with GC.
+  - Code: the Delete in `cleanUpOrphanedSecondarySnapshots` (`ops.go`) now ignores NotFound
+    (`!apierrors.IsNotFound(err)`; `ops.go` gained the `apierrors` import that `gc.go` already uses). The method
+    still returns true, so the caller still requeues.
+  - Plan: U8 now expects no error on NotFound.
+  - More for the PR description: orphan cleanup ignores NotFound on delete.
+  - Validation: `gofmt` and `go vet` are clean, the unit tests pass, and `ginkgo -p` passed 347 of 347 specs.
+  - No open questions remain; implementation is waiting for approval.
+- October 26, 16:40: The integration cases of the October 26 revision were implemented (the 11 new specs are all in
+  `corner_cases_integration_test.go`). The unit tests (U1 to U15) are not implemented yet.
+  - **SC-6** (extended; 4 specs in the existing context): with a paused manager, the queue holds only the extra's
+    request; a second extra (sub-index 3) pending deletion neither blocks the calls nor is enqueued; once it is gone,
+    the calls return the same set. The paused manager is never called at the same time as the manager under test,
+    which still collects the first extra.
+  - **SC-8** (extended; 1 table entry, appended): non-contiguous sub-indices (a primary with a count of 2 and a
+    secondary at sub-index 2) return Unexpected. New constant: `nonContiguousSubIdxsErrMsg`.
+  - **LO-6** ("orphaned secondary snapshot at the latest index"; 6 specs, at the end of the leftover `Describe`): uses
+    a paused manager throughout. Both entry points fail as Transient; the error's `leftoverPlacementResourceSnapshots`
+    attribute names the leftover (read with `errAttrValue`); each call enqueues exactly one request, for the leftover.
+    The block holds after a resource change. The paused manager's `garbageCollect` deletes only the leftover, and the
+    owned snapshots keep their UIDs. The calls then return the original set (stale) and create index 1.
+  - Helper change: `gcRequestFor` (`utils_integration_test.go`) is documented for any snapshot, primary or secondary,
+    and its parameter is renamed to `snapshot`. The test file now imports `k8s.io/klog/v2`.
+  - Validation: `go vet` is clean; the focused run passed 24 of 24 specs; `ginkgo -p --race` passed 358 of 358 specs
+    (about 43s), with no data races; `golangci-lint --fast-only` reported 0 issues.
+- October 26, 16:59: The unit test plan (U1 to U15, including the optional U12 to U15) was implemented. There are 17
+  new test functions and 8 new `TestGarbageCollect` cases; with the 4 existing functions, the package has 21 unit test
+  functions and 149 subtests.
+  - Files:
+    - `ops_test.go` (new): U1 `TestAllSnapshotsFor` (18 cases), U5 `TestRetrieveLatestSnapshot`, U7
+      `TestIsSnapshotUpToDate`, U8 `TestCleanUpOrphanedSecondarySnapshots`, U9 `TestCreateResourceSnapshotAnyway`, and
+      U10 `TestIsSnapshotSynchronized`.
+    - `gc_test.go`: U2 (8 `TestGarbageCollect` cases; each case can now name its GC request, and the remaining
+      snapshots are listed across both scopes), U3 `TestGarbageCollectDeletePreconditions` (the cleanup path is a U8
+      case), U4 `TestEnqueueResourceSnapshotForGC`, U6 `TestEnqueueOldResourceSnapshotsForGC`, and U11
+      `TestPlacementPolicyOwnerRef` and `TestIsSamePlacementPolicyOwner`.
+    - `resources_test.go` (new): U12 `TestSnapshotResource` (it also checks that the given resource is not
+      modified) and U13 `TestSplitResourcesIntoSizeControlledGroups`.
+    - `snapshots_test.go` (new): U14 `TestPrimaryPlacementResourceSnapshot` and `TestSecondaryPlacementResourceSnapshot`
+      (each also covers a `SetControllerReference` failure: a namespace-scoped owner of a cluster-scoped snapshot), and
+      `TestPlacementPolicyOwnerLabelVal`.
+    - `manager_test.go` (new): U15 `TestNew`.
+    - `utils_test.go` (new): shared unit helpers: the `snapshotFixture` builder (`newSnapshotFixture` and `with*`
+      modifiers), `newTestPlacementPolicy`, `testPolicyOwnerRef`, the Delete recorder (`recordDeletes`, `deleteCall`),
+      `listSnapshotNames`, and `verifyErrCategoryAndMsgSubstr`.
+  - Helper changes: `newFakeHubClientWithIndexes` (`gc_test.go`) also registers the "owned by and sub-indexed"
+    snapshot index. The unit tests reuse the Ginkgo-free integration helpers `drainGCRequests`, `gcRequestFor`, and
+    `snapshotNamesOf`, and the `testFinalizer` constant.
+  - Small additions beyond the plan: namespace-scoped cases in U5 and U9; a malformed index label case and a
+    multi-group case in U5; a "latest snapshot only" case in U6.
+  - Mutation checks (reverted afterwards; the sources were restored byte-for-byte), each caught by the intended cases:
+    orphan cleanup failing on NotFound (U8); no primary-first check (U1, two cases); no contiguity check (U1); the
+    secondary GC path disabled (U2, two cases; U3).
+  - Validation: `go vet` and `gofmt` are clean; all unit tests pass with `-race`; the queue-based tests pass with
+    `-race -count=30`; `golangci-lint --fast-only` reported 0 issues; `ginkgo -p --race` passed 358 of 358 specs.
+  - Not built: the optional integration backlog (F.1 to F.4, and `IsSnapshotSynchronized`'s hash comparison).
+- October 26, 17:08: Lint fixes in the new unit tests: `fmt.Appendf` in `ops_test.go`, and preallocated slices in
+  `ops_test.go` (`summarize`) and `utils_test.go` (`listSnapshotNames`).
+- October 26, 17:40: Renamed `cleanUpOrphanedSecondarySnapshots` to `cleanUpDanglingSecondarySnapshots`, at the user's
+  suggestion. "Orphaned" now means only "no owner reference" (as with Kubernetes' orphan propagation), and "dangling"
+  means "a secondary snapshot at an index with no primary snapshot".
+  - Code (`ops.go`, `gc.go`): the function, its doc comment (which now defines "dangling" and the return value), the
+    related comments, and the messages, e.g., "cleaned up dangling secondary placement resource snapshots; requeue
+    before creating new snapshots".
+  - Tests: U8 is now `TestCleanUpDanglingSecondarySnapshots`. The U9 case, the SC-3 to SC-5 contexts and specs, the
+    LO-5 and LO-6 comments, and the `verifyDanglingSecondariesCleanedUp` helpers in `ops_gc_integration_test.go` use
+    the new term. The error-message constant is now `danglingSecondariesCleanedUpErrMsg`. Uses of "orphaned" that mean
+    "no owner" (LO-2, LO-3, LO-6, and the GC unit tests) are unchanged.
+  - This plan: the sections above the status log use the new names; earlier status entries keep the old ones.
+  - The user changed `checkForInconsistentResourceSnapshots` (`gc.go`) to name its result `orphaned` and to return nil
+    with an error. The `TestCheckForInconsistentResourceSnapshots` case "orphaned snapshot followed by a snapshot owned
+    by a deleted placement policy with the same name" now wants no snapshots returned; it still wants the GC request.
+  - Validation: `go build`, `go vet`, and `gofmt` are clean; `golangci-lint --fast-only` reported 0 issues; all unit
+    tests pass with `-race`; `ginkgo -p --race` passed 358 of 358 specs.
+- October 26, 17:47: Consistency fixes from the latest review round (items 4 to 7).
+  - Error/log keys: "observedIdx" (`garbageCollect`) is now "observedIndex", "snapshotIdx"
+    (`cleanUpDanglingSecondarySnapshots`) is now "snapshotIndex", and "actualCount" (`allSnapshotsFor`) is now
+    "observedCount". The workgenerator's `retrieval.go` still uses "actualCount" for its own count check.
+  - Messages: "found via quorum reads" (`isSnapshotUpToDate`) is now "found via quorum read", and
+    `IsSnapshotSynchronized` now says "of the same name", like the GC check. The tests follow:
+    `quorumReadNewerSnapshotErrMsg` and the U10 case.
+  - The `klog.Warningf` in `allSnapshotsFor` is now a structured `klog.InfoS` (same visibility), with the extra
+    snapshots listed (`extraPlacementResourceSnapshots`).
+  - The index-parse errors in `isSnapshotUpToDate` and `createResourceSnapshotAnyway` now carry the primary snapshot
+    and the observed index.
+  - Validation: `go build`, `go vet`, and `gofmt` are clean; `golangci-lint --fast-only` reported 0 issues;
+    `ginkgo -p --race` passed 358 of 358 specs.
+- October 26, 17:58: Settled the snapshot terminology (item 2 of the latest review round): "orphaned" means "no owner
+  reference", "leftover" means "an extra secondary snapshot beyond the count label", and "dangling" means "a secondary
+  snapshot at an index with no primary snapshot".
+  - Code: the user renamed the result of `checkForInconsistentResourceSnapshots` to `orphaned` (17:31). Its callers
+    in `ops.go` follow: the variable is `orphaned`, the message is "orphaned resource snapshots are detected; waiting
+    for garbage collection to complete", and the error key is `orphanedPlacementResourceSnapshots`. The docs of
+    `checkForInconsistentResourceSnapshots` (which also notes that no snapshots are returned with an error),
+    `allSnapshotsFor`, and `garbageCollect` use the new terms. `enqueueLeftoverResourceSnapshotsForGC` keeps its name.
+  - Tests: `leftoverSnapshotsErrMsg` is now `orphanedSnapshotsErrMsg`. The `Describe` for LO-1 to LO-6 is now
+    "corner cases (snapshots of previous placement policies)" (it covers snapshots still owned by a deleted policy
+    too). LO-5 ("orphaned secondary snapshots without a primary snapshot") and LO-6 use "orphaned" in their names,
+    variables (`orphanedSnapshotName*`, `verifyBlockedByOrphan`), and comments. U1/U5 messages and the U5 case
+    "orphaned primary snapshot", and the `TestCheckForInconsistentResourceSnapshots` fields (`wantOrphaned`,
+    `orphanedRef`) follow. "Leftover" in `TestEnqueueResourceSnapshotForGC` still means extras.
+  - This plan: the sections above the status log use the new message and `Describe` names; the LO-* labels stay.
+  - Validation: `go build`, `go vet`, and `gofmt` are clean; `golangci-lint --fast-only` reported 0 issues;
+    `ginkgo -p --race` passed 358 of 358 specs.
+- October 26, 18:05: Typo and wording fixes from the latest review round, plus one trivia item.
+  - `ops.go`: the `snapshotResources` doc list now reads "a) …; b) …; or c) …"; "yet … yet" in `isSnapshotUpToDate`
+    is gone; "a few secondary … snapshots" and "(their contents might be outdated, and their specs are immutable
+    anyway)" in `createResourceSnapshotAnyway`; "match the current state" in `IsSnapshotSynchronized`.
+  - `manager.go`: "to shut down the GC workqueue"; the `New` error message says "mu slot count" (no test matched it).
+  - Tests: "clean-up(s)" is now "cleanup(s)" in the integration tests (14 places, including the SC-4 context name),
+    matching the production code.
+  - `snapshots.go`: the local imports now sit in their own group, as in the other files.
+  - Left as they are, per the user: item 1 (history GC runs before the pending-deletion check; only reachable by
+    tampering), the `TestGarbageCollect` case names, the `retrieveLatestSnapshot` result names, and `actualCount` in
+    the workgenerator's `retrieval.go`.
+  - Validation: `go build`, `go vet`, and `gofmt` are clean; `golangci-lint --fast-only` reported 0 issues;
+    `ginkgo -p --race` passed 358 of 358 specs.
 - October 27, 02:13: `snapshotResource` now strips Service and Job fields filled in by the hub API server, matching
   `generateRawContent` in `pkg/utils/controller/resource_selector_resolver.go`:
   - Services: `clusterIP` and `clusterIPs` (unless headless), `healthCheckNodePort`, and each port's `nodePort`.
@@ -706,3 +1157,10 @@ the non-controller owner references context; they are the last two contexts of t
     `TestSnapshotResource`. Validation: both unit tests pass with `-race`; `ginkgo -p --race
     ./pkg/v1/managers/placementresourcesnapshot` passes 358 of 358 specs (347, plus 3 for PP-2b and 8 for PP-13 and
     PP-14).
+- October 27, 04:10: Merged `main` (#1018 and #1019) into `feat/handle-incomplete-snapshots-in-work-generator`. Only
+  this plan conflicted; both sides' additions were kept, in time order.
+  - The October 26 entries (16:20 to 18:05) and the October 27 entries (02:13 to 03:45) were made on separate
+    branches. The October 26 code is on `feat/clean-up-orphaned-secondary-snapshots`, which `main` does not have yet.
+    Spec counts in each set are relative to its own branch.
+  - Expected conflict: that branch's `resources_test.go` (U12 and U13) and the one on `main` both define
+    `TestSnapshotResource`. Combine the two when that branch merges `main`.

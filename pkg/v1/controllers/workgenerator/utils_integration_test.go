@@ -17,12 +17,16 @@ limitations under the License.
 package workgenerator
 
 import (
+	"crypto/sha256"
 	"fmt"
+	"slices"
 	"strconv"
+	"strings"
 	"time"
 
 	"github.com/google/go-cmp/cmp"
 	"github.com/google/go-cmp/cmp/cmpopts"
+	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
 	appsv1 "k8s.io/api/apps/v1"
 	corev1 "k8s.io/api/core/v1"
@@ -30,6 +34,7 @@ import (
 	"k8s.io/apimachinery/pkg/api/meta"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
+	"k8s.io/apimachinery/pkg/types"
 	"k8s.io/apimachinery/pkg/util/sets"
 	"k8s.io/utils/ptr"
 	"sigs.k8s.io/controller-runtime/pkg/client"
@@ -48,7 +53,9 @@ const (
 	placementResourceSnapshotNameTemplate = "%s-snapshot-%d"
 	// The name template for secondary placement resource snapshots (those with a non-zero sub-index).
 	subIndexedPlacementResourceSnapshotNameTemplate = "%s-snapshot-%d-%d"
-	nsNameTemplate                                  = "ns-%s"
+	// The name template for stray placement resource snapshots (see bindingFixture.createStraySnapshot).
+	straySnapshotNameTemplate = "%s-snapshot-%d-%d-stray-%s"
+	nsNameTemplate            = "ns-%s"
 
 	deployName    = "deploy-1"
 	configMapName = "configmap-1"
@@ -56,6 +63,8 @@ const (
 	indexedNSNameTemplate = "ns-%d"
 	deployNameTemplate    = "deploy-%d"
 	configMapNameTemplate = "configmap-%d"
+	// A zero-padded ConfigMap name template, so that the names sort in the order of their numbers.
+	paddedConfigMapNameTemplate = "configmap-%02d"
 
 	workKind      = "Work"
 	nsKind        = "Namespace"
@@ -81,6 +90,18 @@ const (
 	markedAsAvailableReason     = "MarkedAsAvailable"
 	markedAsUnavailableReason   = "MarkedAsUnavailable"
 	markedAsFailedToApplyReason = "MarkedAsFailedToApply"
+
+	markedAsAppliedManifestMsg = "Manifest has been marked as applied"
+	markedAsAppliedWorkMsg     = "Work has been marked as applied"
+
+	// Substrings of the messages that the work generator reports (in the Synchronized condition of a placement binding)
+	// when the placement resource snapshots that the placement binding points to are invalid.
+	invalidSnapshotsMsgPrefix = "Failed to synchronize resources as the given placement resource snapshots are invalid"
+	fewerSnapshotsErrMsg      = "there are fewer placement resource snapshots than the count label indicates"
+	duplicateSubIdxErrMsg     = "found placement resource snapshots with duplicate sub-indices"
+	inconsistentSubIdxErrMsg  = "found placement resource snapshots with inconsistent sub-indices"
+	// The format of the message substring reporting that a placement resource snapshot (by name) is not found.
+	snapshotNotFoundErrMsgFmt = "%q not found"
 )
 
 // The namespace of cluster-scoped objects (i.e., none); the test helpers use it to tell cluster-scoped placement
@@ -92,11 +113,6 @@ const (
 	eventuallyInterval   = time.Second * 1
 	consistentlyDuration = time.Second * 5
 	consistentlyInterval = time.Millisecond * 500
-
-	// The work generator does not watch placement resource snapshots; when it fails to process a placement binding
-	// due to inconsistent snapshots, it only picks up later snapshot changes when it retries the reconciliation,
-	// which is subject to exponential backoff. Checks that depend on such retries use a longer timeout.
-	eventuallyDurationForBackoffRetries = time.Minute
 )
 
 var (
@@ -372,7 +388,7 @@ func createSubIndexedPlacementResourceSnapshotWithHash(
 ) placementv1alpha1.PlacementResourceSnapshotAccessor {
 	snapshot := newPlacementResourceSnapshotObj(snapshotNS, snapshotName)
 	labels := map[string]string{
-		placementv1alpha1.PlacementResourceSnapshotOwnedByLabelKey:  ownerPlacementPolicyName,
+		placementv1alpha1.PlacementResourceSnapshotOwnedByLabelKey:  snapshotOwnerLabelValue(ownerPlacementPolicyName),
 		placementv1alpha1.PlacementResourceSnapshotIndexLabelKey:    strconv.Itoa(index),
 		placementv1alpha1.PlacementResourceSnapshotSubIndexLabelKey: strconv.Itoa(subIndex),
 	}
@@ -389,6 +405,35 @@ func createSubIndexedPlacementResourceSnapshotWithHash(
 	})
 	Expect(hubClient.Create(ctx, snapshot)).To(Succeed(), "Failed to create the placement resource snapshot")
 	return snapshot
+}
+
+// snapshotOwnerLabelValue returns the value of the owner label on placement resource snapshots for the given placement
+// policy name, mirroring the placement resource snapshot manager: names over 61 characters are truncated and appended
+// with a hash suffix, so that the value stays within the label value length limit. The work generator does not read
+// this label (it looks up snapshots by the owner annotation, which always carries the full name).
+func snapshotOwnerLabelValue(placementPolicyName string) string {
+	const lenLimit, hashLen = 61, 12
+	if len(placementPolicyName) <= lenLimit {
+		return placementPolicyName
+	}
+	hash := fmt.Sprintf("%x", sha256.Sum256([]byte(placementPolicyName)))[:hashLen]
+	return fmt.Sprintf("%s-%s", placementPolicyName[:lenLimit-hashLen-1], hash)
+}
+
+// longDottedName returns a random name of exactly the given length that starts with the given prefix, and contains
+// dots every 50 characters or so; it is a valid DNS subdomain name as long as the length does not exceed 253.
+func longDottedName(prefix string, length int) string {
+	name := fmt.Sprintf("%s-%s", prefix, utils.RandStr())
+	for len(name) < length {
+		remaining := length - len(name)
+		if remaining == 1 {
+			// Avoid a trailing dot.
+			name += "a"
+			break
+		}
+		name += "." + strings.Repeat("a", min(remaining-1, 50))
+	}
+	return name
 }
 
 // createPlacementBinding creates a placement binding that binds a placement resource snapshot to a member cluster;
@@ -460,8 +505,8 @@ func wantWorkForPlacementResourceSnapshot(
 			Name:      workName,
 			Labels: map[string]string{
 				placementv1alpha1.WorkOwnerNamespaceLabelKey:          bindingNS,
-				placementv1alpha1.WorkOwnedByPlacementPolicyLabelKey:  placementPolicyName,
-				placementv1alpha1.WorkOwnedByPlacementBindingLabelKey: bindingName,
+				placementv1alpha1.WorkOwnedByPlacementPolicyLabelKey:  workOwnerLabelValue(placementPolicyName),
+				placementv1alpha1.WorkOwnedByPlacementBindingLabelKey: workOwnerLabelValue(bindingName),
 			},
 			Annotations: map[string]string{
 				placementv1alpha1.WorkLinkedToPrimaryPlacementResourceSnapshotAnnotationKey: primarySnapshotName,
@@ -526,6 +571,39 @@ func wantPlacementBindingStatusSyncedAndAvailable(selectedResources int32, snaps
 	}
 }
 
+// wantPlacementBindingStatusInvalidSnapshots builds the placement binding status that the work generator is expected
+// to report when the placement resource snapshots that a placement binding has been rolled out to are invalid. The
+// resource counters are tallied from the work objects of the last processed placement resource snapshot, all of
+// which are expected to have been applied and become available. For a rollout to a different snapshot, previousStatus
+// supplies the Available condition to preserve; nil expects an incomplete set of resources instead.
+func wantPlacementBindingStatusInvalidSnapshots(placedResources int32, lastProcessedSnapshotName string, previousStatus *placementv1alpha1.PlacementBindingStatus) *placementv1alpha1.PlacementBindingStatus {
+	wantStatus := &placementv1alpha1.PlacementBindingStatus{
+		Conditions: []metav1.Condition{
+			{
+				Type:   placementv1alpha1.PlacementBindingCondTypeSynchronized,
+				Status: metav1.ConditionFalse,
+				Reason: placementv1alpha1.PlacementBindingSynchronizedCondReasonInvalidSnapshots,
+			},
+			{
+				Type:   placementv1alpha1.PlacementBindingCondTypeAvailable,
+				Status: metav1.ConditionFalse,
+				Reason: placementv1alpha1.PlacementBindingAvailableCondReasonIncompleteSetOfResources,
+			},
+		},
+		SelectedResources:                 ptr.To(placedResources),
+		SynchronizedResources:             ptr.To(placedResources),
+		AvailableResources:                ptr.To(placedResources),
+		LastProcessedResourceSnapshotName: ptr.To(lastProcessedSnapshotName),
+	}
+	if previousStatus != nil {
+		wantStatus.Conditions = wantStatus.Conditions[:1]
+		if availableCond := meta.FindStatusCondition(previousStatus.Conditions, placementv1alpha1.PlacementBindingCondTypeAvailable); availableCond != nil {
+			wantStatus.Conditions = append(wantStatus.Conditions, *availableCond)
+		}
+	}
+	return wantStatus
+}
+
 func placementBindingFinalizerAddedActual(bindingNS, bindingName string) func() error {
 	return func() error {
 		// Retrieve the placement binding.
@@ -544,13 +622,14 @@ func placementBindingFinalizerAddedActual(bindingNS, bindingName string) func() 
 
 func worksGeneratedActual(clusterName, bindingNS, bindingName string, wantWorks []placementv1alpha1.Work) func() error {
 	return func() error {
-		// List the work objects owned by the placement binding.
+		// List the work objects owned by the placement binding (the owner label carries a hashed value for long or
+		// dotted placement binding names).
 		workList := &placementv1alpha1.WorkList{}
 		listOptions := []client.ListOption{
 			client.InNamespace(fmt.Sprintf(utils.NamespaceNameFormat, clusterName)),
 			client.MatchingLabels{
 				placementv1alpha1.WorkOwnerNamespaceLabelKey:          bindingNS,
-				placementv1alpha1.WorkOwnedByPlacementBindingLabelKey: bindingName,
+				placementv1alpha1.WorkOwnedByPlacementBindingLabelKey: workOwnerLabelValue(bindingName),
 			},
 		}
 		if err := hubClient.List(ctx, workList, listOptions...); err != nil {
@@ -621,6 +700,27 @@ func placementBindingStatusMatchesActual(bindingNS, bindingName string, wantStat
 	}
 }
 
+// placementBindingSyncCondMessageActual verifies that the message of the Synchronized condition on a placement binding
+// contains the given substring; the status comparison helpers ignore condition messages.
+func placementBindingSyncCondMessageActual(bindingNS, bindingName, wantMsgSubstr string) func() error {
+	return func() error {
+		// Retrieve the placement binding.
+		binding, err := getPlacementBinding(bindingNS, bindingName)
+		if err != nil {
+			return err
+		}
+
+		syncCond := meta.FindStatusCondition(binding.GetStatus().Conditions, placementv1alpha1.PlacementBindingCondTypeSynchronized)
+		if syncCond == nil {
+			return fmt.Errorf("the Synchronized condition is not found on the placement binding")
+		}
+		if !strings.Contains(syncCond.Message, wantMsgSubstr) {
+			return fmt.Errorf("the Synchronized condition message = %q, want it to contain %q", syncCond.Message, wantMsgSubstr)
+		}
+		return nil
+	}
+}
+
 // markWorkAsAppliedAndAvailable updates the status of a work object to mark it (and all of its manifests) as
 // applied and available, as the KubeFleet member agent would do.
 func markWorkAsAppliedAndAvailable(workNS, workName string, manifestIdentifiers []placementv1alpha1.ManifestIdentifier) {
@@ -640,7 +740,7 @@ func markWorkAsAppliedAndAvailable(workNS, workName string, manifestIdentifiers 
 					Status:             metav1.ConditionTrue,
 					ObservedGeneration: 1,
 					Reason:             markedAsAppliedReason,
-					Message:            "Manifest has been marked as applied",
+					Message:            markedAsAppliedManifestMsg,
 					LastTransitionTime: now,
 				},
 				{
@@ -661,7 +761,7 @@ func markWorkAsAppliedAndAvailable(workNS, workName string, manifestIdentifiers 
 				Status:             metav1.ConditionTrue,
 				ObservedGeneration: work.Generation,
 				Reason:             markedAsAppliedReason,
-				Message:            "Work has been marked as applied",
+				Message:            markedAsAppliedWorkMsg,
 				LastTransitionTime: now,
 			},
 			{
@@ -736,7 +836,7 @@ func markWorkManifestsAsFailed(
 		Status:             metav1.ConditionTrue,
 		ObservedGeneration: 1,
 		Reason:             markedAsAppliedReason,
-		Message:            "Manifest has been marked as applied",
+		Message:            markedAsAppliedManifestMsg,
 		LastTransitionTime: now,
 	}
 	availableCond := metav1.Condition{
@@ -794,7 +894,7 @@ func markWorkManifestsAsFailed(
 		Status:             metav1.ConditionTrue,
 		ObservedGeneration: work.Generation,
 		Reason:             markedAsAppliedReason,
-		Message:            "Work has been marked as applied",
+		Message:            markedAsAppliedWorkMsg,
 		LastTransitionTime: now,
 	}
 	if len(failedToApplyOrdinals) > 0 {
@@ -856,6 +956,22 @@ func updatePlacementBindingSyncStrategy(bindingNS, bindingName string, syncStrat
 	}, eventuallyDuration, eventuallyInterval).Should(Succeed(), "Failed to update the sync strategy of the placement binding")
 }
 
+// updatePlacementBindingSpec updates the spec of a placement binding with the given mutation in one write.
+func updatePlacementBindingSpec(bindingNS, bindingName string, mutate func(spec *placementv1alpha1.PlacementBindingSpec)) {
+	Eventually(func() error {
+		binding, err := getPlacementBinding(bindingNS, bindingName)
+		if err != nil {
+			return err
+		}
+
+		mutate(binding.GetSpec())
+		if err := hubClient.Update(ctx, binding); err != nil {
+			return fmt.Errorf("failed to update the placement binding: %w", err)
+		}
+		return nil
+	}, eventuallyDuration, eventuallyInterval).Should(Succeed(), "Failed to update the spec of the placement binding")
+}
+
 // placementBindingFinalizerRemovedActual verifies that the cleanup finalizer is absent from a placement binding.
 func placementBindingFinalizerRemovedActual(bindingNS, bindingName string) func() error {
 	return func() error {
@@ -896,6 +1012,130 @@ func deleteWork(workNS, workName string) {
 		},
 	}
 	Expect(client.IgnoreNotFound(hubClient.Delete(ctx, work))).To(Succeed(), "Failed to delete the work object")
+}
+
+// markWorkAsApplied updates the status of a work object to mark it (and all of its manifests) as applied, as the
+// KubeFleet member agent would do before it completes the availability checks; no Available conditions are set.
+func markWorkAsApplied(workNS, workName string, manifestIdentifiers []placementv1alpha1.ManifestIdentifier) {
+	// Retrieve the work object.
+	work := &placementv1alpha1.Work{}
+	Expect(hubClient.Get(ctx, client.ObjectKey{Namespace: workNS, Name: workName}, work)).To(Succeed(), "Failed to retrieve the work object")
+
+	now := metav1.Now()
+	manifestStatuses := make([]placementv1alpha1.PerManifestStatus, len(manifestIdentifiers))
+	for idx := range manifestIdentifiers {
+		manifestStatuses[idx] = placementv1alpha1.PerManifestStatus{
+			Identifier: manifestIdentifiers[idx],
+			Conditions: []metav1.Condition{
+				{
+					Type:               placementv1alpha1.ManifestCondTypeApplied,
+					Status:             metav1.ConditionTrue,
+					ObservedGeneration: 1,
+					Reason:             markedAsAppliedReason,
+					Message:            markedAsAppliedManifestMsg,
+					LastTransitionTime: now,
+				},
+			},
+		}
+	}
+	work.Status = placementv1alpha1.WorkStatus{
+		Conditions: []metav1.Condition{
+			{
+				Type:               placementv1alpha1.WorkCondTypeApplied,
+				Status:             metav1.ConditionTrue,
+				ObservedGeneration: work.Generation,
+				Reason:             markedAsAppliedReason,
+				Message:            markedAsAppliedWorkMsg,
+				LastTransitionTime: now,
+			},
+		},
+		Manifests: manifestStatuses,
+	}
+	Expect(hubClient.Status().Update(ctx, work)).To(Succeed(), "Failed to mark the work object as applied")
+}
+
+// touchWorkStatus updates the status of a work object without changing any processing result, by giving the
+// work-level Applied condition a new message; the update still counts as a status change (i.e., it is an event the
+// work generator reacts to).
+func touchWorkStatus(workNS, workName string) {
+	Eventually(func() error {
+		work := &placementv1alpha1.Work{}
+		if err := hubClient.Get(ctx, client.ObjectKey{Namespace: workNS, Name: workName}, work); err != nil {
+			return fmt.Errorf("failed to retrieve the work object: %w", err)
+		}
+
+		appliedCond := meta.FindStatusCondition(work.Status.Conditions, placementv1alpha1.WorkCondTypeApplied)
+		if appliedCond == nil {
+			return fmt.Errorf("the work object has no Applied condition")
+		}
+		appliedCond.Message = fmt.Sprintf("Work has been marked as applied (touched: %s)", utils.RandStr())
+		if err := hubClient.Status().Update(ctx, work); err != nil {
+			return fmt.Errorf("failed to update the work object status: %w", err)
+		}
+		return nil
+	}, eventuallyDuration, eventuallyInterval).Should(Succeed(), "Failed to touch the work object status")
+}
+
+// setWorkAnnotation sets an annotation on a work object (a metadata-only change).
+func setWorkAnnotation(workNS, workName, key, value string) {
+	Eventually(func() error {
+		work := &placementv1alpha1.Work{}
+		if err := hubClient.Get(ctx, client.ObjectKey{Namespace: workNS, Name: workName}, work); err != nil {
+			return fmt.Errorf("failed to retrieve the work object: %w", err)
+		}
+
+		annotations := work.GetAnnotations()
+		if annotations == nil {
+			annotations = map[string]string{}
+		}
+		annotations[key] = value
+		work.SetAnnotations(annotations)
+		if err := hubClient.Update(ctx, work); err != nil {
+			return fmt.Errorf("failed to update the work object: %w", err)
+		}
+		return nil
+	}, eventuallyDuration, eventuallyInterval).Should(Succeed(), "Failed to set the annotation on the work object")
+}
+
+// workAnnotationActual verifies that a work object has the given annotation value.
+func workAnnotationActual(workNS, workName, key, wantValue string) func() error {
+	return func() error {
+		work := &placementv1alpha1.Work{}
+		if err := hubClient.Get(ctx, client.ObjectKey{Namespace: workNS, Name: workName}, work); err != nil {
+			return fmt.Errorf("failed to retrieve the work object: %w", err)
+		}
+		if got := work.GetAnnotations()[key]; got != wantValue {
+			return fmt.Errorf("work object annotation %s = %q, want %q", key, got, wantValue)
+		}
+		return nil
+	}
+}
+
+// createReservedNamespace creates the reserved namespace of a member cluster on the hub cluster.
+func createReservedNamespace(clusterName string) {
+	Expect(hubClient.Create(ctx, &corev1.Namespace{
+		ObjectMeta: metav1.ObjectMeta{Name: fmt.Sprintf(utils.NamespaceNameFormat, clusterName)},
+	})).Should(Succeed(), "Failed to create the reserved namespace for member cluster %s", clusterName)
+}
+
+// placementBindingStatusInOrderActual is the same as placementBindingStatusUpdatedActual, except that the failed
+// resources are compared in order (i.e., the order that the work generator reports them in is verified).
+func placementBindingStatusInOrderActual(bindingNS, bindingName string, wantStatus *placementv1alpha1.PlacementBindingStatus) func() error {
+	return func() error {
+		binding, err := getPlacementBinding(bindingNS, bindingName)
+		if err != nil {
+			return err
+		}
+
+		wantStatusWithObsGen := wantStatus.DeepCopy()
+		for idx := range wantStatusWithObsGen.Conditions {
+			wantStatusWithObsGen.Conditions[idx].ObservedGeneration = binding.GetGeneration()
+		}
+		if diff := cmp.Diff(*binding.GetStatus(), *wantStatusWithObsGen, ignoreFieldConditionLTTMsg); diff != "" {
+			return fmt.Errorf("placement binding status diff (-got +want):\n%s", diff)
+		}
+		return nil
+	}
 }
 
 // createForeignWork creates a work object with arbitrary labels and annotations, i.e., one that is not
@@ -944,5 +1184,502 @@ func workRemovedActual(workNS, workName string) func() error {
 			return fmt.Errorf("work object still exists or an unexpected error occurred: %w", err)
 		}
 		return nil
+	}
+}
+
+// scope describes the scope (namespace-scoped or cluster-scoped) of the placement bindings (and their placement
+// resource snapshots) that a test runs against.
+type scope struct {
+	name                string
+	bindingNS           string
+	bindingNameTemplate string
+	policyNameTemplate  string
+}
+
+var scopes = []scope{
+	{
+		name:                "namespace-scoped",
+		bindingNS:           appNamespaceName,
+		bindingNameTemplate: placementBindingNameTemplate,
+		policyNameTemplate:  placementPolicyNameTemplate,
+	},
+	{
+		name:                "cluster-scoped",
+		bindingNS:           clusterScopedNS,
+		bindingNameTemplate: clusterPlacementBindingNameTemplate,
+		policyNameTemplate:  clusterPlacementPolicyNameTemplate,
+	},
+}
+
+// Every placement resource snapshot that the binding fixture creates carries a NS, a Deployment, and a ConfigMap.
+const resourcesPerSnapshot = 3
+
+// snapshotSet is a set of placement resource snapshots that share the same index; the first one is the
+// primary snapshot (sub-index 0).
+type snapshotSet struct {
+	index       int
+	names       []string
+	resources   [][]placementv1alpha1.SnapshottedResource
+	snapshots   []placementv1alpha1.PlacementResourceSnapshotAccessor
+	identifiers [][]placementv1alpha1.ManifestIdentifier
+}
+
+func (s *snapshotSet) primaryName() string {
+	return s.names[0]
+}
+
+// resourceCount returns the number of resources across all the snapshots in the set.
+func (s *snapshotSet) resourceCount() int32 {
+	total := 0
+	for idx := range s.identifiers {
+		total += len(s.identifiers[idx])
+	}
+	return int32(total) //nolint:gosec // safe: the counts are tiny.
+}
+
+// bindingFixture bundles the objects and the expectations of a placement binding bound to a member cluster.
+// Its methods that touch the API server must be called at spec run time (not at tree construction time).
+type bindingFixture struct {
+	scope       scope
+	clusterName string
+	bindingName string
+	policyName  string
+	workNS      string
+
+	// The snapshot sets created (or prepared) so far, keyed by snapshot index.
+	sets map[int]*snapshotSet
+	// The names of the stray snapshots created so far; see createStraySnapshot.
+	strayNames []string
+	// The UIDs of the work objects, keyed by work name; recorded by tests that check if work objects are
+	// updated in place or re-created.
+	workUIDs map[string]types.UID
+	// The status and the resource version of the binding; recorded by tests that check if the binding is left
+	// untouched.
+	status          *placementv1alpha1.PlacementBindingStatus
+	resourceVersion string
+}
+
+func newBindingFixture(sc scope, clusterName string) *bindingFixture {
+	return newBindingFixtureWithNames(sc, clusterName,
+		fmt.Sprintf(sc.bindingNameTemplate, utils.RandStr()), fmt.Sprintf(sc.policyNameTemplate, utils.RandStr()))
+}
+
+// newBindingFixtureWithNames is the same as newBindingFixture, except that it uses the given binding and placement
+// policy names.
+func newBindingFixtureWithNames(sc scope, clusterName, bindingName, policyName string) *bindingFixture {
+	return &bindingFixture{
+		scope:       sc,
+		clusterName: clusterName,
+		bindingName: bindingName,
+		policyName:  policyName,
+		workNS:      fmt.Sprintf(utils.NamespaceNameFormat, clusterName),
+		sets:        map[int]*snapshotSet{},
+	}
+}
+
+// newFixtureOfSamePolicy returns a fixture for another binding of the same placement policy, bound to the given member
+// cluster. The two fixtures share their snapshot sets, i.e., snapshots created via one are visible to the other.
+func (f *bindingFixture) newFixtureOfSamePolicy(clusterName string) *bindingFixture {
+	other := newBindingFixtureWithNames(f.scope, clusterName, fmt.Sprintf(f.scope.bindingNameTemplate, utils.RandStr()), f.policyName)
+	other.sets = f.sets
+	return other
+}
+
+// createSnapshotWithResources creates a single placement resource snapshot of the given index with the given resources
+// (and their expected manifest identifiers), as the only snapshot of its index.
+func (f *bindingFixture) createSnapshotWithResources(
+	index int,
+	resources []placementv1alpha1.SnapshottedResource,
+	identifiers []placementv1alpha1.ManifestIdentifier,
+) *snapshotSet {
+	set := &snapshotSet{
+		index:       index,
+		names:       []string{fmt.Sprintf(placementResourceSnapshotNameTemplate, f.policyName, index)},
+		resources:   [][]placementv1alpha1.SnapshottedResource{resources},
+		snapshots:   make([]placementv1alpha1.PlacementResourceSnapshotAccessor, 1),
+		identifiers: [][]placementv1alpha1.ManifestIdentifier{identifiers},
+	}
+	f.sets[index] = set
+	f.createSnapshotsInSet(set)
+	return set
+}
+
+// createSnapshots creates `count` placement resource snapshots of the given index, each with its own NS, Deployment,
+// and ConfigMap.
+func (f *bindingFixture) createSnapshots(index, count int) *snapshotSet {
+	set := f.newSnapshotSet(index, count)
+	f.createSnapshotsInSet(set)
+	return set
+}
+
+// newSnapshotSet prepares (but does not create) `count` placement resource snapshots of the given index, each with its
+// own NS, Deployment, and ConfigMap; use createSnapshotsInSet to create them.
+func (f *bindingFixture) newSnapshotSet(index, count int) *snapshotSet {
+	set := &snapshotSet{
+		index:       index,
+		names:       make([]string, count),
+		resources:   make([][]placementv1alpha1.SnapshottedResource, count),
+		snapshots:   make([]placementv1alpha1.PlacementResourceSnapshotAccessor, count),
+		identifiers: make([][]placementv1alpha1.ManifestIdentifier, count),
+	}
+	suffix := utils.RandStr()
+	for subIdx := 0; subIdx < count; subIdx++ {
+		if subIdx == 0 {
+			set.names[subIdx] = fmt.Sprintf(placementResourceSnapshotNameTemplate, f.policyName, index)
+		} else {
+			set.names[subIdx] = fmt.Sprintf(subIndexedPlacementResourceSnapshotNameTemplate, f.policyName, index, subIdx)
+		}
+
+		nsName := fmt.Sprintf("ns-%s-%d", suffix, subIdx)
+		deployName := fmt.Sprintf(deployNameTemplate, subIdx)
+		configMapName := fmt.Sprintf(configMapNameTemplate, subIdx)
+		set.resources[subIdx] = []placementv1alpha1.SnapshottedResource{
+			nsSnapshottedResource(nsName),
+			deploySnapshottedResource(nsName, deployName),
+			configMapSnapshottedResource(nsName, configMapName),
+		}
+		set.identifiers[subIdx] = []placementv1alpha1.ManifestIdentifier{
+			nsManifestIdentifier(0, nsName),
+			deployManifestIdentifier(1, nsName, deployName),
+			configMapManifestIdentifier(2, nsName, configMapName),
+		}
+	}
+	f.sets[index] = set
+	return set
+}
+
+// createSnapshotsInSet creates the placement resource snapshots of the given sub-indices (all of them if none is
+// given) in a prepared snapshot set. The snapshots are created in descending order of their sub-indices, so that the
+// primary snapshot comes last, as the placement resource snapshot manager would do. It can also re-create snapshots
+// that have been deleted.
+func (f *bindingFixture) createSnapshotsInSet(set *snapshotSet, subIdxs ...int) {
+	if len(subIdxs) == 0 {
+		for subIdx := range set.names {
+			subIdxs = append(subIdxs, subIdx)
+		}
+	}
+	slices.Sort(subIdxs)
+	slices.Reverse(subIdxs)
+	for _, subIdx := range subIdxs {
+		set.snapshots[subIdx] = createSubIndexedPlacementResourceSnapshot(f.scope.bindingNS, set.names[subIdx], f.policyName,
+			set.index, subIdx, len(set.names), set.resources[subIdx]...)
+	}
+}
+
+// deleteSnapshot deletes a placement resource snapshot of a snapshot set, and waits until the deletion is observed
+// in the cache.
+func (f *bindingFixture) deleteSnapshot(setIdx, subIdx int) {
+	snapshotName := f.sets[setIdx].names[subIdx]
+	Eventually(placementResourceSnapshotRemovedActual(f.scope.bindingNS, snapshotName), eventuallyDuration, eventuallyInterval).Should(Succeed(), "Failed to remove the placement resource snapshot")
+}
+
+// createStraySnapshot creates a stray placement resource snapshot of the given index and sub-index under a name
+// different from the ones the fixture uses, e.g., one left over from a previous placement policy of the same name.
+// If it is a primary snapshot (sub-index 0), it carries the given count label. It returns the name of the snapshot.
+func (f *bindingFixture) createStraySnapshot(index, subIdx, count int, contentsHash string) string {
+	snapshotName := fmt.Sprintf(straySnapshotNameTemplate, f.policyName, index, subIdx, utils.RandStr())
+	createSubIndexedPlacementResourceSnapshotWithHash(f.scope.bindingNS, snapshotName, f.policyName, index, subIdx, count, contentsHash,
+		nsSnapshottedResource(fmt.Sprintf(nsNameTemplate, utils.RandStr())))
+	f.strayNames = append(f.strayNames, snapshotName)
+	return snapshotName
+}
+
+// deleteStraySnapshot deletes a stray placement resource snapshot, and waits until the deletion is observed in the
+// cache.
+func (f *bindingFixture) deleteStraySnapshot(snapshotName string) {
+	Eventually(placementResourceSnapshotRemovedActual(f.scope.bindingNS, snapshotName), eventuallyDuration, eventuallyInterval).Should(Succeed(), "Failed to remove the stray placement resource snapshot")
+}
+
+// createBinding creates the placement binding, bound to the primary snapshot of the given snapshot set.
+func (f *bindingFixture) createBinding(setIdx int) {
+	createPlacementBinding(f.scope.bindingNS, f.bindingName, f.policyName, f.clusterName, f.sets[setIdx].primaryName())
+}
+
+// workName returns the name of the work object derived from the snapshot with the given sub-index.
+func (f *bindingFixture) workName(subIdx int) string {
+	binding := newPlacementBindingObj(f.scope.bindingNS, f.bindingName)
+	binding.SetSpec(placementv1alpha1.PlacementBindingSpec{PlacementPolicyName: f.policyName})
+	return uniqueNameForWorkDerivedFromPlacementResourceSnapshot(binding, subIdx == 0,
+		&placementResourceSnapshotDerivedFromSourceFormatter{snapshotSubIdx: strconv.Itoa(subIdx)})
+}
+
+// worksMatchActual verifies that the work objects of the binding are exactly those derived from the given snapshot
+// set, with the given sync strategy.
+func (f *bindingFixture) worksMatchActual(setIdx int, syncStrategy *placementv1alpha1.SyncStrategy) func() error {
+	return func() error {
+		set := f.sets[setIdx]
+
+		// The secondary work objects should be owned by the primary work object; retrieve its current UID as it
+		// changes whenever the primary work object is re-created.
+		primaryWork := &placementv1alpha1.Work{}
+		if err := hubClient.Get(ctx, client.ObjectKey{Namespace: f.workNS, Name: f.workName(0)}, primaryWork); err != nil {
+			return fmt.Errorf("failed to retrieve the primary work object: %w", err)
+		}
+		ownerRef := &metav1.OwnerReference{
+			APIVersion:         placementv1alpha1.GroupVersion.String(),
+			Kind:               workKind,
+			Name:               primaryWork.Name,
+			UID:                primaryWork.UID,
+			Controller:         ptr.To(true),
+			BlockOwnerDeletion: ptr.To(true),
+		}
+
+		wantWorks := make([]placementv1alpha1.Work, len(set.names))
+		for subIdx := range set.names {
+			wantWorks[subIdx] = wantWorkForPlacementResourceSnapshot(f.workNS, f.workName(subIdx), f.scope.bindingNS, f.bindingName, f.policyName,
+				set.primaryName(), subIdx, len(set.names), ownerRef, set.snapshots[subIdx])
+			wantWorks[subIdx].Spec.SyncStrategy = syncStrategy.DeepCopy()
+		}
+		return worksGeneratedActual(f.clusterName, f.scope.bindingNS, f.bindingName, wantWorks)()
+	}
+}
+
+// noWorksActual verifies that there is no work object for the binding.
+func (f *bindingFixture) noWorksActual() func() error {
+	return worksGeneratedActual(f.clusterName, f.scope.bindingNS, f.bindingName, nil)
+}
+
+func (f *bindingFixture) waitingStatusActual(setIdx int) func() error {
+	set := f.sets[setIdx]
+	return placementBindingStatusUpdatedActual(f.scope.bindingNS, f.bindingName,
+		wantPlacementBindingStatusWaitingForSync(set.resourceCount(), set.primaryName()))
+}
+
+func (f *bindingFixture) syncedStatusActual(setIdx int) func() error {
+	set := f.sets[setIdx]
+	return placementBindingStatusUpdatedActual(f.scope.bindingNS, f.bindingName,
+		wantPlacementBindingStatusSyncedAndAvailable(set.resourceCount(), set.primaryName()))
+}
+
+// markWorks marks the work objects with the given sub-indices (all of them if none is given) as applied and
+// available.
+func (f *bindingFixture) markWorks(setIdx int, subIdxs ...int) {
+	set := f.sets[setIdx]
+	if len(subIdxs) == 0 {
+		for subIdx := range set.names {
+			subIdxs = append(subIdxs, subIdx)
+		}
+	}
+	for _, subIdx := range subIdxs {
+		markWorkAsAppliedAndAvailable(f.workNS, f.workName(subIdx), set.identifiers[subIdx])
+	}
+}
+
+// listWorkUIDs returns the UIDs of the work objects of the binding, keyed by work name.
+func (f *bindingFixture) listWorkUIDs() (map[string]types.UID, error) {
+	workList := &placementv1alpha1.WorkList{}
+	if err := hubClient.List(ctx, workList,
+		client.InNamespace(f.workNS),
+		client.MatchingLabels{
+			placementv1alpha1.WorkOwnerNamespaceLabelKey:          f.scope.bindingNS,
+			placementv1alpha1.WorkOwnedByPlacementBindingLabelKey: workOwnerLabelValue(f.bindingName),
+		},
+	); err != nil {
+		return nil, fmt.Errorf("failed to list work objects: %w", err)
+	}
+	uids := make(map[string]types.UID, len(workList.Items))
+	for idx := range workList.Items {
+		uids[workList.Items[idx].Name] = workList.Items[idx].UID
+	}
+	return uids, nil
+}
+
+// recordWorkUIDs records the current UIDs of the work objects of the binding.
+func (f *bindingFixture) recordWorkUIDs() {
+	uids, err := f.listWorkUIDs()
+	Expect(err).To(Succeed(), "Failed to list the work objects")
+	f.workUIDs = uids
+}
+
+// recordStatus records the current status and resource version of the binding.
+func (f *bindingFixture) recordStatus() {
+	binding, err := getPlacementBinding(f.scope.bindingNS, f.bindingName)
+	Expect(err).To(Succeed(), "Failed to retrieve the placement binding")
+	f.status = binding.GetStatus().DeepCopy()
+	f.resourceVersion = binding.GetResourceVersion()
+}
+
+// statusUnchangedActual verifies that the status of the binding matches the one last recorded, including the
+// observed generations of the conditions.
+func (f *bindingFixture) statusUnchangedActual() func() error {
+	return func() error {
+		return placementBindingStatusMatchesActual(f.scope.bindingNS, f.bindingName, f.status)()
+	}
+}
+
+// resourceVersionUnchangedActual verifies that the binding has the resource version last recorded, i.e., that it
+// has not been written to (spec or status) since.
+func (f *bindingFixture) resourceVersionUnchangedActual() func() error {
+	return func() error {
+		binding, err := getPlacementBinding(f.scope.bindingNS, f.bindingName)
+		if err != nil {
+			return err
+		}
+		if binding.GetResourceVersion() != f.resourceVersion {
+			return fmt.Errorf("placement binding resource version = %s, want %s", binding.GetResourceVersion(), f.resourceVersion)
+		}
+		return nil
+	}
+}
+
+// invalidSnapshotsStatusActual verifies the given status, preserving explicitly supplied observed generations, and
+// checks that the Synchronized condition reports invalid placement resource snapshots with the given details.
+func (f *bindingFixture) invalidSnapshotsStatusActual(wantStatus *placementv1alpha1.PlacementBindingStatus, wantMsgSubstr string) func() error {
+	return func() error {
+		binding, err := getPlacementBinding(f.scope.bindingNS, f.bindingName)
+		if err != nil {
+			return err
+		}
+		wantStatusWithObsGen := wantStatus.DeepCopy()
+		for idx := range wantStatusWithObsGen.Conditions {
+			if wantStatusWithObsGen.Conditions[idx].ObservedGeneration == 0 {
+				wantStatusWithObsGen.Conditions[idx].ObservedGeneration = binding.GetGeneration()
+			}
+		}
+		if err := placementBindingStatusMatchesActual(f.scope.bindingNS, f.bindingName, wantStatusWithObsGen)(); err != nil {
+			return err
+		}
+		if err := placementBindingSyncCondMessageActual(f.scope.bindingNS, f.bindingName, invalidSnapshotsMsgPrefix)(); err != nil {
+			return err
+		}
+		return placementBindingSyncCondMessageActual(f.scope.bindingNS, f.bindingName, wantMsgSubstr)()
+	}
+}
+
+// worksMatchBindingStrategyActual is the same as worksMatchActual, except that the work objects are expected to carry
+// the sync strategy of the binding as written to the API server (which might carry defaulted fields).
+func (f *bindingFixture) worksMatchBindingStrategyActual(setIdx int) func() error {
+	return func() error {
+		binding, err := getPlacementBinding(f.scope.bindingNS, f.bindingName)
+		if err != nil {
+			return err
+		}
+		syncStrategy := binding.GetSpec().SyncStrategy
+		if syncStrategy == nil {
+			return fmt.Errorf("the sync strategy has not been set on the placement binding")
+		}
+		return f.worksMatchActual(setIdx, syncStrategy)()
+	}
+}
+
+// expectWorksNotRecreated verifies that the work objects recorded earlier still exist with the same UIDs.
+func (f *bindingFixture) expectWorksNotRecreated() {
+	uids, err := f.listWorkUIDs()
+	Expect(err).To(Succeed(), "Failed to list the work objects")
+	for workName, wantUID := range f.workUIDs {
+		if uids[workName] != wantUID {
+			Fail(fmt.Sprintf("work object %s has been re-created or removed (UID %s, want %s)", workName, uids[workName], wantUID))
+		}
+	}
+}
+
+// updateSpec updates the spec of the binding with the given mutation in one write.
+func (f *bindingFixture) updateSpec(mutate func(spec *placementv1alpha1.PlacementBindingSpec)) {
+	updatePlacementBindingSpec(f.scope.bindingNS, f.bindingName, mutate)
+}
+
+// registerWorkGenerationSpecs registers the specs that generate the work objects from the given snapshot set and bring
+// the binding to the waiting-for-synchronization state.
+func (f *bindingFixture) registerWorkGenerationSpecs(setIdx int) {
+	It("should add cleanup finalizer to the placement binding", func() {
+		finalizerAddedActual := placementBindingFinalizerAddedActual(f.scope.bindingNS, f.bindingName)
+		Eventually(finalizerAddedActual, eventuallyDuration, eventuallyInterval).Should(Succeed(), "Failed to add cleanup finalizer to the placement binding")
+	})
+
+	It("should generate the work objects", func() {
+		Eventually(f.worksMatchActual(setIdx, nil), eventuallyDuration, eventuallyInterval).Should(Succeed(), "Failed to generate the work objects")
+	})
+
+	It("should refresh the placement binding status", func() {
+		Eventually(f.waitingStatusActual(setIdx), eventuallyDuration, eventuallyInterval).Should(Succeed(), "Failed to refresh the placement binding status")
+	})
+}
+
+// registerBaselineSpecs registers the specs that generate the work objects from the given snapshot set and bring the
+// binding to the synchronized and available state.
+func (f *bindingFixture) registerBaselineSpecs(setIdx int) {
+	f.registerWorkGenerationSpecs(setIdx)
+
+	It("can mark the work objects as applied and available", func() {
+		f.markWorks(setIdx)
+	})
+
+	It("should refresh the placement binding status", func() {
+		Eventually(f.syncedStatusActual(setIdx), eventuallyDuration, eventuallyInterval).Should(Succeed(), "Failed to refresh the placement binding status")
+		f.recordStatus()
+	})
+}
+
+// markWorksAsApplied marks all the work objects of the given snapshot set as applied (but not yet checked for
+// availability).
+func (f *bindingFixture) markWorksAsApplied(setIdx int) {
+	set := f.sets[setIdx]
+	for subIdx := range set.names {
+		markWorkAsApplied(f.workNS, f.workName(subIdx), set.identifiers[subIdx])
+	}
+}
+
+// workGeneration returns the generation of the work object derived from the snapshot with the given sub-index.
+func (f *bindingFixture) workGeneration(subIdx int) int64 {
+	work := &placementv1alpha1.Work{}
+	Expect(hubClient.Get(ctx, client.ObjectKey{Namespace: f.workNS, Name: f.workName(subIdx)}, work)).To(Succeed(), "Failed to retrieve the work object")
+	return work.Generation
+}
+
+// syncCondTransitionedSinceRecordActual verifies that the Synchronized condition of the binding has transitioned
+// (i.e., has a later last transition time) since the status was last recorded.
+func (f *bindingFixture) syncCondTransitionedSinceRecordActual() func() error {
+	return func() error {
+		recordedCond := meta.FindStatusCondition(f.status.Conditions, placementv1alpha1.PlacementBindingCondTypeSynchronized)
+		if recordedCond == nil {
+			return fmt.Errorf("the recorded status has no Synchronized condition")
+		}
+
+		binding, err := getPlacementBinding(f.scope.bindingNS, f.bindingName)
+		if err != nil {
+			return err
+		}
+		syncCond := meta.FindStatusCondition(binding.GetStatus().Conditions, placementv1alpha1.PlacementBindingCondTypeSynchronized)
+		if syncCond == nil {
+			return fmt.Errorf("the Synchronized condition is not found on the placement binding")
+		}
+		if !syncCond.LastTransitionTime.After(recordedCond.LastTransitionTime.Time) {
+			return fmt.Errorf("the Synchronized condition last transitioned at %v, want a time after %v",
+				syncCond.LastTransitionTime, recordedCond.LastTransitionTime)
+		}
+		return nil
+	}
+}
+
+// syncWorks generates the work objects from the given snapshot set and brings the binding to the synchronized and
+// available state in one go; it is for bindings that are not the focus of a test.
+func (f *bindingFixture) syncWorks(setIdx int) {
+	Eventually(f.worksMatchActual(setIdx, nil), eventuallyDuration, eventuallyInterval).Should(Succeed(), "Failed to generate the work objects")
+	Eventually(f.waitingStatusActual(setIdx), eventuallyDuration, eventuallyInterval).Should(Succeed(), "Failed to refresh the placement binding status")
+	f.markWorks(setIdx)
+	Eventually(f.syncedStatusActual(setIdx), eventuallyDuration, eventuallyInterval).Should(Succeed(), "Failed to refresh the placement binding status")
+}
+
+// teardown removes the binding, its leftover work objects, and the snapshots.
+func (f *bindingFixture) teardown() {
+	Expect(client.IgnoreNotFound(hubClient.Delete(ctx, newPlacementBindingObj(f.scope.bindingNS, f.bindingName)))).To(Succeed(), "Failed to delete the placement binding")
+	Eventually(placementBindingRemovedActual(f.scope.bindingNS, f.bindingName), eventuallyDuration, eventuallyInterval).Should(Succeed(), "Failed to remove the placement binding")
+
+	// The work generator deletes only the primary work object upon cleanup, and the secondary work objects are left to
+	// K8s' garbage collection, which does not run in the test environment; delete any leftover explicitly.
+	uids, err := f.listWorkUIDs()
+	Expect(err).To(Succeed(), "Failed to list the work objects")
+	for workName := range uids {
+		deleteWork(f.workNS, workName)
+		Eventually(workRemovedActual(f.workNS, workName), eventuallyDuration, eventuallyInterval).Should(Succeed(), "Failed to remove the work object")
+	}
+
+	for _, set := range f.sets {
+		for _, snapshotName := range set.names {
+			Eventually(placementResourceSnapshotRemovedActual(f.scope.bindingNS, snapshotName), eventuallyDuration, eventuallyInterval).Should(Succeed(), "Failed to remove the placement resource snapshot")
+		}
+	}
+	for _, snapshotName := range f.strayNames {
+		Eventually(placementResourceSnapshotRemovedActual(f.scope.bindingNS, snapshotName), eventuallyDuration, eventuallyInterval).Should(Succeed(), "Failed to remove the stray placement resource snapshot")
 	}
 }

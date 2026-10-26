@@ -51,14 +51,20 @@ type Reconciler struct {
 	hubClient client.Client
 
 	parallelizer parallelizerutil.Parallelizer
+
+	// rateLimiter is the rate limiter for requeues of failed reconciliations; nil means the controller-runtime default.
+	rateLimiter workqueue.TypedRateLimiter[reconcile.Request]
 }
 
-func New(hubClient client.Client, workerCnt int) *Reconciler {
+// New returns a new work generator reconciler. If rateLimiter is nil, the default rate limiter of controller-runtime
+// is used for requeues of failed reconciliations.
+func New(hubClient client.Client, workerCnt int, rateLimiter workqueue.TypedRateLimiter[reconcile.Request]) *Reconciler {
 	parallelizer := parallelizerutil.NewParallelizer(workerCnt)
 
 	return &Reconciler{
 		hubClient:    hubClient,
 		parallelizer: parallelizer,
+		rateLimiter:  rateLimiter,
 	}
 }
 
@@ -88,8 +94,7 @@ func (r *Reconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.Resu
 	// suspended.
 	if placementBinding.GetDeletionTimestamp() != nil || placementBindingSpec.Suspended {
 		if err := r.cleanupWorks(ctx, placementBinding); err != nil {
-			wrappedErr := errors.Wraps(err, "failed to clean up work objects for placement binding",
-				"placementBinding", klog.KObj(placementBinding), "controller", controllerName)
+			wrappedErr := errors.Wraps(err, "", "placementBinding", klog.KObj(placementBinding), "controller", controllerName)
 			klog.ErrorS(wrappedErr, "failed to clean up work objects for placement binding",
 				errors.Args(wrappedErr)...)
 			return ctrl.Result{}, wrappedErr
@@ -98,8 +103,7 @@ func (r *Reconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.Resu
 	}
 	// Add the cleanup finalizer if it is not already present.
 	if err := r.addPlacementBindingCleanupFinalizer(ctx, placementBinding); err != nil {
-		wrappedErr := errors.Wraps(err, "failed to add cleanup finalizer to placement binding",
-			"placementBinding", klog.KObj(placementBinding), "controller", controllerName)
+		wrappedErr := errors.Wraps(err, "", "placementBinding", klog.KObj(placementBinding), "controller", controllerName)
 		klog.ErrorS(wrappedErr, "failed to add cleanup finalizer to placement binding", errors.Args(wrappedErr)...)
 		return ctrl.Result{}, wrappedErr
 	}
@@ -137,26 +141,44 @@ func (r *Reconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.Resu
 	// not guaranteed to auto-recover. Any inadvertent changes, however, will be overwritten upon rollouts.
 	workSyncRes, err := areWorksInSync(placementBinding, works)
 	if err != nil {
-		wrappedErr := errors.Wraps(err, "failed to check if work objects are in sync",
+		wrappedErr := errors.Wraps(err, "",
 			"placementBinding", klog.KObj(placementBinding), "targetCluster", placementBindingSpec.ClusterName,
 			"controller", controllerName)
 		klog.ErrorS(wrappedErr, "failed to check if work objects are in sync", errors.Args(wrappedErr)...)
 		return ctrl.Result{}, wrappedErr
 	}
-	if workSyncRes == workSyncStatusInSync {
-		klog.V(2).InfoS("Work objects are in sync for the placement binding; refreshing placement binding status",
+	switch workSyncRes {
+	case workSyncStatusInSync:
+		klog.V(2).InfoS("Work objects are fully in sync with the placement binding; refreshing placement binding status",
 			"placementBinding", klog.KObj(placementBinding), "targetCluster", placementBindingSpec.ClusterName,
 			"controller", controllerName)
 		if err := r.refreshPlacementBindingStatus(ctx, placementBinding, works); err != nil {
-			wrappedErr := errors.Wraps(err, "failed to refresh placement binding status",
+			wrappedErr := errors.Wraps(err, "",
 				"placementBinding", klog.KObj(placementBinding), "targetCluster", placementBindingSpec.ClusterName,
 				"controller", controllerName)
 			klog.ErrorS(wrappedErr, "failed to refresh placement binding status", errors.Args(wrappedErr)...)
 			return ctrl.Result{}, wrappedErr
 		}
 		return ctrl.Result{}, nil
+	case workSyncStatusStrategyOutOfSync:
+		// In this situation the work objects always have a spec change, so that the work generator can just
+		// wait for the status change events on the work objects to arrive to have the binding status refreshed.
+		//
+		// Note that the controller does not reset the binding status in this situation, unlike in the scenario below
+		// (resource changes to apply); it is considered OK as the set of selected resources remains consistent.
+		klog.V(2).InfoS("There are sync strategy changes not yet applied to the work objects; reconciling",
+			"placementBinding", klog.KObj(placementBinding), "targetCluster", placementBindingSpec.ClusterName,
+			"controller", controllerName)
+		if err := r.refreshSyncStrategyOnlyForWorks(ctx, placementBinding, works); err != nil {
+			wrappedErr := errors.Wraps(err, "",
+				"placementBinding", klog.KObj(placementBinding), "targetCluster", placementBindingSpec.ClusterName,
+				"controller", controllerName)
+			klog.ErrorS(wrappedErr, "failed to refresh sync strategy for work objects", errors.Args(wrappedErr)...)
+			return ctrl.Result{}, wrappedErr
+		}
+		return ctrl.Result{}, nil
 	}
-	klog.V(2).InfoS("Work objects are not in sync for the placement binding; reconciling",
+	klog.V(2).InfoS("Found resource changes not in sync with the work objects; reconciling",
 		"placementBinding", klog.KObj(placementBinding), "targetCluster", placementBindingSpec.ClusterName,
 		"workSyncStatus", workSyncRes, "controller", controllerName)
 
@@ -167,11 +189,27 @@ func (r *Reconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.Resu
 	// Retrieve the assigned primary and secondary placement resource snapshots referenced by the placement binding.
 	placementResourceSnapshots, err := r.retrievePrimaryAndSecondaryPlacementResourceSnapshots(ctx, placementBinding)
 	if err != nil {
-		wrappedErr := errors.Wraps(err, "failed to retrieve placement resource snapshots",
+		if apierrors.IsNotFound(err) || errors.Category(err) == errors.ErrCategoryUser {
+			// There exists a corner case where, due to stale caches, a binding updated with a new placement resource
+			// snapshot fails its reconciliation at this step due to the snapshot not being found in the cache.
+			// The situation should self-recover upon retries; for simplicity and performance reasons
+			// no additional checks are made in the control loop.
+			if statusErr := r.markPlacementBindingAsFailedToSynchronizeDueToInvalidSnapshots(ctx, placementBinding, works, err.Error()); statusErr != nil {
+				wrappedErr := errors.Wraps(statusErr,
+					"failed to mark placement binding as failed to synchronize due to invalid snapshots",
+					"originalErr", err,
+					"placementBinding", klog.KObj(placementBinding), "targetCluster", placementBindingSpec.ClusterName,
+					"controller", controllerName)
+				klog.ErrorS(wrappedErr, "failed to mark placement binding as failed to synchronize due to invalid snapshots", errors.Args(wrappedErr)...)
+				return ctrl.Result{}, wrappedErr
+			}
+		}
+		wrappedErr := errors.Wraps(err, "",
 			"placementBinding", klog.KObj(placementBinding), "targetCluster", placementBindingSpec.ClusterName,
 			"controller", controllerName)
-		klog.ErrorS(wrappedErr, "failed to retrieve placement resource snapshots referenced by binding",
+		klog.ErrorS(wrappedErr, "failed to retrieve placement resource snapshots",
 			errors.Args(wrappedErr)...)
+		// Keep retrying as the work generator does not watch for snapshot changes.
 		return ctrl.Result{}, wrappedErr
 	}
 
@@ -180,17 +218,17 @@ func (r *Reconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.Resu
 	// Note that if any of the work objects we have checked are stale, the refreshing would fail with an error.
 	createdOrUpdatedWorks, workSpecsChanged, err := r.refreshWorks(ctx, placementBinding, placementResourceSnapshots, works)
 	if err != nil {
-		wrappedErr := errors.Wraps(err, "failed to refresh work objects",
+		wrappedErr := errors.Wraps(err, "",
 			"placementBinding", klog.KObj(placementBinding), "targetCluster", placementBindingSpec.ClusterName,
 			"controller", controllerName)
-		klog.ErrorS(wrappedErr, "failed to refresh work objects for placement binding",
+		klog.ErrorS(wrappedErr, "failed to refresh work objects",
 			errors.Args(wrappedErr)...)
 		return ctrl.Result{}, wrappedErr
 	}
 
 	// Report the processing progress via placement binding status.
 	if err := r.reportPlacementBindingProcessingProgress(ctx, placementBinding, placementResourceSnapshots[0], createdOrUpdatedWorks); err != nil {
-		wrappedErr := errors.Wraps(err, "failed to report placement binding processing progress",
+		wrappedErr := errors.Wraps(err, "",
 			"placementBinding", klog.KObj(placementBinding), "targetCluster", placementBindingSpec.ClusterName,
 			"controller", controllerName)
 		klog.ErrorS(wrappedErr, "failed to report placement binding processing progress",
@@ -273,7 +311,7 @@ func (r *Reconciler) SetupWithManager(mgr ctrl.Manager, maxConcurrentReconciles 
 
 	return ctrl.NewControllerManagedBy(mgr).
 		Named(controllerName).
-		WithOptions(controller.Options{MaxConcurrentReconciles: maxConcurrentReconciles}).
+		WithOptions(controller.Options{MaxConcurrentReconciles: maxConcurrentReconciles, RateLimiter: r.rateLimiter}).
 		// The controller watches placement binding objects (both namespace-scoped and cluster-scoped) for spec
 		// changes (generation predicate).
 		Watches(&placementv1alpha1.PlacementBinding{}, &handler.EnqueueRequestForObject{}, builder.WithPredicates(predicate.GenerationChangedPredicate{})).
