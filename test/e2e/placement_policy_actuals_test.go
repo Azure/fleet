@@ -105,6 +105,17 @@ type wantPlacementBinding struct {
 // in one shot. Each wanted binding is controlled by the policy, not being deleted, and carries the policy's sync
 // strategy.
 func placementPolicyBindingsActual(key types.NamespacedName, wantBindings map[string]wantPlacementBinding) func() error {
+	return comparePlacementPolicyBindingsActual(key, wantBindings, false)
+}
+
+// placementPolicyBindingsIgnoringOrphansActual is placementPolicyBindingsActual for a policy re-created under the name
+// of one deleted with orphan propagation: the orphaned bindings that it has not adopted, i.e., those that no object
+// controls, are left out of the comparison.
+func placementPolicyBindingsIgnoringOrphansActual(key types.NamespacedName, wantBindings map[string]wantPlacementBinding) func() error {
+	return comparePlacementPolicyBindingsActual(key, wantBindings, true)
+}
+
+func comparePlacementPolicyBindingsActual(key types.NamespacedName, wantBindings map[string]wantPlacementBinding, ignoreOrphans bool) func() error {
 	return func() error {
 		policy, err := retrievePlacementPolicy(key)
 		if err != nil {
@@ -122,6 +133,9 @@ func placementPolicyBindingsActual(key types.NamespacedName, wantBindings map[st
 		got := make(map[string]placementBindingView, len(bindings))
 		generations := make(map[string]int64, len(bindings))
 		for _, binding := range bindings {
+			if ignoreOrphans && metav1.GetControllerOf(binding) == nil {
+				continue
+			}
 			clusterName := binding.GetSpec().ClusterName
 			if _, found := got[clusterName]; found {
 				return fmt.Errorf("placement policy %s has more than one binding for cluster %s", key, clusterName)
@@ -175,6 +189,25 @@ func allSynchronizedPlacementPolicyBindingsActual(
 	wantSelectorsByCluster map[string][]kfplacementv1alpha1.ClusterSelectorWithTermsOnly,
 	wantResourceCount int32,
 ) func() error {
+	return placementPolicyBindingsActual(key, allSynchronizedPlacementBindings(wantSelectorsByCluster, wantResourceCount))
+}
+
+// allSynchronizedAdoptedPlacementPolicyBindingsActual is allSynchronizedPlacementPolicyBindingsActual for a policy
+// re-created under the name of one deleted with orphan propagation; see placementPolicyBindingsIgnoringOrphansActual.
+func allSynchronizedAdoptedPlacementPolicyBindingsActual(
+	key types.NamespacedName,
+	wantSelectorsByCluster map[string][]kfplacementv1alpha1.ClusterSelectorWithTermsOnly,
+	wantResourceCount int32,
+) func() error {
+	return placementPolicyBindingsIgnoringOrphansActual(key, allSynchronizedPlacementBindings(wantSelectorsByCluster, wantResourceCount))
+}
+
+// allSynchronizedPlacementBindings returns the wanted bindings, keyed by cluster, that record the given cluster
+// selectors and report all of their wantResourceCount resources as synchronized and available.
+func allSynchronizedPlacementBindings(
+	wantSelectorsByCluster map[string][]kfplacementv1alpha1.ClusterSelectorWithTermsOnly,
+	wantResourceCount int32,
+) map[string]wantPlacementBinding {
 	wantBindings := make(map[string]wantPlacementBinding, len(wantSelectorsByCluster))
 	for clusterName, selectors := range wantSelectorsByCluster {
 		wantBindings[clusterName] = wantPlacementBinding{
@@ -182,7 +215,7 @@ func allSynchronizedPlacementPolicyBindingsActual(
 			status:    synchronizedPlacementBindingStatus(wantResourceCount),
 		}
 	}
-	return placementPolicyBindingsActual(key, wantBindings)
+	return wantBindings
 }
 
 // configMapDataOnClustersActual checks that the ConfigMap exists on each given cluster with exactly the given data.
@@ -872,9 +905,20 @@ type placementBindingOwnershipView struct {
 // UIDs in one shot. None of them is being deleted, and each is either controlled by the policy as it exists now
 // (wantControlled) or by no object at all, i.e., orphaned.
 func placementPolicyBindingOwnershipActual(key types.NamespacedName, wantUIDsByCluster map[string]types.UID, wantControlled bool) func() error {
+	var controlledClusterNames []string
+	if wantControlled {
+		controlledClusterNames = slices.Collect(maps.Keys(wantUIDsByCluster))
+	}
+	return placementPolicyBindingControllersActual(key, wantUIDsByCluster, controlledClusterNames...)
+}
+
+// placementPolicyBindingControllersActual compares, keyed by cluster, the bindings that name the policy with the given
+// UIDs in one shot. None of them is being deleted; those for the given clusters are controlled by the policy as it
+// exists now, and the others by no object at all, i.e., they are orphans that the policy has not adopted.
+func placementPolicyBindingControllersActual(key types.NamespacedName, wantUIDsByCluster map[string]types.UID, controlledClusterNames ...string) func() error {
 	return func() error {
 		var policy kfplacementv1alpha1.PlacementPolicyAccessor
-		if wantControlled {
+		if len(controlledClusterNames) > 0 {
 			var err error
 			if policy, err = retrievePlacementPolicy(key); err != nil {
 				return err
@@ -896,14 +940,88 @@ func placementPolicyBindingOwnershipActual(key types.NamespacedName, wantUIDsByC
 		}
 		want := make(map[string]placementBindingOwnershipView, len(wantUIDsByCluster))
 		for clusterName, uid := range wantUIDsByCluster {
+			controlled := slices.Contains(controlledClusterNames, clusterName)
 			want[clusterName] = placementBindingOwnershipView{
 				UID:                uid,
-				HasController:      wantControlled,
-				ControlledByPolicy: wantControlled,
+				HasController:      controlled,
+				ControlledByPolicy: controlled,
 			}
 		}
 		if diff := cmp.Diff(got, want); diff != "" {
 			return fmt.Errorf("placement policy %s binding ownership diff, keyed by cluster (-got, +want):\n%s", key, diff)
+		}
+		return nil
+	}
+}
+
+// orphanedPlacementBindingUnchangedActual checks that the binding naming the policy for the cluster is still the
+// orphan of the given UID, controlled by no object, and still at the given resource version, i.e., that nothing has
+// written to it since.
+func orphanedPlacementBindingUnchangedActual(key types.NamespacedName, clusterName string, wantUID types.UID, wantResourceVersion string) func() error {
+	return func() error {
+		bindings, err := placementPolicyBindingsByCluster(key)
+		if err != nil {
+			return err
+		}
+		binding, found := bindings[clusterName]
+		switch {
+		case !found:
+			return fmt.Errorf("placement policy %s has no binding for cluster %s", key, clusterName)
+		case binding.GetUID() != wantUID:
+			return fmt.Errorf("binding %s for cluster %s was replaced (UID %s, want %s)", binding.GetName(), clusterName, binding.GetUID(), wantUID)
+		case metav1.GetControllerOf(binding) != nil:
+			return fmt.Errorf("binding %s for cluster %s is controlled by %+v, want no controller", binding.GetName(), clusterName, metav1.GetControllerOf(binding))
+		case binding.GetResourceVersion() != wantResourceVersion:
+			return fmt.Errorf("binding %s for cluster %s changed (resource version %s, want %s; spec: %+v; status: %+v)",
+				binding.GetName(), clusterName, binding.GetResourceVersion(), wantResourceVersion, binding.GetSpec(), binding.GetStatus())
+		}
+		return nil
+	}
+}
+
+// placementPolicySnapshotsOrphanedActual checks that the policy, now gone, has left resource snapshots behind, none of
+// them owned by any object or being deleted.
+func placementPolicySnapshotsOrphanedActual(key types.NamespacedName) func() error {
+	return func() error {
+		snapshots, err := placementPolicySnapshots(key)
+		if err != nil {
+			return err
+		}
+		if len(snapshots) == 0 {
+			return fmt.Errorf("placement policy %s has left no resource snapshot behind", key)
+		}
+		for _, snapshot := range snapshots {
+			if len(snapshot.GetOwnerReferences()) > 0 {
+				return fmt.Errorf("resource snapshot %s of placement policy %s is still owned (owner references: %+v)", snapshot.GetName(), key, snapshot.GetOwnerReferences())
+			}
+			if !snapshot.GetDeletionTimestamp().IsZero() {
+				return fmt.Errorf("resource snapshot %s of placement policy %s is being deleted", snapshot.GetName(), key)
+			}
+		}
+		return nil
+	}
+}
+
+// placementPolicyWorksLinkedToSnapshotActual checks that every Work generated for the policy's bindings is linked to
+// the given primary resource snapshot and is not being deleted, i.e., that no Work of an earlier policy of the same
+// name is left.
+func placementPolicyWorksLinkedToSnapshotActual(key types.NamespacedName, wantSnapshotName string) func() error {
+	return func() error {
+		works, err := placementPolicyWorks(key)
+		if err != nil {
+			return err
+		}
+		if len(works) == 0 {
+			return fmt.Errorf("placement policy %s has no Works", key)
+		}
+		for i := range works {
+			work := &works[i]
+			if !work.DeletionTimestamp.IsZero() {
+				return fmt.Errorf("work %s of placement policy %s is being deleted", client.ObjectKeyFromObject(work), key)
+			}
+			if got := work.GetAnnotations()[kfplacementv1alpha1.WorkLinkedToPrimaryPlacementResourceSnapshotAnnotationKey]; got != wantSnapshotName {
+				return fmt.Errorf("work %s of placement policy %s is linked to resource snapshot %q, want %q", client.ObjectKeyFromObject(work), key, got, wantSnapshotName)
+			}
 		}
 		return nil
 	}

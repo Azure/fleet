@@ -19,29 +19,133 @@ package e2e
 import (
 	"fmt"
 
+	"github.com/google/go-cmp/cmp"
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/apimachinery/pkg/runtime/schema"
 	"k8s.io/apimachinery/pkg/types"
 	"k8s.io/apimachinery/pkg/util/intstr"
 	"k8s.io/utils/ptr"
 
 	kfplacementv1alpha1 "github.com/kubefleet-dev/kubefleet/apis/kubefleet.dev/placement/v1alpha1"
 	placementv1beta1 "github.com/kubefleet-dev/kubefleet/apis/placement/v1beta1"
+	"github.com/kubefleet-dev/kubefleet/pkg/controllers/workapplier"
 	"github.com/kubefleet-dev/kubefleet/test/e2e/framework"
 )
 
 const (
-	placementPolicyInteropCRPNameTemplate   = "pp-interop-crp-%d"
-	placementPolicyAfterCRPNameTemplate     = "pp-after-crp-%d"
-	placementPolicySharedFirstNameTemplate  = "pp-shared-first-%d"
-	placementPolicySharedSecondNameTemplate = "pp-shared-second-%d"
+	placementPolicyInteropCRPNameTemplate      = "pp-interop-crp-%d"
+	placementPolicyAfterCRPNameTemplate        = "pp-after-crp-%d"
+	placementPolicyInteropLaterCRPNameTemplate = "pp-interop-later-crp-%d"
+	placementPolicyBeforeCRPNameTemplate       = "pp-before-crp-%d"
+	placementPolicySharedFirstNameTemplate     = "pp-shared-first-%d"
+	placementPolicySharedSecondNameTemplate    = "pp-shared-second-%d"
 )
 
 // placementPolicyOwnedByOtherKubeFleetAPIObjectsReason is the apply result type, copied into a binding's failed
 // resources, of a manifest whose object an AppliedWork of the older placement APIs owns.
 const placementPolicyOwnedByOtherKubeFleetAPIObjectsReason = "OwnedByOtherKubeFleetAPIObjects"
+
+// isOlderPlacementAPIsAppliedWorkOwnerRef reports whether the owner reference points to an AppliedWork of the older
+// placement APIs, in any version of their API group.
+func isOlderPlacementAPIsAppliedWorkOwnerRef(ownerRef metav1.OwnerReference) bool {
+	gv, err := schema.ParseGroupVersion(ownerRef.APIVersion)
+	return err == nil && gv.Group == placementv1beta1.GroupVersion.Group && ownerRef.Kind == placementv1beta1.AppliedWorkKind
+}
+
+// configMapPlacedByPlacementPolicyOnlyActual checks that the given placement policy, and no other KubeFleet
+// placement API object of either experience, has placed the ConfigMap on the cluster; see
+// configMapPlacedByPlacementPolicyActual.
+func configMapPlacedByPlacementPolicyOnlyActual(cluster *framework.Cluster, cmKey, policyKey types.NamespacedName) func() error {
+	placedActual := configMapPlacedByPlacementPolicyActual(cluster, cmKey, policyKey)
+	return func() error {
+		if err := placedActual(); err != nil {
+			return err
+		}
+		cm := &corev1.ConfigMap{}
+		if err := cluster.KubeClient.Get(ctx, cmKey, cm); err != nil {
+			return fmt.Errorf("cluster %s: failed to get ConfigMap %s: %w", cluster.ClusterName, cmKey, err)
+		}
+		for _, ownerRef := range cm.OwnerReferences {
+			if isOlderPlacementAPIsAppliedWorkOwnerRef(ownerRef) {
+				return fmt.Errorf("cluster %s: ConfigMap %s is also owned by AppliedWork %s of the older placement APIs",
+					cluster.ClusterName, cmKey, ownerRef.Name)
+			}
+		}
+		return nil
+	}
+}
+
+// namespaceTakenOverByOlderPlacementAPIsActual checks that the namespace on the cluster, which the placement policy
+// work applier created without owning it, is now owned by an AppliedWork of the older placement APIs alone, i.e., that
+// a CRP has taken it over.
+func namespaceTakenOverByOlderPlacementAPIsActual(cluster *framework.Cluster, name string) func() error {
+	return func() error {
+		ns := &corev1.Namespace{}
+		if err := cluster.KubeClient.Get(ctx, types.NamespacedName{Name: name}, ns); err != nil {
+			return fmt.Errorf("cluster %s: failed to get namespace %s: %w", cluster.ClusterName, name, err)
+		}
+		if !ns.DeletionTimestamp.IsZero() {
+			return fmt.Errorf("cluster %s: namespace %s is being deleted", cluster.ClusterName, name)
+		}
+		if ownedByPlacementPolicyAppliedWork(ns) {
+			return fmt.Errorf("cluster %s: namespace %s is owned by an AppliedWork of the placement policy APIs (owner references: %+v)",
+				cluster.ClusterName, name, ns.OwnerReferences)
+		}
+		for _, ownerRef := range ns.OwnerReferences {
+			if isOlderPlacementAPIsAppliedWorkOwnerRef(ownerRef) {
+				return nil
+			}
+		}
+		return fmt.Errorf("cluster %s: namespace %s is not owned by an AppliedWork of the older placement APIs (owner references: %+v)",
+			cluster.ClusterName, name, ns.OwnerReferences)
+	}
+}
+
+// crpRefusedConfigMapOnClusterActual checks that the CRP, which places the work resources on the given cluster alone,
+// reports, for its current generation, that the namespace is applied but the ConfigMap is not, as a placement policy
+// already owns it.
+func crpRefusedConfigMapOnClusterActual(crpKey, cmKey types.NamespacedName, clusterName string) func() error {
+	return func() error {
+		crp := &placementv1beta1.ClusterResourcePlacement{}
+		if err := hubClient.Get(ctx, crpKey, crp); err != nil {
+			return err
+		}
+		wantStatus := placementv1beta1.PlacementStatus{
+			Conditions:        crpAppliedFailedConditions(crp.Generation),
+			SelectedResources: workResourceIdentifiers(),
+			PerClusterPlacementStatuses: []placementv1beta1.PerClusterPlacementStatus{
+				{
+					ClusterName:           clusterName,
+					ObservedResourceIndex: "0",
+					Conditions:            perClusterApplyFailedConditions(crp.Generation),
+					FailedPlacements: []placementv1beta1.FailedResourcePlacement{
+						{
+							ResourceIdentifier: placementv1beta1.ResourceIdentifier{
+								Version:   "v1",
+								Kind:      "ConfigMap",
+								Name:      cmKey.Name,
+								Namespace: cmKey.Namespace,
+							},
+							Condition: metav1.Condition{
+								Type:   string(placementv1beta1.PerClusterAppliedConditionType),
+								Status: metav1.ConditionFalse,
+								Reason: string(workapplier.ApplyOrReportDiffResTypeOwnedByOtherKubeFleetAPIObjects),
+							},
+						},
+					},
+				},
+			},
+			ObservedResourceIndex: "0",
+		}
+		if diff := cmp.Diff(crp.Status, wantStatus, placementStatusCmpOptions...); diff != "" {
+			return fmt.Errorf("CRP %s status diff (-got, +want):\n%s", crpKey.Name, diff)
+		}
+		return nil
+	}
+}
 
 // configMapPlacedByOlderPlacementAPIsOnlyActual checks that the ConfigMap on the cluster matches its hub copy and is
 // owned by an AppliedWork of the older placement APIs (e.g., that of a CRP), and by none of the placement policy APIs.
@@ -184,6 +288,169 @@ var _ = Describe("placement policy interoperability", Label("placementpolicy"), 
 				}
 				return cmActual()
 			}, consistentlyDuration, consistentlyInterval).Should(Succeed(), "The CRP or its ConfigMap on member cluster 1 changed")
+		})
+	})
+
+	Context("CRP selecting a namespace whose ConfigMap a placement policy has placed", Ordered, func() {
+		nsName := appNamespace().Name
+		crpKey := types.NamespacedName{Name: fmt.Sprintf(placementPolicyInteropLaterCRPNameTemplate, GinkgoParallelProcess())}
+		policyKey := types.NamespacedName{Namespace: nsName, Name: fmt.Sprintf(placementPolicyBeforeCRPNameTemplate, GinkgoParallelProcess())}
+		cmKey := types.NamespacedName{Namespace: nsName, Name: appConfigMap().Name}
+		// Both the policy and the CRP place on cluster-1 alone.
+		aliasLabels := map[string]string{placementv1beta1.ClusterAliasLabel: memberCluster1EastProdName}
+		wantSelectorsByCluster := map[string][]kfplacementv1alpha1.ClusterSelectorWithTermsOnly{
+			memberCluster1EastProdName: {clusterSelectorTermsMatchingLabels(aliasLabels)},
+		}
+
+		var policyCMUID types.UID
+
+		// policyUndisturbedActual checks that the policy still has the ConfigMap that it created placed on cluster-1,
+		// synchronized, and owned by its AppliedWork alone.
+		policyUndisturbedActual := func() func() error {
+			bindingsActual := allSynchronizedPlacementPolicyBindingsActual(policyKey, wantSelectorsByCluster, 1)
+			statusActual := placementPolicyStatusActual(policyKey, allSynchronizedPlacementPolicyStatus(1))
+			cmActual := configMapPlacedByPlacementPolicyOnlyActual(memberCluster1EastProd, cmKey, policyKey)
+			return func() error {
+				for _, actual := range []func() error{bindingsActual, statusActual, cmActual} {
+					if err := actual(); err != nil {
+						return err
+					}
+				}
+				uids, err := configMapUIDsByCluster(cmKey, memberCluster1EastProd)
+				if err != nil {
+					return err
+				}
+				if uids[memberCluster1EastProdName] != policyCMUID {
+					return fmt.Errorf("ConfigMap %s on member cluster 1 was re-created (UID %s, want %s)", cmKey, uids[memberCluster1EastProdName], policyCMUID)
+				}
+				return nil
+			}
+		}
+		// crpRefusedActual checks that the CRP has taken the namespace over but refuses the ConfigMap, leaving the policy
+		// alone.
+		crpRefusedActual := func() func() error {
+			statusActual := crpRefusedConfigMapOnClusterActual(crpKey, cmKey, memberCluster1EastProdName)
+			nsActual := namespaceTakenOverByOlderPlacementAPIsActual(memberCluster1EastProd, nsName)
+			policyActual := policyUndisturbedActual()
+			return func() error {
+				for _, actual := range []func() error{statusActual, nsActual, policyActual} {
+					if err := actual(); err != nil {
+						return err
+					}
+				}
+				return nil
+			}
+		}
+
+		BeforeAll(func() {
+			By("creating the work resources")
+			createWorkResources()
+
+			By("creating a placement policy that places the ConfigMap on member cluster 1")
+			policy := newPlacementPolicyObject(policyKey, kfplacementv1alpha1.PlacementPolicySpec{
+				ClusterSelectors: []kfplacementv1alpha1.ClusterSelector{
+					clusterSelectorMatchingLabels(aliasLabels, intstr.FromInt32(1)),
+				},
+				ResourceSelectors: placementPolicyResourceSelectors(),
+			})
+			Expect(hubClient.Create(ctx, policy)).To(Succeed(), "Failed to create placement policy %s", policyKey)
+		})
+
+		AfterAll(func() {
+			// The work resources must go even if removing the policy or the CRP fails; otherwise they leak into later
+			// specs.
+			defer cleanupWorkResourcesOnHubAndMembers()
+			// The policy goes first. The CRP owns the namespace that it took over, so deleting the CRP while the policy
+			// still places the ConfigMap would delete the namespace, and the ConfigMap in it, under the policy.
+			deletePlacementPolicyAndWait(policyKey)
+			ensureCRPAndRelatedResourcesDeleted(crpKey.Name, []*framework.Cluster{memberCluster1EastProd})
+		})
+
+		It("should place the ConfigMap on member cluster 1 through the placement policy, in a namespace that no one owns", func() {
+			Eventually(allSynchronizedPlacementPolicyBindingsActual(policyKey, wantSelectorsByCluster, 1), workloadEventuallyDuration, eventuallyInterval).
+				Should(Succeed(), "Failed to synchronize the binding of the placement policy")
+			Eventually(configMapPlacedByPlacementPolicyOnlyActual(memberCluster1EastProd, cmKey, policyKey), workloadEventuallyDuration, eventuallyInterval).
+				Should(Succeed(), "Failed to place the ConfigMap through the placement policy")
+			// The work applier creates the namespace of the ConfigMap but does not manage it.
+			Expect(namespaceLeftUnmanagedOnClustersActual(nsName, memberCluster1EastProd)()).
+				To(Succeed(), "The namespace of the ConfigMap on member cluster 1 is managed by KubeFleet")
+
+			uids, err := configMapUIDsByCluster(cmKey, memberCluster1EastProd)
+			Expect(err).NotTo(HaveOccurred(), "Failed to read the ConfigMap on member cluster 1")
+			policyCMUID = uids[memberCluster1EastProdName]
+			Eventually(policyUndisturbedActual(), workloadEventuallyDuration, eventuallyInterval).
+				Should(Succeed(), "Failed to report the placement policy as synchronized")
+		})
+
+		It("can create a CRP that places the app namespace, and the ConfigMap in it, on member cluster 1", func() {
+			crp := &placementv1beta1.ClusterResourcePlacement{
+				ObjectMeta: metav1.ObjectMeta{
+					Name: crpKey.Name,
+					// The custom finalizer lets ensureCRPAndRelatedResourcesDeleted observe the CRP's own cleanup.
+					Finalizers: []string{customDeletionBlockerFinalizer},
+				},
+				Spec: placementv1beta1.PlacementSpec{
+					ResourceSelectors: workResourceSelector(),
+					Strategy: placementv1beta1.RolloutStrategy{
+						Type: placementv1beta1.RollingUpdateRolloutStrategyType,
+						RollingUpdate: &placementv1beta1.RollingUpdateConfig{
+							UnavailablePeriodSeconds: ptr.To(2),
+						},
+					},
+					Policy: &placementv1beta1.PlacementPolicy{
+						PlacementType: placementv1beta1.PickFixedPlacementType,
+						ClusterNames:  []string{memberCluster1EastProdName},
+					},
+				},
+			}
+			Expect(hubClient.Create(ctx, crp)).To(Succeed(), "Failed to create CRP %s", crpKey.Name)
+		})
+
+		It("should refuse the ConfigMap for the CRP, taking over only the namespace, and leave the placement policy alone", func() {
+			// The namespace has no owner, so the CRP takes it over (the default whenToTakeOver is Always); the ConfigMap
+			// is owned by the placement policy's AppliedWork, which the older work applier refuses before any takeover.
+			Eventually(crpRefusedActual(), workloadEventuallyDuration, eventuallyInterval).
+				Should(Succeed(), "Failed to refuse the ConfigMap for the CRP")
+			Consistently(crpRefusedActual(), consistentlyDuration, consistentlyInterval).
+				Should(Succeed(), "The CRP took the ConfigMap over, or the placement policy changed")
+		})
+
+		It("can allow the CRP to share the ownership of the resources it places", func() {
+			Eventually(func() error {
+				crp := &placementv1beta1.ClusterResourcePlacement{}
+				if err := hubClient.Get(ctx, crpKey, crp); err != nil {
+					return err
+				}
+				if crp.Spec.Strategy.ApplyStrategy == nil {
+					crp.Spec.Strategy.ApplyStrategy = &placementv1beta1.ApplyStrategy{}
+				}
+				crp.Spec.Strategy.ApplyStrategy.AllowCoOwnership = true
+				return hubClient.Update(ctx, crp)
+			}, eventuallyDuration, eventuallyInterval).Should(Succeed(), "Failed to allow co-ownership on CRP %s", crpKey.Name)
+		})
+
+		It("should still refuse the ConfigMap for the CRP, and leave the placement policy alone", func() {
+			// The safeguard runs whatever the apply strategy, so co-ownership does not let the two placement experiences
+			// manage the same object. The CRP status is checked for the CRP's new generation.
+			Eventually(crpRefusedActual(), workloadEventuallyDuration, eventuallyInterval).
+				Should(Succeed(), "Failed to refuse the ConfigMap for the CRP with co-ownership allowed")
+			Consistently(crpRefusedActual(), consistentlyDuration, consistentlyInterval).
+				Should(Succeed(), "The CRP took the ConfigMap over, or the placement policy changed")
+		})
+
+		It("can delete the placement policy", func() {
+			deletePlacementPolicyAndWait(policyKey)
+		})
+
+		It("should let the CRP create the ConfigMap anew once the placement policy has removed it", func() {
+			Eventually(customizedPlacementStatusUpdatedActual(crpKey, workResourceIdentifiers(), []string{memberCluster1EastProdName}, nil, "0", true),
+				workloadEventuallyDuration, eventuallyInterval).Should(Succeed(), "Failed to report the CRP as applied")
+			Eventually(configMapPlacedByOlderPlacementAPIsOnlyActual(memberCluster1EastProd, cmKey), workloadEventuallyDuration, eventuallyInterval).
+				Should(Succeed(), "Failed to place the ConfigMap through the CRP")
+
+			uids, err := configMapUIDsByCluster(cmKey, memberCluster1EastProd)
+			Expect(err).NotTo(HaveOccurred(), "Failed to read the ConfigMap on member cluster 1")
+			Expect(uids[memberCluster1EastProdName]).NotTo(Equal(policyCMUID), "The CRP took over the placement policy's ConfigMap instead of creating it anew")
 		})
 	})
 
