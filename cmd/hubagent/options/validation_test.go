@@ -139,6 +139,21 @@ func TestValidation(t *testing.T) {
 			}),
 			want: field.ErrorList{field.Invalid(newPath.Child("EnablePlacementPolicyAPIs"), true, "the placement policy APIs require the v1beta1 APIs to be enabled")},
 		},
+		"annotation-based placement without the placement policy APIs": {
+			opt: newTestOptions(func(option *Options) {
+				option.FeatureFlags.EnableAnnotationBasedPlacement = true
+				option.FeatureFlags.EnablePlacementPolicyAPIs = false
+			}),
+			want: field.ErrorList{field.Invalid(newPath.Child("EnableAnnotationBasedPlacement"), true, "annotation-based placement requires the placement policy APIs to be enabled")},
+		},
+		"annotation-based placement with the placement policy APIs": {
+			opt: newTestOptions(func(option *Options) {
+				option.FeatureFlags.EnableAnnotationBasedPlacement = true
+				option.FeatureFlags.EnablePlacementPolicyAPIs = true
+				option.FeatureFlags.EnableV1Beta1APIs = true
+			}),
+			want: field.ErrorList{},
+		},
 		"rate limiter qps must be less than bucket size": {
 			opt: newTestOptions(func(option *Options) {
 				option.PlacementMgmtOpts.PlacementControllerWorkQueueRateLimiterOpts.RateLimiterQPS = 100

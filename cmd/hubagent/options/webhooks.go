@@ -82,9 +82,8 @@ type WebhookAndAdmissionPolicyOptions struct {
 	// is a YAML file that specifies configuration for each policy generator available
 	// in the admission policy manager. See the KubeFleet source code for more information.
 	// If not specified, the default configuration will be used, which enables all available
-	// policy generators if the placement policy APIs are enabled, and all but the placement
-	// annotation one (DenyPlacementAnnotationIfNoPlacementPolicyAPIAccess) otherwise. This option
-	// only applies if the admission policy manager is enabled.
+	// policy generators but the placement annotation one (DenyPlacementAnnotationIfNoPlacementPolicyAPIAccess).
+	// This option only applies if the admission policy manager is enabled.
 	AdmissionPolicyManagerConfig string
 }
 
@@ -166,7 +165,7 @@ func (o *WebhookAndAdmissionPolicyOptions) AddFlags(flags *flag.FlagSet) {
 		&o.AdmissionPolicyManagerConfig,
 		"admission-policy-manager-config",
 		"",
-		"A file path to the configuration file for the KubeFleet admission policy manager. The file is a JSON or YAML file that specifies configuration for each policy generator available in the admission policy manager. See the KubeFleet source code for more information. If not specified, the default configuration will be used, which enables all available policy generators if the placement policy APIs are enabled, and all but the placement annotation one (DenyPlacementAnnotationIfNoPlacementPolicyAPIAccess) otherwise. This option only applies if the admission policy manager is enabled.",
+		"A file path to the configuration file for the KubeFleet admission policy manager. The file is a JSON or YAML file that specifies configuration for each policy generator available in the admission policy manager. See the KubeFleet source code for more information. If not specified, the default configuration will be used, which enables all available policy generators but the placement annotation one (DenyPlacementAnnotationIfNoPlacementPolicyAPIAccess). This option only applies if the admission policy manager is enabled.",
 	)
 }
 

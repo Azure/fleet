@@ -92,6 +92,17 @@ func isInNamespaceWithPrefix(p string) CELExprTreeNode {
 	return RawCELExpr(fmt.Sprintf(`request.namespace.startsWith("%s")`, p))
 }
 
+// requestHasNamespace guards checks on request.namespace in policies that match cluster-scoped objects, as the
+// field is absent from requests on cluster-scoped objects (other than Namespace objects).
+func requestHasNamespace() CELExprTreeNode {
+	return RawCELExpr(`has(request.namespace)`)
+}
+
+// requestIsForKind checks the kind of the object in the request; the core API group is an empty string.
+func requestIsForKind(group, kind string) CELExprTreeNode {
+	return RawCELExpr(fmt.Sprintf(`request.kind.group == "%s" && request.kind.kind == "%s"`, group, kind))
+}
+
 func isFromUsername(u string) CELExprTreeNode {
 	return RawCELExpr(fmt.Sprintf(`request.userInfo.username == "%s"`, u))
 }

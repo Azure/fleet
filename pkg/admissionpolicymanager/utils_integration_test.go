@@ -37,6 +37,8 @@ const (
 	wantSvcAccountsAndTokenRequestsDenialMsg = "writing service accounts in reserved namespaces or requesting tokens from such service accounts is disallowed"
 	wantNamespacedObjDenialMsg               = "adding or changing the kubefleet.dev/cluster-selectors annotation on a namespaced object requires the permissions to create and update placementpolicies.placement.kubefleet.dev in the namespace of the object"
 	wantClusterScopedObjDenialMsg            = "adding or changing the kubefleet.dev/cluster-selectors annotation on a cluster-scoped object requires the permissions to create and update clusterplacementpolicies.placement.kubefleet.dev"
+	wantReservedNSAnnotationDenialMsg        = "adding or changing the kubefleet.dev/cluster-selectors annotation on reserved namespaces or objects in them is disallowed (reserved namespace prefixes: fleet-, kube-)"
+	wantEndpointsAnnotationDenialMsg         = "adding or changing the kubefleet.dev/cluster-selectors annotation on Endpoints objects is disallowed; Endpoints cannot be placed, and the annotation would be copied onto the EndpointSlices mirrored from them"
 )
 
 // A finalizer that test cases add to objects, so that the objects stay around (with a deletion timestamp set)

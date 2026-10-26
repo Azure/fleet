@@ -109,6 +109,7 @@ _See [helm install](https://helm.sh/docs/helm/helm_install/) for command documen
 | `enableClusterInventoryAPI` | Enable cluster inventory APIs | `true` |
 | `enableStagedUpdateRunAPIs` | Enable staged update run APIs | `true` |
 | `enablePlacementPolicyAPIs` | Enable the experimental FEP-0001 placement policy APIs (`placement.kubefleet.dev/v1alpha1`). Their controllers use fixed concurrency; `MaxConcurrentClusterPlacement` and `MaxFleetSizeSupported` don't apply to them | `false` |
+| `enableAnnotationBasedPlacement` | Enable the experimental annotation-based placement experience (the `kubefleet.dev/cluster-selectors` annotation); requires `enablePlacementPolicyAPIs` to be `true`. Only enable it if KubeFleet runs in a fully trusted environment, or if the hub cluster has the workload controllers of kube-controller-manager (e.g., the Deployment, StatefulSet, DaemonSet, and CronJob controllers) disabled and the protection validating admission policy (`DenyPlacementAnnotationIfNoPlacementPolicyAPIAccess`) installed; setting `enableWorkload` to `false` does not disable these controllers | `false` |
 | `enableEvictionAPIs` | Enable eviction APIs | `true` |
 | `enablePprof` | Enable the pprof endpoint (listens on loopback only; use `kubectl port-forward`) | `false` |
 | `pprofPort` | pprof server port | `6065` |

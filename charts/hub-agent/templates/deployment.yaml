@@ -59,6 +59,7 @@ spec:
             - --enable-cluster-inventory-apis={{ .Values.enableClusterInventoryAPI }}
             - --enable-staged-update-run-apis={{ .Values.enableStagedUpdateRunAPIs }}
             - --enable-placement-policy-apis={{ .Values.enablePlacementPolicyAPIs }}
+            - --enable-annotation-based-placement={{ .Values.enableAnnotationBasedPlacement }}
             - --enable-eviction-apis={{ .Values.enableEvictionAPIs}}
             - --enable-pprof={{ .Values.enablePprof }}
             - --pprof-port={{ .Values.pprofPort }}

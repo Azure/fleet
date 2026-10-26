@@ -51,15 +51,16 @@ var (
 )
 
 func init() {
-	// Add all available generators to the set; the default configuration for the v1 APIs covers all
-	// available generators.
-	v := reflect.ValueOf(DefaultPolicyGeneratorConfigsForV1APIs).Elem()
-	for i := range v.NumField() {
-		field := v.Field(i)
-		if field.IsNil() {
+	// Add all available generators to the set; each field of PolicyGeneratorConfigs holds the configuration
+	// of one generator. The default configurations do not cover all generators, as some generators must be
+	// enabled explicitly.
+	t := reflect.TypeFor[PolicyGeneratorConfigs]()
+	for i := range t.NumField() {
+		fieldType := t.Field(i).Type
+		if fieldType.Kind() != reflect.Pointer {
 			continue
 		}
-		gen, ok := field.Interface().(ValidatingAdmissionPolicyGenerator)
+		gen, ok := reflect.New(fieldType.Elem()).Interface().(ValidatingAdmissionPolicyGenerator)
 		if !ok {
 			continue
 		}

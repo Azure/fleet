@@ -58,6 +58,12 @@ enableClusterInventoryAPI: true
 enableStagedUpdateRunAPIs: true
 # The experimental FEP-0001 placement policy APIs (placement.kubefleet.dev/v1alpha1).
 enablePlacementPolicyAPIs: false
+# The experimental annotation-based placement experience; requires enablePlacementPolicyAPIs to be true.
+# Only enable it if KubeFleet runs in a fully trusted environment, or if the hub cluster has the workload controllers
+# of kube-controller-manager (e.g., the Deployment, StatefulSet, DaemonSet, and CronJob controllers) disabled and the
+# protection validating admission policy (DenyPlacementAnnotationIfNoPlacementPolicyAPIAccess) installed. Note that
+# setting enableWorkload to false does not disable these controllers.
+enableAnnotationBasedPlacement: false
 enableEvictionAPIs: true
 
 enablePprof: false

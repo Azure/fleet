@@ -33,6 +33,8 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/envtest"
 	"sigs.k8s.io/controller-runtime/pkg/log/zap"
 	"sigs.k8s.io/controller-runtime/pkg/metrics/server"
+
+	"github.com/kubefleet-dev/kubefleet/pkg/utils"
 )
 
 // These tests use Ginkgo (BDD-style Go testing framework). Refer to
@@ -61,7 +63,8 @@ const (
 
 // suitePolicyGeneratorConfigs returns the configuration that the policy manager runs with in this suite: all the
 // generators in DefaultPolicyGeneratorConfigsForV1APIs, with a whitelisted username and user group added to the
-// service accounts and token requests generator.
+// service accounts and token requests generator, plus the placement annotation generator, which must be enabled
+// explicitly.
 //
 // The shared default configuration is copied rather than modified.
 func suitePolicyGeneratorConfigs() *PolicyGeneratorConfigs {
@@ -70,6 +73,9 @@ func suitePolicyGeneratorConfigs() *PolicyGeneratorConfigs {
 	svcAccountsAndTokenRequestsGen.WhitelistedUsernames = []string{whitelistedUsername}
 	svcAccountsAndTokenRequestsGen.WhitelistedUserGroups = []string{whitelistedUserGroup}
 	configs.SvcAccountsAndTokenRequestsVAPGeneratorConfig = &svcAccountsAndTokenRequestsGen
+	configs.AnnotatedForPlacementObjectsVAPGeneratorConfig = &AnnotatedForPlacementObjectsValidatingAdmissionPolicyGenerator{
+		ReservedNamespacePrefixes: []string{utils.FleetNSNamePrefix, utils.KubeNSNamePrefix},
+	}
 	return &configs
 }
 

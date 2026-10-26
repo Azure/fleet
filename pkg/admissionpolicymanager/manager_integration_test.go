@@ -218,6 +218,16 @@ var _ = Describe("Policies, Policy Bindings and their Effects", Ordered, func() 
 					},
 					Validations: []admissionregistrationv1.Validation{
 						{
+							Expression: `!((has(request.namespace)) && ((request.namespace.startsWith("fleet-")) || (request.namespace.startsWith("kube-"))))`,
+							Message:    wantReservedNSAnnotationDenialMsg,
+							Reason:     ptr.To(metav1.StatusReasonForbidden),
+						},
+						{
+							Expression: `!(request.kind.group == "" && request.kind.kind == "Endpoints")`,
+							Message:    wantEndpointsAnnotationDenialMsg,
+							Reason:     ptr.To(metav1.StatusReasonForbidden),
+						},
+						{
 							Expression: `(!(has(object.metadata.namespace) && object.metadata.namespace != "")) || ((authorizer.group("placement.kubefleet.dev").resource("placementpolicies").namespace(object.metadata.namespace).check("create").allowed()) && (authorizer.group("placement.kubefleet.dev").resource("placementpolicies").namespace(object.metadata.namespace).check("update").allowed()))`,
 							Message:    wantNamespacedObjDenialMsg,
 							Reason:     ptr.To(metav1.StatusReasonForbidden),

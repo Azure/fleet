@@ -94,6 +94,18 @@ func newNamespace(name string, annotations map[string]string) *corev1.Namespace 
 	}
 }
 
+// newEndpoints returns an Endpoints object with no subsets. It is built as an unstructured object, as the typed
+// Endpoints API is deprecated.
+func newEndpoints(namespace, name string, annotations map[string]string) *unstructured.Unstructured {
+	endpoints := &unstructured.Unstructured{}
+	endpoints.SetAPIVersion("v1")
+	endpoints.SetKind("Endpoints")
+	endpoints.SetNamespace(namespace)
+	endpoints.SetName(name)
+	endpoints.SetAnnotations(annotations)
+	return endpoints
+}
+
 // newClusterRole returns a cluster role with no rules, which any user who can create cluster roles can create
 // (i.e., the RBAC privilege escalation prevention does not apply).
 func newClusterRole(name string, annotations map[string]string) *rbacv1.ClusterRole {
@@ -457,6 +469,89 @@ var _ = Describe("deny placement annotation if no placement policy API access", 
 			Entry("status", "status"),
 			Entry("finalize", "finalize"),
 		)
+	})
+
+	// The annotation can never be added in reserved namespaces, regardless of the permissions of the caller.
+	Context("reserved namespaces", func() {
+		It("should deny creating an annotated object in a kube- prefixed namespace, even as a cluster admin", func() {
+			cm := newConfigMap(kubeSystemNSName, fmt.Sprintf("cm-%s", utils.RandStr()), placementAnnotation(placementAnnotationValue))
+			err := hubUncachedClient.Create(ctx, cm)
+			Expect(wantDeniedByPolicy(err, annotatedForPlacementObjsVAPPolicyName, wantReservedNSAnnotationDenialMsg)).To(Succeed())
+		})
+
+		It("should deny creating an annotated object in a fleet- prefixed namespace, even as a cluster admin", func() {
+			fleetNSName := fmt.Sprintf("fleet-%s", utils.RandStr())
+			createNamespace(fleetNSName)
+
+			cm := newConfigMap(fleetNSName, fmt.Sprintf("cm-%s", utils.RandStr()), placementAnnotation(placementAnnotationValue))
+			err := hubUncachedClient.Create(ctx, cm)
+			Expect(wantDeniedByPolicy(err, annotatedForPlacementObjsVAPPolicyName, wantReservedNSAnnotationDenialMsg)).To(Succeed())
+		})
+
+		It("should deny adding the annotation to an existing object in a reserved namespace, even as a cluster admin", func() {
+			cm := newConfigMap(kubeSystemNSName, fmt.Sprintf("cm-%s", utils.RandStr()), nil)
+			Expect(hubUncachedClient.Create(ctx, cm)).To(Succeed(), "Failed to create a config map without the annotation")
+			DeferCleanup(func() {
+				Expect(client.IgnoreNotFound(hubUncachedClient.Delete(ctx, cm))).To(Succeed(), "Failed to delete the config map")
+			})
+
+			err := getAndUpdate(hubUncachedClient, cm, func(cm *corev1.ConfigMap) {
+				cm.Annotations = placementAnnotation(placementAnnotationValue)
+			})
+			Expect(wantDeniedByPolicy(err, annotatedForPlacementObjsVAPPolicyName, wantReservedNSAnnotationDenialMsg)).To(Succeed())
+		})
+
+		// The caller fails the permission check as well; the reserved namespace denial is the one reported.
+		It("should report the reserved namespace denial if the caller cannot create or update placement policies either", func() {
+			cm := newConfigMap(kubeSystemNSName, fmt.Sprintf("cm-%s", utils.RandStr()), placementAnnotation(placementAnnotationValue))
+			err := noPermClient.Create(ctx, cm)
+			Expect(wantDeniedByPolicy(err, annotatedForPlacementObjsVAPPolicyName, wantReservedNSAnnotationDenialMsg)).To(Succeed())
+		})
+
+		It("should deny annotating a reserved namespace itself, even if the caller can create and update cluster placement policies", func() {
+			err := cppClient.Create(ctx, newNamespace(fmt.Sprintf("fleet-%s", utils.RandStr()), placementAnnotation(placementAnnotationValue)))
+			Expect(wantDeniedByPolicy(err, annotatedForPlacementObjsVAPPolicyName, wantReservedNSAnnotationDenialMsg)).To(Succeed())
+
+			nsName := fmt.Sprintf("fleet-%s", utils.RandStr())
+			createNamespace(nsName)
+			err = getAndUpdate(cppClient, newNamespace(nsName, nil), func(ns *corev1.Namespace) {
+				ns.Annotations = placementAnnotation(placementAnnotationValue)
+			})
+			Expect(wantDeniedByPolicy(err, annotatedForPlacementObjsVAPPolicyName, wantReservedNSAnnotationDenialMsg)).To(Succeed())
+		})
+
+		It("should allow writing objects without the annotation in a reserved namespace", func() {
+			fleetNSName := fmt.Sprintf("fleet-%s", utils.RandStr())
+			createNamespace(fleetNSName)
+
+			cm := newConfigMap(fleetNSName, fmt.Sprintf("cm-%s", utils.RandStr()), nil)
+			Expect(noPermClient.Create(ctx, cm)).To(Succeed(), "Failed to create a config map without the annotation")
+
+			err := getAndUpdate(noPermClient, cm, func(cm *corev1.ConfigMap) {
+				cm.Data = map[string]string{testDataKey: altTestDataValue}
+			})
+			Expect(err).To(Succeed(), "Failed to update a config map without the annotation")
+		})
+	})
+
+	// The annotation can never be added to Endpoints objects, regardless of the permissions of the caller, as the
+	// EndpointSlice mirroring controller would copy it onto the mirrored EndpointSlices.
+	Context("Endpoints", func() {
+		It("should deny creating an annotated Endpoints object, even as a cluster admin", func() {
+			endpoints := newEndpoints(workNSName, fmt.Sprintf("ep-%s", utils.RandStr()), placementAnnotation(placementAnnotationValue))
+			err := hubUncachedClient.Create(ctx, endpoints)
+			Expect(wantDeniedByPolicy(err, annotatedForPlacementObjsVAPPolicyName, wantEndpointsAnnotationDenialMsg)).To(Succeed())
+		})
+
+		It("should deny adding the annotation to an existing Endpoints object, even as a cluster admin", func() {
+			endpoints := newEndpoints(workNSName, fmt.Sprintf("ep-%s", utils.RandStr()), nil)
+			Expect(hubUncachedClient.Create(ctx, endpoints)).To(Succeed(), "Failed to create an Endpoints object without the annotation")
+
+			err := getAndUpdate(hubUncachedClient, endpoints, func(endpoints *unstructured.Unstructured) {
+				endpoints.SetAnnotations(placementAnnotation(placementAnnotationValue))
+			})
+			Expect(wantDeniedByPolicy(err, annotatedForPlacementObjsVAPPolicyName, wantEndpointsAnnotationDenialMsg)).To(Succeed())
+		})
 	})
 
 	AfterAll(func() {

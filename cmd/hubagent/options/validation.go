@@ -76,6 +76,12 @@ func (o *Options) Validate() field.ErrorList {
 		errs = append(errs, field.Invalid(newPath.Child("EnablePlacementPolicyAPIs"), true, "the placement policy APIs require the v1beta1 APIs to be enabled"))
 	}
 
+	// The annotation-based placement controller is set up with the placement policy controllers; refuse a flag
+	// that would do nothing.
+	if o.FeatureFlags.EnableAnnotationBasedPlacement && !o.FeatureFlags.EnablePlacementPolicyAPIs {
+		errs = append(errs, field.Invalid(newPath.Child("EnableAnnotationBasedPlacement"), true, "annotation-based placement requires the placement policy APIs to be enabled"))
+	}
+
 	// Validate admission policy manager setup (if enabled).
 	if err := o.validateAdmissionPolicyManagerConfig(newPath); err != nil {
 		errs = append(errs, err)

@@ -423,17 +423,22 @@ func SetupControllers(ctx context.Context, wg *sync.WaitGroup, mgr ctrl.Manager,
 				klog.ErrorS(err, "Unable to set up the placement policy auto-rollout controller")
 				return err
 			}
-			// Annotation-based placement generates the policies above; the resource watcher feeds it.
-			annotatedSources = &annotationplacement.SourceQueue{}
-			if err := (&annotationplacement.Reconciler{
-				Client:                     mgr.GetClient(),
-				APIReader:                  mgr.GetAPIReader(),
-				RESTMapper:                 mgr.GetRESTMapper(),
-				Recorder:                   mgr.GetEventRecorder("annotation-placement-controller"),
-				ResourceEligibilityChecker: v1ResourceEligibilityChecker,
-			}).SetupWithManager(mgr, annotatedSources); err != nil {
-				klog.ErrorS(err, "Unable to set up the annotation placement controller")
-				return err
+			// Annotation-based placement generates the policies above; the resource watcher feeds it. The source
+			// queue is created only along with the controller, as nothing would drain it otherwise; the resource
+			// watcher does not report annotated resources if the queue is nil.
+			if opts.FeatureFlags.EnableAnnotationBasedPlacement {
+				klog.Info("Setting up the annotation placement controller")
+				annotatedSources = &annotationplacement.SourceQueue{}
+				if err := (&annotationplacement.Reconciler{
+					Client:                     mgr.GetClient(),
+					APIReader:                  mgr.GetAPIReader(),
+					RESTMapper:                 mgr.GetRESTMapper(),
+					Recorder:                   mgr.GetEventRecorder("annotation-placement-controller"),
+					ResourceEligibilityChecker: v1ResourceEligibilityChecker,
+				}).SetupWithManager(mgr, annotatedSources); err != nil {
+					klog.ErrorS(err, "Unable to set up the annotation placement controller")
+					return err
+				}
 			}
 		}
 
