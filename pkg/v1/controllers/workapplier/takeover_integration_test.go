@@ -1468,6 +1468,208 @@ var _ = Describe("takeover", func() {
 		})
 	})
 
+	Context("objects owned by the older KubeFleet APIs", Ordered, func() {
+		workName := fmt.Sprintf(workNameTemplate, utils.RandStr())
+		// The environment prepared by the envtest package does not support namespace
+		// deletion; each test case would use a new namespace.
+		nsName := fmt.Sprintf(nsNameTemplate, utils.RandStr())
+
+		var regularConfigMapJSON []byte
+		// The object created in the member cluster before the work object.
+		var preExistingConfigMap *corev1.ConfigMap
+
+		BeforeAll(func() {
+			// Create the namespace directly in the member cluster, as the work object does not feature the
+			// namespace manifest.
+			regularNS := ns.DeepCopy()
+			regularNS.Name = nsName
+			Expect(memberClient1.Create(ctx, regularNS)).To(Succeed(), "Failed to create the namespace")
+
+			// Prepare the manifest.
+			regularConfigMap := configMap.DeepCopy()
+			regularConfigMap.Namespace = nsName
+			regularConfigMapJSON = marshalK8sObjJSON(regularConfigMap)
+
+			// Create the config map in the member cluster before the work object, as if the older work applier has
+			// placed it via the older KubeFleet APIs. The pre-existing config map differs from its manifest in a
+			// field that the manifest specifies (the data).
+			preExistingConfigMap = regularConfigMap.DeepCopy()
+			preExistingConfigMap.OwnerReferences = []metav1.OwnerReference{olderAPIAppliedWorkOwnerRef}
+			preExistingConfigMap.Data = map[string]string{
+				configMapDataKey: "baz",
+			}
+			Expect(memberClient1.Create(ctx, preExistingConfigMap)).To(Succeed(), "Failed to create the pre-existing config map")
+
+			// Create a new work object with the most permissive sync strategy: it always takes over pre-existing
+			// objects and allows co-ownership.
+			syncStrategy := &placementv1alpha1.SyncStrategy{
+				WhenAlreadyExists: placementv1alpha1.WhenAlreadyExistsOptionAlwaysTakeOver,
+				WhenOwnedByOthers: placementv1alpha1.WhenOwnedByOthersOptionShareOwnership,
+			}
+			createWorkObject(workName, memberReservedNSName1, syncStrategy, regularConfigMapJSON)
+		})
+
+		It("should prepare an appliedWork object", func() {
+			appliedWorkCreatedActual := appliedWorkCreatedActual(memberClient1, memberReservedNSName1, workName)
+			Eventually(appliedWorkCreatedActual, eventuallyDuration, eventuallyInterval).Should(Succeed(), "Failed to prepare an appliedWork object")
+		})
+
+		It("should update the work object status (takeover and co-ownership allowed)", func() {
+			workConds := []metav1.Condition{
+				{
+					Type:   placementv1alpha1.WorkCondTypeApplied,
+					Status: metav1.ConditionFalse,
+					Reason: placementv1alpha1.WorkAppliedCondNotAllManifestsAppliedReason,
+				},
+				{
+					Type:   placementv1alpha1.WorkCondTypeAvailable,
+					Status: metav1.ConditionFalse,
+					Reason: placementv1alpha1.WorkAvailableCondNotAllManifestsAvailableReason,
+				},
+			}
+			manifestStatuses := []placementv1alpha1.PerManifestStatus{
+				{
+					Identifier: placementv1alpha1.ManifestIdentifier{
+						Ordinal:    0,
+						APIGroup:   "",
+						APIVersion: "v1",
+						Kind:       "ConfigMap",
+						Resource:   "configmaps",
+						Name:       configMapName,
+						Namespace:  nsName,
+					},
+					Conditions: []metav1.Condition{
+						{
+							Type:               placementv1alpha1.ManifestCondTypeApplied,
+							Status:             metav1.ConditionFalse,
+							Reason:             string(ApplyResTypeOwnedByOtherKubeFleetAPIObjects),
+							ObservedGeneration: 0,
+						},
+					},
+				},
+			}
+
+			workStatusUpdatedActual := workStatusUpdated(memberReservedNSName1, workName, workConds, manifestStatuses)
+			Eventually(workStatusUpdatedActual, eventuallyDuration, eventuallyInterval).Should(Succeed(), "Failed to update work status")
+		})
+
+		It("should report the ownership by the older KubeFleet APIs as the cause of the failure", func() {
+			manifestAppliedCondMessageActual := manifestAppliedCondMessageActual(memberReservedNSName1, workName, 0, ownedByOlderKubeFleetAPIObjectsErrMsg)
+			Eventually(manifestAppliedCondMessageActual, eventuallyDuration, eventuallyInterval).Should(Succeed(), "Failed to report the ownership by the older KubeFleet APIs as the cause of the failure")
+		})
+
+		It("should not report any applied resource in the appliedWork object status", func() {
+			appliedWorkStatusUpdatedActual := appliedWorkStatusUpdated(memberClient1, workName, nil)
+			Eventually(appliedWorkStatusUpdatedActual, eventuallyDuration, eventuallyInterval).Should(Succeed(), "Failed to update appliedWork status")
+		})
+
+		It("should not take over or modify the pre-existing config map (takeover and co-ownership allowed)", func() {
+			// The check spans at least one periodic requeue of the work object.
+			configMapUntouchedActual := objectUntouchedActual(memberClient1, preExistingConfigMap)
+			Consistently(configMapUntouchedActual, consistentlyDuration, consistentlyInterval).Should(Succeed(), "The pre-existing config map has been modified")
+		})
+
+		It("can update the work object to use the default sync strategy", func() {
+			updateWorkObject(workName, memberReservedNSName1, nil, regularConfigMapJSON)
+		})
+
+		It("should update the work object status (default sync strategy)", func() {
+			// The safeguard runs regardless of the sync strategy in use; without it, the default sync strategy would
+			// have the work applier report the config map as not taken over instead.
+			workConds := []metav1.Condition{
+				{
+					Type:   placementv1alpha1.WorkCondTypeApplied,
+					Status: metav1.ConditionFalse,
+					Reason: placementv1alpha1.WorkAppliedCondNotAllManifestsAppliedReason,
+				},
+				{
+					Type:   placementv1alpha1.WorkCondTypeAvailable,
+					Status: metav1.ConditionFalse,
+					Reason: placementv1alpha1.WorkAvailableCondNotAllManifestsAvailableReason,
+				},
+			}
+			manifestStatuses := []placementv1alpha1.PerManifestStatus{
+				{
+					Identifier: placementv1alpha1.ManifestIdentifier{
+						Ordinal:    0,
+						APIGroup:   "",
+						APIVersion: "v1",
+						Kind:       "ConfigMap",
+						Resource:   "configmaps",
+						Name:       configMapName,
+						Namespace:  nsName,
+					},
+					Conditions: []metav1.Condition{
+						{
+							Type:               placementv1alpha1.ManifestCondTypeApplied,
+							Status:             metav1.ConditionFalse,
+							Reason:             string(ApplyResTypeOwnedByOtherKubeFleetAPIObjects),
+							ObservedGeneration: 0,
+						},
+					},
+				},
+			}
+
+			workStatusUpdatedActual := workStatusUpdated(memberReservedNSName1, workName, workConds, manifestStatuses)
+			Eventually(workStatusUpdatedActual, eventuallyDuration, eventuallyInterval).Should(Succeed(), "Failed to update work status")
+		})
+
+		It("should not take over or modify the pre-existing config map (default sync strategy)", func() {
+			// The check spans at least one periodic requeue of the work object.
+			configMapUntouchedActual := objectUntouchedActual(memberClient1, preExistingConfigMap)
+			Consistently(configMapUntouchedActual, consistentlyDuration, consistentlyInterval).Should(Succeed(), "The pre-existing config map has been modified")
+		})
+
+		It("can delete the work object", func() {
+			deleteWorkObject(workName, memberReservedNSName1)
+		})
+
+		It("should start deleting the appliedWork object in the foreground", func() {
+			appliedWorkBeingDeletedActual := appliedWorkBeingDeletedInForegroundActual(memberClient1, workName)
+			Eventually(appliedWorkBeingDeletedActual, eventuallyDuration, eventuallyInterval).Should(Succeed(), "Failed to start deleting the appliedWork object in the foreground")
+		})
+
+		It("should remove the work object", func() {
+			// As there is no GC controller in the test environment, the appliedWork object will be stuck in the
+			// pending deletion state; the test case does not simulate the GC controller here, so that the work
+			// applier goes through the forced cleanup path, which visits all the manifests that have an Applied
+			// condition (including the config map, which features an AppliedWork owner reference that blocks owner
+			// deletion, but from the older KubeFleet APIs). The work applier proceeds to remove the cleanup
+			// finalizer after 2 * cleanupWaitTime.
+			workRemovedActual := workRemovedActual(memberReservedNSName1, workName)
+			Eventually(workRemovedActual, 2*cleanupWaitTime+eventuallyDuration, eventuallyInterval*2).Should(Succeed(), "Failed to remove the work object")
+		})
+
+		It("should leave the pre-existing config map untouched", func() {
+			Expect(objectUntouchedActual(memberClient1, preExistingConfigMap)()).To(Succeed(), "The pre-existing config map has been modified")
+		})
+
+		AfterAll(func() {
+			// The work object might still exist if the test case fails before the work object is deleted.
+			work := &placementv1alpha1.Work{
+				ObjectMeta: metav1.ObjectMeta{
+					Name:      workName,
+					Namespace: memberReservedNSName1,
+				},
+			}
+			Expect(client.IgnoreNotFound(hubClient.Delete(ctx, work))).To(Succeed(), "Failed to delete the work object")
+
+			// Simulate the GC controller by removing the foreground deletion finalizer from the appliedWork object.
+			appliedWorkRemovedActual := appliedWorkRemovedActual(memberClient1, workName)
+			Eventually(appliedWorkRemovedActual, eventuallyDuration, eventuallyInterval).Should(Succeed(), "Failed to remove the appliedWork object")
+
+			workRemovedActual := workRemovedActual(memberReservedNSName1, workName)
+			Eventually(workRemovedActual, eventuallyDuration, eventuallyInterval).Should(Succeed(), "Failed to remove the work object")
+
+			// Remove the pre-existing config map; the work applier never manages it.
+			regularConfigMapRemovedActual := regularConfigMapRemovedActual(memberClient1, nsName, configMapName)
+			Eventually(regularConfigMapRemovedActual, eventuallyDuration, eventuallyInterval).Should(Succeed(), "Failed to remove the config map object")
+
+			// The namespace is left behind, as the environment prepared by the envtest package does not support
+			// namespace deletion.
+		})
+	})
+
 	Context("objects placed by another work object (duplicate placement)", Ordered, func() {
 		// The two work objects are not linked: each is the primary (and only) work object of its own placement
 		// binding. Both place the same config map.

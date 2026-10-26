@@ -185,11 +185,13 @@ const (
 	ApplyOrReportDiffResTypeFoundGenerateName              ManifestProcessingApplyOrReportDiffResultType = "FoundGenerateName"
 	ApplyOrReportDiffResTypeDuplicated                     ManifestProcessingApplyOrReportDiffResultType = "Duplicated"
 	ApplyOrReportDiffResTypeFailedToFindObjInMemberCluster ManifestProcessingApplyOrReportDiffResultType = "FailedToFindObjInMemberCluster"
-	ApplyOrReportDiffResTypeFailedToTakeOver               ManifestProcessingApplyOrReportDiffResultType = "FailedToTakeOver"
-	ApplyOrReportDiffResTypeNotTakenOver                   ManifestProcessingApplyOrReportDiffResultType = "NotTakenOver"
-	ApplyOrReportDiffResTypeFailedToRunDriftDetection      ManifestProcessingApplyOrReportDiffResultType = "FailedToRunDriftDetection"
-	ApplyOrReportDiffResTypeFoundDrifts                    ManifestProcessingApplyOrReportDiffResultType = "FoundDrifts"
-	ApplyOrReportDiffResTypeFoundDriftsInDegradedMode      ManifestProcessingApplyOrReportDiffResultType = "FoundDriftsInDegradedMode"
+	// Note that the reason string below uses the same value as kept in the v1 work applier.
+	ApplyOrReportDiffResTypeOwnedByOtherKubeFleetAPIObjects ManifestProcessingApplyOrReportDiffResultType = "OwnedByOtherKubeFleetAPIObjects"
+	ApplyOrReportDiffResTypeFailedToTakeOver                ManifestProcessingApplyOrReportDiffResultType = "FailedToTakeOver"
+	ApplyOrReportDiffResTypeNotTakenOver                    ManifestProcessingApplyOrReportDiffResultType = "NotTakenOver"
+	ApplyOrReportDiffResTypeFailedToRunDriftDetection       ManifestProcessingApplyOrReportDiffResultType = "FailedToRunDriftDetection"
+	ApplyOrReportDiffResTypeFoundDrifts                     ManifestProcessingApplyOrReportDiffResultType = "FoundDrifts"
+	ApplyOrReportDiffResTypeFoundDriftsInDegradedMode       ManifestProcessingApplyOrReportDiffResultType = "FoundDriftsInDegradedMode"
 	// Note that the reason string below uses the same value as kept in the old work applier.
 	ApplyOrReportDiffResTypeFailedToApply ManifestProcessingApplyOrReportDiffResultType = "ManifestApplyFailed"
 
@@ -231,6 +233,7 @@ var (
 		ApplyOrReportDiffResTypeFoundGenerateName,
 		ApplyOrReportDiffResTypeDuplicated,
 		ApplyOrReportDiffResTypeFailedToFindObjInMemberCluster,
+		ApplyOrReportDiffResTypeOwnedByOtherKubeFleetAPIObjects,
 		ApplyOrReportDiffResTypeFailedToTakeOver,
 		ApplyOrReportDiffResTypeNotTakenOver,
 		ApplyOrReportDiffResTypeFailedToRunDriftDetection,

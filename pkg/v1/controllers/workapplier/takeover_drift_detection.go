@@ -51,6 +51,10 @@ const (
 //
 // This is added as a safeguard to avoid scenarios where a manifest is applied via both the newer PlacementPolicy
 // APIs and the older ResourcePlacement APIs. And the safeguard always runs regardless of the sync strategy in use.
+//
+// Owner references are matched by API group and kind only, as owner references are not migrated when an API
+// version changes; an object might carry an owner reference of any version that the API group has ever served
+// (e.g., the `placement.kubernetes-fleet.io` API group serves AppliedWork objects in both v1 and v1beta1).
 func isOwnedByOlderKubeFleetAPIObjects(inMemberClusterObj *unstructured.Unstructured) bool {
 	if inMemberClusterObj == nil {
 		return false
@@ -59,7 +63,13 @@ func isOwnedByOlderKubeFleetAPIObjects(inMemberClusterObj *unstructured.Unstruct
 	curOwners := inMemberClusterObj.GetOwnerReferences()
 	for idx := range curOwners {
 		owner := &curOwners[idx]
-		if owner.APIVersion == kfioplacementv1beta1.GroupVersion.String() && owner.Kind == "AppliedWork" {
+		gv, err := schema.ParseGroupVersion(owner.APIVersion)
+		if err != nil {
+			// The API server rejects owner references with unparsable API versions; normally this should never
+			// happen.
+			continue
+		}
+		if gv.Group == kfioplacementv1beta1.GroupVersion.Group && owner.Kind == kfioplacementv1beta1.AppliedWorkKind {
 			return true
 		}
 	}

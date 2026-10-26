@@ -44,6 +44,7 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/controller/controllerutil"
 
 	placementv1alpha1 "github.com/kubefleet-dev/kubefleet/apis/kubefleet.dev/placement/v1alpha1"
+	kfioplacementv1beta1 "github.com/kubefleet-dev/kubefleet/apis/placement/v1beta1"
 	"github.com/kubefleet-dev/kubefleet/pkg/utils"
 	"github.com/kubefleet-dev/kubefleet/pkg/utils/parallelizer"
 	testutilsresource "github.com/kubefleet-dev/kubefleet/test/utils/resource"
@@ -76,6 +77,9 @@ const (
 	// The message the work applier reports when it may not apply to an object it co-owns, as co-ownership has been
 	// disallowed since the takeover.
 	coOwnershipDisallowedErrMsg = "object is co-owned by multiple objects but co-ownership has been disallowed"
+	// The message the work applier reports when it may not process an object as the object has been placed via the
+	// older KubeFleet APIs (i.e., it is owned by an AppliedWork object in the placement.kubernetes-fleet.io API group).
+	ownedByOlderKubeFleetAPIObjectsErrMsg = "the object to process is already owned by another KubeFleet placement API object"
 
 	// A label that the test cases add to objects in the member cluster, to mimic changes made by users or other
 	// controllers on fields that KubeFleet does not manage.
@@ -172,6 +176,18 @@ var (
 		Kind:       "ExternalOwner",
 		Name:       "external-owner",
 		UID:        "external-owner-uid",
+	}
+
+	// An owner reference that points to an AppliedWork object of the older KubeFleet APIs (the
+	// placement.kubernetes-fleet.io API group), in the same form as the older work applier sets it on the objects
+	// it places. The API server does not verify that owners exist, and there is no GC controller in the test
+	// environment to act on the reference.
+	olderAPIAppliedWorkOwnerRef = metav1.OwnerReference{
+		APIVersion:         kfioplacementv1beta1.GroupVersion.String(),
+		Kind:               kfioplacementv1beta1.AppliedWorkKind,
+		Name:               "older-api-applied-work",
+		UID:                "older-api-applied-work-uid",
+		BlockOwnerDeletion: ptr.To(true),
 	}
 )
 

@@ -38,11 +38,12 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/controller/controllerutil"
 
-	fleetv1beta1 "go.goms.io/fleet/apis/placement/v1beta1"
-	"go.goms.io/fleet/pkg/utils"
-	"go.goms.io/fleet/pkg/utils/condition"
-	testutilsactuals "go.goms.io/fleet/test/utils/actuals"
-	testutilsresource "go.goms.io/fleet/test/utils/resource"
+	placementv1alpha1 "github.com/kubefleet-dev/kubefleet/apis/kubefleet.dev/placement/v1alpha1"
+	fleetv1beta1 "github.com/kubefleet-dev/kubefleet/apis/placement/v1beta1"
+	"github.com/kubefleet-dev/kubefleet/pkg/utils"
+	"github.com/kubefleet-dev/kubefleet/pkg/utils/condition"
+	testutilsactuals "github.com/kubefleet-dev/kubefleet/test/utils/actuals"
+	testutilsresource "github.com/kubefleet-dev/kubefleet/test/utils/resource"
 )
 
 const (
@@ -5480,6 +5481,271 @@ var _ = Describe("drift detection and takeover", func() {
 
 			workRemovedActual := testutilsactuals.WorkObjectRemovedActual(ctx, hubClient, workName, memberReservedNSName1)
 			Eventually(workRemovedActual, eventuallyDuration, eventuallyInterval).Should(Succeed(), "Failed to remove the Work object")
+
+			// The environment prepared by the envtest package does not support namespace
+			// deletion; consequently this test suite would not attempt to verify its deletion.
+		})
+	})
+
+	Context("objects owned by the newer KubeFleet APIs", Ordered, func() {
+		workName := fmt.Sprintf(workNameTemplate, utils.RandStr())
+		// The environment prepared by the envtest package does not support namespace
+		// deletion; each test case would use a new namespace.
+		nsName := fmt.Sprintf(nsNameTemplate, utils.RandStr())
+
+		// The owner reference points to an AppliedWork object from the newer KubeFleet APIs, which does
+		// not exist; this is OK as there is no garbage collector in the test environment. It is in the same
+		// form as the newer work applier sets it on the objects it places.
+		newerAPIAppliedWorkOwnerRef := metav1.OwnerReference{
+			APIVersion:         placementv1alpha1.GroupVersion.String(),
+			Kind:               placementv1alpha1.AppliedWorkKind,
+			Name:               fmt.Sprintf(workNameTemplate, utils.RandStr()),
+			UID:                "uid-newer-api-applied-work",
+			BlockOwnerDeletion: ptr.To(true),
+		}
+
+		var preExistingConfigMap *corev1.ConfigMap
+		var regularConfigMapJSON []byte
+
+		configMapManifestCondIdentifier := fleetv1beta1.WorkResourceIdentifier{
+			Ordinal:   0,
+			Group:     "",
+			Version:   "v1",
+			Kind:      "ConfigMap",
+			Resource:  "configmaps",
+			Name:      configMapName,
+			Namespace: nsName,
+		}
+
+		// Any write (takeover, apply, etc.) would bump the resource version of the config map.
+		configMapUntouchedActual := func() error {
+			gotConfigMap := &corev1.ConfigMap{}
+			if err := memberClient1.Get(ctx, client.ObjectKey{Namespace: nsName, Name: configMapName}, gotConfigMap); err != nil {
+				return fmt.Errorf("failed to retrieve the config map: %w", err)
+			}
+
+			// Rebuild the config map to ignore fields that are irrelevant to the comparison.
+			rebuiltGotConfigMap := &corev1.ConfigMap{
+				ObjectMeta: metav1.ObjectMeta{
+					Namespace:       gotConfigMap.Namespace,
+					Name:            gotConfigMap.Name,
+					ResourceVersion: gotConfigMap.ResourceVersion,
+					Annotations:     gotConfigMap.Annotations,
+					OwnerReferences: gotConfigMap.OwnerReferences,
+				},
+				Data: gotConfigMap.Data,
+			}
+			wantConfigMap := &corev1.ConfigMap{
+				ObjectMeta: metav1.ObjectMeta{
+					Namespace:       nsName,
+					Name:            configMapName,
+					ResourceVersion: preExistingConfigMap.ResourceVersion,
+					OwnerReferences: []metav1.OwnerReference{newerAPIAppliedWorkOwnerRef},
+				},
+				Data: map[string]string{
+					dummyLabelKey: dummyLabelValue2,
+				},
+			}
+			if diff := cmp.Diff(rebuiltGotConfigMap, wantConfigMap); diff != "" {
+				return fmt.Errorf("config map diff (-got +want):\n%s", diff)
+			}
+			return nil
+		}
+
+		BeforeAll(func() {
+			// Prepare a NS object.
+			regularNS := ns.DeepCopy()
+			regularNS.Name = nsName
+			Expect(memberClient1.Create(ctx, regularNS)).To(Succeed(), "Failed to create the NS object")
+
+			// Prepare a ConfigMap object.
+			regularConfigMap := configMap.DeepCopy()
+			regularConfigMap.Namespace = nsName
+			regularConfigMapJSON = marshalK8sObjJSON(regularConfigMap)
+
+			// Create the ConfigMap object on the member cluster side, with different data and
+			// an owner reference that points to an AppliedWork object from the newer KubeFleet APIs.
+			preExistingConfigMap = configMap.DeepCopy()
+			preExistingConfigMap.Namespace = nsName
+			preExistingConfigMap.Data = map[string]string{
+				dummyLabelKey: dummyLabelValue2,
+			}
+			preExistingConfigMap.OwnerReferences = []metav1.OwnerReference{newerAPIAppliedWorkOwnerRef}
+			Expect(memberClient1.Create(ctx, preExistingConfigMap)).To(Succeed(), "Failed to create the pre-existing ConfigMap object")
+
+			// Create a new Work object with the most permissive takeover setup.
+			applyStrategy := &fleetv1beta1.ApplyStrategy{
+				WhenToTakeOver:   fleetv1beta1.WhenToTakeOverTypeAlways,
+				AllowCoOwnership: true,
+			}
+			createWorkObject(workName, memberReservedNSName1, applyStrategy, nil, regularConfigMapJSON)
+		})
+
+		It("should add cleanup finalizer to the Work object", func() {
+			finalizerAddedActual := workFinalizerAddedActual(memberReservedNSName1, workName)
+			Eventually(finalizerAddedActual, eventuallyDuration, eventuallyInterval).Should(Succeed(), "Failed to add cleanup finalizer to the Work object")
+		})
+
+		It("should prepare an AppliedWork object", func() {
+			appliedWorkCreatedActual := appliedWorkCreatedActual(memberClient1, memberReservedNSName1, workName)
+			Eventually(appliedWorkCreatedActual, eventuallyDuration, eventuallyInterval).Should(Succeed(), "Failed to prepare an AppliedWork object")
+		})
+
+		It("should update the Work object status (always take over, co-ownership allowed)", func() {
+			// Prepare the status information.
+			workConds := []metav1.Condition{
+				{
+					Type:   fleetv1beta1.WorkConditionTypeApplied,
+					Status: metav1.ConditionFalse,
+					Reason: condition.WorkNotAllManifestsAppliedReason,
+				},
+			}
+			manifestConds := []fleetv1beta1.ManifestCondition{
+				{
+					Identifier: configMapManifestCondIdentifier,
+					Conditions: []metav1.Condition{
+						{
+							Type:               fleetv1beta1.WorkConditionTypeApplied,
+							Status:             metav1.ConditionFalse,
+							Reason:             string(ApplyOrReportDiffResTypeOwnedByOtherKubeFleetAPIObjects),
+							ObservedGeneration: 0,
+						},
+					},
+				},
+			}
+
+			workStatusUpdatedActual := workStatusUpdated(memberReservedNSName1, workName, workConds, manifestConds, nil, nil)
+			Eventually(workStatusUpdatedActual, eventuallyDuration, eventuallyInterval).Should(Succeed(), "Failed to update work status")
+		})
+
+		It("should not take over or apply the ConfigMap object (always take over, co-ownership allowed)", func() {
+			Consistently(configMapUntouchedActual, consistentlyDuration, consistentlyInterval).Should(Succeed(), "The ConfigMap object has been written to unexpectedly")
+		})
+
+		It("should update the AppliedWork object status", func() {
+			appliedWorkStatusUpdatedActual := appliedWorkStatusUpdated(memberClient1, workName, nil)
+			Eventually(appliedWorkStatusUpdatedActual, eventuallyDuration, eventuallyInterval).Should(Succeed(), "Failed to update appliedWork status")
+		})
+
+		It("can switch to the never take over option", func() {
+			applyStrategy := &fleetv1beta1.ApplyStrategy{
+				WhenToTakeOver: fleetv1beta1.WhenToTakeOverTypeNever,
+			}
+			updateWorkObject(workName, applyStrategy, regularConfigMapJSON)
+		})
+
+		It("should update the Work object status (never take over)", func() {
+			// Prepare the status information.
+			//
+			// Note that the work-level condition must observe the latest generation of the Work object.
+			workConds := []metav1.Condition{
+				{
+					Type:   fleetv1beta1.WorkConditionTypeApplied,
+					Status: metav1.ConditionFalse,
+					Reason: condition.WorkNotAllManifestsAppliedReason,
+				},
+			}
+			manifestConds := []fleetv1beta1.ManifestCondition{
+				{
+					Identifier: configMapManifestCondIdentifier,
+					Conditions: []metav1.Condition{
+						{
+							Type:               fleetv1beta1.WorkConditionTypeApplied,
+							Status:             metav1.ConditionFalse,
+							Reason:             string(ApplyOrReportDiffResTypeOwnedByOtherKubeFleetAPIObjects),
+							ObservedGeneration: 0,
+						},
+					},
+				},
+			}
+
+			workStatusUpdatedActual := workStatusUpdated(memberReservedNSName1, workName, workConds, manifestConds, nil, nil)
+			Eventually(workStatusUpdatedActual, eventuallyDuration, eventuallyInterval).Should(Succeed(), "Failed to update work status")
+		})
+
+		It("should not touch the ConfigMap object (never take over)", func() {
+			Consistently(configMapUntouchedActual, consistentlyDuration, consistentlyInterval).Should(Succeed(), "The ConfigMap object has been written to unexpectedly")
+		})
+
+		It("can switch to the ReportDiff mode", func() {
+			// Note that the takeover option is defaulted to Always.
+			applyStrategy := &fleetv1beta1.ApplyStrategy{
+				Type:             fleetv1beta1.ApplyStrategyTypeReportDiff,
+				AllowCoOwnership: true,
+			}
+			updateWorkObject(workName, applyStrategy, regularConfigMapJSON)
+		})
+
+		It("should update the Work object status (report diff)", func() {
+			// Prepare the status information.
+			workConds := []metav1.Condition{
+				{
+					Type:   fleetv1beta1.WorkConditionTypeDiffReported,
+					Status: metav1.ConditionFalse,
+					Reason: condition.WorkNotAllManifestsDiffReportedReason,
+				},
+			}
+			manifestConds := []fleetv1beta1.ManifestCondition{
+				{
+					Identifier: configMapManifestCondIdentifier,
+					Conditions: []metav1.Condition{
+						{
+							Type:               fleetv1beta1.WorkConditionTypeDiffReported,
+							Status:             metav1.ConditionFalse,
+							Reason:             string(ApplyOrReportDiffResTypeFailedToReportDiff),
+							ObservedGeneration: 0,
+						},
+					},
+				},
+			}
+
+			workStatusUpdatedActual := workStatusUpdated(memberReservedNSName1, workName, workConds, manifestConds, nil, nil)
+			Eventually(workStatusUpdatedActual, eventuallyDuration, eventuallyInterval).Should(Succeed(), "Failed to update work status")
+		})
+
+		It("should not touch the ConfigMap object (report diff)", func() {
+			Consistently(configMapUntouchedActual, consistentlyDuration, consistentlyInterval).Should(Succeed(), "The ConfigMap object has been written to unexpectedly")
+		})
+
+		It("can delete the Work object", func() {
+			deleteWorkObject(workName, memberReservedNSName1)
+
+			// Ensure that the AppliedWork object has been removed.
+			appliedWorkRemovedActual := appliedWorkRemovedActual(memberClient1, workName)
+			Eventually(appliedWorkRemovedActual, eventuallyDuration, eventuallyInterval).Should(Succeed(), "Failed to remove the AppliedWork object")
+
+			workRemovedActual := testutilsactuals.WorkObjectRemovedActual(ctx, hubClient, workName, memberReservedNSName1)
+			Eventually(workRemovedActual, eventuallyDuration, eventuallyInterval).Should(Succeed(), "Failed to remove the Work object")
+		})
+
+		It("should leave the ConfigMap object alone after the Work object is deleted", func() {
+			Expect(configMapUntouchedActual()).To(Succeed(), "The ConfigMap object has been written to unexpectedly")
+		})
+
+		AfterAll(func() {
+			// Delete the Work object and related resources, in case an earlier step has failed.
+			work := &fleetv1beta1.Work{
+				ObjectMeta: metav1.ObjectMeta{
+					Name:      workName,
+					Namespace: memberReservedNSName1,
+				},
+			}
+			Expect(client.IgnoreNotFound(hubClient.Delete(ctx, work))).To(Succeed(), "Failed to delete the Work object")
+
+			appliedWorkRemovedActual := appliedWorkRemovedActual(memberClient1, workName)
+			Eventually(appliedWorkRemovedActual, eventuallyDuration, eventuallyInterval).Should(Succeed(), "Failed to remove the AppliedWork object")
+
+			workRemovedActual := testutilsactuals.WorkObjectRemovedActual(ctx, hubClient, workName, memberReservedNSName1)
+			Eventually(workRemovedActual, eventuallyDuration, eventuallyInterval).Should(Succeed(), "Failed to remove the Work object")
+
+			// Remove the pre-existing ConfigMap object.
+			cm := &corev1.ConfigMap{
+				ObjectMeta: metav1.ObjectMeta{
+					Namespace: nsName,
+					Name:      configMapName,
+				},
+			}
+			Expect(client.IgnoreNotFound(memberClient1.Delete(ctx, cm))).To(Succeed(), "Failed to delete the ConfigMap object")
 
 			// The environment prepared by the envtest package does not support namespace
 			// deletion; consequently this test suite would not attempt to verify its deletion.

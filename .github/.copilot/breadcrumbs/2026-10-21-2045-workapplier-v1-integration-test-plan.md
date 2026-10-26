@@ -8,8 +8,8 @@ envtest suite in [suite_test.go](../../../pkg/v1/controllers/workapplier/suite_t
 applier ITs (`pkg/controllers/workapplier`) are used as a reference only; many do not apply as-is because of API and
 behavior changes (see [Old tests → new plan](#old-tests--new-plan)).
 
-**Status**: In progress. The [Decisions](#decisions) are adopted. All P0 contexts are implemented, plus W1–W3, R2, R3,
-L2, L3 (P1) and L5 (P2); the remaining P1/P2 contexts (including the V section and W4) are pending. See
+**Status**: In progress. The [Decisions](#decisions) are adopted. All P0 contexts are implemented, plus T8, W1–W3, R2,
+R3, L2, L3 (P1) and L5 (P2); the remaining P1/P2 contexts (including the V section and W4) are pending. See
 [Status](#status) for details.
 
 ## Requirements
@@ -346,7 +346,8 @@ old package:
 - `apply_test.go` (`sanitizeManifestObject`, `setLastAppliedConfigAnnotation` size limit,
   `shouldUseForcedServerSideApply`, `validateOwnerRefs`).
 - `drift_detection_takeover_test.go` (`preparePatchDetails`, `discardFieldsIrrelevantInComparisonFrom`, redaction,
-  `isPlacedByKubeFleetInDuplicate`, `shouldInitiateTakeOverAttempt`, `isOwnedByOlderKubeFleetAPIObjects`).
+  `isPlacedByKubeFleetInDuplicate`, `shouldInitiateTakeOverAttempt`). `isOwnedByOlderKubeFleetAPIObjects` is done
+  (October 26, 2026), in `takeover_drift_detection_test.go` (named after the source file); see [Status](#status).
 - `status_test.go` (condition setters, port-back, `FirstDiffedObservedTimestamp`, work-level aggregation).
 - Branches envtest cannot reach reliably: `FailedToFindObjInMemberCluster`, `FailedToRunDriftDetection`,
   `AppliedWithFailedDriftDetection`, transient decoding errors, context cancellation mid-wave, `Forget` bookkeeping.
@@ -663,5 +664,48 @@ today).
     reconcile adds the finalizer back and re-creates the appliedWork.
   - W1: renamed the spec to `should create the objects in the same wave`; the timestamp check shows that the objects
     share a wave, not that they are processed in parallel.
+- [x] **T8** (P1) and its unit test (October 26, 2026). Written alongside the
+  matching safeguard in the older work applier (`pkg/controllers/workapplier`), which now rejects objects owned by
+  `placement.kubefleet.dev` AppliedWorks.
+  - `takeover_integration_test.go`, context `objects owned by the older KubeFleet APIs` (12 specs). The pre-existing
+    config map differs from its manifest and is owned by a `placement.kubernetes-fleet.io/v1beta1` AppliedWork (with
+    `BlockOwnerDeletion=true`, as the older work applier sets it). Beyond the plan row, the work goes through three
+    phases:
+    - `AlwaysTakeOver` + `ShareOwnership` (the planned step);
+    - the default (`nil`) strategy, which would report `NotTakenOver` without the safeguard, to show that the safeguard
+      runs regardless of the sync strategy;
+    - deletion without simulated GC, as in T1, so that the forced cleanup path visits the config map (it has an
+      `Applied` condition) and must leave the older API's blocking owner reference alone.
+
+    Each phase asserts `Applied=False/OwnedByOtherKubeFleetAPIObjects` (message included in the first phase), work
+    `Applied=False`/`Available=False`, an empty appliedWork status, and that the config map is untouched (same
+    resource version, `Consistently` across a periodic requeue).
+  - New in `utils_integration_test.go`: the `olderAPIAppliedWorkOwnerRef` fixture and the constant
+    `ownedByOlderKubeFleetAPIObjectsErrMsg`. The planned `createPreExistingObject` helper is not added; like the other
+    T contexts, T8 creates the object with `memberClient1.Create`.
+  - Unit test `TestIsOwnedByOlderKubeFleetAPIObjects` in the new `takeover_drift_detection_test.go` (7 cases):
+    - false: no object, no owners, a non-KubeFleet owner of the `AppliedWork` kind, a `placement.kubefleet.dev`
+      AppliedWork, an older-API `Work`;
+    - true: an older-API AppliedWork, alone or alongside a newer-API AppliedWork and a non-KubeFleet owner.
+  - Verified: gofmt, goimports, `go vet` and `golangci-lint --fast-only` are clean. With `ginkgo -p --race`:
+    - the T8 context runs 12/12, and the unit test passes (run on its own with `-- -test.run=... -test.v`, as
+      `ginkgo -p` does not forward the output of plain Go tests that pass);
+    - the full package runs 380/380 (121.2s spec time, 2m10s wall);
+    - a temporary mutation (`isOwnedByOlderKubeFleetAPIObjects` always returns false) fails T8 at its first status
+      spec (the config map is taken over and applied, `Applied=True`), and fails the two `true` cases of the unit
+      test.
+  - Follow-up (October 26, 2026), after review:
+    - The safeguards in both work appliers match owner references by API group and kind only, not by the full API
+      version, as owner references are not migrated when an API version changes (and the
+      `placement.kubernetes-fleet.io` group serves AppliedWork in both `v1` and `v1beta1`).
+    - `TestIsOwnedByOlderKubeFleetAPIObjects` gains 2 cases (9 in total): a `placement.kubernetes-fleet.io/v1`
+      AppliedWork (true), and an AppliedWork from a group that only shares a prefix with the older API group (false).
+      The older work applier's `TestIsOwnedByNewerKubeFleetAPIObjects` gains the matching pair.
+    - The older work applier's IT (`objects owned by the newer KubeFleet APIs`) now sets `BlockOwnerDeletion=true` on
+      its newer-API owner reference, as the newer work applier does.
+    - Verified: gofmt, `go vet` and `golangci-lint --fast-only` are clean (goimports is clean on the changed files).
+      The unit tests pass in both packages, and the new version cases fail against the previous exact-version
+      guards. With `go test -race` and `-ginkgo.focus`, T8 runs 12/12 and the older work applier's context runs
+      13/13. The full packages are not re-run.
 - [ ] P1 contexts.
 - [ ] P2 contexts.
