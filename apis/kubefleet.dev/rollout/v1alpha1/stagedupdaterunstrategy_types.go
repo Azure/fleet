@@ -33,7 +33,7 @@ const (
 // within each stage, and which tasks to execute before and after each stage.
 //
 // +kubebuilder:object:root=true
-// +kubebuilder:resource:scope=Namespaced,categories={kubefleet,kubefleet-rollout}
+// +kubebuilder:resource:scope=Namespaced,categories={kubefleet,kubefleet-rollout},shortName=updatestrategy
 // +k8s:deepcopy-gen:interfaces=k8s.io/apimachinery/pkg/runtime.Object
 // +kubebuilder:storageversion
 type StagedUpdateStrategy struct {
@@ -51,7 +51,7 @@ type StagedUpdateStrategy struct {
 // within each stage, and which tasks to execute before and after each stage.
 //
 // +kubebuilder:object:root=true
-// +kubebuilder:resource:scope=Cluster,categories={kubefleet,kubefleet-rollout}
+// +kubebuilder:resource:scope=Cluster,categories={kubefleet,kubefleet-rollout},shortName=clusterupdatestrategy
 // +k8s:deepcopy-gen:interfaces=k8s.io/apimachinery/pkg/runtime.Object
 // +kubebuilder:storageversion
 type ClusterStagedUpdateStrategy struct {
@@ -110,6 +110,8 @@ type Stage struct {
 	//
 	// A minimum concurrency of 1 is enforced. Note that KubeFleet might further cap the concurrency as needed.
 	//
+	// Integer values must be between 1 and 1000.
+	//
 	// Defaults to 1.
 	//
 	// +kubebuilder:validation:Optional
@@ -117,6 +119,7 @@ type Stage struct {
 	// +kubebuilder:validation:XIntOrString
 	// +kubebuilder:validation:Pattern="^(100|[1-9][0-9]?)%$"
 	// +kubebuilder:validation:XValidation:rule="self == null || type(self) != int || self >= 1",message="maxConcurrency must be at least 1"
+	// +kubebuilder:validation:XValidation:rule="self == null || type(self) != int || self <= 1000",message="maxConcurrency must be at most 1000"
 	MaxConcurrency *intstr.IntOrString `json:"maxConcurrency,omitempty"`
 
 	// A list of tasks to execute after the stage rollout is completed. The tasks run in parallel; a staged update will only
@@ -150,10 +153,13 @@ type StageTask struct {
 	// The time to wait in a TimedWait task.
 	//
 	// Specify the time period using hours (h), minutes (m), and seconds (s) units, e.g., "1h30m" for 1 hour and 30 minutes.
+	// The maximum is 720h (30 days).
 	//
 	// +kubebuilder:validation:Optional
 	// +kubebuilder:validation:Type=string
+	// +kubebuilder:validation:MaxLength=32
 	// +kubebuilder:validation:Pattern="^(?:(?:0|[1-9][0-9]*)(\\.[0-9]+)?(?:s|m|h))+$"
+	// +kubebuilder:validation:XValidation:rule="duration(self) <= duration('720h')",message="waitTime must be at most 720h (30 days)"
 	WaitTime *metav1.Duration `json:"waitTime,omitempty"`
 }
 

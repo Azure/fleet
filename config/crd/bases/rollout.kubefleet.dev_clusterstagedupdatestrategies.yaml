@@ -14,6 +14,8 @@ spec:
     kind: ClusterStagedUpdateStrategy
     listKind: ClusterStagedUpdateStrategyList
     plural: clusterstagedupdatestrategies
+    shortNames:
+    - clusterupdatestrategy
     singular: clusterstagedupdatestrategy
   scope: Cluster
   versions:
@@ -69,8 +71,13 @@ spec:
                               The time to wait in a TimedWait task.
 
                               Specify the time period using hours (h), minutes (m), and seconds (s) units, e.g., "1h30m" for 1 hour and 30 minutes.
+                              The maximum is 720h (30 days).
+                            maxLength: 32
                             pattern: ^(?:(?:0|[1-9][0-9]*)(\.[0-9]+)?(?:s|m|h))+$
                             type: string
+                            x-kubernetes-validations:
+                            - message: waitTime must be at most 720h (30 days)
+                              rule: duration(self) <= duration('720h')
                         required:
                         - type
                         type: object
@@ -105,8 +112,13 @@ spec:
                               The time to wait in a TimedWait task.
 
                               Specify the time period using hours (h), minutes (m), and seconds (s) units, e.g., "1h30m" for 1 hour and 30 minutes.
+                              The maximum is 720h (30 days).
+                            maxLength: 32
                             pattern: ^(?:(?:0|[1-9][0-9]*)(\.[0-9]+)?(?:s|m|h))+$
                             type: string
+                            x-kubernetes-validations:
+                            - message: waitTime must be at most 720h (30 days)
+                              rule: duration(self) <= duration('720h')
                         required:
                         - type
                         type: object
@@ -181,12 +193,16 @@ spec:
 
                         A minimum concurrency of 1 is enforced. Note that KubeFleet might further cap the concurrency as needed.
 
+                        Integer values must be between 1 and 1000.
+
                         Defaults to 1.
                       pattern: ^(100|[1-9][0-9]?)%$
                       x-kubernetes-int-or-string: true
                       x-kubernetes-validations:
                       - message: maxConcurrency must be at least 1
                         rule: self == null || type(self) != int || self >= 1
+                      - message: maxConcurrency must be at most 1000
+                        rule: self == null || type(self) != int || self <= 1000
                     name:
                       description: |-
                         The name of the stage. It must be unique within the staged update strategy and may only consist of

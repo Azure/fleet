@@ -85,7 +85,7 @@ const (
 // +genclient
 // +kubebuilder:object:root=true
 // +kubebuilder:subresource:status
-// +kubebuilder:resource:scope=Namespaced,categories={kubefleet, kubefleet-placement}
+// +kubebuilder:resource:scope=Namespaced,categories={kubefleet, kubefleet-placement},shortName=kfwork
 // +kubebuilder:storageversion
 // +k8s:deepcopy-gen:interfaces=k8s.io/apimachinery/pkg/runtime.Object
 type Work struct {
@@ -255,7 +255,7 @@ type WorkList struct {
 // +genclient
 // +kubebuilder:object:root=true
 // +kubebuilder:subresource:status
-// +kubebuilder:resource:scope=Cluster,categories={kubefleet, kubefleet-placement}
+// +kubebuilder:resource:scope=Cluster,categories={kubefleet, kubefleet-placement},shortName=kfappliedwork
 // +kubebuilder:storageversion
 // +k8s:deepcopy-gen:interfaces=k8s.io/apimachinery/pkg/runtime.Object
 type AppliedWork struct {
