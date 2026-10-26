@@ -14,13 +14,13 @@ See the License for the specific language governing permissions and
 limitations under the License.
 */
 
+// Package fieldindexers provides utilities for setting up and using field-based indexes for KubeFleet API objects on the KubeFleet agent side.
 package fieldindexers
 
 import (
 	"context"
 	"fmt"
 
-	"k8s.io/klog/v2"
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 
@@ -29,13 +29,13 @@ import (
 )
 
 const (
-	// The field-based indexes set up for KubeFleet API objects.
+	// The field-based indexes set up for KubeFleet API objects (on the hub agent side).
 	//
-	// Important: many KubeFleet components run under the assumption that proper custom fields
+	// Important: many KubeFleet components on the hub agent side run under the assumption that proper custom fields
 	// have been added and indexed in the cache when running. Failure to complete such prior setup **before
-	// the manager starts** will result in unexpected behaviors. Make sure that all applicable components
-	// are properly set up using the client provided by the hub controller manager, and `SetupWithManager` is
-	// called before the manager starts.
+	// the manager starts** will result in unexpected behaviors/failures. Make sure that all applicable components
+	// are properly set up using the client provided by the hub controller manager, and
+	// `SetupWithHubAgentControllerManager` is called before the manager starts.
 
 	// PlacementResourceSnapshotOwnedByAndSubIndexedCustomFieldName is the name of the custom field that indexes
 	// placement resource snapshots by their owner placement policies and their sub-indices.
@@ -50,6 +50,10 @@ const (
 	// This is added to help the placement resource snapshot manager retrieve all placement resource snapshots of a
 	// specific index associated with a placement policy.
 	PlacementResourceSnapshotOwnedByAndIndexedCustomFieldName = "ownedByWithIndex"
+
+	// WorkOwnedByBindingCustomFieldName is the name of the custom field that indexes Work objects by their owner
+	// placement bindings.
+	WorkOwnedByBindingCustomFieldName = "workOwnedByBinding"
 )
 
 const (
@@ -66,29 +70,13 @@ const (
 	//
 	// Note that slashes are used to avoid unexpected collisions.
 	PlacementResourceSnapshotOwnedByAndIndexedCustomFieldValFmt = "%s/%s"
+
+	// WorkOwnedByBindingCustomFieldValFmt is used to format the value for the custom field,
+	// `WorkOwnedByBindingCustomFieldName`.
+	//
+	// The first value is the owner binding namespace, and the second value is the owner binding name.
+	WorkOwnedByBindingCustomFieldValFmt = "%s/%s"
 )
-
-type fieldValueExtractor func(obj client.Object) ([]string, error)
-
-func indexCompositeField(ctx context.Context,
-	fieldIdxer client.FieldIndexer,
-	obj client.Object,
-	fieldName string, fieldValueExt fieldValueExtractor) error {
-	if err := fieldIdxer.IndexField(ctx, obj, fieldName, func(rawObj client.Object) []string {
-		fieldVals, extErr := fieldValueExt(rawObj)
-		if extErr != nil {
-			wrappedErr := errors.NewUnexpectedError(extErr, "failed to extract field value", "object", klog.KObj(rawObj))
-			klog.ErrorS(wrappedErr, "failed to index field", errors.Args(wrappedErr)...)
-			return nil
-		}
-		return fieldVals
-	}); err != nil {
-		wrappedErr := errors.NewUnexpectedError(err, "", "fieldName", fieldName, "object", klog.KObj(obj))
-		klog.ErrorS(wrappedErr, "failed to index field", errors.Args(wrappedErr)...)
-		return wrappedErr
-	}
-	return nil
-}
 
 var (
 	placementResourceSnapshotOwnedByAndSubIdxedFieldExtractor fieldValueExtractor = func(obj client.Object) ([]string, error) {
@@ -110,11 +98,22 @@ var (
 		}
 		return []string{fmt.Sprintf(PlacementResourceSnapshotOwnedByAndIndexedCustomFieldValFmt, ownedBy, index)}, nil
 	}
+
+	workOwnedByBindingFieldExtractor fieldValueExtractor = func(obj client.Object) ([]string, error) {
+		ownerNS, ownerNSFound := obj.GetLabels()[placementv1alpha1.WorkOwnerNamespaceLabelKey]
+		ownerBinding := obj.GetLabels()[placementv1alpha1.WorkOwnedByPlacementBindingLabelKey]
+		if !ownerNSFound || ownerBinding == "" {
+			wrappedErr := errors.NewUnexpectedError(nil, "work is missing required owner binding metadata")
+			return nil, wrappedErr
+		}
+		return []string{fmt.Sprintf(WorkOwnedByBindingCustomFieldValFmt, ownerNS, ownerBinding)}, nil
+	}
 )
 
-// SetupWithHubControllerManager sets up the indices that controllers from the KubeFleet hub agent need to run properly.
+// SetupWithHubAgentControllerManager sets up the indices that controllers from the KubeFleet hub agent need to run properly.
+//
 // It must be called before the manager starts.
-func SetupWithHubControllerManager(ctx context.Context, mgr ctrl.Manager) error {
+func SetupWithHubAgentControllerManager(ctx context.Context, mgr ctrl.Manager) error {
 	fieldIdxer := mgr.GetFieldIndexer()
 
 	if err := indexCompositeField(ctx, fieldIdxer,
@@ -143,6 +142,13 @@ func SetupWithHubControllerManager(ctx context.Context, mgr ctrl.Manager) error 
 		PlacementResourceSnapshotOwnedByAndIndexedCustomFieldName, placementResourceSnapshotOwnedByAndIdxedFieldExtractor,
 	); err != nil {
 		return errors.Wraps(err, "failed to set up cluster placement resource snapshot owner and index field index")
+	}
+
+	if err := indexCompositeField(ctx, fieldIdxer,
+		&placementv1alpha1.Work{},
+		WorkOwnedByBindingCustomFieldName, workOwnedByBindingFieldExtractor,
+	); err != nil {
+		return errors.Wraps(err, "failed to set up work owner binding field index")
 	}
 
 	return nil

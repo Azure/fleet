@@ -286,6 +286,108 @@ func TestArgs(t *testing.T) {
 	}
 }
 
+func TestCategory(t *testing.T) {
+	var typedNilErr *Error
+	testCases := []struct {
+		name         string
+		err          error
+		wantCategory ErrCategory
+	}{
+		{
+			name:         "nil error",
+			err:          nil,
+			wantCategory: ErrCategoryUncategorized,
+		},
+		{
+			name:         "plain error (not an *Error)",
+			err:          fmt.Errorf("plain error"),
+			wantCategory: ErrCategoryUncategorized,
+		},
+		{
+			name:         "typed nil *Error",
+			err:          typedNilErr,
+			wantCategory: ErrCategoryUncategorized,
+		},
+		{
+			name:         "*Error with no category set and no wrapped error",
+			err:          &Error{},
+			wantCategory: ErrCategoryUncategorized,
+		},
+		{
+			name:         "*Error with explicit category",
+			err:          &Error{category: ErrCategoryUser},
+			wantCategory: ErrCategoryUser,
+		},
+		{
+			name:         "*Error with explicit category, wrapping an *Error of a different category",
+			err:          &Error{category: ErrCategoryAPIServer, wrapped: &Error{category: ErrCategoryUser}},
+			wantCategory: ErrCategoryAPIServer,
+		},
+		{
+			name:         "*Error with no category set, wrapping a plain error",
+			err:          &Error{wrapped: fmt.Errorf("plain error")},
+			wantCategory: ErrCategoryUncategorized,
+		},
+		{
+			name:         "*Error with no category set, wrapping a typed nil *Error",
+			err:          &Error{wrapped: typedNilErr},
+			wantCategory: ErrCategoryUncategorized,
+		},
+		{
+			name:         "*Error with no category set, wrapping a categorized *Error",
+			err:          &Error{wrapped: &Error{category: ErrCategoryTransient}},
+			wantCategory: ErrCategoryTransient,
+		},
+		{
+			name:         "*Error with no category set, wrapping a categorized *Error through a plain error",
+			err:          &Error{wrapped: fmt.Errorf("plain error: %w", &Error{category: ErrCategoryUnexpected})},
+			wantCategory: ErrCategoryUnexpected,
+		},
+		{
+			name:         "*Error with no category set, wrapping multiple *Errors with no category set",
+			err:          &Error{wrapped: &Error{wrapped: &Error{wrapped: &Error{category: ErrCategoryAPIServer}}}},
+			wantCategory: ErrCategoryAPIServer,
+		},
+		{
+			name:         "plain error wrapping a typed nil *Error",
+			err:          fmt.Errorf("plain error: %w", typedNilErr),
+			wantCategory: ErrCategoryUncategorized,
+		},
+		{
+			name:         "plain error wrapping a categorized *Error",
+			err:          fmt.Errorf("plain error: %w", &Error{category: ErrCategoryTransient}),
+			wantCategory: ErrCategoryTransient,
+		},
+		{
+			name:         "plain error wrapping an *Error with no category set, which wraps a categorized *Error",
+			err:          fmt.Errorf("plain error: %w", &Error{wrapped: &Error{category: ErrCategoryUser}}),
+			wantCategory: ErrCategoryUser,
+		},
+		{
+			name:         "error created by NewTransientError",
+			err:          NewTransientError(nil, "transient error"),
+			wantCategory: ErrCategoryTransient,
+		},
+		{
+			name:         "error created by Wraps over a categorized *Error",
+			err:          Wraps(NewAPIServerError(nil, "API server error", false), "high-level description"),
+			wantCategory: ErrCategoryAPIServer,
+		},
+		{
+			name:         "error created by Wraps over a plain error",
+			err:          Wraps(fmt.Errorf("plain error"), "high-level description"),
+			wantCategory: ErrCategoryUncategorized,
+		},
+	}
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			if gotCategory := Category(tc.err); gotCategory != tc.wantCategory {
+				t.Errorf("Category(%v) = %v, want %v", tc.err, gotCategory, tc.wantCategory)
+			}
+		})
+	}
+}
+
 func TestUnwrap(t *testing.T) {
 	innerErr := fmt.Errorf("inner error")
 	testCases := []struct {

@@ -17,7 +17,9 @@ package placement
 
 import (
 	"fmt"
+	"sort"
 	"strconv"
+	"strings"
 	"time"
 
 	"github.com/google/go-cmp/cmp"
@@ -40,7 +42,6 @@ import (
 	"go.goms.io/fleet/pkg/utils/condition"
 	"go.goms.io/fleet/pkg/utils/resource"
 	"go.goms.io/fleet/test/utils/crpstatussync"
-	metricsUtils "go.goms.io/fleet/test/utils/metrics"
 )
 
 const (
@@ -2346,6 +2347,34 @@ func checkPlacementStatusMetric(wantMetrics []*prometheusclientmodel.Metric) {
 			placementStatusMetrics = mf.GetMetric()
 		}
 	}
-	// Sort the emitted metrics for comparison
-	Expect(cmp.Diff(placementStatusMetrics, wantMetrics, metricsUtils.MetricsCmpOptions...)).Should(BeEmpty(), "Placement status metrics do not match diff (-got, +want):")
+	// Persisted condition and creation timestamps can legitimately be identical, so compare
+	// placement time series by their stable label identity rather than scrape order.
+	sortPlacementStatusMetricsByLabels(placementStatusMetrics)
+	sortPlacementStatusMetricsByLabels(wantMetrics)
+	cmpOptions := []cmp.Option{
+		cmpopts.SortSlices(func(a, b *prometheusclientmodel.LabelPair) bool {
+			return a.GetName() < b.GetName()
+		}),
+		cmp.Comparer(func(a, b *prometheusclientmodel.Gauge) bool {
+			return (a.GetValue() > 0) == (b.GetValue() > 0)
+		}),
+		cmpopts.IgnoreUnexported(prometheusclientmodel.Metric{}, prometheusclientmodel.LabelPair{}, prometheusclientmodel.Gauge{}),
+	}
+	Expect(cmp.Diff(placementStatusMetrics, wantMetrics, cmpOptions...)).Should(BeEmpty(), "Placement status metrics do not match diff (-got, +want):")
+}
+
+func sortPlacementStatusMetricsByLabels(metrics []*prometheusclientmodel.Metric) {
+	sort.Slice(metrics, func(i, j int) bool {
+		return placementStatusMetricLabelKey(metrics[i]) < placementStatusMetricLabelKey(metrics[j])
+	})
+}
+
+func placementStatusMetricLabelKey(metric *prometheusclientmodel.Metric) string {
+	labels := metric.GetLabel()
+	pairs := make([]string, 0, len(labels))
+	for _, label := range labels {
+		pairs = append(pairs, label.GetName()+"="+label.GetValue())
+	}
+	sort.Strings(pairs)
+	return strings.Join(pairs, ";")
 }

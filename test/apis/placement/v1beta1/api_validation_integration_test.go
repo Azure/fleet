@@ -2901,6 +2901,31 @@ var _ = Describe("Test placement v1beta1 API validation", func() {
 			Expect(statusErr.ErrStatus.Message).Should(MatchRegexp("Too many: 3: must have at most 2 items"))
 		})
 
+		It("Should deny creation of ClusterStagedUpdateStrategy with BeforeStageTask of type Approval with waitTime specified", func() {
+			strategy := placementv1beta1.ClusterStagedUpdateStrategy{
+				ObjectMeta: metav1.ObjectMeta{
+					Name: fmt.Sprintf(updateRunStrategyNameTemplate, GinkgoParallelProcess()),
+				},
+				Spec: placementv1beta1.UpdateStrategySpec{
+					Stages: []placementv1beta1.StageConfig{
+						{
+							Name: fmt.Sprintf(updateRunStageNameTemplate, GinkgoParallelProcess(), 1),
+							BeforeStageTasks: []placementv1beta1.StageTask{
+								{
+									Type:     placementv1beta1.StageTaskTypeApproval,
+									WaitTime: &metav1.Duration{Duration: time.Minute * 10},
+								},
+							},
+						},
+					},
+				},
+			}
+			err := hubClient.Create(ctx, &strategy)
+			var statusErr *k8sErrors.StatusError
+			Expect(errors.As(err, &statusErr)).To(BeTrue(), fmt.Sprintf("Create updateRunStrategy call produced error %s. Error type wanted is %s.", reflect.TypeOf(err), reflect.TypeOf(&k8sErrors.StatusError{})))
+			Expect(statusErr.ErrStatus.Message).Should(MatchRegexp("BeforeStageTaskType is Approval, waitTime is not allowed"))
+		})
+
 		It("Should deny creation of ClusterStagedUpdateStrategy with AfterStageTask of type Approval with waitTime specified", func() {
 			strategy := placementv1beta1.ClusterStagedUpdateStrategy{
 				ObjectMeta: metav1.ObjectMeta{
@@ -3378,6 +3403,74 @@ var _ = Describe("Test placement v1beta1 API validation", func() {
 			Expect(statusErr.ErrStatus.Message).Should(MatchRegexp("The spec field is immutable"))
 			Expect(hubClient.Delete(ctx, &appReq)).Should(Succeed())
 		})
+	})
+
+	// The delete stage tasks have the same rules in both scopes, as the cluster-scoped and the namespaced
+	// strategies share their spec; each CRD is generated separately, so both are checked.
+	Context("Test the delete stage of a StagedUpdateStrategy and a ClusterStagedUpdateStrategy", func() {
+		approval := placementv1beta1.StageTask{Type: placementv1beta1.StageTaskTypeApproval}
+
+		deleteStageEntries := func(namespaced bool) []TableEntry {
+			scope := "ClusterStagedUpdateStrategy"
+			if namespaced {
+				scope = "StagedUpdateStrategy"
+			}
+			return []TableEntry{
+				Entry(scope+": a delete stage without tasks is accepted",
+					namespaced, &placementv1beta1.DeleteStageConfig{}, ""),
+				Entry(scope+": a single Approval task is accepted",
+					namespaced, &placementv1beta1.DeleteStageConfig{BeforeStageTasks: []placementv1beta1.StageTask{approval}}, ""),
+				Entry(scope+": more than 1 task is rejected",
+					namespaced, &placementv1beta1.DeleteStageConfig{BeforeStageTasks: []placementv1beta1.StageTask{approval, approval}},
+					"Too many: 2: must have at most 1 item"),
+				Entry(scope+": a TimedWait task is rejected",
+					namespaced, &placementv1beta1.DeleteStageConfig{BeforeStageTasks: []placementv1beta1.StageTask{{Type: placementv1beta1.StageTaskTypeTimedWait, WaitTime: &metav1.Duration{Duration: time.Minute}}}},
+					"BeforeStageTaskType cannot be TimedWait"),
+				Entry(scope+": an Approval task with a waitTime is rejected",
+					namespaced, &placementv1beta1.DeleteStageConfig{BeforeStageTasks: []placementv1beta1.StageTask{{Type: placementv1beta1.StageTaskTypeApproval, WaitTime: &metav1.Duration{Duration: 10 * time.Minute}}}},
+					"BeforeStageTaskType is Approval, waitTime is not allowed"),
+			}
+		}
+
+		DescribeTable("the before-stage tasks of the delete stage",
+			func(namespaced bool, deleteStage *placementv1beta1.DeleteStageConfig, wantMessage string) {
+				spec := placementv1beta1.UpdateStrategySpec{
+					Stages: []placementv1beta1.StageConfig{
+						{
+							Name: fmt.Sprintf(updateRunStageNameTemplate, GinkgoParallelProcess(), 1),
+						},
+					},
+					DeleteStage: deleteStage,
+				}
+				var strategy client.Object = &placementv1beta1.ClusterStagedUpdateStrategy{
+					ObjectMeta: metav1.ObjectMeta{
+						Name: fmt.Sprintf(updateRunStrategyNameTemplate, GinkgoParallelProcess()),
+					},
+					Spec: spec,
+				}
+				if namespaced {
+					strategy = &placementv1beta1.StagedUpdateStrategy{
+						ObjectMeta: metav1.ObjectMeta{
+							Name:      fmt.Sprintf(updateRunStrategyNameTemplate, GinkgoParallelProcess()),
+							Namespace: testNamespace,
+						},
+						Spec: spec,
+					}
+				}
+
+				err := hubClient.Create(ctx, strategy)
+				if wantMessage == "" {
+					Expect(err).To(Succeed(), "Expected the strategy to be accepted")
+					Expect(hubClient.Delete(ctx, strategy)).To(Succeed())
+					return
+				}
+				var statusErr *k8sErrors.StatusError
+				Expect(errors.As(err, &statusErr)).To(BeTrue(), fmt.Sprintf("Create updateRunStrategy call produced error %s. Error type wanted is %s.", reflect.TypeOf(err), reflect.TypeOf(&k8sErrors.StatusError{})))
+				Expect(statusErr.ErrStatus.Message).Should(ContainSubstring(wantMessage))
+			},
+			deleteStageEntries(false),
+			deleteStageEntries(true),
+		)
 	})
 
 	Context("Test ClusterStagedUpdateRun State API validation - valid Initialize state transitions", func() {

@@ -32,6 +32,7 @@ import (
 
 	clusterv1beta1 "go.goms.io/fleet/apis/cluster/v1beta1"
 	placementv1beta1 "go.goms.io/fleet/apis/placement/v1beta1"
+	"go.goms.io/fleet/pkg/utils/condition"
 	toolsutils "go.goms.io/fleet/tools/utils"
 )
 
@@ -509,4 +510,114 @@ func serviceScheme(t *testing.T) *runtime.Scheme {
 		t.Fatalf("failed to add placement v1beta1 scheme: %v", err)
 	}
 	return scheme
+}
+
+func TestEvaluateEviction(t *testing.T) {
+	validType := string(placementv1beta1.PlacementEvictionConditionTypeValid)
+	executedType := string(placementv1beta1.PlacementEvictionConditionTypeExecuted)
+
+	tests := []struct {
+		name       string
+		conditions []metav1.Condition
+		want       evictionResult
+	}{
+		{
+			name: "valid true, executed true",
+			conditions: []metav1.Condition{
+				{Type: validType, Status: metav1.ConditionTrue, Reason: "Valid"},
+				{Type: executedType, Status: metav1.ConditionTrue, Reason: "Executed"},
+			},
+			want: evictionResultExecuted,
+		},
+		{
+			name: "valid true, executed false",
+			conditions: []metav1.Condition{
+				{Type: validType, Status: metav1.ConditionTrue, Reason: "Valid"},
+				{Type: executedType, Status: metav1.ConditionFalse, Reason: "NotExecuted"},
+			},
+			want: evictionResultNotExecuted,
+		},
+		{
+			name: "valid true, executed unknown",
+			conditions: []metav1.Condition{
+				{Type: validType, Status: metav1.ConditionTrue, Reason: "Valid"},
+				{Type: executedType, Status: metav1.ConditionUnknown, Reason: "Unknown"},
+			},
+			want: evictionResultIndeterminate,
+		},
+		{
+			name: "valid true, executed empty/invalid status",
+			conditions: []metav1.Condition{
+				{Type: validType, Status: metav1.ConditionTrue, Reason: "Valid"},
+				{Type: executedType, Status: "", Reason: "EmptyStatus"},
+			},
+			want: evictionResultIndeterminate,
+		},
+		{
+			name: "valid true, executed missing",
+			conditions: []metav1.Condition{
+				{Type: validType, Status: metav1.ConditionTrue, Reason: "Valid"},
+			},
+			want: evictionResultIndeterminate,
+		},
+		{
+			name: "valid unknown",
+			conditions: []metav1.Condition{
+				{Type: validType, Status: metav1.ConditionUnknown, Reason: "Unknown"},
+			},
+			want: evictionResultIndeterminate,
+		},
+		{
+			name:       "valid missing",
+			conditions: nil,
+			want:       evictionResultIndeterminate,
+		},
+		{
+			name: "valid false, message missing CRP",
+			conditions: []metav1.Condition{
+				{Type: validType, Status: metav1.ConditionFalse, Reason: condition.ClusterResourcePlacementEvictionInvalidReason, Message: condition.EvictionInvalidMissingCRPMessage},
+			},
+			want: evictionResultInvalidButDrained,
+		},
+		{
+			name: "valid false, message deleting CRP",
+			conditions: []metav1.Condition{
+				{Type: validType, Status: metav1.ConditionFalse, Reason: condition.ClusterResourcePlacementEvictionInvalidReason, Message: condition.EvictionInvalidDeletingCRPMessage},
+			},
+			want: evictionResultInvalidButDrained,
+		},
+		{
+			name: "valid false, message missing CRB",
+			conditions: []metav1.Condition{
+				{Type: validType, Status: metav1.ConditionFalse, Reason: condition.ClusterResourcePlacementEvictionInvalidReason, Message: condition.EvictionInvalidMissingCRBMessage},
+			},
+			want: evictionResultInvalidButDrained,
+		},
+		{
+			name: "valid false with unrecognized message, executed true",
+			conditions: []metav1.Condition{
+				{Type: validType, Status: metav1.ConditionFalse, Reason: condition.ClusterResourcePlacementEvictionInvalidReason, Message: "some other invalid detail"},
+				{Type: executedType, Status: metav1.ConditionTrue, Reason: "Executed"},
+			},
+			want: evictionResultExecuted,
+		},
+		{
+			name: "valid false with unrecognized message, executed unknown",
+			conditions: []metav1.Condition{
+				{Type: validType, Status: metav1.ConditionFalse, Reason: condition.ClusterResourcePlacementEvictionInvalidReason, Message: "some other invalid detail"},
+				{Type: executedType, Status: metav1.ConditionUnknown, Reason: "Unknown"},
+			},
+			want: evictionResultIndeterminate,
+		},
+	}
+
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			eviction := &placementv1beta1.ClusterResourcePlacementEviction{}
+			eviction.SetConditions(tc.conditions...)
+			if got := evaluateEviction(eviction); got != tc.want {
+				t.Errorf("evaluateEviction() = %v, want %v", got, tc.want)
+			}
+		})
+	}
 }

@@ -112,7 +112,7 @@ func (r *Reconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.Resu
 		return ctrl.Result{}, wrappedErr
 	}
 
-	// Retrieve the Work objects owned by the placement binding.
+	// Retrieve the work objects owned by the placement binding.
 	works, err := r.listWorksByOwnerBinding(ctx, placementBindingSpec.ClusterName, placementBinding.GetNamespace(), placementBinding.GetName())
 	if err != nil {
 		wrappedErr := errors.Wraps(err, "", "placementBinding", klog.KObj(placementBinding),
@@ -121,8 +121,8 @@ func (r *Reconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.Resu
 		return ctrl.Result{}, wrappedErr
 	}
 
-	// Check if the Work objects are consistent with the assigned primary and secondary placement resource snapshots.
-	// If so, no need to update the spec of the Work objects; just sync the status back to the placement binding
+	// Check if the work objects are consistent with the assigned primary and secondary placement resource snapshots.
+	// If so, no need to update the spec of the work objects; just sync the status back to the placement binding
 	// instead.
 	//
 	// Note (chenyu1): this check is intended as a shortcut to avoid constant re-generation and validation of
@@ -152,8 +152,8 @@ func (r *Reconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.Resu
 		return ctrl.Result{}, nil
 	}
 
-	// The Work objects are absent or not up-to-date. Retrieve the placement resource snapshots and create/update
-	// the Work objects accordingly.
+	// The work objects are absent or not up-to-date. Retrieve the placement resource snapshots and create/update
+	// the work objects accordingly.
 
 	// Retrieve the assigned primary and secondary placement resource snapshots referenced by the placement binding.
 	placementResourceSnapshots, err := r.retrievePrimaryAndSecondaryPlacementResourceSnapshots(ctx, placementBinding)
@@ -167,7 +167,7 @@ func (r *Reconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.Resu
 	}
 
 	// Create or update the work objects.
-	createdOrUpdatedWorks, writtenToStorage, err := r.refreshWorks(ctx, placementBinding, placementResourceSnapshots, works)
+	createdOrUpdatedWorks, workSpecsChanged, err := r.refreshWorks(ctx, placementBinding, placementResourceSnapshots, works)
 	if err != nil {
 		wrappedErr := errors.Wraps(err, "failed to refresh work objects",
 			"placementBinding", klog.KObj(placementBinding), "targetCluster", placementBindingSpec.ClusterName,
@@ -189,16 +189,18 @@ func (r *Reconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.Resu
 
 	// The work objects have been refreshed. Normally the controller needs only to wait for the work objects
 	// to be processed by the KubeFleet member agent, then refresh the placement binding status upon receiving
-	// create/update events from the work objects, and there is no need to requeue manually. However, there exists
-	// a corner case in which a rollout attempt does not involve any change in the work objects; in this case there
-	// will not be any change events from the work objects and the work generator needs to requeue manually to
-	// have the placement binding status refreshed.
-	if !writtenToStorage {
-		// The work objects have not been created or updated; requeue manually.
+	// create/status update events from the work objects, and there is no need to requeue manually. However, there
+	// exists a corner case in which a rollout attempt does not involve any spec change in the work objects (e.g.,
+	// the new placement resource snapshot has the same content as the old one, and the work objects are only
+	// re-linked via metadata changes); in this case the member agent will not re-process the work objects, there
+	// will not be any status change events, and the work generator needs to requeue manually to have the placement
+	// binding status refreshed.
+	if !workSpecsChanged {
+		// No work object has been created or has had its spec changed; requeue manually.
 		return ctrl.Result{RequeueAfter: 1 * time.Second}, nil
 	}
-	// The work objects have been created or updated; wait for change events from the work objects to refresh
-	// the placement binding status.
+	// Some work objects have been created or have had their specs changed; wait for change events from the work
+	// objects to refresh the placement binding status.
 	return ctrl.Result{}, nil
 }
 

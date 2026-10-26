@@ -289,8 +289,8 @@ func validateDeleteStageStatus(
 		}
 	}
 
-	deleteStageFinishedCond := meta.FindStatusCondition(existingDeleteStageStatus.Conditions, string(placementv1beta1.StagedUpdateRunConditionSucceeded))
-	deleteStageProgressingCond := meta.FindStatusCondition(existingDeleteStageStatus.Conditions, string(placementv1beta1.StagedUpdateRunConditionProgressing))
+	deleteStageFinishedCond := meta.FindStatusCondition(existingDeleteStageStatus.Conditions, string(placementv1beta1.StageUpdatingConditionSucceeded))
+	deleteStageProgressingCond := meta.FindStatusCondition(existingDeleteStageStatus.Conditions, string(placementv1beta1.StageUpdatingConditionProgressing))
 	// Check if there is any active updating stage
 	if updatingStageIndex != -1 || lastFinishedStageIndex < totalStages-1 {
 		// There are still stages updating before the delete stage, make sure the delete stage is not active/finished.

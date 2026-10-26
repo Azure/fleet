@@ -38,6 +38,7 @@ import (
 	"k8s.io/client-go/dynamic"
 	clientgoscheme "k8s.io/client-go/kubernetes/scheme"
 	"k8s.io/client-go/rest"
+	"k8s.io/client-go/tools/clientcmd"
 	"k8s.io/client-go/util/retry"
 	"k8s.io/klog/v2"
 	ctrl "sigs.k8s.io/controller-runtime"
@@ -99,13 +100,15 @@ func main() {
 	// Set up controller-runtime logger
 	ctrl.SetLogger(zap.New(zap.UseDevMode(true)))
 
-	hubURL := os.Getenv("HUB_SERVER_URL")
-
-	if hubURL == "" {
-		klog.ErrorS(errors.New("hub server api cannot be empty"), "Failed to read URL for the hub cluster")
-		klog.FlushAndExit(klog.ExitFlushTimeout, 1)
+	var hubURL string
+	if !opts.HubConnectivityOpts.UseKubeConfig {
+		hubURL = os.Getenv("HUB_SERVER_URL")
+		if hubURL == "" {
+			klog.ErrorS(errors.New("hub server api cannot be empty"), "Failed to read URL for the hub cluster")
+			klog.FlushAndExit(klog.ExitFlushTimeout, 1)
+		}
 	}
-	hubConfig, err := buildHubConfig(hubURL, opts.HubConnectivityOpts.UseCertificateAuth, opts.HubConnectivityOpts.UseInsecureTLSClient)
+	hubConfig, err := buildHubConfig(hubURL, opts.HubConnectivityOpts)
 	if err != nil {
 		klog.ErrorS(err, "Failed to build Kubernetes client configuration for the hub cluster")
 		klog.FlushAndExit(klog.ExitFlushTimeout, 1)
@@ -182,11 +185,32 @@ func main() {
 	}
 }
 
-func buildHubConfig(hubURL string, useCertificateAuth bool, tlsClientInsecure bool) (*rest.Config, error) {
+func buildHubConfig(hubURL string, opts options.HubConnectivityOptions) (*rest.Config, error) {
 	var hubConfig = &rest.Config{
 		Host: hubURL,
 	}
-	if useCertificateAuth {
+
+	if opts.UseKubeConfig {
+		// A full kubeconfig is authoritative for the hub connection: it already carries the
+		// server URL, TLS configuration, and authentication (a bearer token, a client
+		// certificate, or a standard Kubernetes exec credential plugin for a federated
+		// identity), so none of the env-var/flag-based configuration below applies.
+		kubeConfigPath := os.Getenv("KUBE_CONFIG_PATH")
+		if kubeConfigPath == "" {
+			err := errors.New("hub kubeconfig file path cannot be empty if use-kubeconfig is set")
+			klog.ErrorS(err, "Failed to retrieve hub kubeconfig path")
+			return nil, err
+		}
+		clientConfig := clientcmd.NewNonInteractiveDeferredLoadingClientConfig(
+			&clientcmd.ClientConfigLoadingRules{ExplicitPath: kubeConfigPath},
+			&clientcmd.ConfigOverrides{})
+		loadedConfig, err := clientConfig.ClientConfig()
+		if err != nil {
+			klog.ErrorS(err, "Failed to load hub kubeconfig", "path", kubeConfigPath)
+			return nil, err
+		}
+		return applyHubKubeHeader(loadedConfig)
+	} else if opts.UseCertificateAuth {
 		keyFilePath := os.Getenv("IDENTITY_KEY")
 		certFilePath := os.Getenv("IDENTITY_CERT")
 		if keyFilePath == "" {
@@ -224,11 +248,19 @@ func buildHubConfig(hubURL string, useCertificateAuth bool, tlsClientInsecure bo
 		hubConfig.BearerTokenFile = tokenFilePath
 	}
 
-	hubConfig.TLSClientConfig.Insecure = tlsClientInsecure
-	if tlsClientInsecure {
+	return applyHubTLSConfig(hubConfig, opts)
+}
+
+// applyHubTLSConfig applies the TLS insecure/CA settings shared by the certificate-auth and
+// token-auth hub connection modes, then wraps the config with the HUB_KUBE_HEADER transport if
+// one is configured. The kubeconfig mode does not go through this path: a loaded kubeconfig is
+// already authoritative for TLS and skips straight to the header wrapping.
+func applyHubTLSConfig(hubConfig *rest.Config, opts options.HubConnectivityOptions) (*rest.Config, error) {
+	hubConfig.TLSClientConfig.Insecure = opts.UseInsecureTLSClient
+	if opts.UseInsecureTLSClient {
 		klog.Warning("TLS verification is disabled for hub cluster connection. This is insecure and should not be used in production.")
 	}
-	if !tlsClientInsecure {
+	if !opts.UseInsecureTLSClient {
 		caBundle, ok := os.LookupEnv("CA_BUNDLE")
 		if ok && caBundle == "" {
 			err := errors.New("environment variable CA_BUNDLE should not be empty")
@@ -259,8 +291,14 @@ func buildHubConfig(hubURL string, useCertificateAuth bool, tlsClientInsecure bo
 		}
 	}
 
-	// Sometime the hub cluster need additional http header for authentication or authorization.
-	// the "HUB_KUBE_HEADER" to allow sending custom header to hub's API Server for authentication and authorization.
+	return applyHubKubeHeader(hubConfig)
+}
+
+// applyHubKubeHeader wires in the "HUB_KUBE_HEADER" custom header, if set, to the given hub
+// rest.Config. Sometimes the hub cluster needs an additional HTTP header for authentication or
+// authorization; this applies regardless of how the rest of hubConfig was built, since it is an
+// independent, orthogonal transport-level concern (e.g. a front-door header requirement).
+func applyHubKubeHeader(hubConfig *rest.Config) (*rest.Config, error) {
 	if header, ok := os.LookupEnv("HUB_KUBE_HEADER"); ok {
 		r := textproto.NewReader(bufio.NewReader(strings.NewReader(header)))
 		h, err := r.ReadMIMEHeader()
