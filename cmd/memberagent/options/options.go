@@ -54,6 +54,8 @@ func (o *Options) AddFlags(flags *flag.FlagSet) {
 	o.CtrlManagerOptions.AddFlags(flags)
 	o.ApplierOpts.AddFlags(flags)
 	o.PropertyProviderOpts.AddFlags(flags)
+
+	// Note (chenyu1): backport only: placement policy APIs are disabled by default in the backport for now.
 	flags.BoolVar(
 		&o.EnablePlacementPolicyAPIs,
 		"enable-placement-policy-apis",

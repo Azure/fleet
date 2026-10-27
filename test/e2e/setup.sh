@@ -160,6 +160,8 @@ helm install hub-agent ../../charts/hub-agent/ \
     --set MaxConcurrentClusterPlacement=200 \
     --set resourceSnapshotCreationMinimumInterval=$RESOURCE_SNAPSHOT_CREATION_MINIMUM_INTERVAL \
     --set resourceChangesCollectionDuration=$RESOURCE_CHANGES_COLLECTION_DURATION \
+    --set enablePlacementPolicyAPIs=true \
+    --set enableAnnotationBasedPlacement=true \
     --wait \
     --timeout=2m
 

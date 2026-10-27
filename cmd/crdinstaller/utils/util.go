@@ -53,6 +53,9 @@ var (
 	memberCRD = map[string]bool{
 		"placement.kubernetes-fleet.io_appliedworks.yaml": true,
 	}
+	placementPolicyAPIMemberCRD = map[string]bool{
+		"placement.kubefleet.dev_appliedworks.yaml": true,
+	}
 )
 
 // InstallCRD creates/updates a Custom Resource Definition (CRD) from the provided CRD object.
@@ -106,8 +109,9 @@ func install(ctx context.Context, client client.Client, obj client.Object, mut f
 	return nil
 }
 
-// CollectCRDs collects CRDs from the specified path based on the mode either hub/member.
-func CollectCRDs(crdDirectoryPath, mode string, scheme *runtime.Scheme) ([]apiextensionsv1.CustomResourceDefinition, error) {
+// CollectCRDs collects CRDs from the specified path based on the mode either hub/member. The CRDs of the
+// experimental placement policy APIs are collected only if enablePlacementPolicyAPIs is true.
+func CollectCRDs(crdDirectoryPath, mode string, enablePlacementPolicyAPIs bool, scheme *runtime.Scheme) ([]apiextensionsv1.CustomResourceDefinition, error) {
 	// Set of CRDs to install based on mode.
 	crdsToInstall := []apiextensionsv1.CustomResourceDefinition{}
 
@@ -129,11 +133,16 @@ func CollectCRDs(crdDirectoryPath, mode string, scheme *runtime.Scheme) ([]apiex
 		var shouldInstall bool
 		switch mode {
 		case ModeMember, ModeArcMember:
-			shouldInstall = memberCRD[crdFileName]
+			shouldInstall = memberCRD[crdFileName] ||
+				(enablePlacementPolicyAPIs && placementPolicyAPIMemberCRD[crdFileName])
 		case ModeHub:
 			// Install multicluster CRD or CRDs with kubernetes-fleet.io in the filename (excluding member-only CRDs).
+			// If the placement policy APIs are enabled, also install CRDs with kubefleet.dev in the filename
+			// (placement.kubefleet.dev and rollout.kubefleet.dev), excluding member-only CRDs.
 			// CRD filenames follow the pattern <group>_<plural>.yaml, so we can check the filename.
-			shouldInstall = multiclusterCRD[crdFileName] || (strings.Contains(crdFileName, "kubernetes-fleet.io") && !memberCRD[crdFileName])
+			shouldInstall = multiclusterCRD[crdFileName] ||
+				(strings.Contains(crdFileName, "kubernetes-fleet.io") && !memberCRD[crdFileName]) ||
+				(enablePlacementPolicyAPIs && strings.Contains(crdFileName, "kubefleet.dev") && !placementPolicyAPIMemberCRD[crdFileName])
 		}
 
 		if shouldInstall {

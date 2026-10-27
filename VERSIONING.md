@@ -138,11 +138,11 @@ as a model rather than restating it here. Note that the upstream policy formally
 governs built-in Kubernetes APIs; KubeFleet adopts it by convention for its CRDs.
 
 When upgrading with raw manifests, apply the CRDs shipped with the target release
-before rolling the agents, as you would for any Kubernetes operator. Helm-based
-installs need no separate step: KubeFleet ships its CRDs under
-`charts/hub-agent/templates/crds/` and `charts/member-agent/templates/crds/`
-(regular templates, not Helm's special unmanaged `crds/` directory), so
-`helm upgrade` applies them — ahead of the Deployments — automatically.
+before rolling the agents, as you would for any Kubernetes operator. The Helm
+charts do not ship CRDs; for Helm-based installs, enable the CRD installer
+(`crdInstaller.enabled=true`), which runs as an init container of the agent and
+creates/updates the CRDs of the target release before the agent starts, or apply
+the CRDs separately (e.g., from the release's CRD bundle) before `helm upgrade`.
 
 ## See also
 

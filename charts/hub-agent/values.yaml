@@ -57,6 +57,8 @@ affinity: {}
 enableClusterInventoryAPI: true
 enableStagedUpdateRunAPIs: true
 # The experimental FEP-0001 placement policy APIs (placement.kubefleet.dev/v1alpha1).
+# If crdInstaller is enabled, this also has the CRD installer install the CRDs of these APIs
+# ([placement|rollout].kubefleet.dev); otherwise, these CRDs must be installed separately.
 enablePlacementPolicyAPIs: false
 # The experimental annotation-based placement experience; requires enablePlacementPolicyAPIs to be true.
 # Only enable it if KubeFleet runs in a fully trusted environment, or if the hub cluster has the workload controllers

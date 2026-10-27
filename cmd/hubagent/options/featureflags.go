@@ -85,6 +85,7 @@ func (o *FeatureFlags) AddFlags(flags *flag.FlagSet) {
 		"Enable the ClusterInventory API support in the KubeFleet hub agent or not.",
 	)
 
+	// Note (chenyu1): backport only: placement policy APIs are disabled by default in the backport for now.
 	flags.BoolVar(
 		&o.EnablePlacementPolicyAPIs,
 		"enable-placement-policy-apis",
@@ -92,6 +93,7 @@ func (o *FeatureFlags) AddFlags(flags *flag.FlagSet) {
 		"Enable the experimental FEP-0001 placement policy APIs (placement.kubefleet.dev/v1alpha1) in the KubeFleet hub agent or not.",
 	)
 
+	// Note (chenyu1): backport only: placement policy APIs are disabled by default in the backport for now.
 	flags.BoolVar(
 		&o.EnableAnnotationBasedPlacement,
 		"enable-annotation-based-placement",

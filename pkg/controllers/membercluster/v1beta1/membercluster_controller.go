@@ -47,6 +47,7 @@ import (
 	"go.goms.io/fleet/pkg/utils"
 	"go.goms.io/fleet/pkg/utils/condition"
 	"go.goms.io/fleet/pkg/utils/controller"
+	"go.goms.io/fleet/pkg/utils/labels"
 )
 
 const (
@@ -284,6 +285,8 @@ func (r *Reconciler) ensureFinalizer(ctx context.Context, mc *clusterv1beta1.Mem
 
 // ensureMemberNameLabel makes sure that the member cluster has a label with its own name.
 // This enables selecting clusters by name in ResourceOverride and ClusterResourceOverride via labelSelector.
+// It also seeds the cluster alias label and, if the fleet.azure.com/location label is present, the
+// topology.kubernetes.io/region label, which the region shorthand of annotation-based placement selects on.
 func (r *Reconciler) ensureMemberNameLabel(ctx context.Context, mc *clusterv1beta1.MemberCluster) error {
 	changed := false
 	if mc.Labels == nil {
@@ -304,10 +307,21 @@ func (r *Reconciler) ensureMemberNameLabel(ctx context.Context, mc *clusterv1bet
 		changed = true
 	}
 
+	// Azure-specific change: add the topology.kubernetes.io/region label using the same value
+	// as the fleet.azure.com/location label if it exists. Like the alias label above, the region
+	// label is seeded only when it is absent, so that a value set by an admin (or any other
+	// writer) is never overwritten.
+	if location, found := mc.Labels[labels.AzureLocationLabel]; found && location != "" {
+		if _, found := mc.Labels[corev1.LabelTopologyRegion]; !found {
+			mc.Labels[corev1.LabelTopologyRegion] = location
+			changed = true
+		}
+	}
+
 	if !changed {
 		return nil
 	}
-	klog.InfoS("Ensured the member cluster name and alias labels", "memberCluster", klog.KObj(mc))
+	klog.InfoS("Ensured the member cluster name, alias, and region labels", "memberCluster", klog.KObj(mc))
 	return r.Update(ctx, mc, client.FieldOwner(utils.MCControllerFieldManagerName))
 }
 

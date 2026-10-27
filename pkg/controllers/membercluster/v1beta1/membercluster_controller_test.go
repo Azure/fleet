@@ -41,6 +41,7 @@ import (
 	placementv1beta1 "go.goms.io/fleet/apis/placement/v1beta1"
 	"go.goms.io/fleet/pkg/utils"
 	"go.goms.io/fleet/pkg/utils/controller"
+	"go.goms.io/fleet/pkg/utils/labels"
 )
 
 const (
@@ -195,6 +196,144 @@ func TestEnsureMemberNameLabel(t *testing.T) {
 			wantLabels: map[string]string{
 				placementv1beta1.MemberNameLabel:   "mc1",
 				placementv1beta1.ClusterAliasLabel: "mc1",
+			},
+		},
+		"location label present, region label absent: region is seeded from location": {
+			r: &Reconciler{
+				Client: &test.MockClient{
+					MockUpdate: func(ctx context.Context, obj client.Object, opts ...client.UpdateOption) error {
+						return nil
+					},
+				},
+			},
+			memberCluster: &clusterv1beta1.MemberCluster{
+				ObjectMeta: metav1.ObjectMeta{
+					Name: "mc1",
+					Labels: map[string]string{
+						labels.AzureLocationLabel: "eastus",
+					},
+				},
+			},
+			wantLabels: map[string]string{
+				placementv1beta1.MemberNameLabel:   "mc1",
+				placementv1beta1.ClusterAliasLabel: "mc1",
+				labels.AzureLocationLabel:          "eastus",
+				corev1.LabelTopologyRegion:         "eastus",
+			},
+		},
+		// The day-2 scenario for the region label: a member cluster labeled by the controller
+		// before the region label was seeded. Only the region branch has anything to do, and it
+		// alone must drive the update; the update failure below proves that the update is issued.
+		"name and alias labels correct, region label absent: region alone drives the update": {
+			r: &Reconciler{
+				Client: &test.MockClient{
+					MockUpdate: test.NewMockUpdateFn(errors.New("update failed")),
+				},
+			},
+			memberCluster: &clusterv1beta1.MemberCluster{
+				ObjectMeta: metav1.ObjectMeta{
+					Name: "mc1",
+					Labels: map[string]string{
+						placementv1beta1.MemberNameLabel:   "mc1",
+						placementv1beta1.ClusterAliasLabel: "mc1",
+						labels.AzureLocationLabel:          "eastus",
+					},
+				},
+			},
+			wantErr: "update failed",
+		},
+		// Like the alias, the region label is seeded rather than reasserted: a value set by an
+		// admin (or any other writer) is left alone, even if it differs from the location.
+		"region label already present with a different value is not overwritten": {
+			r: &Reconciler{
+				Client: &test.MockClient{
+					MockUpdate: test.NewMockUpdateFn(fmt.Errorf("update should not be called when the region label is already present")),
+				},
+			},
+			memberCluster: &clusterv1beta1.MemberCluster{
+				ObjectMeta: metav1.ObjectMeta{
+					Name: "mc1",
+					Labels: map[string]string{
+						placementv1beta1.MemberNameLabel:   "mc1",
+						placementv1beta1.ClusterAliasLabel: "mc1",
+						labels.AzureLocationLabel:          "eastus",
+						corev1.LabelTopologyRegion:         "us-east",
+					},
+				},
+			},
+			wantLabels: map[string]string{
+				placementv1beta1.MemberNameLabel:   "mc1",
+				placementv1beta1.ClusterAliasLabel: "mc1",
+				labels.AzureLocationLabel:          "eastus",
+				corev1.LabelTopologyRegion:         "us-east",
+			},
+		},
+		"region label already matches the location label": {
+			r: &Reconciler{
+				Client: &test.MockClient{
+					MockUpdate: test.NewMockUpdateFn(fmt.Errorf("update should not be called when the labels are already correct")),
+				},
+			},
+			memberCluster: &clusterv1beta1.MemberCluster{
+				ObjectMeta: metav1.ObjectMeta{
+					Name: "mc1",
+					Labels: map[string]string{
+						placementv1beta1.MemberNameLabel:   "mc1",
+						placementv1beta1.ClusterAliasLabel: "mc1",
+						labels.AzureLocationLabel:          "eastus",
+						corev1.LabelTopologyRegion:         "eastus",
+					},
+				},
+			},
+			wantLabels: map[string]string{
+				placementv1beta1.MemberNameLabel:   "mc1",
+				placementv1beta1.ClusterAliasLabel: "mc1",
+				labels.AzureLocationLabel:          "eastus",
+				corev1.LabelTopologyRegion:         "eastus",
+			},
+		},
+		"location label present but empty: region label is not seeded": {
+			r: &Reconciler{
+				Client: &test.MockClient{
+					MockUpdate: test.NewMockUpdateFn(fmt.Errorf("update should not be called when the location label is empty")),
+				},
+			},
+			memberCluster: &clusterv1beta1.MemberCluster{
+				ObjectMeta: metav1.ObjectMeta{
+					Name: "mc1",
+					Labels: map[string]string{
+						placementv1beta1.MemberNameLabel:   "mc1",
+						placementv1beta1.ClusterAliasLabel: "mc1",
+						labels.AzureLocationLabel:          "",
+					},
+				},
+			},
+			wantLabels: map[string]string{
+				placementv1beta1.MemberNameLabel:   "mc1",
+				placementv1beta1.ClusterAliasLabel: "mc1",
+				labels.AzureLocationLabel:          "",
+			},
+		},
+		"location label absent: an existing region label is left alone": {
+			r: &Reconciler{
+				Client: &test.MockClient{
+					MockUpdate: test.NewMockUpdateFn(fmt.Errorf("update should not be called when the location label is absent")),
+				},
+			},
+			memberCluster: &clusterv1beta1.MemberCluster{
+				ObjectMeta: metav1.ObjectMeta{
+					Name: "mc1",
+					Labels: map[string]string{
+						placementv1beta1.MemberNameLabel:   "mc1",
+						placementv1beta1.ClusterAliasLabel: "mc1",
+						corev1.LabelTopologyRegion:         "us-east",
+					},
+				},
+			},
+			wantLabels: map[string]string{
+				placementv1beta1.MemberNameLabel:   "mc1",
+				placementv1beta1.ClusterAliasLabel: "mc1",
+				corev1.LabelTopologyRegion:         "us-east",
 			},
 		},
 		"update error": {

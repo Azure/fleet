@@ -9,6 +9,7 @@ package utils
 import (
 	"context"
 	"os"
+	"slices"
 	"testing"
 
 	"github.com/google/go-cmp/cmp"
@@ -48,53 +49,103 @@ func TestCollectCRDFileNamesWithActualPath(t *testing.T) {
 
 // runTest contains the actual test logic, separated to allow running with different paths.
 func runTest(t *testing.T, crdPath string) {
+	wantHubCRDNames := []string{
+		"memberclusters.cluster.kubernetes-fleet.io",
+		"internalmemberclusters.cluster.kubernetes-fleet.io",
+		"approvalrequests.placement.kubernetes-fleet.io",
+		"clusterapprovalrequests.placement.kubernetes-fleet.io",
+		"clusterresourcebindings.placement.kubernetes-fleet.io",
+		"clusterresourceenvelopes.placement.kubernetes-fleet.io",
+		"clusterresourceplacements.placement.kubernetes-fleet.io",
+		"clusterresourceplacementstatuses.placement.kubernetes-fleet.io",
+		"clusterresourceoverrides.placement.kubernetes-fleet.io",
+		"clusterresourceoverridesnapshots.placement.kubernetes-fleet.io",
+		"clusterresourceplacementdisruptionbudgets.placement.kubernetes-fleet.io",
+		"clusterresourceplacementevictions.placement.kubernetes-fleet.io",
+		"clusterresourcesnapshots.placement.kubernetes-fleet.io",
+		"clusterschedulingpolicysnapshots.placement.kubernetes-fleet.io",
+		"clusterstagedupdateruns.placement.kubernetes-fleet.io",
+		"clusterstagedupdatestrategies.placement.kubernetes-fleet.io",
+		"resourcebindings.placement.kubernetes-fleet.io",
+		"resourceenvelopes.placement.kubernetes-fleet.io",
+		"resourceoverrides.placement.kubernetes-fleet.io",
+		"resourceoverridesnapshots.placement.kubernetes-fleet.io",
+		"resourceplacements.placement.kubernetes-fleet.io",
+		"resourcesnapshots.placement.kubernetes-fleet.io",
+		"schedulingpolicysnapshots.placement.kubernetes-fleet.io",
+		"stagedupdateruns.placement.kubernetes-fleet.io",
+		"stagedupdatestrategies.placement.kubernetes-fleet.io",
+		"works.placement.kubernetes-fleet.io",
+		"clusterprofiles.multicluster.x-k8s.io",
+	}
+	wantHubPlacementPolicyAPICRDNames := []string{
+		"clusterclaims.placement.kubefleet.dev",
+		"clusterplacementbindings.placement.kubefleet.dev",
+		"clusterplacementpolicies.placement.kubefleet.dev",
+		"clusterplacementresourcesnapshots.placement.kubefleet.dev",
+		"placementbindings.placement.kubefleet.dev",
+		"placementpolicies.placement.kubefleet.dev",
+		"placementresourcesnapshots.placement.kubefleet.dev",
+		"works.placement.kubefleet.dev",
+		"approvalrequests.rollout.kubefleet.dev",
+		"clusterapprovalrequests.rollout.kubefleet.dev",
+		"clusterstagedupdateruns.rollout.kubefleet.dev",
+		"clusterstagedupdatestrategies.rollout.kubefleet.dev",
+		"stagedupdateruns.rollout.kubefleet.dev",
+		"stagedupdatestrategies.rollout.kubefleet.dev",
+	}
+	wantMemberCRDNames := []string{
+		"appliedworks.placement.kubernetes-fleet.io",
+	}
+	wantMemberPlacementPolicyAPICRDNames := []string{
+		"appliedworks.placement.kubefleet.dev",
+	}
+
 	tests := []struct {
-		name           string
-		mode           string
-		wantedCRDNames []string
-		wantError      bool
+		name                      string
+		mode                      string
+		enablePlacementPolicyAPIs bool
+		wantedCRDNames            []string
+		wantError                 bool
 	}{
 		{
-			name: "hub mode v1beta1 with actual directory",
-			mode: ModeHub,
-			wantedCRDNames: []string{
-				"memberclusters.cluster.kubernetes-fleet.io",
-				"internalmemberclusters.cluster.kubernetes-fleet.io",
-				"approvalrequests.placement.kubernetes-fleet.io",
-				"clusterapprovalrequests.placement.kubernetes-fleet.io",
-				"clusterresourcebindings.placement.kubernetes-fleet.io",
-				"clusterresourceenvelopes.placement.kubernetes-fleet.io",
-				"clusterresourceplacements.placement.kubernetes-fleet.io",
-				"clusterresourceplacementstatuses.placement.kubernetes-fleet.io",
-				"clusterresourceoverrides.placement.kubernetes-fleet.io",
-				"clusterresourceoverridesnapshots.placement.kubernetes-fleet.io",
-				"clusterresourceplacementdisruptionbudgets.placement.kubernetes-fleet.io",
-				"clusterresourceplacementevictions.placement.kubernetes-fleet.io",
-				"clusterresourcesnapshots.placement.kubernetes-fleet.io",
-				"clusterschedulingpolicysnapshots.placement.kubernetes-fleet.io",
-				"clusterstagedupdateruns.placement.kubernetes-fleet.io",
-				"clusterstagedupdatestrategies.placement.kubernetes-fleet.io",
-				"resourcebindings.placement.kubernetes-fleet.io",
-				"resourceenvelopes.placement.kubernetes-fleet.io",
-				"resourceoverrides.placement.kubernetes-fleet.io",
-				"resourceoverridesnapshots.placement.kubernetes-fleet.io",
-				"resourceplacements.placement.kubernetes-fleet.io",
-				"resourcesnapshots.placement.kubernetes-fleet.io",
-				"schedulingpolicysnapshots.placement.kubernetes-fleet.io",
-				"stagedupdateruns.placement.kubernetes-fleet.io",
-				"stagedupdatestrategies.placement.kubernetes-fleet.io",
-				"works.placement.kubernetes-fleet.io",
-				"clusterprofiles.multicluster.x-k8s.io",
-			},
-			wantError: false,
+			name:           "hub mode v1beta1 with actual directory",
+			mode:           ModeHub,
+			wantedCRDNames: wantHubCRDNames,
+			wantError:      false,
 		},
 		{
-			name: "member mode v1beta1 with actual directory",
-			mode: ModeMember,
-			wantedCRDNames: []string{
-				"appliedworks.placement.kubernetes-fleet.io",
-			},
-			wantError: false,
+			name:                      "hub mode with placement policy APIs enabled with actual directory",
+			mode:                      ModeHub,
+			enablePlacementPolicyAPIs: true,
+			wantedCRDNames:            slices.Concat(wantHubCRDNames, wantHubPlacementPolicyAPICRDNames),
+			wantError:                 false,
+		},
+		{
+			name:           "member mode v1beta1 with actual directory",
+			mode:           ModeMember,
+			wantedCRDNames: wantMemberCRDNames,
+			wantError:      false,
+		},
+		{
+			name:                      "member mode with placement policy APIs enabled with actual directory",
+			mode:                      ModeMember,
+			enablePlacementPolicyAPIs: true,
+			wantedCRDNames:            slices.Concat(wantMemberCRDNames, wantMemberPlacementPolicyAPICRDNames),
+			wantError:                 false,
+		},
+		{
+			name:           "arcMember mode v1beta1 with actual directory",
+			mode:           ModeArcMember,
+			wantedCRDNames: wantMemberCRDNames,
+			wantError:      false,
+		},
+		{
+			name:                      "arcMember mode with placement policy APIs enabled with actual directory",
+			mode:                      ModeArcMember,
+			enablePlacementPolicyAPIs: true,
+			wantedCRDNames:            slices.Concat(wantMemberCRDNames, wantMemberPlacementPolicyAPICRDNames),
+			wantError:                 false,
 		},
 	}
 
@@ -105,7 +156,7 @@ func runTest(t *testing.T, crdPath string) {
 		}
 		t.Run(tt.name, func(t *testing.T) {
 			// Call the function.
-			gotCRDs, err := CollectCRDs(crdPath, tt.mode, scheme)
+			gotCRDs, err := CollectCRDs(crdPath, tt.mode, tt.enablePlacementPolicyAPIs, scheme)
 			if (err != nil) != tt.wantError {
 				t.Errorf("collectCRDs() error = %v, wantError %v", err, tt.wantError)
 			}

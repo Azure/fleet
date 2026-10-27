@@ -24,6 +24,9 @@ import (
 
 var (
 	mode = flag.String("mode", "", "Mode to run in: 'hub', 'member', 'arcMember', (required)")
+	// Note (chenyu1): adding a temporary flag for enabling placement policy APIs.
+	enablePlacementPolicyAPIs = flag.Bool("enable-placement-policy-apis", false,
+		"Install the CRDs of the placement policy APIs ([placement|rollout].kubefleet.dev/v1alpha1) or not. Hub and member agents must have the APIs enabled together.")
 )
 
 func main() {
@@ -68,7 +71,7 @@ func main() {
 
 	// Install CRDs from the fixed location.
 	const crdPath = "/workspace/config/crd/bases"
-	if err := installCRDs(ctx, client, crdPath, *mode); err != nil {
+	if err := installCRDs(ctx, client, crdPath, *mode, *enablePlacementPolicyAPIs); err != nil {
 		klog.Fatalf("Failed to install CRDs: %v", err)
 	}
 
@@ -76,9 +79,9 @@ func main() {
 }
 
 // installCRDs installs the CRDs from the specified directory based on the mode.
-func installCRDs(ctx context.Context, client client.Client, crdPath, mode string) error {
+func installCRDs(ctx context.Context, client client.Client, crdPath, mode string, enablePlacementPolicyAPIs bool) error {
 	// List of CRDs to install based on mode.
-	crdsToInstall, err := utils.CollectCRDs(crdPath, mode, client.Scheme())
+	crdsToInstall, err := utils.CollectCRDs(crdPath, mode, enablePlacementPolicyAPIs, client.Scheme())
 	if err != nil {
 		return err
 	}

@@ -34,6 +34,9 @@ spec:
           args:
             - --mode=hub
             - --v={{ .Values.crdInstaller.logVerbosity }}
+            {{- if .Values.enablePlacementPolicyAPIs }}
+            - --enable-placement-policy-apis=true
+            {{- end }}
         {{- end }}
       containers:
         - name: {{ .Chart.Name }}

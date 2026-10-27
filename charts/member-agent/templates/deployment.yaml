@@ -35,6 +35,7 @@ spec:
         fsGroup: 65532
         seccompProfile:
           type: RuntimeDefault
+      {{- if or .Values.crdInstaller.enabled .Values.extraInitContainers }}
       initContainers:
         {{- if .Values.crdInstaller.enabled }}
         - name: crd-installer
@@ -43,7 +44,14 @@ spec:
           args:
             - --mode=member
             - --v={{ .Values.crdInstaller.logVerbosity }}
+            {{- if .Values.enablePlacementPolicyAPIs }}
+            - --enable-placement-policy-apis=true
+            {{- end }}
         {{- end }}
+        {{- with .Values.extraInitContainers }}
+        {{- toYaml . | nindent 8 }}
+        {{- end }}
+      {{- end }}
       containers:
         - name: {{ include "member-agent.fullname" . }}
           image: "{{ .Values.image.repository }}:{{ .Values.image.tag | default .Chart.AppVersion }}"
@@ -222,10 +230,6 @@ spec:
           - name: provider-token
             mountPath: /config
         {{- end }}
-      {{- if .Values.extraInitContainers }}
-      initContainers:
-        {{- toYaml .Values.extraInitContainers | nindent 8 }}
-      {{- end }}
       {{- if or ($useSidecar) (eq .Values.propertyProvider "azure") ($mountIdentitySecret) ($mountHubKubeconfig) (.Values.extraVolumes) }}
       volumes:
       {{- if $useSidecar }}

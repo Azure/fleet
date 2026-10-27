@@ -115,5 +115,6 @@ priorityQueue:
 enableNamespaceCollectionInPropertyProvider: false
 
 # Apply the Works of the experimental FEP-0001 placement policy APIs (placement.kubefleet.dev/v1alpha1).
-# The hub agent must run with enablePlacementPolicyAPIs too.
+# The hub agent must run with enablePlacementPolicyAPIs too. If crdInstaller is enabled, this also has the
+# CRD installer install the AppliedWork CRD of these APIs; otherwise, the CRD must be installed separately.
 enablePlacementPolicyAPIs: false
