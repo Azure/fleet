@@ -23,8 +23,8 @@ import (
 
 	corev1 "k8s.io/api/core/v1"
 
-	clusterv1beta1 "github.com/kubefleet-dev/kubefleet/apis/cluster/v1beta1"
-	"github.com/kubefleet-dev/kubefleet/pkg/propertyprovider"
+	clusterv1beta1 "go.goms.io/fleet/apis/cluster/v1beta1"
+	"go.goms.io/fleet/pkg/propertyprovider"
 )
 
 // criterionWeight is the weight the FEP assigns to each ranking criterion. All criteria weigh

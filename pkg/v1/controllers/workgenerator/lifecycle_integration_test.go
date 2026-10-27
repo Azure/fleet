@@ -24,8 +24,8 @@ import (
 	. "github.com/onsi/gomega"
 	"k8s.io/apimachinery/pkg/types"
 
-	placementv1alpha1 "github.com/kubefleet-dev/kubefleet/apis/kubefleet.dev/placement/v1alpha1"
-	"github.com/kubefleet-dev/kubefleet/pkg/utils"
+	placementv1alpha1 "go.goms.io/fleet/apis/kubefleet.dev/placement/v1alpha1"
+	"go.goms.io/fleet/pkg/utils"
 )
 
 var _ = Describe("deleting placement bindings", func() {

@@ -29,10 +29,10 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/controller/controllerutil"
 
-	kfplacementv1alpha1 "github.com/kubefleet-dev/kubefleet/apis/kubefleet.dev/placement/v1alpha1"
-	kferrors "github.com/kubefleet-dev/kubefleet/pkg/utils/errors"
-	"github.com/kubefleet-dev/kubefleet/pkg/utils/naming"
-	"github.com/kubefleet-dev/kubefleet/pkg/v1/utils/fieldindexers"
+	kfplacementv1alpha1 "go.goms.io/fleet/apis/kubefleet.dev/placement/v1alpha1"
+	kferrors "go.goms.io/fleet/pkg/utils/errors"
+	"go.goms.io/fleet/pkg/utils/naming"
+	"go.goms.io/fleet/pkg/v1/utils/fieldindexers"
 )
 
 const (

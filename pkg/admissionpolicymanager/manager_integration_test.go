@@ -166,8 +166,7 @@ var _ = Describe("Policies, Policy Bindings and their Effects", Ordered, func() 
 					},
 					Validations: []admissionregistrationv1.Validation{
 						{
-<<<<<<< HEAD
-							Expression: `(!((request.namespace.startsWith("fleet-")) || (request.namespace.startsWith("kube-")))) || ((request.userInfo.username == "system:kube-scheduler") || (request.userInfo.username == "system:kube-controller-manager") || ("system:nodes" in request.userInfo.groups) || ("system:masters" in request.userInfo.groups) || ("kubeadm:cluster-admins" in request.userInfo.groups) || ("system:serviceaccounts" in request.userInfo.groups) || (request.userInfo.username == "aks-support"))`,
+							Expression: `(!((request.namespace.startsWith("fleet-")) || (request.namespace.startsWith("kube-")))) || ((request.userInfo.username == "system:kube-scheduler") || (request.userInfo.username == "system:kube-controller-manager") || ("system:nodes" in request.userInfo.groups) || ("system:masters" in request.userInfo.groups) || ("kubeadm:cluster-admins" in request.userInfo.groups) || ("system:serviceaccounts" in request.userInfo.groups) || (request.userInfo.username == "whitelisted-user") || ("whitelisted-group" in request.userInfo.groups))`,
 							Message:    "writing service accounts in reserved namespaces or requesting tokens from such service accounts is disallowed",
 							Reason:     ptr.To(metav1.StatusReasonForbidden),
 						},
@@ -235,7 +234,6 @@ var _ = Describe("Policies, Policy Bindings and their Effects", Ordered, func() 
 						{
 							Expression: `(has(object.metadata.namespace) && object.metadata.namespace != "") || ((authorizer.group("placement.kubefleet.dev").resource("clusterplacementpolicies").check("create").allowed()) && (authorizer.group("placement.kubefleet.dev").resource("clusterplacementpolicies").check("update").allowed()))`,
 							Message:    wantClusterScopedObjDenialMsg,
->>>>>>> 38ddddfd (feat: add VAP safeguard for the placement policy API (annotated for placement experience) (#1006))
 							Reason:     ptr.To(metav1.StatusReasonForbidden),
 						},
 					},

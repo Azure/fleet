@@ -31,10 +31,10 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/controller"
 
-	placementv1alpha1 "github.com/kubefleet-dev/kubefleet/apis/kubefleet.dev/placement/v1alpha1"
-	"github.com/kubefleet-dev/kubefleet/pkg/utils/errors"
-	parallelizerutil "github.com/kubefleet-dev/kubefleet/pkg/utils/parallelizer"
-	"github.com/kubefleet-dev/kubefleet/pkg/v1/managers/placementresourcesnapshot"
+	placementv1alpha1 "go.goms.io/fleet/apis/kubefleet.dev/placement/v1alpha1"
+	"go.goms.io/fleet/pkg/utils/errors"
+	parallelizerutil "go.goms.io/fleet/pkg/utils/parallelizer"
+	"go.goms.io/fleet/pkg/v1/managers/placementresourcesnapshot"
 )
 
 const (

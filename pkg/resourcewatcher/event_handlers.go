@@ -25,7 +25,7 @@ import (
 	"k8s.io/klog/v2"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 
-	"github.com/kubefleet-dev/kubefleet/pkg/v1/controllers/annotationplacement"
+	"go.goms.io/fleet/pkg/v1/controllers/annotationplacement"
 )
 
 // handleTombStoneObj handles the case that the delete object is a tombStone instead of the real object

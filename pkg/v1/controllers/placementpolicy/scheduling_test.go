@@ -25,9 +25,9 @@ import (
 	"k8s.io/apimachinery/pkg/util/intstr"
 	"k8s.io/utils/ptr"
 
-	clusterv1beta1 "github.com/kubefleet-dev/kubefleet/apis/cluster/v1beta1"
-	kfplacementv1alpha1 "github.com/kubefleet-dev/kubefleet/apis/kubefleet.dev/placement/v1alpha1"
-	"github.com/kubefleet-dev/kubefleet/pkg/propertyprovider"
+	clusterv1beta1 "go.goms.io/fleet/apis/cluster/v1beta1"
+	kfplacementv1alpha1 "go.goms.io/fleet/apis/kubefleet.dev/placement/v1alpha1"
+	"go.goms.io/fleet/pkg/propertyprovider"
 )
 
 // allEligible is a test eligibility gate that admits every cluster.

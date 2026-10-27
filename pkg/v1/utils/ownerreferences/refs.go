@@ -23,7 +23,7 @@ import (
 	"k8s.io/klog/v2"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 
-	"github.com/kubefleet-dev/kubefleet/pkg/utils/errors"
+	"go.goms.io/fleet/pkg/utils/errors"
 )
 
 // Disown removes a specific owner reference from the given object.

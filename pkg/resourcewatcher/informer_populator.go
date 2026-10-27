@@ -26,8 +26,8 @@ import (
 	"k8s.io/klog/v2"
 	"sigs.k8s.io/controller-runtime/pkg/manager"
 
-	"github.com/kubefleet-dev/kubefleet/pkg/utils/informer"
-	"github.com/kubefleet-dev/kubefleet/pkg/utils/resourceeligibility"
+	"go.goms.io/fleet/pkg/utils/informer"
+	"go.goms.io/fleet/pkg/utils/resourceeligibility"
 )
 
 const (

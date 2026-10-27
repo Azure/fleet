@@ -38,8 +38,8 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/client/fake"
 	"sigs.k8s.io/controller-runtime/pkg/client/interceptor"
 
-	kfplacementv1alpha1 "github.com/kubefleet-dev/kubefleet/apis/kubefleet.dev/placement/v1alpha1"
-	"github.com/kubefleet-dev/kubefleet/pkg/utils/resourceeligibility"
+	kfplacementv1alpha1 "go.goms.io/fleet/apis/kubefleet.dev/placement/v1alpha1"
+	"go.goms.io/fleet/pkg/utils/resourceeligibility"
 )
 
 var (

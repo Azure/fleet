@@ -17,7 +17,7 @@ limitations under the License.
 package workapplier
 
 import (
-	placementv1alpha1 "github.com/kubefleet-dev/kubefleet/apis/kubefleet.dev/placement/v1alpha1"
+	placementv1alpha1 "go.goms.io/fleet/apis/kubefleet.dev/placement/v1alpha1"
 )
 
 // setDefaultSyncStrategy fills in a default sync strategy on a work object that carries none.

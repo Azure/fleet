@@ -12,8 +12,8 @@ import (
 	"k8s.io/client-go/rest"
 	"k8s.io/utils/ptr"
 
-	"github.com/kubefleet-dev/kubefleet/cmd/memberagent/options"
-	v1workapplier "github.com/kubefleet-dev/kubefleet/pkg/v1/controllers/workapplier"
+	"go.goms.io/fleet/cmd/memberagent/options"
+	v1workapplier "go.goms.io/fleet/pkg/v1/controllers/workapplier"
 )
 
 // TestPlacementPolicyWorkApplierRequeueRateLimiter tests that the placement policy work applier uses its default

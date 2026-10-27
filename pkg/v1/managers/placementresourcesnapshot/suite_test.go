@@ -40,10 +40,10 @@ import (
 	metricsserver "sigs.k8s.io/controller-runtime/pkg/metrics/server"
 	"sigs.k8s.io/controller-runtime/pkg/reconcile"
 
-	placementv1alpha1 "github.com/kubefleet-dev/kubefleet/apis/kubefleet.dev/placement/v1alpha1"
-	"github.com/kubefleet-dev/kubefleet/pkg/utils/informer"
-	"github.com/kubefleet-dev/kubefleet/pkg/utils/resourceeligibility"
-	"github.com/kubefleet-dev/kubefleet/pkg/v1/utils/fieldindexers"
+	placementv1alpha1 "go.goms.io/fleet/apis/kubefleet.dev/placement/v1alpha1"
+	"go.goms.io/fleet/pkg/utils/informer"
+	"go.goms.io/fleet/pkg/utils/resourceeligibility"
+	"go.goms.io/fleet/pkg/v1/utils/fieldindexers"
 )
 
 const (

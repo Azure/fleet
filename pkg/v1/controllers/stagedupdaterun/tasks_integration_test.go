@@ -29,8 +29,8 @@ import (
 	"k8s.io/utils/ptr"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 
-	rolloutv1alpha1 "github.com/kubefleet-dev/kubefleet/apis/kubefleet.dev/rollout/v1alpha1"
-	"github.com/kubefleet-dev/kubefleet/pkg/utils"
+	rolloutv1alpha1 "go.goms.io/fleet/apis/kubefleet.dev/rollout/v1alpha1"
+	"go.goms.io/fleet/pkg/utils"
 )
 
 // The name templates of the approval requests that the controller creates for before-stage and after-stage approval

@@ -28,8 +28,8 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/event"
 	"sigs.k8s.io/controller-runtime/pkg/handler"
 
-	rolloutv1alpha1 "github.com/kubefleet-dev/kubefleet/apis/kubefleet.dev/rollout/v1alpha1"
-	"github.com/kubefleet-dev/kubefleet/pkg/utils/errors"
+	rolloutv1alpha1 "go.goms.io/fleet/apis/kubefleet.dev/rollout/v1alpha1"
+	"go.goms.io/fleet/pkg/utils/errors"
 )
 
 var (

@@ -26,10 +26,10 @@ import (
 	"k8s.io/klog/v2"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 
-	placementv1alpha1 "github.com/kubefleet-dev/kubefleet/apis/kubefleet.dev/placement/v1alpha1"
-	"github.com/kubefleet-dev/kubefleet/pkg/utils"
-	"github.com/kubefleet-dev/kubefleet/pkg/utils/errors"
-	"github.com/kubefleet-dev/kubefleet/pkg/v1/utils/fieldindexers"
+	placementv1alpha1 "go.goms.io/fleet/apis/kubefleet.dev/placement/v1alpha1"
+	"go.goms.io/fleet/pkg/utils"
+	"go.goms.io/fleet/pkg/utils/errors"
+	"go.goms.io/fleet/pkg/v1/utils/fieldindexers"
 )
 
 func (r *Reconciler) retrievePlacementBinding(ctx context.Context, namespacedName types.NamespacedName) (placementv1alpha1.PlacementBindingAccessor, error) {

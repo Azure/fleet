@@ -32,7 +32,7 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/envtest"
 	metricsserver "sigs.k8s.io/controller-runtime/pkg/metrics/server"
 
-	rolloutv1alpha1 "github.com/kubefleet-dev/kubefleet/apis/kubefleet.dev/rollout/v1alpha1"
+	rolloutv1alpha1 "go.goms.io/fleet/apis/kubefleet.dev/rollout/v1alpha1"
 )
 
 var (

@@ -32,10 +32,10 @@ import (
 	"k8s.io/klog/v2"
 	"k8s.io/utils/ptr"
 
-	placementv1alpha1 "github.com/kubefleet-dev/kubefleet/apis/kubefleet.dev/placement/v1alpha1"
-	rolloutv1alpha1 "github.com/kubefleet-dev/kubefleet/apis/kubefleet.dev/rollout/v1alpha1"
-	"github.com/kubefleet-dev/kubefleet/pkg/utils/condition"
-	kferrors "github.com/kubefleet-dev/kubefleet/pkg/utils/errors"
+	placementv1alpha1 "go.goms.io/fleet/apis/kubefleet.dev/placement/v1alpha1"
+	rolloutv1alpha1 "go.goms.io/fleet/apis/kubefleet.dev/rollout/v1alpha1"
+	"go.goms.io/fleet/pkg/utils/condition"
+	kferrors "go.goms.io/fleet/pkg/utils/errors"
 )
 
 const (

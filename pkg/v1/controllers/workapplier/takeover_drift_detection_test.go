@@ -23,9 +23,9 @@ import (
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
 	"k8s.io/utils/ptr"
 
-	placementv1alpha1 "github.com/kubefleet-dev/kubefleet/apis/kubefleet.dev/placement/v1alpha1"
-	kfioplacementv1 "github.com/kubefleet-dev/kubefleet/apis/placement/v1"
-	kfioplacementv1beta1 "github.com/kubefleet-dev/kubefleet/apis/placement/v1beta1"
+	placementv1alpha1 "go.goms.io/fleet/apis/kubefleet.dev/placement/v1alpha1"
+	kfioplacementv1 "go.goms.io/fleet/apis/placement/v1"
+	kfioplacementv1beta1 "go.goms.io/fleet/apis/placement/v1beta1"
 )
 
 // TestIsOwnedByOlderKubeFleetAPIObjects tests the isOwnedByOlderKubeFleetAPIObjects function.

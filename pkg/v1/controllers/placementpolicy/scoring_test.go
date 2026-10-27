@@ -24,8 +24,8 @@ import (
 	"k8s.io/apimachinery/pkg/api/resource"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 
-	clusterv1beta1 "github.com/kubefleet-dev/kubefleet/apis/cluster/v1beta1"
-	"github.com/kubefleet-dev/kubefleet/pkg/propertyprovider"
+	clusterv1beta1 "go.goms.io/fleet/apis/cluster/v1beta1"
+	"go.goms.io/fleet/pkg/propertyprovider"
 )
 
 // rankedCluster builds a member cluster reporting the three ranking metrics; an empty string

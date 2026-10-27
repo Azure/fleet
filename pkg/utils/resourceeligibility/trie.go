@@ -19,7 +19,7 @@ package resourceeligibility
 import (
 	"k8s.io/apimachinery/pkg/runtime/schema"
 
-	"github.com/kubefleet-dev/kubefleet/pkg/utils/errors"
+	"go.goms.io/fleet/pkg/utils/errors"
 )
 
 const (

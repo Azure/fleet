@@ -18,6 +18,7 @@ import (
 
 	"go.goms.io/fleet/cmd/hubagent/options"
 	"go.goms.io/fleet/pkg/utils"
+	jobwebhook "go.goms.io/fleet/pkg/webhook/job"
 	testmanager "go.goms.io/fleet/test/utils/manager"
 )
 

@@ -35,11 +35,11 @@ import (
 	"k8s.io/utils/ptr"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 
-	placementv1alpha1 "github.com/kubefleet-dev/kubefleet/apis/kubefleet.dev/placement/v1alpha1"
-	"github.com/kubefleet-dev/kubefleet/pkg/utils"
-	kferrors "github.com/kubefleet-dev/kubefleet/pkg/utils/errors"
-	"github.com/kubefleet-dev/kubefleet/pkg/v1/managers/placementresourcesnapshot/uniquename"
-	"github.com/kubefleet-dev/kubefleet/pkg/v1/utils/fieldindexers"
+	placementv1alpha1 "go.goms.io/fleet/apis/kubefleet.dev/placement/v1alpha1"
+	"go.goms.io/fleet/pkg/utils"
+	kferrors "go.goms.io/fleet/pkg/utils/errors"
+	"go.goms.io/fleet/pkg/v1/managers/placementresourcesnapshot/uniquename"
+	"go.goms.io/fleet/pkg/v1/utils/fieldindexers"
 )
 
 const (

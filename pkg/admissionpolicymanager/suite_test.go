@@ -34,7 +34,7 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/log/zap"
 	"sigs.k8s.io/controller-runtime/pkg/metrics/server"
 
-	"github.com/kubefleet-dev/kubefleet/pkg/utils"
+	"go.goms.io/fleet/pkg/utils"
 )
 
 // These tests use Ginkgo (BDD-style Go testing framework). Refer to

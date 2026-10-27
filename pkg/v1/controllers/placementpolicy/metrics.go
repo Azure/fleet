@@ -22,8 +22,8 @@ import (
 	"github.com/prometheus/client_golang/prometheus"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 
-	kfplacementv1alpha1 "github.com/kubefleet-dev/kubefleet/apis/kubefleet.dev/placement/v1alpha1"
-	hubmetrics "github.com/kubefleet-dev/kubefleet/pkg/metrics/hub"
+	kfplacementv1alpha1 "go.goms.io/fleet/apis/kubefleet.dev/placement/v1alpha1"
+	hubmetrics "go.goms.io/fleet/pkg/metrics/hub"
 )
 
 // reportPolicyMetrics publishes the scheduling status and the outstanding claim count for a

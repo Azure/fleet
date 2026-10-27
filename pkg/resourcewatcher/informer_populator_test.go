@@ -30,9 +30,9 @@ import (
 	"k8s.io/client-go/kubernetes/fake"
 	"k8s.io/client-go/restmapper"
 
-	"github.com/kubefleet-dev/kubefleet/pkg/utils/resourceeligibility"
-	testinformer "github.com/kubefleet-dev/kubefleet/test/utils/informer"
-	testresource "github.com/kubefleet-dev/kubefleet/test/utils/resource"
+	"go.goms.io/fleet/pkg/utils/resourceeligibility"
+	testinformer "go.goms.io/fleet/test/utils/informer"
+	testresource "go.goms.io/fleet/test/utils/resource"
 )
 
 const (

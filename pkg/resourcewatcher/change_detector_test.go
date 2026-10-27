@@ -30,10 +30,10 @@ import (
 	"k8s.io/client-go/restmapper"
 	"k8s.io/client-go/tools/cache"
 
-	"github.com/kubefleet-dev/kubefleet/pkg/utils"
-	"github.com/kubefleet-dev/kubefleet/pkg/utils/resourceeligibility"
-	testinformer "github.com/kubefleet-dev/kubefleet/test/utils/informer"
-	testresource "github.com/kubefleet-dev/kubefleet/test/utils/resource"
+	"go.goms.io/fleet/pkg/utils"
+	"go.goms.io/fleet/pkg/utils/resourceeligibility"
+	testinformer "go.goms.io/fleet/test/utils/informer"
+	testresource "go.goms.io/fleet/test/utils/resource"
 )
 
 func TestChangeDetector_discoverResources(t *testing.T) {

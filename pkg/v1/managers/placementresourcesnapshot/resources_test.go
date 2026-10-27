@@ -35,9 +35,9 @@ import (
 	clienttesting "k8s.io/client-go/testing"
 	"k8s.io/utils/ptr"
 
-	placementv1alpha1 "github.com/kubefleet-dev/kubefleet/apis/kubefleet.dev/placement/v1alpha1"
-	kferrors "github.com/kubefleet-dev/kubefleet/pkg/utils/errors"
-	testinformer "github.com/kubefleet-dev/kubefleet/test/utils/informer"
+	placementv1alpha1 "go.goms.io/fleet/apis/kubefleet.dev/placement/v1alpha1"
+	kferrors "go.goms.io/fleet/pkg/utils/errors"
+	testinformer "go.goms.io/fleet/test/utils/informer"
 )
 
 // TestRetrieveResourceByName tests the retrieveResourceByName method, in particular how it falls back to reading

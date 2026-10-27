@@ -36,12 +36,12 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	ctrlmetrics "sigs.k8s.io/controller-runtime/pkg/metrics"
 
-	placementv1beta1 "github.com/kubefleet-dev/kubefleet/apis/placement/v1beta1"
-	hubmetrics "github.com/kubefleet-dev/kubefleet/pkg/metrics/hub"
-	"github.com/kubefleet-dev/kubefleet/pkg/utils"
-	"github.com/kubefleet-dev/kubefleet/pkg/utils/condition"
-	"github.com/kubefleet-dev/kubefleet/pkg/utils/resource"
-	"github.com/kubefleet-dev/kubefleet/test/utils/crpstatussync"
+	placementv1beta1 "go.goms.io/fleet/apis/placement/v1beta1"
+	hubmetrics "go.goms.io/fleet/pkg/metrics/hub"
+	"go.goms.io/fleet/pkg/utils"
+	"go.goms.io/fleet/pkg/utils/condition"
+	"go.goms.io/fleet/pkg/utils/resource"
+	"go.goms.io/fleet/test/utils/crpstatussync"
 )
 
 const (

@@ -37,10 +37,10 @@ import (
 	"k8s.io/kubectl/pkg/util/deployment"
 	"k8s.io/utils/ptr"
 
-	fleetv1beta1 "github.com/kubefleet-dev/kubefleet/apis/placement/v1beta1"
-	"github.com/kubefleet-dev/kubefleet/pkg/utils"
-	"github.com/kubefleet-dev/kubefleet/pkg/utils/resourceeligibility"
-	testinformer "github.com/kubefleet-dev/kubefleet/test/utils/informer"
+	fleetv1beta1 "go.goms.io/fleet/apis/placement/v1beta1"
+	"go.goms.io/fleet/pkg/utils"
+	"go.goms.io/fleet/pkg/utils/resourceeligibility"
+	testinformer "go.goms.io/fleet/test/utils/informer"
 )
 
 func makeIPFamilyPolicyTypePointer(policyType corev1.IPFamilyPolicy) *corev1.IPFamilyPolicy {

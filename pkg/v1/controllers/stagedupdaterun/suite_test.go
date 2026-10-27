@@ -44,14 +44,14 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/manager"
 	metricsserver "sigs.k8s.io/controller-runtime/pkg/metrics/server"
 
-	clusterv1beta1 "github.com/kubefleet-dev/kubefleet/apis/cluster/v1beta1"
-	placementv1alpha1 "github.com/kubefleet-dev/kubefleet/apis/kubefleet.dev/placement/v1alpha1"
-	rolloutv1alpha1 "github.com/kubefleet-dev/kubefleet/apis/kubefleet.dev/rollout/v1alpha1"
-	"github.com/kubefleet-dev/kubefleet/pkg/utils/informer"
-	"github.com/kubefleet-dev/kubefleet/pkg/utils/parallelizer"
-	"github.com/kubefleet-dev/kubefleet/pkg/utils/resourceeligibility"
-	"github.com/kubefleet-dev/kubefleet/pkg/v1/managers/placementresourcesnapshot"
-	"github.com/kubefleet-dev/kubefleet/pkg/v1/utils/fieldindexers"
+	clusterv1beta1 "go.goms.io/fleet/apis/cluster/v1beta1"
+	placementv1alpha1 "go.goms.io/fleet/apis/kubefleet.dev/placement/v1alpha1"
+	rolloutv1alpha1 "go.goms.io/fleet/apis/kubefleet.dev/rollout/v1alpha1"
+	"go.goms.io/fleet/pkg/utils/informer"
+	"go.goms.io/fleet/pkg/utils/parallelizer"
+	"go.goms.io/fleet/pkg/utils/resourceeligibility"
+	"go.goms.io/fleet/pkg/v1/managers/placementresourcesnapshot"
+	"go.goms.io/fleet/pkg/v1/utils/fieldindexers"
 )
 
 const (

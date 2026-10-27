@@ -37,9 +37,9 @@ import (
 	ctrloption "sigs.k8s.io/controller-runtime/pkg/controller"
 	"sigs.k8s.io/controller-runtime/pkg/predicate"
 
-	placementv1alpha1 "github.com/kubefleet-dev/kubefleet/apis/kubefleet.dev/placement/v1alpha1"
-	"github.com/kubefleet-dev/kubefleet/pkg/utils/errors"
-	parallelizerutil "github.com/kubefleet-dev/kubefleet/pkg/utils/parallelizer"
+	placementv1alpha1 "go.goms.io/fleet/apis/kubefleet.dev/placement/v1alpha1"
+	"go.goms.io/fleet/pkg/utils/errors"
+	parallelizerutil "go.goms.io/fleet/pkg/utils/parallelizer"
 )
 
 const (

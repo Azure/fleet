@@ -47,10 +47,10 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/manager"
 	"sigs.k8s.io/controller-runtime/pkg/metrics/server"
 
-	placementv1alpha1 "github.com/kubefleet-dev/kubefleet/apis/kubefleet.dev/placement/v1alpha1"
-	"github.com/kubefleet-dev/kubefleet/pkg/utils/parallelizer"
-	"github.com/kubefleet-dev/kubefleet/pkg/v1/utils/fieldindexers"
-	testv1alpha1 "github.com/kubefleet-dev/kubefleet/test/apis/v1alpha1"
+	placementv1alpha1 "go.goms.io/fleet/apis/kubefleet.dev/placement/v1alpha1"
+	"go.goms.io/fleet/pkg/utils/parallelizer"
+	"go.goms.io/fleet/pkg/v1/utils/fieldindexers"
+	testv1alpha1 "go.goms.io/fleet/test/apis/v1alpha1"
 )
 
 // These tests use Ginkgo (BDD-style Go testing framework). Refer to

@@ -25,7 +25,7 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/klog/v2"
 
-	"github.com/kubefleet-dev/kubefleet/pkg/utils/resourceeligibility"
+	"go.goms.io/fleet/pkg/utils/resourceeligibility"
 )
 
 // PlacementManagementOptions is a set of options the KubeFleet hub agent exposes for

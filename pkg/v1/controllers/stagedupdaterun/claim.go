@@ -21,10 +21,10 @@ import (
 
 	"k8s.io/klog/v2"
 
-	placementv1alpha1 "github.com/kubefleet-dev/kubefleet/apis/kubefleet.dev/placement/v1alpha1"
-	rolloutv1alpha1 "github.com/kubefleet-dev/kubefleet/apis/kubefleet.dev/rollout/v1alpha1"
-	"github.com/kubefleet-dev/kubefleet/pkg/utils/errors"
-	"github.com/kubefleet-dev/kubefleet/pkg/v1/utils/bindingmanager"
+	placementv1alpha1 "go.goms.io/fleet/apis/kubefleet.dev/placement/v1alpha1"
+	rolloutv1alpha1 "go.goms.io/fleet/apis/kubefleet.dev/rollout/v1alpha1"
+	"go.goms.io/fleet/pkg/utils/errors"
+	"go.goms.io/fleet/pkg/v1/utils/bindingmanager"
 )
 
 func stagedUpdateRunObjRef(stagedUpdateRun rolloutv1alpha1.StagedUpdateRunAccessor) placementv1alpha1.ObjectReference {
