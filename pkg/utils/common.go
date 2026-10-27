@@ -361,6 +361,13 @@ var (
 		Kind:    "Work",
 	}
 
+	// PlacementPolicyWorkMetaGVK is the GVK of the Works of the experimental placement policy APIs.
+	PlacementPolicyWorkMetaGVK = metav1.GroupVersionKind{
+		Group:   kfplacementv1alpha1.GroupVersion.Group,
+		Version: kfplacementv1alpha1.GroupVersion.Version,
+		Kind:    kfplacementv1alpha1.WorkKind,
+	}
+
 	ClusterResourceOverrideSnapshotKind = schema.GroupVersionKind{
 		Group:   placementv1beta1.GroupVersion.Group,
 		Version: placementv1beta1.GroupVersion.Version,

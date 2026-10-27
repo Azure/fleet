@@ -464,6 +464,114 @@ func TestValidateFleetMemberClusterUpdate(t *testing.T) {
 			},
 			wantResponse: admission.Denied(DeniedModifyMemberClusterLabels),
 		},
+		// Azure-specific: the hub agent seeds topology.kubernetes.io/region from the fleet.azure.com/location
+		// label, together with the member name and cluster alias labels, in one update.
+		"allow label creation by service accounts for the topology.kubernetes.io/region label": {
+			denyModifyMemberClusterLabels: true,
+			oldMC: &clusterv1beta1.MemberCluster{
+				ObjectMeta: metav1.ObjectMeta{
+					Name:   "test-mc",
+					Labels: map[string]string{"fleet.azure.com/location": "eastus"},
+					Annotations: map[string]string{
+						"fleet.azure.com/cluster-resource-id": "test-cluster-resource-id",
+					},
+				},
+			},
+			newMC: &clusterv1beta1.MemberCluster{
+				ObjectMeta: metav1.ObjectMeta{
+					Name: "test-mc",
+					Labels: map[string]string{
+						"fleet.azure.com/location":        "eastus",
+						"kubernetes-fleet.io/member-name": "test-mc",
+						"kubefleet.dev/cluster-alias":     "test-mc",
+						"topology.kubernetes.io/region":   "eastus",
+					},
+					Annotations: map[string]string{
+						"fleet.azure.com/cluster-resource-id": "test-cluster-resource-id",
+					},
+				},
+			},
+			req: admission.Request{
+				AdmissionRequest: admissionv1.AdmissionRequest{
+					Name: "test-mc",
+					UserInfo: authenticationv1.UserInfo{
+						Username: "system:serviceaccount:fleet-system:hub-agent-sa",
+						Groups:   []string{"system:serviceaccounts"},
+					},
+					RequestKind: &utils.MCMetaGVK,
+					Operation:   admissionv1.Update,
+				},
+			},
+			wantResponse: admission.Allowed(fmt.Sprintf(ResourceAllowedFormat, "system:serviceaccount:fleet-system:hub-agent-sa", utils.GenerateGroupString([]string{"system:serviceaccounts"}),
+				admissionv1.Update, &utils.MCMetaGVK, "", types.NamespacedName{Name: "test-mc"})),
+		},
+		"allow label modification by service accounts for the topology.kubernetes.io/region label": {
+			denyModifyMemberClusterLabels: true,
+			oldMC: &clusterv1beta1.MemberCluster{
+				ObjectMeta: metav1.ObjectMeta{
+					Name:   "test-mc",
+					Labels: map[string]string{"topology.kubernetes.io/region": "eastus"},
+					Annotations: map[string]string{
+						"fleet.azure.com/cluster-resource-id": "test-cluster-resource-id",
+					},
+				},
+			},
+			newMC: &clusterv1beta1.MemberCluster{
+				ObjectMeta: metav1.ObjectMeta{
+					Name:   "test-mc",
+					Labels: map[string]string{"topology.kubernetes.io/region": "westus"},
+					Annotations: map[string]string{
+						"fleet.azure.com/cluster-resource-id": "test-cluster-resource-id",
+					},
+				},
+			},
+			req: admission.Request{
+				AdmissionRequest: admissionv1.AdmissionRequest{
+					Name: "test-mc",
+					UserInfo: authenticationv1.UserInfo{
+						Username: "system:serviceaccount:test-ns:test-sa",
+						Groups:   []string{"system:serviceaccounts"},
+					},
+					RequestKind: &utils.MCMetaGVK,
+					Operation:   admissionv1.Update,
+				},
+			},
+			wantResponse: admission.Allowed(fmt.Sprintf(ResourceAllowedFormat, "system:serviceaccount:test-ns:test-sa", utils.GenerateGroupString([]string{"system:serviceaccounts"}),
+				admissionv1.Update, &utils.MCMetaGVK, "", types.NamespacedName{Name: "test-mc"})),
+		},
+		"deny label modification by non-system:masters user for the topology.kubernetes.io/region label": {
+			denyModifyMemberClusterLabels: true,
+			oldMC: &clusterv1beta1.MemberCluster{
+				ObjectMeta: metav1.ObjectMeta{
+					Name:   "test-mc",
+					Labels: map[string]string{"topology.kubernetes.io/region": "eastus"},
+					Annotations: map[string]string{
+						"fleet.azure.com/cluster-resource-id": "test-cluster-resource-id",
+					},
+				},
+			},
+			newMC: &clusterv1beta1.MemberCluster{
+				ObjectMeta: metav1.ObjectMeta{
+					Name:   "test-mc",
+					Labels: map[string]string{"topology.kubernetes.io/region": "westus"},
+					Annotations: map[string]string{
+						"fleet.azure.com/cluster-resource-id": "test-cluster-resource-id",
+					},
+				},
+			},
+			req: admission.Request{
+				AdmissionRequest: admissionv1.AdmissionRequest{
+					Name: "test-mc",
+					UserInfo: authenticationv1.UserInfo{
+						Username: "nonSystemMastersUser",
+						Groups:   []string{"someGroup"},
+					},
+					RequestKind: &utils.MCMetaGVK,
+					Operation:   admissionv1.Update,
+				},
+			},
+			wantResponse: admission.Denied(DeniedModifyMemberClusterLabels),
+		},
 		"allow label deletion by any user for kubernetes-fleet.io/* labels": {
 			denyModifyMemberClusterLabels: true,
 			oldMC: &clusterv1beta1.MemberCluster{
@@ -643,6 +751,56 @@ func TestValidateUserForFleetCRD(t *testing.T) {
 			group: "multicluster.x-k8s.io",
 			wantResponse: admission.Denied(fmt.Sprintf(ResourceDeniedFormat, "regular-user", utils.GenerateGroupString([]string{"regular-group"}), admissionv1.Create,
 				&utils.CRDMetaGVK, "", types.NamespacedName{Name: "clusterprofiles.multicluster.x-k8s.io"})),
+		},
+		"deny non-admin user for placement policy API CRD": {
+			req: admission.Request{
+				AdmissionRequest: admissionv1.AdmissionRequest{
+					Name:        "placementpolicies.placement.kubefleet.dev",
+					RequestKind: &utils.CRDMetaGVK,
+					UserInfo: authenticationv1.UserInfo{
+						Username: "regular-user",
+						Groups:   []string{"regular-group"},
+					},
+					Operation: admissionv1.Delete,
+				},
+			},
+			group: "placement.kubefleet.dev",
+			wantResponse: admission.Denied(fmt.Sprintf(ResourceDeniedFormat, "regular-user", utils.GenerateGroupString([]string{"regular-group"}), admissionv1.Delete,
+				&utils.CRDMetaGVK, "", types.NamespacedName{Name: "placementpolicies.placement.kubefleet.dev"})),
+		},
+		"deny non-admin user for placement policy rollout API CRD": {
+			req: admission.Request{
+				AdmissionRequest: admissionv1.AdmissionRequest{
+					Name:        "stagedupdateruns.rollout.kubefleet.dev",
+					RequestKind: &utils.CRDMetaGVK,
+					UserInfo: authenticationv1.UserInfo{
+						Username: "regular-user",
+						Groups:   []string{"regular-group"},
+					},
+					Operation: admissionv1.Update,
+				},
+			},
+			group: "rollout.kubefleet.dev",
+			wantResponse: admission.Denied(fmt.Sprintf(ResourceDeniedFormat, "regular-user", utils.GenerateGroupString([]string{"regular-group"}), admissionv1.Update,
+				&utils.CRDMetaGVK, "", types.NamespacedName{Name: "stagedupdateruns.rollout.kubefleet.dev"})),
+		},
+		// The CRD installer runs with the hub agent's service account, which is white listed.
+		"allow white listed user for placement policy API CRD": {
+			req: admission.Request{
+				AdmissionRequest: admissionv1.AdmissionRequest{
+					Name:        "works.placement.kubefleet.dev",
+					RequestKind: &utils.CRDMetaGVK,
+					UserInfo: authenticationv1.UserInfo{
+						Username: "white-listed-user",
+						Groups:   []string{"system:serviceaccounts"},
+					},
+					Operation: admissionv1.Update,
+				},
+			},
+			whiteListedUsers: []string{"white-listed-user"},
+			group:            "placement.kubefleet.dev",
+			wantResponse: admission.Allowed(fmt.Sprintf(ResourceAllowedFormat, "white-listed-user", utils.GenerateGroupString([]string{"system:serviceaccounts"}), admissionv1.Update,
+				&utils.CRDMetaGVK, "", types.NamespacedName{Name: "works.placement.kubefleet.dev"})),
 		},
 		"allow any user for non-fleet-managed CRD group": {
 			req: admission.Request{

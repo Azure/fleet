@@ -61,6 +61,7 @@ var DefaultPolicyGeneratorConfigsForV1APIs = &PolicyGeneratorConfigs{
 	},
 	SvcAccountsAndTokenRequestsVAPGeneratorConfig: &ServiceAccountsAndTokenRequestsValidatingAdmissionPolicyGenerator{
 		ReservedNamespacePrefixes: []string{utils.FleetNSNamePrefix, utils.KubeNSNamePrefix},
+		WhitelistedUsernames:      []string{aksSupportUser},
 	},
 }
 

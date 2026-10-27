@@ -10,6 +10,7 @@ import (
 	"strings"
 
 	authenticationv1 "k8s.io/api/authentication/v1"
+	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/api/equality"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/types"
@@ -19,6 +20,8 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/webhook/admission"
 
 	clusterv1beta1 "go.goms.io/fleet/apis/cluster/v1beta1"
+	kfplacementv1alpha1 "go.goms.io/fleet/apis/kubefleet.dev/placement/v1alpha1"
+	kfrolloutv1alpha1 "go.goms.io/fleet/apis/kubefleet.dev/rollout/v1alpha1"
 	placementv1beta1 "go.goms.io/fleet/apis/placement/v1beta1"
 	"go.goms.io/fleet/pkg/utils"
 )
@@ -50,6 +53,8 @@ var (
 		clusterv1beta1.GroupVersion.Group,
 		placementv1beta1.GroupVersion.Group,
 		clusterinventory.GroupVersion.Group,
+		kfplacementv1alpha1.GroupVersion.Group,
+		kfrolloutv1alpha1.GroupVersion.Group,
 	}
 )
 
@@ -95,8 +100,9 @@ func ValidateFleetMemberClusterUpdate(currentMC, oldMC clusterv1beta1.MemberClus
 
 	isLabelUpdated := isMapFieldUpdated(currentMC.GetLabels(), oldMC.GetLabels())
 	if isLabelUpdated && !isUserInGroup(userInfo, mastersGroup) && shouldDenyLabelModification(currentMC.GetLabels(), oldMC.GetLabels(), denyModifyMemberClusterLabels, isUserAuthenticatedServiceAccount(userInfo)) {
-		// allow any user to modify kubernetes-fleet.io/* labels and service accounts to modify kubefleet.dev/* labels,
-		// but restricts other label modifications given denyModifyMemberClusterLabels is true.
+		// allow any user to modify kubernetes-fleet.io/* labels and service accounts to modify kubefleet.dev/* labels
+		// and the topology.kubernetes.io/region label, but restricts other label modifications given
+		// denyModifyMemberClusterLabels is true.
 		klog.V(2).InfoS(DeniedModifyMemberClusterLabels, "user", userInfo.Username, "groups", userInfo.Groups, "operation", req.Operation, "GVK", req.RequestKind, "subResource", req.SubResource, "namespacedName", namespacedName)
 		return admission.Denied(DeniedModifyMemberClusterLabels)
 	}
@@ -166,12 +172,16 @@ func isUserInGroup(userInfo authenticationv1.UserInfo, groupName string) bool {
 // every user; kubefleet.dev/* labels only for service accounts, so that the hub agent (which is not
 // in system:masters) can seed the cluster alias while a plain user under the guard cannot move an
 // alias, which is a scheduling label, from one cluster to another.
+//
+// Azure-specific change: the topology.kubernetes.io/region label is exempt for service accounts as well,
+// for the same reason, so that the hub agent can seed it from the fleet.azure.com/location label.
 func shouldDenyLabelModification(currentLabels, oldLabels map[string]string, denyModifyMemberClusterLabels, isServiceAccount bool) bool {
 	if !denyModifyMemberClusterLabels {
 		return false
 	}
 	exempt := func(k string) bool {
-		return strings.HasPrefix(k, placementv1beta1.FleetPrefix) || (isServiceAccount && strings.HasPrefix(k, placementv1beta1.KubeFleetPrefix))
+		return strings.HasPrefix(k, placementv1beta1.FleetPrefix) ||
+			(isServiceAccount && (strings.HasPrefix(k, placementv1beta1.KubeFleetPrefix) || k == corev1.LabelTopologyRegion))
 	}
 	for k, v := range currentLabels {
 		oldV, exists := oldLabels[k]

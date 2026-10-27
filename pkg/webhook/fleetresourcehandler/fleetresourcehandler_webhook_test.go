@@ -8,6 +8,7 @@ import (
 	"testing"
 
 	"github.com/crossplane/crossplane-runtime/v2/pkg/test"
+	"github.com/google/go-cmp/cmp"
 	"github.com/stretchr/testify/assert"
 	admissionv1 "k8s.io/api/admission/v1"
 	authenticationv1 "k8s.io/api/authentication/v1"
@@ -113,6 +114,34 @@ func TestHandleCRD(t *testing.T) {
 				},
 			},
 			wantResponse: admission.Denied(fmt.Sprintf(validation.ResourceDeniedFormat, "test-user", utils.GenerateGroupString([]string{"test-group"}), admissionv1.Create, &utils.CRDMetaGVK, "", types.NamespacedName{Name: "memberclusters.cluster.kubernetes-fleet.io"})),
+		},
+		"deny non system user to modify placement policy API CRD": {
+			req: admission.Request{
+				AdmissionRequest: admissionv1.AdmissionRequest{
+					Name: "placementpolicies.placement.kubefleet.dev",
+					UserInfo: authenticationv1.UserInfo{
+						Username: "test-user",
+						Groups:   []string{"test-group"},
+					},
+					RequestKind: &utils.CRDMetaGVK,
+					Operation:   admissionv1.Delete,
+				},
+			},
+			wantResponse: admission.Denied(fmt.Sprintf(validation.ResourceDeniedFormat, "test-user", utils.GenerateGroupString([]string{"test-group"}), admissionv1.Delete, &utils.CRDMetaGVK, "", types.NamespacedName{Name: "placementpolicies.placement.kubefleet.dev"})),
+		},
+		"deny non system user to modify placement policy rollout API CRD": {
+			req: admission.Request{
+				AdmissionRequest: admissionv1.AdmissionRequest{
+					Name: "clusterstagedupdateruns.rollout.kubefleet.dev",
+					UserInfo: authenticationv1.UserInfo{
+						Username: "test-user",
+						Groups:   []string{"test-group"},
+					},
+					RequestKind: &utils.CRDMetaGVK,
+					Operation:   admissionv1.Update,
+				},
+			},
+			wantResponse: admission.Denied(fmt.Sprintf(validation.ResourceDeniedFormat, "test-user", utils.GenerateGroupString([]string{"test-group"}), admissionv1.Update, &utils.CRDMetaGVK, "", types.NamespacedName{Name: "clusterstagedupdateruns.rollout.kubefleet.dev"})),
 		},
 	}
 
@@ -692,6 +721,110 @@ func TestHandleFleetReservedNamespacedResource(t *testing.T) {
 		t.Run(testName, func(t *testing.T) {
 			gotResult := testCase.resourceValidator.handleFleetReservedNamespacedResource(context.Background(), testCase.req)
 			assert.Equal(t, testCase.wantResponse, gotResult, utils.TestCaseMsg, testName)
+		})
+	}
+}
+
+// TestHandleWorksInFleetMemberNamespace verifies that Handle sends the Works of both the v1beta1 APIs and the
+// placement policy APIs in a fleet member namespace through the member cluster identity check, so that a member
+// agent which does not authenticate as a service account (e.g., one using an Azure identity) can update them.
+func TestHandleWorksInFleetMemberNamespace(t *testing.T) {
+	memberNamespace := fmt.Sprintf(utils.NamespaceNameFormat, mcName)
+	mockClient := &test.MockClient{
+		MockGet: func(ctx context.Context, key client.ObjectKey, obj client.Object) error {
+			if key.Name != mcName {
+				return errors.New("cannot find member cluster")
+			}
+			o := obj.(*clusterv1beta1.MemberCluster)
+			*o = clusterv1beta1.MemberCluster{
+				ObjectMeta: metav1.ObjectMeta{
+					Name: mcName,
+				},
+				Spec: clusterv1beta1.MemberClusterSpec{
+					Identity: rbacv1.Subject{
+						Kind: rbacv1.UserKind,
+						Name: "test-identity",
+					},
+				},
+			}
+			return nil
+		},
+	}
+	resourceValidator := fleetResourceValidator{
+		client:           mockClient,
+		whiteListedUsers: []string{"hub-agent"},
+	}
+
+	testCases := map[string]struct {
+		gvk         metav1.GroupVersionKind
+		username    string
+		operation   admissionv1.Operation
+		subResource string
+		wantAllowed bool
+	}{
+		"allow the member cluster identity to update the status of a placement policy Work": {
+			gvk:         utils.PlacementPolicyWorkMetaGVK,
+			username:    "test-identity",
+			operation:   admissionv1.Update,
+			subResource: "status",
+			wantAllowed: true,
+		},
+		"allow the member cluster identity to update a placement policy Work": {
+			gvk:         utils.PlacementPolicyWorkMetaGVK,
+			username:    "test-identity",
+			operation:   admissionv1.Update,
+			wantAllowed: true,
+		},
+		"deny other users to update the status of a placement policy Work": {
+			gvk:         utils.PlacementPolicyWorkMetaGVK,
+			username:    "test-user",
+			operation:   admissionv1.Update,
+			subResource: "status",
+			wantAllowed: false,
+		},
+		"allow white listed users to create a placement policy Work": {
+			gvk:         utils.PlacementPolicyWorkMetaGVK,
+			username:    "hub-agent",
+			operation:   admissionv1.Create,
+			wantAllowed: true,
+		},
+		"allow the member cluster identity to update the status of a v1beta1 Work": {
+			gvk:         utils.WorkMetaGVK,
+			username:    "test-identity",
+			operation:   admissionv1.Update,
+			subResource: "status",
+			wantAllowed: true,
+		},
+	}
+
+	for testName, testCase := range testCases {
+		t.Run(testName, func(t *testing.T) {
+			gvk := testCase.gvk
+			groups := []string{"system:authenticated"}
+			namespacedName := types.NamespacedName{Name: "test-work", Namespace: memberNamespace}
+			req := admission.Request{
+				AdmissionRequest: admissionv1.AdmissionRequest{
+					Name:        namespacedName.Name,
+					Namespace:   namespacedName.Namespace,
+					Kind:        gvk,
+					RequestKind: &gvk,
+					SubResource: testCase.subResource,
+					UserInfo: authenticationv1.UserInfo{
+						Username: testCase.username,
+						Groups:   groups,
+					},
+					Operation: testCase.operation,
+				},
+			}
+
+			wantResponse := admission.Denied(fmt.Sprintf(validation.ResourceDeniedFormat, testCase.username, utils.GenerateGroupString(groups), testCase.operation, &gvk, testCase.subResource, namespacedName))
+			if testCase.wantAllowed {
+				wantResponse = admission.Allowed(fmt.Sprintf(validation.ResourceAllowedFormat, testCase.username, utils.GenerateGroupString(groups), testCase.operation, &gvk, testCase.subResource, namespacedName))
+			}
+			gotResponse := resourceValidator.Handle(context.Background(), req)
+			if diff := cmp.Diff(wantResponse, gotResponse); diff != "" {
+				t.Errorf("Handle() mismatch (-want +got):\n%s", diff)
+			}
 		})
 	}
 }
