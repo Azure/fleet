@@ -18,7 +18,6 @@ import (
 
 	"go.goms.io/fleet/cmd/hubagent/options"
 	"go.goms.io/fleet/pkg/utils"
-	jobwebhook "go.goms.io/fleet/pkg/webhook/job"
 	testmanager "go.goms.io/fleet/test/utils/manager"
 )
 
@@ -157,6 +156,37 @@ func TestBuildFleetJobWebhooks(t *testing.T) {
 	}
 	if diff := cmp.Diff(wantValidating, *gotValidating); diff != "" {
 		t.Errorf("Job validating webhook mismatch (-want +got):\n%s", diff)
+	}
+}
+
+// TestBuildFleetValidatingWebhooks_SkipHubAgentNamespace checks that the pod and replica set webhooks skip the hub
+// agent's own namespace, so that the hub agent's pods can be re-created while the hub agent is down.
+func TestBuildFleetValidatingWebhooks_SkipHubAgentNamespace(t *testing.T) {
+	url := options.WebhookClientConnectionType("url")
+	config := Config{
+		serviceNamespace:     "hub-agent-namespace",
+		servicePort:          8080,
+		serviceURL:           "test-url",
+		clientConnectionType: &url,
+	}
+	want := &metav1.LabelSelector{
+		MatchExpressions: []metav1.LabelSelectorRequirement{
+			{
+				Key:      "kubernetes.io/metadata.name",
+				Operator: metav1.LabelSelectorOpNotIn,
+				Values:   []string{"hub-agent-namespace"},
+			},
+		},
+	}
+
+	got := map[string]*metav1.LabelSelector{}
+	for _, wh := range config.buildFleetValidatingWebhooks() {
+		got[wh.Name] = wh.NamespaceSelector
+	}
+	for _, name := range []string{"fleet.pod.validating", "fleet.replicaset.validating"} {
+		if diff := cmp.Diff(want, got[name]); diff != "" {
+			t.Errorf("namespace selector of %s mismatch (-want +got):\n%s", name, diff)
+		}
 	}
 }
 

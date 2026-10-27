@@ -499,10 +499,22 @@ func (w *Config) buildFleetValidatingWebhooks() []admv1.ValidatingWebhook {
 
 	// When enableWorkload is true, skip pod and replicaset validating webhooks to allow workloads
 	if !w.enableWorkload {
+		// The hub agent's own namespace is always allowed. Skipping it keeps these webhooks from blocking
+		// the hub agent's own pods and replica sets while the hub agent (and so the webhook) is down.
+		skipHubAgentNamespace := &metav1.LabelSelector{
+			MatchExpressions: []metav1.LabelSelectorRequirement{
+				{
+					Key:      corev1.LabelMetadataName,
+					Operator: metav1.LabelSelectorOpNotIn,
+					Values:   []string{w.serviceNamespace},
+				},
+			},
+		}
 		webHooks = append(webHooks, admv1.ValidatingWebhook{
 			Name:                    "fleet.pod.validating",
 			ClientConfig:            w.createClientConfig(pod.ValidationPath),
 			FailurePolicy:           &failFailurePolicy,
+			NamespaceSelector:       skipHubAgentNamespace,
 			SideEffects:             &sideEffortsNone,
 			AdmissionReviewVersions: admissionReviewVersions,
 			Rules: []admv1.RuleWithOperations{
@@ -518,6 +530,7 @@ func (w *Config) buildFleetValidatingWebhooks() []admv1.ValidatingWebhook {
 			Name:                    "fleet.replicaset.validating",
 			ClientConfig:            w.createClientConfig(replicaset.ValidationPath),
 			FailurePolicy:           &failFailurePolicy,
+			NamespaceSelector:       skipHubAgentNamespace,
 			SideEffects:             &sideEffortsNone,
 			AdmissionReviewVersions: admissionReviewVersions,
 			Rules: []admv1.RuleWithOperations{
