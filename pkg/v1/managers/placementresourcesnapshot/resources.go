@@ -21,7 +21,9 @@ import (
 	"fmt"
 	"sort"
 
+	batchv1 "k8s.io/api/batch/v1"
 	corev1 "k8s.io/api/core/v1"
+	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	"k8s.io/apimachinery/pkg/api/meta"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
@@ -32,6 +34,7 @@ import (
 	"k8s.io/kubectl/pkg/util/deployment"
 
 	placementv1alpha1 "go.goms.io/fleet/apis/kubefleet.dev/placement/v1alpha1"
+	"go.goms.io/fleet/pkg/utils"
 	errors "go.goms.io/fleet/pkg/utils/errors"
 	hasher "go.goms.io/fleet/pkg/utils/resource"
 )
@@ -44,8 +47,14 @@ const (
 	// resource snapshot to be ~1.2 MiB, or ~1.26 MB, which should be safe in most cases. Note that the padding
 	// space is not just reserved for safety reasons, but also to accommodate the additional fields in
 	// the placement resource snapshot object, such as metadata and labels.
-	maxPerSnapshotResourceDataSizeBytes = 1258291 // 1.2 MiB, or ~1.26 MB.
-	maxPerSnapshotResourceCnt           = 50
+	DefaultMaxPerSnapshotResourceDataSizeBytes = 1258291 // 1.2 MiB, or ~1.26 MB.
+	DefaultMaxPerSnapshotResourceCnt           = 50
+
+	// The minimum and maximum limits for the size and count of resources in a single placement resource snapshot.
+	MinPerSnapshotResourceDataSizeBytes = 2000 // 2 KB.
+	MinPerSnapshotResourceCnt           = 2
+	MaxPerSnapshotResourceDataSizeBytes = 1468000 // 1.4 MiB, or ~1.47 MB.
+	MaxPerSnapshotResourceCnt           = 100
 )
 
 const (
@@ -81,9 +90,43 @@ func (m *Manager) retrieveAndHashSelectedResources(
 		// called at all if there are no resource selectors), hence the unexpected error returned here.
 		return nil, "", errors.NewUnexpectedError(nil, "no resource selectors are present")
 	}
+	if placementPolicyNSName := placementPolicyAccessor.GetNamespace(); placementPolicyNSName != "" {
+		// Check if the placement policy is in a namespace eligible for placement.
+		if m.resourceEligibilityChecker != nil && !m.resourceEligibilityChecker.AllowsNamespace(placementPolicyNSName) {
+			return nil, "", errors.NewUserError(nil, "placement policy is in a namespace that is ineligible for placement",
+				"placementPolicyNamespace", placementPolicyNSName)
+		}
+	}
 
 	for idx := range placementPolicySpec.ResourceSelectors {
 		selector := placementPolicySpec.ResourceSelectors[idx]
+
+		// Check if the resource selector selects object(s) from a namespace eligible for placement.
+		//
+		// Note that if the resource selector selects namespaces, the check will be done later at the retrieval step.
+		namespaceInSelector := selector.Namespace
+		if placementPolicyNamespace := placementPolicyAccessor.GetNamespace(); placementPolicyNamespace != "" {
+			if namespaceInSelector != "" && namespaceInSelector != placementPolicyNamespace {
+				return nil, "", errors.NewUserError(nil, "resource selector specifies an invalid namespace (a placement policy can only select resources within its own namespace)",
+					"resourceSelectorIndex", idx, "invalidNamespace", namespaceInSelector)
+			}
+		} else {
+			if m.resourceEligibilityChecker != nil && !m.resourceEligibilityChecker.AllowsNamespace(namespaceInSelector) {
+				return nil, "", errors.NewUserError(nil, "resource selector specifies a namespace that is ineligible for placement",
+					"resourceSelectorIndex", idx, "ineligibleNamespace", namespaceInSelector)
+			}
+		}
+
+		// Check if the resource selector specifies a GVK eligible for placement.
+		gvkInSelector := schema.GroupVersionKind{
+			Group:   selector.APIGroup,
+			Version: selector.APIVersion,
+			Kind:    selector.Kind,
+		}
+		if m.resourceEligibilityChecker != nil && !m.resourceEligibilityChecker.AllowsGVK(gvkInSelector) {
+			return nil, "", errors.NewUserError(nil, "resource selector specifies a GVK that is ineligible for placement",
+				"resourceSelectorIndex", idx, "ineligibleGVK", gvkInSelector)
+		}
 
 		resourcesAsSelected := make([]*placementv1alpha1.SnapshottedResource, 0, 5)
 		switch {
@@ -158,15 +201,26 @@ func (m *Manager) retrieveResourceByName(
 		} else {
 			obj, err = m.hubDynamicInformerManager.Lister(gvr).ByNamespace(namespace).Get(resourceSelector.Name)
 		}
-		if err != nil {
+		switch {
+		case apierrors.IsNotFound(err):
+			// The cache might be stale (e.g., the resource has just been created); confirm with a read from the
+			// API server directly before reporting the resource as absent.
+			klog.V(2).InfoS("The selected resource is not found in the cache; retrieving the resource directly from the API server",
+				"gvr", gvr, "namespace", namespace, "name", resourceSelector.Name)
+			resource, err = m.retrieveResourceByNameWithNoCache(ctx, gvr, namespace, resourceSelector.Name)
+			if err != nil {
+				return placementv1alpha1.SnapshottedResource{}, err
+			}
+		case err != nil:
 			return placementv1alpha1.SnapshottedResource{}, errors.NewAPIServerError(err, "failed to get selected resource", true,
 				"gvr", gvr, "namespace", namespace, "name", resourceSelector.Name)
-		}
-		var ok bool
-		resource, ok = obj.(*unstructured.Unstructured)
-		if !ok {
-			return placementv1alpha1.SnapshottedResource{}, errors.NewUnexpectedError(nil, "failed to convert the retrieved resource to unstructured",
-				"gvr", gvr, "namespace", namespace, "name", resourceSelector.Name)
+		default:
+			var ok bool
+			resource, ok = obj.(*unstructured.Unstructured)
+			if !ok {
+				return placementv1alpha1.SnapshottedResource{}, errors.NewUnexpectedError(nil, "failed to convert the retrieved resource to unstructured",
+					"gvr", gvr, "namespace", namespace, "name", resourceSelector.Name)
+			}
 		}
 	} else {
 		// No informer is set up for the selected resource, or the informer has not been synced yet.
@@ -174,13 +228,36 @@ func (m *Manager) retrieveResourceByName(
 		// As a fallback, retrieve the resource directly from the API server.
 		klog.V(2).InfoS("Informer for the selected resource is not set up or not synced; retrieving the resource directly from the API server",
 			"gvr", gvr)
-		if namespace == "" {
-			resource, err = m.hubDynamicClient.Resource(gvr).Get(ctx, resourceSelector.Name, metav1.GetOptions{})
-		} else {
-			resource, err = m.hubDynamicClient.Resource(gvr).Namespace(namespace).Get(ctx, resourceSelector.Name, metav1.GetOptions{})
-		}
+		resource, err = m.retrieveResourceByNameWithNoCache(ctx, gvr, namespace, resourceSelector.Name)
 		if err != nil {
-			return placementv1alpha1.SnapshottedResource{}, errors.NewAPIServerError(err, "failed to get selected resource directly from the API server", false,
+			return placementv1alpha1.SnapshottedResource{}, err
+		}
+	}
+
+	// Check if the selected resource is eligible for placement.
+	//
+	// Note that here the resource snapshot manager will throw an error if the resource is not eligible for placement
+	// rather than silently ignoring it, as the selection is explicitly defined.
+	if m.resourceEligibilityChecker != nil {
+		// As a special case, if the selected resource is a namespace itself, check if the namespace is eligible for
+		// placement.
+		if gvk.Group == "" && gvk.Kind == utils.NamespaceKind {
+			if !m.resourceEligibilityChecker.AllowsNamespace(resource.GetName()) {
+				return placementv1alpha1.SnapshottedResource{}, errors.NewUserError(nil,
+					"selected namespace is not eligible for placement",
+					"gvr", gvr, "namespace", namespace, "name", resourceSelector.Name)
+			}
+		}
+
+		// Check if the resource itself is eligible for placement.
+		isEligible, reason, err := m.resourceEligibilityChecker.AllowsObject(resource)
+		if err != nil {
+			return placementv1alpha1.SnapshottedResource{}, errors.Wraps(err, "failed to check if the selected resource is eligible for placement",
+				"gvr", gvr, "namespace", namespace, "name", resourceSelector.Name)
+		}
+		if !isEligible {
+			return placementv1alpha1.SnapshottedResource{}, errors.NewUserError(nil,
+				fmt.Sprintf("selected resource is not eligible for placement (%s)", reason),
 				"gvr", gvr, "namespace", namespace, "name", resourceSelector.Name)
 		}
 	}
@@ -192,6 +269,31 @@ func (m *Manager) retrieveResourceByName(
 				"gvr", gvr, "namespace", namespace, "name", resourceSelector.Name)
 	}
 	return snapshottedResource, nil
+}
+
+// retrieveResourceByNameWithNoCache retrieves a resource selected by name directly from the API server, bypassing the
+// cache. As the read is authoritative, a not found error is reported as a user error (wrapping the original error).
+func (m *Manager) retrieveResourceByNameWithNoCache(
+	ctx context.Context,
+	gvr schema.GroupVersionResource,
+	namespace, name string,
+) (*unstructured.Unstructured, error) {
+	var resource *unstructured.Unstructured
+	var err error
+	if namespace == "" {
+		resource, err = m.hubDynamicClient.Resource(gvr).Get(ctx, name, metav1.GetOptions{})
+	} else {
+		resource, err = m.hubDynamicClient.Resource(gvr).Namespace(namespace).Get(ctx, name, metav1.GetOptions{})
+	}
+	switch {
+	case apierrors.IsNotFound(err):
+		return nil, errors.NewUserError(err, "selected resource does not exist",
+			"gvr", gvr, "namespace", namespace, "name", name)
+	case err != nil:
+		return nil, errors.NewAPIServerError(err, "failed to get selected resource directly from the API server", false,
+			"gvr", gvr, "namespace", namespace, "name", name)
+	}
+	return resource, nil
 }
 
 func (m *Manager) retrieveResourcesByLabelSelector(
@@ -260,14 +362,44 @@ func (m *Manager) retrieveResourcesByLabelSelector(
 		}
 	}
 
-	snapshottedResources := make([]placementv1alpha1.SnapshottedResource, len(resources))
+	snapshottedResources := make([]placementv1alpha1.SnapshottedResource, 0, len(resources))
 	for idx := range resources {
 		resource := resources[idx]
-		snapshottedResources[idx], err = snapshotResource(resource)
+
+		// Check if the resource is eligible for placement.
+		//
+		// Note that here the resource snapshot manager will skip a resource if it is not eligible for placement
+		// rather than returning an error to the caller, as a label selector may match resources that the user
+		// did not explicitly pick (e.g., the built-in CA certificate config map in every namespace).
+		if m.resourceEligibilityChecker != nil {
+			// As a special case, if the selected resource is a namespace itself, check if the namespace is eligible for
+			// placement.
+			if gvk.Group == "" && gvk.Kind == utils.NamespaceKind {
+				if !m.resourceEligibilityChecker.AllowsNamespace(resource.GetName()) {
+					klog.V(2).InfoS("Skipping a namespace that is not eligible for placement",
+						"gvr", gvr, "resource", klog.KObj(resource))
+					continue
+				}
+			}
+
+			isEligible, reason, err := m.resourceEligibilityChecker.AllowsObject(resource)
+			if err != nil {
+				return nil, errors.Wraps(err, "failed to check if a selected resource is eligible for placement",
+					"gvr", gvr, "namespace", namespace, "name", resource.GetName())
+			}
+			if !isEligible {
+				klog.V(2).InfoS("Skipping a selected resource that is not eligible for placement",
+					"gvr", gvr, "resource", klog.KObj(resource), "reason", reason)
+				continue
+			}
+		}
+
+		snapshottedResource, err := snapshotResource(resource)
 		if err != nil {
 			return nil, errors.Wraps(err, "failed to snapshot selected resource",
 				"gvr", gvr, "namespace", namespace, "name", resource.GetName())
 		}
+		snapshottedResources = append(snapshottedResources, snapshottedResource)
 	}
 	return snapshottedResources, nil
 }
@@ -283,6 +415,9 @@ func (m *Manager) lookUpGVKGVRAndNamespace(resourceSelector placementv1alpha1.Re
 	// Convert the GVK to a GVR using the REST mapper.
 	mapping, err := m.restMapper.RESTMapping(gvk.GroupKind(), gvk.Version)
 	if err != nil {
+		if meta.IsNoMatchError(err) {
+			return schema.GroupVersionKind{}, schema.GroupVersionResource{}, "", errors.NewUserError(err, "no match found for GVK; the API might not be available on the cluster", "gvk", gvk)
+		}
 		return schema.GroupVersionKind{}, schema.GroupVersionResource{}, "", errors.NewUnexpectedError(err, "failed to map GVK to GVR", "gvk", gvk)
 	}
 	gvr := mapping.Resource
@@ -303,6 +438,11 @@ func (m *Manager) lookUpGVKGVRAndNamespace(resourceSelector placementv1alpha1.Re
 		return schema.GroupVersionKind{}, schema.GroupVersionResource{}, "",
 			errors.NewUserError(nil, "cluster-scoped resource cannot be selected by a placement policy; use cluster placement policy instead",
 				"resourceSelector", resourceSelector)
+	}
+	// When selecting a namespace-scoped resource, a namespace must be specified.
+	if scope == meta.RESTScopeNameNamespace && namespace == "" {
+		return schema.GroupVersionKind{}, schema.GroupVersionResource{}, "",
+			errors.NewUserError(nil, "a namespace must be specified for namespace-scoped resources", "resourceSelector", resourceSelector)
 	}
 	// Check if the resolved scope matches with the resource selector, i.e., when selecting a cluster-scoped resource, no namespace can
 	// be specified.
@@ -347,9 +487,49 @@ func snapshotResource(resource *unstructured.Unstructured) (placementv1alpha1.Sn
 	resourceCopy.SetResourceVersion("")
 	resourceCopy.SetSelfLink("")
 	resourceCopy.SetUID("")
+	resourceCopy.SetFinalizers(nil)
 
 	// Remove the status field.
 	unstructured.RemoveNestedField(resourceCopy.Object, "status")
+
+	// Apply resource-specific transformations as needed.
+	switch resourceCopy.GroupVersionKind() {
+	case corev1.SchemeGroupVersion.WithKind(utils.ServiceKind):
+		// Remove the cluster IP(s) allocated by the hub cluster, unless the Service is headless.
+		if clusterIP, exist, _ := unstructured.NestedString(resourceCopy.Object, "spec", "clusterIP"); exist && clusterIP != corev1.ClusterIPNone {
+			unstructured.RemoveNestedField(resourceCopy.Object, "spec", "clusterIP")
+			unstructured.RemoveNestedField(resourceCopy.Object, "spec", "clusterIPs")
+		}
+		// Remove all the node ports allocated by the hub cluster, if any.
+		unstructured.RemoveNestedField(resourceCopy.Object, "spec", "healthCheckNodePort")
+
+		vals, found, err := unstructured.NestedFieldNoCopy(resourceCopy.Object, "spec", "ports")
+		if err != nil {
+			return placementv1alpha1.SnapshottedResource{}, errors.NewUnexpectedError(err, "failed to get the ports field in the Service object",
+				"resource", klog.KObj(resourceCopy))
+		}
+		if found {
+			if ports, ok := vals.([]any); ok {
+				for i := range ports {
+					if port, ok := ports[i].(map[string]any); ok {
+						delete(port, "nodePort")
+					}
+				}
+			}
+		}
+	case batchv1.SchemeGroupVersion.WithKind(utils.JobKind):
+		if manualSelector, exist, _ := unstructured.NestedBool(resourceCopy.Object, "spec", "manualSelector"); !exist || !manualSelector {
+			// Remove the selector field and labels added by the API server if the Job is not created with a manual selector,
+			// as their values would conflict with the ones generated by the member cluster API server.
+			// https://github.com/kubernetes/kubernetes/blob/d4fde1e92a83cb533ae63b3abe9d49f08efb7a2f/pkg/registry/batch/job/strategy.go#L219
+			// Kubernetes used to add a label called "controller-uid", but has switched to "batch.kubernetes.io/controller-uid" since 1.27.
+			unstructured.RemoveNestedField(resourceCopy.Object, "spec", "selector", "matchLabels", "controller-uid")
+			unstructured.RemoveNestedField(resourceCopy.Object, "spec", "selector", "matchLabels", "batch.kubernetes.io/controller-uid")
+			unstructured.RemoveNestedField(resourceCopy.Object, "spec", "template", "metadata", "creationTimestamp")
+			unstructured.RemoveNestedField(resourceCopy.Object, "spec", "template", "metadata", "labels", "controller-uid")
+			unstructured.RemoveNestedField(resourceCopy.Object, "spec", "template", "metadata", "labels", "batch.kubernetes.io/controller-uid")
+		}
+	}
 
 	resourceCopyRawData, err := resourceCopy.MarshalJSON()
 	if err != nil {
@@ -380,7 +560,7 @@ func resourceUniqueId(resource *placementv1alpha1.SnapshottedResource) string {
 		resource.Identifier.Name)
 }
 
-func splitResourcesIntoSizeControlledGroups(resources []placementv1alpha1.SnapshottedResource) ([][]placementv1alpha1.SnapshottedResource, error) {
+func (m *Manager) splitResourcesIntoSizeControlledGroups(resources []placementv1alpha1.SnapshottedResource) ([][]placementv1alpha1.SnapshottedResource, error) {
 	if len(resources) == 0 {
 		// Return one single empty group.
 		return [][]placementv1alpha1.SnapshottedResource{{}}, nil
@@ -398,16 +578,16 @@ func splitResourcesIntoSizeControlledGroups(resources []placementv1alpha1.Snapsh
 			resourceSize += len(info)
 		}
 
-		if resourceSize > maxPerSnapshotResourceDataSizeBytes {
+		if resourceSize > m.maxPerSnapshotResourceDataSizeBytes {
 			// A single resource exceeds the per-snapshot size limit; it can never fit into any group.
 			return nil, errors.NewUserError(nil, "a single selected resource is too large to fit in a placement resource snapshot",
 				"resource", resource.Identifier,
-				"resourceSizeBytes", resourceSize, "maxPerSnapshotResourceDataSizeBytes", maxPerSnapshotResourceDataSizeBytes)
+				"resourceSizeBytes", resourceSize, "maxPerSnapshotResourceDataSizeBytes", m.maxPerSnapshotResourceDataSizeBytes)
 		}
 
 		// Start a new group if adding this resource would exceed either the size or the count limit.
 		if len(currentGroup) > 0 &&
-			(currentSize+resourceSize > maxPerSnapshotResourceDataSizeBytes || len(currentGroup) >= maxPerSnapshotResourceCnt) {
+			(currentSize+resourceSize > m.maxPerSnapshotResourceDataSizeBytes || len(currentGroup) >= m.maxPerSnapshotResourceCnt) {
 			groups = append(groups, currentGroup)
 			currentGroup = nil
 			currentSize = 0

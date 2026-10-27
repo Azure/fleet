@@ -58,16 +58,18 @@ being finalized:
   (see the [CNCF TAG-Security `SECURITY.md` template](https://github.com/cncf/tag-security)
   for the conventional `cncf-<project>-distributors-announce@lists.cncf.io` form). Whether
   KubeFleet stands one up depends on demonstrated downstream demand.
-- **GitHub private vulnerability reporting:** to be enabled on this repository as the
-  preferred reporting channel; the maintainer mailing list (see below) remains the fallback
-  until it is.
+- **GitHub private vulnerability reporting:** report them via the KubeFleet Security Advisories [Report a vulnerability](https://github.com/kubefleet-dev/kubefleet/security/advisories/new) feature..
 
 This section will be updated as each item is decided.
 
 ## Reporting Security Issues
 
-**Please do not report security vulnerabilities through public GitHub issues.** Instead, 
-report them to the [KubeFleet maintainers](mailto:kubefleet@microsoft.com).
+**Please do not report security vulnerabilities through public GitHub issues.** 
+
+Instead, report them via the KubeFleet Security Advisories [Report a vulnerability](https://github.com/kubefleet-dev/kubefleet/security/advisories/new) feature.
+
+You can also follow up with the [KubeFleet maintainers](mailto:kubefleet@microsoft.com).
+
 We prefer all communications to be in English.
 
 You should receive a response as soon as possible. If for some reason you do not, please

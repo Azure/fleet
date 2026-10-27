@@ -1327,6 +1327,23 @@ func TestSetManifestAppliedCondition(t *testing.T) {
 			},
 		},
 		{
+			name:                              "owned by other KubeFleet API objects",
+			manifestCond:                      &fleetv1beta1.ManifestCondition{},
+			applyOrReportDiffResTyp:           ApplyOrReportDiffResTypeOwnedByOtherKubeFleetAPIObjects,
+			applyOrReportDiffErr:              fmt.Errorf("the object to process is already owned by another KubeFleet placement API object"),
+			observedInMemberClusterGeneration: 1,
+			wantManifestCond: &fleetv1beta1.ManifestCondition{
+				Conditions: []metav1.Condition{
+					{
+						Type:               fleetv1beta1.WorkConditionTypeApplied,
+						Status:             metav1.ConditionFalse,
+						Reason:             string(ApplyOrReportDiffResTypeOwnedByOtherKubeFleetAPIObjects),
+						ObservedGeneration: 1,
+					},
+				},
+			},
+		},
+		{
 			name: "no apply performed",
 			manifestCond: &fleetv1beta1.ManifestCondition{
 				Conditions: []metav1.Condition{

@@ -44,6 +44,19 @@ config:
   identityKey: "identity-key-path"
   identityCert: "identity-cert-path"
   CABundle: "ca-bundle-path"
+  # identitySecretName, when set, mounts a kubernetes.io/tls Secret (keys tls.crt/tls.key) of
+  # this name and uses it for IDENTITY_KEY/IDENTITY_CERT instead of the identityKey/identityCert
+  # paths above. Only used when useCAAuth is true. Leave empty ("") to keep bringing your own
+  # cert/key files by another means (identityKey/identityCert must then point at that mount).
+  identitySecretName: ""
+  # hubKubeconfigSecretName names a Secret (key "kubeconfig") containing a full kubeconfig for
+  # the hub connection, mounted and passed to the process via the KUBE_CONFIG_PATH environment
+  # variable. Only used when useKubeconfig is true. This is the vendor-neutral way to
+  # authenticate via a federated identity (AWS IRSA, GCP Workload Identity, Azure AD workload
+  # identity, SPIFFE, etc.): the kubeconfig's exec stanza invokes whatever credential plugin
+  # your platform provides — this chart has no vendor-specific knowledge of any of them. See
+  # the README for worked examples.
+  hubKubeconfigSecretName: ""
   azureCloudConfig:
     cloud: ""
     tenantId: ""
@@ -68,7 +81,29 @@ azure:
 tlsClientInsecure: false
 useCAAuth: false
 
-enablePprof: true
+# useKubeconfig authenticates to the hub cluster via a full kubeconfig instead of the
+# refresh-token sidecar or useCAAuth — see config.hubKubeconfigSecretName above for the
+# companion value naming the Secret that holds it. Mutually exclusive with useCAAuth.
+useKubeconfig: false
+
+# podLabels and serviceAccountAnnotations are passed straight through to the pod template and the
+# member agent's ServiceAccount, respectively. Use them to attach whatever platform-specific
+# workload-identity metadata your hub-kubeconfig's exec plugin needs — e.g. for AKS workload
+# identity: podLabels: {azure.workload.identity/use: "true"}, serviceAccountAnnotations:
+# {azure.workload.identity/client-id: <uami-client-id>}; for AWS IRSA or GCP Workload Identity,
+# only a serviceAccountAnnotations entry is needed. See the README for worked examples.
+podLabels: {}
+serviceAccountAnnotations: {}
+
+# extraVolumes, extraVolumeMounts (on the member-agent container), and extraInitContainers are
+# escape hatches for getting a hub-kubeconfig exec plugin's binary (or, for SPIFFE, a workload-API
+# socket) into the pod, without this chart needing any vendor-specific knowledge of how. The
+# alternative is building a custom image layered on top of the official one.
+extraVolumes: []
+extraVolumeMounts: []
+extraInitContainers: []
+
+enablePprof: false
 pprofPort: 6065
 hubPprofPort: 6066
 
@@ -78,3 +113,8 @@ priorityQueue:
   priorityLinearEquationCoeffB: 100
 
 enableNamespaceCollectionInPropertyProvider: false
+
+# Apply the Works of the experimental FEP-0001 placement policy APIs (placement.kubefleet.dev/v1alpha1).
+# The hub agent must run with enablePlacementPolicyAPIs too. If crdInstaller is enabled, this also has the
+# CRD installer install the AppliedWork CRD of these APIs; otherwise, the CRD must be installed separately.
+enablePlacementPolicyAPIs: false

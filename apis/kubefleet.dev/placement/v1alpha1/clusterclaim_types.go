@@ -22,6 +22,22 @@ import (
 
 const (
 	ClusterClaimCondTypeCompleted = "Completed"
+
+	// ClusterClaimPlacementPolicyNameLabel and ClusterClaimPlacementPolicyNamespaceLabel record the placement
+	// policy that added a cluster claim. Cluster claims are cluster-scoped and cannot carry an
+	// owner reference to a namespaced PlacementPolicy, so these labels are how KubeFleet — and
+	// anyone querying claims, such as a provisioner watching the claims of a specific
+	// placement — associates a claim with its policy. The namespace label is empty for claims
+	// added by a ClusterPlacementPolicy.
+	//
+	// Object names may be longer than the 63-byte limit on label values: when a policy's name
+	// does not fit, the label carries a shortened, collision-resistant form of it instead, and
+	// selecting on the label with the policy's own name then matches nothing. The authoritative
+	// identity is always spec.placementPolicyRef, so a consumer that must handle policies with
+	// names longer than 63 bytes should list cluster claims and match on that field rather than
+	// select on this label.
+	ClusterClaimPlacementPolicyNameLabel      = "placement.kubefleet.dev/placement-policy-name"
+	ClusterClaimPlacementPolicyNamespaceLabel = "placement.kubefleet.dev/placement-policy-namespace"
 )
 
 // ClusterClaim is a KubeFleet API that represents a claim for a new member cluster.
@@ -46,6 +62,8 @@ type ClusterClaim struct {
 	Status ClusterClaimStatus `json:"status,omitempty"`
 }
 
+// ClusterClaimSpec is the specification of a cluster claim.
+//
 // +kubebuilder:validation:XValidation:rule="has(self.clusterSelectorTerms) == has(oldSelf.clusterSelectorTerms)",message="the clusterSelectorTerms field cannot be added or removed after creation"
 type ClusterClaimSpec struct {
 	// The reference to the placement policy that adds the cluster claim.
@@ -74,6 +92,15 @@ type ClusterClaimStatus struct {
 	Conditions []metav1.Condition `json:"conditions,omitempty"`
 
 	// The name of the cluster that has been provisioned for this cluster claim, if any.
+	//
+	// A cluster claim asks for a single cluster: a provisioner fulfills it by provisioning one
+	// cluster, recording its name here, and marking the Completed condition. A placement that still
+	// needs more clusters than one claim provides is served one claim at a time -- once the
+	// provisioned cluster becomes eligible, the completed claim is withdrawn and a new claim is
+	// created, under the same deterministic name, for the next cluster. A provisioner that retries a
+	// conflicting status write must therefore key the retry on the claim's identity (UID or resource
+	// version), not on its name alone, so that a write meant for a completed claim is not applied to
+	// the different, freshly created claim that has taken its name.
 	//
 	// +kubebuilder:validation:Optional
 	ProvisionedClusterName *string `json:"provisionedClusterName,omitempty"`

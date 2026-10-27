@@ -1,0 +1,289 @@
+# Implementation notes: FEP-0001 placement policy controller (#786, #788)
+
+Observations collected while implementing the controller against the
+`placement.kubefleet.dev/v1alpha1` APIs. Items in "API gaps" are candidate
+follow-ups for the API definition (#781/#803); they are recorded here rather
+than silently worked around, and the ones marked *pinned* have a test in this
+package demonstrating the current behavior.
+
+## API gaps found while implementing
+
+1. **`ClusterSelector.count` accepts non-positive integers** (*closed*). The
+   field is `XIntOrString` with `Pattern="^([1-9][0-9]{0,2}|All)$"`, and a
+   pattern only constrains the string form, so `count: 0` and `count: -1` used
+   to bypass CRD validation and be rejected by the controller at evaluation
+   time instead. #829 added the CEL rule bounding the integer form, so they are
+   now rejected at admission; the controller's own check remains as a backstop
+   for objects admitted before the rule shipped.
+
+2. **Numeric operators are accepted in `matchLabelExpressions` at admission**
+   (*pinned*). `MatchLabelExpressions` reuses the
+   `LabelClusterPropertyExpression` type, whose enum includes `Gt`/`Lt`/etc.;
+   the API doc comment defers misuse to "an error at the scheduling phase".
+   Admission could reject it instead:
+   `self.all(e, e.operator in ['In', 'NotIn', 'Exists', 'DoesNotExist'])` on
+   the `matchLabelExpressions` field. Until then, the controller surfaces
+   `Scheduled=False/InvalidClusterSelectors`.
+
+3. **Aggregation across multiple selectors follows the FEP's overlapping-selectors
+   note.** A cluster satisfying two selectors of the same policy counts toward
+   both in `desiredClusters`/`scheduledClusters` (per-selector sums) — the
+   FEP's "About overlapping cluster selectors" section explicitly allows
+   totals to deviate from the sum of counts when selectors overlap. For a
+   `count: All` selector the desired count floors at `minCount`, so an
+   unfulfilled All selector shows a gap instead of trivially reporting
+   `desired == scheduled`.
+
+4. **`Scheduled` condition semantics with `minCount`.** The API's reason
+   constants encode a binary contract (`FoundAllRequiredClusters` /
+   `FailedToFindSomeRequiredClusters`), so reaching the floor (minCount) but
+   not the desired count reports `False` here, with the floor state surfaced
+   in the condition message. Whether the floor deserves a dedicated reason
+   (or a `True` polarity) is an FEP-level question worth settling before
+   beta; the claim lifecycle also needs a defined stance on whether a
+   floor-satisfied selector still warrants a claim.
+
+5. **Status count fields lack `+kubebuilder:validation:Optional` markers**
+   (`DesiredClusters` through `ActiveClusterClaims`) — cosmetic, but the
+   package convention annotates every optional field.
+
+## Deliberate implementation decisions (for reviewers)
+
+- **Fulfillment is judged against the scheduler's eligibility gate**
+  (`clustereligibilitychecker`) plus taint/toleration filtering, not raw label
+  matching — a provisioner-created or newly registered cluster does not count
+  until its member agent is online, heartbeating, and joined. See the
+  discussion on #791.
+- **Clusters are ranked per the FEP's preferences** (`scoring.go`): on node
+  count (fewer is better), available CPU, and available memory (more is
+  better), each normalized to 0–100 against the candidates' own min and max,
+  summed, with the name as the tie-breaker. A cluster that does not report a
+  metric scores 0 on it, the least preferred position either way; a malformed
+  value is treated the same. The candidates are the schedulable clusters that
+  match the selector and are not already chosen, so the normalization is
+  per selector per round — the FEP's "among all clusters that match the
+  cluster selector".
+- **Preferences are sticky, and stickiness survives an outage**
+  (`chooseClusters`): a bound cluster keeps its binding while it exists and
+  still matches a selector's terms, even when it is not schedulable (agent
+  dark, or an untolerated taint appeared). Unbinding on a transient outage
+  would tear resources down on a cluster that may be back in minutes, which
+  neither the current scheduler nor the FEP's "sticky once made" ask for.
+  An unschedulable bound cluster does not count toward the selector, so the
+  gap is filled from the schedulable candidates; when the cluster returns the
+  policy is briefly overpicked (`scheduledClusters` above `desiredClusters`), which the
+  count then trims: the bindings of clusters that no longer satisfy the
+  selector's terms go first, then the newest ones (creation timestamp, to the
+  second, then name), so a scale-down undoes the latest picks and a cluster
+  back from an outage, being the older binding, wins over its replacement.
+  The same trim also absorbs a duplicate pick made from a stale binding list
+  (the cache lagging a create by one round).
+- **A scheduling decision sticks until the selector itself changes**
+  (`evaluateSelectors`), as it does for ClusterResourcePlacement and
+  ResourcePlacement: a bound cluster whose labels or properties stop matching
+  keeps its binding and still counts, because a cluster hovering around a
+  property threshold (a node count moving with autoscaling) would otherwise
+  have its resources removed and placed again on every swing, and the people
+  who label clusters are not always the ones who own the placements. The
+  binding's `spec.clusterSelectors` is the record: a cluster stays selected by
+  every selector whose terms its binding still lists. Changing a selector's
+  terms re-evaluates its clusters from scratch, as a new scheduling policy does
+  for placements; a cluster leaving the fleet, or its binding being deleted,
+  releases it too. The record is the binding itself, so anyone who rewrites a
+  binding's `spec.clusterSelectors` has that cluster re-evaluated from scratch
+  on the next round. A cluster whose reported data cannot be evaluated is named
+  on the `Scheduled` condition message, since it keeps its binding uncounted.
+- **One binding per cluster per policy, counting toward every selector it
+  matches**: selectors are processed in order, and a cluster chosen for an
+  earlier selector satisfies each later selector whose terms it matches
+  before any new cluster is ranked for it, per the FEP's overlapping-selectors
+  note. The binding's informational `spec.clusterSelectors` lists the terms of
+  every selector the cluster currently serves and is kept up to date; the
+  selector *hashes* the FEP mentions keeping in annotations have no key in the
+  API yet, so nothing writes them.
+- **Binding changes run under the binding manager role** (`bindingmanager`),
+  the FEP's mutual exclusion between scheduling decision changes and rollouts:
+  the role is claimed only when a create, update, or delete is actually due,
+  and released once every change is through. A failed write returns with the
+  role still held, so the retry resumes under the role it already has (the
+  FEP's restart semantics); a role held by another process backs the policy
+  off exponentially (5s up to 5m, reset by a round that completes) rather
+  than blocking the rest of the reconcile, which still refreshes claims and
+  status.
+- **A binding needs a resource snapshot to roll out**, so the controller takes
+  the placement resource snapshot manager as a seam (`snapshotter`) and asks it
+  every round for the current snapshot — creating the first one, per the FEP's
+  "when a placement is first created" — and whether it still matches the
+  selected resources. The seam exists for the same reason as
+  `eligibilityChecker`: the real manager needs a dynamic client and informer
+  manager the envtest suite has no use for. Scheduling changes apply
+  independently of resources, per the FEP: a round that cannot get the
+  snapshot still unbinds, updates, and refreshes claims and the `Scheduled`
+  status, holds back only the new bindings, and is retried.
+- **The status reports how far the latest revision has reached**
+  (`status.go`): `latestResourceRevisionName` is the latest snapshot;
+  `synchronizedClusters` counts the target clusters whose binding names that
+  revision, has had it processed by the work generator, and reports
+  `Synchronized` for its current generation; `resourcesAvailableClusters`
+  counts, of those, the ones reporting `Available` (availability is judged
+  only for the latest revision, as placements judge it only once
+  synchronized). A binding being deleted, or one not yet updated to the
+  policy's sync strategy, counts as neither: its conditions describe what is
+  going away. Target clusters include a bound cluster kept while
+  unschedulable, since it still holds the resources. The `Synchronized`
+  condition is true only
+  when every target cluster is synchronized *and* the snapshot still matches
+  the hub — per the FEP a resource change alone takes no snapshot, so until a
+  rollout does, the condition says the resources changed and a rollout is
+  pending (`ResourcesChangedPendingRollout`). Otherwise it reports
+  `SomeClustersOnOlderResourceRevision` while a target cluster is still on an
+  older revision and `FailedToSynchronizeSomeClusters` while the rest have yet
+  to apply the latest one, the message counting both. `ResourceCollected` is
+  true once the selected resources are collected and the snapshot taken or
+  found, false when they cannot be collected for good (a resource selected by
+  name is gone, or the selection is invalid), and left as it was on a
+  transient failure or while the cluster selectors are invalid, since no
+  snapshot is attempted then. When the resources cannot be collected, no
+  target cluster counts as synchronized, but `resourcesAvailableClusters` and
+  `Available` are still reported from the bindings, whatever revision each
+  holds, the way a Deployment reports its ready pods; the latest revision is
+  left as it was.
+  Rolling a new revision out is left to the rollout APIs; this
+  controller only reports. Binding updates wake the policy when their spec or
+  this progress changes (`bindingRelevantChanges`).
+- **A change to a selected resource re-queues the policy**
+  (`EnqueuePoliciesSelecting`): the hub's resource-change controller hands
+  every changed resource's key to the policy controller, which re-queues the
+  policies that may select it — namespaced policies in that namespace, and
+  cluster-scoped ones whose selector names that namespace or none — through a
+  `sourcequeue.Queue` per controller, the never-blocking source the annotation
+  placement controller already uses. Matching is on the key alone (group,
+  kind, name, namespace), so deletions work the same way; label selectors are
+  not evaluated and the version is not compared, both of which can only
+  over-trigger a reconcile, never miss one. The hook is best effort: a failure
+  is logged and the change still reaches the placements. Resources the hub
+  agent's resource watcher drops produce no change events, so their policies
+  notice only on the periodic requeue: skipped namespaces (including
+  `default`, `kube-*`, and `fleet-*`), disabled kinds, and the objects
+  `ShouldPropagateObj` excludes (owned ReplicaSets and ControllerRevisions,
+  `kube-root-ca.crt`, default service accounts and their token secrets, and
+  the like), all of which the snapshot manager can still select.
+- **Bindings are owned by the policy** through a controller reference —
+  policy and binding share a scope, so unlike claims they can be garbage
+  collected — and the controller `Owns()` them: a binding deleted out of band
+  is recreated, while binding status writes by the work generator are filtered
+  out by the generation predicate.
+- **A taken binding name is settled, not ignored**: binding names are
+  deterministic, so a policy deleted without cascading and recreated under
+  the same name finds its old bindings in the way. Such an orphan (no
+  controller, same `spec.placementPolicyName` and cluster) is adopted and
+  brought up to date — the policy's desired state wins, lifting a suspension
+  the orphan carried — the way a ReplicaSet adopts an orphaned pod; deleting
+  it would tear down the workloads the orphaning kept running. A binding still
+  controlled by an earlier policy of the same name is reported as transient
+  (the garbage collector removes it), and one any other object controls as a
+  user error. Either way only that cluster waits: the round's other changes go
+  through and the role is released before the error is returned.
+- **Invalid selectors release the binding manager role**: a role a failed
+  binding write left held is normally kept for the retry to resume under, but
+  once the selectors are invalid no binding change can follow until the spec
+  is fixed, so the role is released rather than blocking rollouts.
+- **Heartbeat-noise suppression**: member cluster watch events pass through a
+  projection predicate that ignores heartbeat/observation timestamps;
+  time-driven eligibility transitions (e.g., heartbeats going stale) are
+  covered by periodic requeues instead (fulfilled policies re-check at half
+  the eligibility timeout, bounding worst-case staleness detection at about
+  1.5x the timeout).
+- **Malformed per-cluster data never fails a policy**: selector specs are
+  validated structurally up front, so any evaluation-time error is by
+  construction caused by data one cluster self-reported (e.g., a property
+  value that is not a quantity); that cluster is skipped and logged rather
+  than aborting evaluation for the whole policy.
+- **Claims are issued while a selector is below its desired count** (not just
+  below the minCount floor), consistent with the binary Scheduled contract;
+  whether floor-satisfied selectors should stop claiming is part of the same
+  FEP follow-up as item 4 above.
+- **Claim names are deterministic and namespace-qualified**: the name embeds
+  the selector index and a hash of the policy's namespaced name, so
+  same-named policies in different namespaces cannot collide on the
+  cluster-scoped claim namespace, and a restarted reconciler converges on
+  get-or-create instead of duplicating claims.
+- **A Terminating claim occupies its budget slot**: a claim held by a
+  provisioner finalizer is not replaced, so a slow teardown can starve the
+  policy of its single claim slot but can never cause double-provisioning —
+  the safer failure mode for a provisioner acting on the claim.
+- **Cleanup is finalizer-driven**: cross-scope owner references (namespaced
+  policy owning a cluster-scoped claim) are invalid in garbage collection —
+  and, trap-like, accepted at admission — so claims carry ownership labels,
+  the policy carries a cleanup finalizer (added before the first claim is
+  created, so a crash between the two writes cannot orphan a claim), and
+  deletion withdraws claims before the policy goes away. Claims are deleted
+  one by one rather than via DeleteAllOf, which keeps the RBAC surface free
+  of deletecollection.
+- **Withdrawal is eligibility-gated**: a claim is withdrawn only when its
+  selector is fulfilled by schedulable clusters, so a provisioned cluster
+  that has registered but not yet joined does not withdraw the claim (the
+  join-window race raised on the verification issue).
+- **Selector-term changes replace the claim under the same name**: the stale
+  claim is withdrawn and the same deterministic name is re-created with the
+  new terms. While the old claim is held Terminating by a provisioner
+  finalizer, `activeClusterClaims` keeps counting it: the withdraw round
+  treats the just-deleted claim as still occupying its slot, and the
+  replacement create waits for the slot to free rather than standing beside
+  it, so the budget holds through the swap.
+- **A policy with no cluster selectors claims like any other**: the
+  synthesized "all clusters" selector inherits the API's `AddClusterClaim`
+  default, so a bare policy facing an empty fleet still signals that a
+  cluster is needed rather than silently waiting forever.
+- **The FEP's eligible-keys allowlist is not implemented yet** (same status
+  as the per-fleet concurrency limit): the only opt-out today is the
+  per-selector `whenUnfulfilled: KeepSearching`. Both belong to the config
+  surface the FEP describes in prose only.
+
+## How a claim records the policy that owns it
+
+`spec.placementPolicyRef` is the authoritative identity: it is required,
+immutable, and has no length limit, so the claim watch maps an event back to
+its policy through that field. The ownership **labels** exist only so that a
+policy's claims can be selected server-side with a `List`, which no spec field
+allows.
+
+That distinction matters because label values stop at 63 bytes while object
+names run to 253. When a policy's name does not fit, the label carries a
+prefix plus a hash of the full name instead — so selecting on the label with
+the policy's own name matches nothing, and consumers that must handle such
+names should list claims and match on `spec.placementPolicyRef`. Generated
+names are trimmed of trailing separators at every truncation point: a `.` or
+`-` landing exactly on the boundary would otherwise produce a name the API
+server rejects. Both flaws were found by manual testing with a 250-character
+policy name, and each made claim creation fail validation and the reconciler
+retry forever, with the policy silently never getting a claim.
+
+## Operational notes
+
+- **Stopping the controller with claims outstanding leaves policies
+  undeletable.** The cleanup finalizer is only removed by this controller, so
+  running the hub agent without it while a policy holds cluster claims parks
+  that policy in `Terminating` and leaves its claims in place until the
+  controller runs again, at which point reconciliation resumes and completes
+  the cleanup. This mirrors the existing behavior of the staged update run
+  APIs and their finalizer; the integration PR that wires the controller in
+  should document it on the enabling flag and in the chart README rather than
+  work around it, since removing a finalizer without a controller to withdraw
+  the claims would orphan them instead.
+- **Not wired into the hub agent yet.** The controller is dormant code until
+  the integration PR adds the flag, scheme registration, RBAC, and the chart
+  CRDs; its kind e2e is parked at `parked/fep0001-placement-policy-e2e`.
+- **Restarting the hub agent mid-flow is safe**: claim creation is
+  get-or-create on a deterministic name, and the finalizer is added before the
+  first claim exists, so no window can orphan a claim.
+
+## Cleanup lists every claim
+
+Releasing the claim-cleanup finalizer is gated on an uncached list of ALL
+cluster claims, filtered by each claim's immutable `spec.placementPolicyRef`
+-- the ownership labels are mutable, and a label-stripped claim vanishing
+from a label-selected list would be orphaned permanently. This trades a
+full-collection read per deleting policy for that guarantee; cheap while the
+per-policy claim budget is 1, worth revisiting together with the
+configurable concurrency limits.

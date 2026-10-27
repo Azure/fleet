@@ -60,9 +60,14 @@ type Reconciler struct {
 
 	// Event recorder to indicate the which placement picks up this object
 	Recorder events.EventRecorder
+
+	// EnqueuePlacementPolicies, when set, re-queues the FEP-0001 placement policies that may select
+	// the changed resource. It needs only the key, so it serves deletions as well as updates. It is
+	// best effort: a failure is logged and the change is processed for the placements regardless.
+	EnqueuePlacementPolicies func(context.Context, keys.ClusterWideKey) error
 }
 
-func (r *Reconciler) Reconcile(_ context.Context, key controller.QueueKey) (ctrl.Result, error) {
+func (r *Reconciler) Reconcile(ctx context.Context, key controller.QueueKey) (ctrl.Result, error) {
 	startTime := time.Now()
 	clusterWideKey, ok := key.(keys.ClusterWideKey)
 	if !ok {
@@ -76,6 +81,14 @@ func (r *Reconciler) Reconcile(_ context.Context, key controller.QueueKey) (ctrl
 	defer func() {
 		klog.V(2).InfoS("ResourceChange reconciliation loop ends", "obj", clusterWideKey, "latency", time.Since(startTime).Milliseconds())
 	}()
+
+	if r.EnqueuePlacementPolicies != nil {
+		// Best effort: the policies also requeue periodically, so a failure here only delays
+		// their status, and must not hold up the placements below.
+		if err := r.EnqueuePlacementPolicies(ctx, clusterWideKey); err != nil {
+			klog.ErrorS(err, "Failed to re-queue the placement policies that may select the object", "obj", clusterWideKey)
+		}
+	}
 
 	// The clusterObj is set to be the object that the placement direct selects.
 	clusterObj, isClusterScoped, err := r.getUnstructuredObject(clusterWideKey)

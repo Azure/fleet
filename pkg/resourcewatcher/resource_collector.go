@@ -17,15 +17,14 @@ limitations under the License.
 package resourcewatcher
 
 import (
-	"k8s.io/apimachinery/pkg/api/meta"
 	"k8s.io/apimachinery/pkg/runtime/schema"
 	"k8s.io/apimachinery/pkg/util/errors"
 	"k8s.io/client-go/discovery"
 	"k8s.io/klog/v2"
 	metricsV1beta1 "k8s.io/metrics/pkg/apis/metrics/v1beta1"
 
-	"go.goms.io/fleet/pkg/utils"
 	"go.goms.io/fleet/pkg/utils/informer"
+	"go.goms.io/fleet/pkg/utils/resourceeligibility"
 )
 
 // getWatchableResources returns all api resources from discoveryClient that we can watch.
@@ -87,9 +86,9 @@ func getWatchableResources(discoveryClient discovery.ServerResourcesInterface) (
 }
 
 // discoverWatchableResources discovers all API resources in the cluster and filters them
-// based on the resource configuration. This is a shared helper used by both InformerPopulator
+// based on their placement eligibility. This is a shared helper used by both InformerPopulator
 // and ChangeDetector to ensure consistent resource discovery logic.
-func discoverWatchableResources(discoveryClient discovery.DiscoveryInterface, restMapper meta.RESTMapper, resourceConfig *utils.ResourceConfig) []informer.APIResourceMeta {
+func discoverWatchableResources(discoveryClient discovery.DiscoveryInterface, resourceEligibilityCheckers ...resourceeligibility.Checker) []informer.APIResourceMeta {
 	newResources, err := getWatchableResources(discoveryClient)
 	if err != nil {
 		klog.ErrorS(err, "Failed to get all the api resources from the cluster")
@@ -97,7 +96,21 @@ func discoverWatchableResources(discoveryClient discovery.DiscoveryInterface, re
 
 	var resourcesToWatch []informer.APIResourceMeta
 	for _, res := range newResources {
-		if utils.ShouldProcessResource(res.GroupVersionResource, restMapper, resourceConfig) {
+		// A resource is watchable if any of the set eligibility checkers allows it; unset (nil) checkers are
+		// ignored, and if no checker is set at all, every resource is watchable.
+		allowed := false
+		anyCheckerPresent := false
+		for _, checker := range resourceEligibilityCheckers {
+			if checker == nil {
+				continue
+			}
+			anyCheckerPresent = true
+			if checker.AllowsGVK(res.GroupVersionKind) {
+				allowed = true
+				break
+			}
+		}
+		if allowed || !anyCheckerPresent {
 			resourcesToWatch = append(resourcesToWatch, res)
 		}
 	}

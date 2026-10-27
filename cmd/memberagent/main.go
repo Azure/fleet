@@ -28,9 +28,11 @@ import (
 	"net/http"
 	"net/textproto"
 	"os"
+	"strconv"
 	"strings"
 	"time"
 
+	"k8s.io/apimachinery/pkg/api/meta"
 	"k8s.io/apimachinery/pkg/runtime"
 	utilrand "k8s.io/apimachinery/pkg/util/rand"
 	utilruntime "k8s.io/apimachinery/pkg/util/runtime"
@@ -38,6 +40,7 @@ import (
 	"k8s.io/client-go/dynamic"
 	clientgoscheme "k8s.io/client-go/kubernetes/scheme"
 	"k8s.io/client-go/rest"
+	"k8s.io/client-go/tools/clientcmd"
 	"k8s.io/client-go/util/retry"
 	"k8s.io/klog/v2"
 	ctrl "sigs.k8s.io/controller-runtime"
@@ -49,6 +52,7 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/webhook"
 
 	clusterv1beta1 "go.goms.io/fleet/apis/cluster/v1beta1"
+	kfplacementv1alpha1 "go.goms.io/fleet/apis/kubefleet.dev/placement/v1alpha1"
 	placementv1beta1 "go.goms.io/fleet/apis/placement/v1beta1"
 	"go.goms.io/fleet/cmd/memberagent/options"
 	imcv1beta1 "go.goms.io/fleet/pkg/controllers/internalmembercluster/v1beta1"
@@ -56,8 +60,11 @@ import (
 	"go.goms.io/fleet/pkg/propertyprovider"
 	"go.goms.io/fleet/pkg/propertyprovider/azure"
 	"go.goms.io/fleet/pkg/utils"
+	"go.goms.io/fleet/pkg/utils/controller"
 	"go.goms.io/fleet/pkg/utils/httpclient"
 	"go.goms.io/fleet/pkg/utils/parallelizer"
+	v1workapplier "go.goms.io/fleet/pkg/v1/controllers/workapplier"
+	"go.goms.io/fleet/pkg/v1/utils/fieldindexers"
 	//+kubebuilder:scaffold:imports
 )
 
@@ -65,6 +72,19 @@ const (
 	// The list of available property provider names.
 	azurePropertyProvider = "azure"
 )
+
+// Fixed settings for the experimental placement policy work applier. These are deliberately not taken from the
+// applier flags (--deletion-wait-time, --work-applier-requeue-rate-limiter-*, and the like), which tune the v1beta1
+// work applier only; the placement policy work applier also uses its own built-in requeue rate limiters.
+const (
+	placementPolicyWorkApplierConcurrentReconciles = 5
+	placementPolicyWorkApplierCleanupWaitTime      = 5 * time.Minute
+)
+
+// testOnlyPlacementPolicyWorkApplierMaxRequeueDelayEnvVarName names a test-only environment variable that caps,
+// in seconds, every requeue delay of the placement policy work applier. The E2E test environment sets it so that
+// changes made only on the member cluster side are picked up quickly; it is not a supported setting.
+const testOnlyPlacementPolicyWorkApplierMaxRequeueDelayEnvVarName = "TEST_ONLY_PLACEMENT_POLICY_WORK_APPLIER_MAX_REQUEUE_DELAY_SECONDS"
 
 var (
 	scheme = runtime.NewScheme()
@@ -76,6 +96,7 @@ func init() {
 	utilruntime.Must(clientgoscheme.AddToScheme(scheme))
 	utilruntime.Must(clusterv1beta1.AddToScheme(scheme))
 	utilruntime.Must(placementv1beta1.AddToScheme(scheme))
+	utilruntime.Must(kfplacementv1alpha1.AddToScheme(scheme))
 	//+kubebuilder:scaffold:scheme
 }
 
@@ -99,13 +120,15 @@ func main() {
 	// Set up controller-runtime logger
 	ctrl.SetLogger(zap.New(zap.UseDevMode(true)))
 
-	hubURL := os.Getenv("HUB_SERVER_URL")
-
-	if hubURL == "" {
-		klog.ErrorS(errors.New("hub server api cannot be empty"), "Failed to read URL for the hub cluster")
-		klog.FlushAndExit(klog.ExitFlushTimeout, 1)
+	var hubURL string
+	if !opts.HubConnectivityOpts.UseKubeConfig {
+		hubURL = os.Getenv("HUB_SERVER_URL")
+		if hubURL == "" {
+			klog.ErrorS(errors.New("hub server api cannot be empty"), "Failed to read URL for the hub cluster")
+			klog.FlushAndExit(klog.ExitFlushTimeout, 1)
+		}
 	}
-	hubConfig, err := buildHubConfig(hubURL, opts.HubConnectivityOpts.UseCertificateAuth, opts.HubConnectivityOpts.UseInsecureTLSClient)
+	hubConfig, err := buildHubConfig(hubURL, opts.HubConnectivityOpts)
 	if err != nil {
 		klog.ErrorS(err, "Failed to build Kubernetes client configuration for the hub cluster")
 		klog.FlushAndExit(klog.ExitFlushTimeout, 1)
@@ -172,8 +195,8 @@ func main() {
 	}
 	//+kubebuilder:scaffold:builder
 	if opts.CtrlManagerOptions.EnablePprof {
-		memberOpts.PprofBindAddress = fmt.Sprintf(":%d", opts.CtrlManagerOptions.MemberManagerOpts.PprofPort)
-		hubOpts.PprofBindAddress = fmt.Sprintf(":%d", opts.CtrlManagerOptions.HubManagerOpts.PprofPort)
+		memberOpts.PprofBindAddress = fmt.Sprintf("127.0.0.1:%d", opts.CtrlManagerOptions.MemberManagerOpts.PprofPort)
+		hubOpts.PprofBindAddress = fmt.Sprintf("127.0.0.1:%d", opts.CtrlManagerOptions.HubManagerOpts.PprofPort)
 	}
 
 	if err := Start(ctrl.SetupSignalHandler(), hubConfig, memberConfig, hubOpts, memberOpts, *opts); err != nil {
@@ -182,11 +205,32 @@ func main() {
 	}
 }
 
-func buildHubConfig(hubURL string, useCertificateAuth bool, tlsClientInsecure bool) (*rest.Config, error) {
+func buildHubConfig(hubURL string, opts options.HubConnectivityOptions) (*rest.Config, error) {
 	var hubConfig = &rest.Config{
 		Host: hubURL,
 	}
-	if useCertificateAuth {
+
+	if opts.UseKubeConfig {
+		// A full kubeconfig is authoritative for the hub connection: it already carries the
+		// server URL, TLS configuration, and authentication (a bearer token, a client
+		// certificate, or a standard Kubernetes exec credential plugin for a federated
+		// identity), so none of the env-var/flag-based configuration below applies.
+		kubeConfigPath := os.Getenv("KUBE_CONFIG_PATH")
+		if kubeConfigPath == "" {
+			err := errors.New("hub kubeconfig file path cannot be empty if use-kubeconfig is set")
+			klog.ErrorS(err, "Failed to retrieve hub kubeconfig path")
+			return nil, err
+		}
+		clientConfig := clientcmd.NewNonInteractiveDeferredLoadingClientConfig(
+			&clientcmd.ClientConfigLoadingRules{ExplicitPath: kubeConfigPath},
+			&clientcmd.ConfigOverrides{})
+		loadedConfig, err := clientConfig.ClientConfig()
+		if err != nil {
+			klog.ErrorS(err, "Failed to load hub kubeconfig", "path", kubeConfigPath)
+			return nil, err
+		}
+		return applyHubKubeHeader(loadedConfig)
+	} else if opts.UseCertificateAuth {
 		keyFilePath := os.Getenv("IDENTITY_KEY")
 		certFilePath := os.Getenv("IDENTITY_CERT")
 		if keyFilePath == "" {
@@ -224,11 +268,19 @@ func buildHubConfig(hubURL string, useCertificateAuth bool, tlsClientInsecure bo
 		hubConfig.BearerTokenFile = tokenFilePath
 	}
 
-	hubConfig.TLSClientConfig.Insecure = tlsClientInsecure
-	if tlsClientInsecure {
+	return applyHubTLSConfig(hubConfig, opts)
+}
+
+// applyHubTLSConfig applies the TLS insecure/CA settings shared by the certificate-auth and
+// token-auth hub connection modes, then wraps the config with the HUB_KUBE_HEADER transport if
+// one is configured. The kubeconfig mode does not go through this path: a loaded kubeconfig is
+// already authoritative for TLS and skips straight to the header wrapping.
+func applyHubTLSConfig(hubConfig *rest.Config, opts options.HubConnectivityOptions) (*rest.Config, error) {
+	hubConfig.TLSClientConfig.Insecure = opts.UseInsecureTLSClient
+	if opts.UseInsecureTLSClient {
 		klog.Warning("TLS verification is disabled for hub cluster connection. This is insecure and should not be used in production.")
 	}
-	if !tlsClientInsecure {
+	if !opts.UseInsecureTLSClient {
 		caBundle, ok := os.LookupEnv("CA_BUNDLE")
 		if ok && caBundle == "" {
 			err := errors.New("environment variable CA_BUNDLE should not be empty")
@@ -259,8 +311,14 @@ func buildHubConfig(hubURL string, useCertificateAuth bool, tlsClientInsecure bo
 		}
 	}
 
-	// Sometime the hub cluster need additional http header for authentication or authorization.
-	// the "HUB_KUBE_HEADER" to allow sending custom header to hub's API Server for authentication and authorization.
+	return applyHubKubeHeader(hubConfig)
+}
+
+// applyHubKubeHeader wires in the "HUB_KUBE_HEADER" custom header, if set, to the given hub
+// rest.Config. Sometimes the hub cluster needs an additional HTTP header for authentication or
+// authorization; this applies regardless of how the rest of hubConfig was built, since it is an
+// independent, orthogonal transport-level concern (e.g. a front-door header requirement).
+func applyHubKubeHeader(hubConfig *rest.Config) (*rest.Config, error) {
 	if header, ok := os.LookupEnv("HUB_KUBE_HEADER"); ok {
 		r := textproto.NewReader(bufio.NewReader(strings.NewReader(header)))
 		h, err := r.ReadMIMEHeader()
@@ -404,6 +462,16 @@ func Start(ctx context.Context, hubCfg, memberConfig *rest.Config, hubOpts, memb
 		klog.ErrorS(err, "Failed to create v1beta1 controller", "controller", "work")
 		return err
 	}
+	workAppliers := memberControllers{workApplier}
+
+	if globalOpts.EnablePlacementPolicyAPIs {
+		klog.Info("Setting up the placement policy work applier")
+		v1WorkApplier, v1Err := setUpPlacementPolicyWorkApplier(ctx, hubCfg, hubMgr, memberMgr, discoverClient, spokeDynamicClient, restMapper, targetNS)
+		if v1Err != nil {
+			return v1Err
+		}
+		workAppliers = append(workAppliers, v1WorkApplier)
+	}
 
 	klog.Info("Setting up the internalMemberCluster v1beta1 controller")
 	// Set up a provider provider (if applicable).
@@ -432,7 +500,7 @@ func Start(ctx context.Context, hubCfg, memberConfig *rest.Config, hubOpts, memb
 		ctx,
 		hubMgr.GetClient(),
 		memberMgr.GetConfig(), memberMgr.GetClient(),
-		workApplier,
+		workAppliers,
 		pp)
 	if err != nil {
 		klog.ErrorS(err, "Failed to create InternalMemberCluster v1beta1 reconciler")
@@ -460,4 +528,103 @@ func Start(ctx context.Context, hubCfg, memberConfig *rest.Config, hubOpts, memb
 	}
 
 	return nil
+}
+
+// setUpPlacementPolicyWorkApplier sets up the work applier for the Works of the experimental placement policy APIs.
+func setUpPlacementPolicyWorkApplier(
+	ctx context.Context,
+	hubCfg *rest.Config,
+	hubMgr, memberMgr ctrl.Manager,
+	memberDiscoveryClient discovery.DiscoveryInterface,
+	spokeDynamicClient dynamic.Interface,
+	restMapper meta.RESTMapper,
+	workNS string,
+) (*v1workapplier.Reconciler, error) {
+	// Check both sides up front; a missing CRD would otherwise only show up as a cache sync timeout.
+	appliedWorkGVK := kfplacementv1alpha1.GroupVersion.WithKind(kfplacementv1alpha1.AppliedWorkKind)
+	if err := utils.CheckCRDInstalled(memberDiscoveryClient, appliedWorkGVK); err != nil {
+		klog.ErrorS(err, "Unable to find the required CRD in the member cluster", "GVK", appliedWorkGVK)
+		return nil, err
+	}
+	hubDiscoveryClient, err := discovery.NewDiscoveryClientForConfig(hubCfg)
+	if err != nil {
+		klog.ErrorS(err, "Failed to create the hub discovery client")
+		return nil, err
+	}
+	workGVK := kfplacementv1alpha1.GroupVersion.WithKind(kfplacementv1alpha1.WorkKind)
+	if err := utils.CheckCRDInstalled(hubDiscoveryClient, workGVK); err != nil {
+		klog.ErrorS(err, "Unable to find the required CRD in the hub cluster; the hub agent might predate the placement policy APIs", "GVK", workGVK)
+		return nil, err
+	}
+
+	// The work applier finds the Works of a placement binding via these indexes.
+	if err := fieldindexers.SetupWithMemberAgentControllerManager(ctx, hubMgr); err != nil {
+		klog.ErrorS(err, "Failed to set up the field indexes for the placement policy work applier")
+		return nil, err
+	}
+
+	periodicRequeueRateLimiter, err := placementPolicyWorkApplierRequeueRateLimiter()
+	if err != nil {
+		klog.ErrorS(err, "Failed to set up the requeue rate limiter for the placement policy work applier")
+		return nil, err
+	}
+
+	workApplier := v1workapplier.New(
+		workNS,
+		hubMgr.GetClient(), hubMgr.GetAPIReader(),
+		memberMgr.GetClient(), spokeDynamicClient,
+		restMapper,
+		parallelizer.NewParallelizer(parallelizer.DefaultNumOfWorkers),
+		placementPolicyWorkApplierConcurrentReconciles,
+		// Nil picks the package's own default cleanup rate limiter; a nil periodic requeue rate limiter
+		// picks its default one too.
+		nil, periodicRequeueRateLimiter,
+		placementPolicyWorkApplierCleanupWaitTime,
+	)
+	if err := workApplier.SetupWithManager(hubMgr); err != nil {
+		klog.ErrorS(err, "Failed to set up the placement policy work applier")
+		return nil, err
+	}
+	return workApplier, nil
+}
+
+// placementPolicyWorkApplierRequeueRateLimiter returns the periodic requeue rate limiter for the placement policy
+// work applier: nil (the package default) unless the test-only environment variable caps the requeue delays.
+func placementPolicyWorkApplierRequeueRateLimiter() (*v1workapplier.MultiStageRequeueWithExponentialBackoffRateLimiter, error) {
+	val, found := os.LookupEnv(testOnlyPlacementPolicyWorkApplierMaxRequeueDelayEnvVarName)
+	if !found || val == "" {
+		return nil, nil
+	}
+	maxDelaySeconds, err := strconv.Atoi(val)
+	if err != nil {
+		return nil, fmt.Errorf("failed to parse %s=%q as an integer: %w", testOnlyPlacementPolicyWorkApplierMaxRequeueDelayEnvVarName, val, err)
+	}
+	rateLimiter, err := v1workapplier.NewDefaultRequeueRateLimiterWithMaxDelay(maxDelaySeconds)
+	if err != nil {
+		return nil, fmt.Errorf("invalid %s=%q: %w", testOnlyPlacementPolicyWorkApplierMaxRequeueDelayEnvVarName, val, err)
+	}
+	klog.InfoS("Capping the requeue delays of the placement policy work applier; this is a test-only setting",
+		"envVar", testOnlyPlacementPolicyWorkApplierMaxRequeueDelayEnvVarName, "maxDelaySeconds", maxDelaySeconds)
+	return rateLimiter, nil
+}
+
+// memberControllers lets the InternalMemberCluster controller join and leave the fleet for
+// several member controllers at once. Every controller gets the call even if an earlier one
+// fails, so a single failure does not leave the others in the wrong state.
+type memberControllers []controller.MemberController
+
+func (m memberControllers) Join(ctx context.Context) error {
+	errs := make([]error, 0, len(m))
+	for _, c := range m {
+		errs = append(errs, c.Join(ctx))
+	}
+	return errors.Join(errs...)
+}
+
+func (m memberControllers) Leave(ctx context.Context) error {
+	errs := make([]error, 0, len(m))
+	for _, c := range m {
+		errs = append(errs, c.Leave(ctx))
+	}
+	return errors.Join(errs...)
 }

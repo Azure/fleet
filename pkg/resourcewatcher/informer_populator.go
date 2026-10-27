@@ -26,8 +26,8 @@ import (
 	"k8s.io/klog/v2"
 	"sigs.k8s.io/controller-runtime/pkg/manager"
 
-	"go.goms.io/fleet/pkg/utils"
 	"go.goms.io/fleet/pkg/utils/informer"
+	"go.goms.io/fleet/pkg/utils/resourceeligibility"
 )
 
 const (
@@ -54,8 +54,10 @@ type InformerPopulator struct {
 	// InformerManager manages all the dynamic informers created by the discovery client
 	InformerManager informer.Manager
 
-	// ResourceConfig contains all the API resources that we won't select based on the allowed or skipped propagating APIs option.
-	ResourceConfig *utils.ResourceConfig
+	// ResourceEligibilityCheckerForV0APIs determines if a given namespace, GVK (GVR), or object is eligible for placement for v0 APIs.
+	ResourceEligibilityCheckerForV0APIs resourceeligibility.Checker
+	// ResourceEligibilityCheckerForV1APIs determines if a given namespace, GVK (GVR), or object is eligible for placement for v1 APIs.
+	ResourceEligibilityCheckerForV1APIs resourceeligibility.Checker
 }
 
 // Start runs the informer populator, discovering resources and creating informers.
@@ -81,7 +83,7 @@ func (p *InformerPopulator) Start(ctx context.Context) error {
 
 // discoverAndCreateInformers discovers API resources and creates informers WITHOUT adding event handlers
 func (p *InformerPopulator) discoverAndCreateInformers() {
-	resourcesToWatch := discoverWatchableResources(p.DiscoveryClient, p.RESTMapper, p.ResourceConfig)
+	resourcesToWatch := discoverWatchableResources(p.DiscoveryClient, p.ResourceEligibilityCheckerForV0APIs, p.ResourceEligibilityCheckerForV1APIs)
 
 	// Create informers directly without adding event handlers.
 	// This avoids adding any event handlers on follower pods

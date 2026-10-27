@@ -2,7 +2,7 @@
 
 ## Chart Versioning
 
-Chart versions match the KubeFleet release versions. For example, to install KubeFleet v0.3.0, use chart version `0.3.0`.
+Chart versions match the KubeFleet release versions. For example, to install KubeFleet v0.3.2, use chart version `0.3.2`.
 
 ## Install Chart
 
@@ -108,8 +108,10 @@ _See [helm install](https://helm.sh/docs/helm/helm_install/) for command documen
 | `webhookCertSecretName` | Name of the Secret where cert-manager stores the certificate (required when enabled) | `unset` |
 | `enableClusterInventoryAPI` | Enable cluster inventory APIs | `true` |
 | `enableStagedUpdateRunAPIs` | Enable staged update run APIs | `true` |
+| `enablePlacementPolicyAPIs` | Enable the experimental FEP-0001 placement policy APIs (`placement.kubefleet.dev/v1alpha1`). Their controllers use fixed concurrency; `MaxConcurrentClusterPlacement` and `MaxFleetSizeSupported` don't apply to them. If `crdInstaller.enabled` is `true`, the CRD installer also installs the CRDs of these APIs (`placement.kubefleet.dev` and `rollout.kubefleet.dev`); otherwise, these CRDs must be installed separately | `false` |
+| `enableAnnotationBasedPlacement` | Enable the experimental annotation-based placement experience (the `kubefleet.dev/cluster-selectors` annotation); requires `enablePlacementPolicyAPIs` to be `true`. Only enable it if KubeFleet runs in a fully trusted environment, or if the hub cluster has the workload controllers of kube-controller-manager (e.g., the Deployment, StatefulSet, DaemonSet, and CronJob controllers) disabled and the protection validating admission policy (`DenyPlacementAnnotationIfNoPlacementPolicyAPIAccess`) installed; setting `enableWorkload` to `false` does not disable these controllers | `false` |
 | `enableEvictionAPIs` | Enable eviction APIs | `true` |
-| `enablePprof` | Enable pprof endpoint | `true` |
+| `enablePprof` | Enable the pprof endpoint (listens on loopback only; use `kubectl port-forward`) | `false` |
 | `pprofPort` | pprof server port | `6065` |
 | `hubAPIQPS` | QPS for fleet-apiserver (not including events/node heartbeat) | `250` |
 | `hubAPIBurst` | Burst for fleet-apiserver (not including events/node heartbeat) | `1000` |

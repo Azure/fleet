@@ -43,6 +43,7 @@ import (
 	fleetnetworkingv1alpha1 "go.goms.io/fleet-networking/api/v1alpha1"
 
 	clusterv1beta1 "go.goms.io/fleet/apis/cluster/v1beta1"
+	kfplacementv1alpha1 "go.goms.io/fleet/apis/kubefleet.dev/placement/v1alpha1"
 	placementv1 "go.goms.io/fleet/apis/placement/v1"
 	placementv1beta1 "go.goms.io/fleet/apis/placement/v1beta1"
 	"go.goms.io/fleet/pkg/utils/condition"
@@ -117,6 +118,13 @@ var (
 		Verbs:     []string{"*"},
 		APIGroups: []string{placementv1beta1.GroupVersion.Group},
 		Resources: []string{"*"},
+	}
+	// FleetPlacementPolicyWorkRule lets the member agent apply the Works of the experimental
+	// placement policy APIs; it is granted only when the hub agent runs with those APIs enabled.
+	FleetPlacementPolicyWorkRule = rbacv1.PolicyRule{
+		Verbs:     []string{"get", "list", "watch", "update", "patch"},
+		APIGroups: []string{kfplacementv1alpha1.GroupVersion.Group},
+		Resources: []string{"works", "works/status"},
 	}
 	// EventRule grants access to core/v1 Events. The Fleet controllers have
 	// moved to the events.k8s.io recorder, but this rule is still required:
@@ -353,6 +361,13 @@ var (
 		Kind:    "Work",
 	}
 
+	// PlacementPolicyWorkMetaGVK is the GVK of the Works of the experimental placement policy APIs.
+	PlacementPolicyWorkMetaGVK = metav1.GroupVersionKind{
+		Group:   kfplacementv1alpha1.GroupVersion.Group,
+		Version: kfplacementv1alpha1.GroupVersion.Version,
+		Kind:    kfplacementv1alpha1.WorkKind,
+	}
+
 	ClusterResourceOverrideSnapshotKind = schema.GroupVersionKind{
 		Group:   placementv1beta1.GroupVersion.Group,
 		Version: placementv1beta1.GroupVersion.Version,
@@ -518,18 +533,6 @@ func IsReservedNamespace(namespace string) bool {
 // IsFleetMemberNamespace indicates if an argued namespace is a fleet member namespace.
 func IsFleetMemberNamespace(namespace string) bool {
 	return strings.HasPrefix(namespace, FleetMemberNamespacePrefix)
-}
-
-// ShouldPropagateNamespace decides if we should propagate the resources in the namespace.
-func ShouldPropagateNamespace(namespace string, skippedNamespaces map[string]bool) bool {
-	if IsReservedNamespace(namespace) {
-		return false
-	}
-
-	if skippedNamespaces[namespace] {
-		return false
-	}
-	return true
 }
 
 // GenerateGroupString generates a string which prints groups in which a user belongs,

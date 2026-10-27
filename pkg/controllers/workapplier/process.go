@@ -25,6 +25,7 @@ import (
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
 	"k8s.io/klog/v2"
 
+	placementv1alpha1 "go.goms.io/fleet/apis/kubefleet.dev/placement/v1alpha1"
 	fleetv1beta1 "go.goms.io/fleet/apis/placement/v1beta1"
 	"go.goms.io/fleet/pkg/utils/controller"
 	"go.goms.io/fleet/pkg/utils/resource"
@@ -248,6 +249,19 @@ func (r *Reconciler) takeOverInMemberClusterObjectIfApplicable(
 	work *fleetv1beta1.Work,
 	expectedAppliedWorkOwnerRef *metav1.OwnerReference,
 ) (shouldSkipProcessing bool) {
+	// Refuse to process objects that are owned by the newer KubeFleet APIs. This check runs before
+	// any write (takeover or apply) and regardless of the apply strategy in use, so that
+	// the object is never co-owned by both placement experiences.
+	if isOwnedByNewerKubeFleetAPIObjects(bundle.inMemberClusterObj) {
+		wrappedErr := fmt.Errorf("the object to process is already owned by another KubeFleet placement API object from the %s API group; the two placement experiences cannot be used to place the same manifest at the same time", placementv1alpha1.GroupVersion.Group)
+		bundle.applyOrReportDiffErr = wrappedErr
+		bundle.applyOrReportDiffResTyp = ApplyOrReportDiffResTypeOwnedByOtherKubeFleetAPIObjects
+		klog.ErrorS(wrappedErr, "Failed to check if takeover is needed",
+			"work", klog.KObj(work), "GVR", *bundle.gvr, "manifestObj", klog.KObj(bundle.manifestObj),
+			"inMemberClusterObj", klog.KObj(bundle.inMemberClusterObj), "expectedAppliedWorkOwnerRef", *expectedAppliedWorkOwnerRef)
+		return true
+	}
+
 	if !shouldInitiateTakeOverAttempt(bundle.inMemberClusterObj, work.Spec.ApplyStrategy, expectedAppliedWorkOwnerRef) {
 		// Takeover is not necessary; proceed with the processing.
 		klog.V(2).InfoS("Takeover is not needed; skip the step", "work", klog.KObj(work), "GVR", *bundle.gvr, "manifestObj", bundle.workResourceIdentifierStr)

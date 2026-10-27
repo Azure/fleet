@@ -36,6 +36,7 @@ import (
 	placementv1beta1 "go.goms.io/fleet/apis/placement/v1beta1"
 	"go.goms.io/fleet/pkg/utils"
 	"go.goms.io/fleet/pkg/utils/condition"
+	"go.goms.io/fleet/pkg/utils/labels"
 )
 
 const (
@@ -709,6 +710,113 @@ var _ = Describe("Test MemberCluster Controller", func() {
 			// check the member cluster namespace is being deleted. There is no namespace controller, so it won't be removed
 			Expect(k8sClient.Get(ctx, types.NamespacedName{Name: namespaceName}, &ns)).Should(Succeed())
 			Expect(ns.DeletionTimestamp != nil).Should(BeTrue())
+		})
+	})
+
+	// Azure-specific: the controller seeds the topology.kubernetes.io/region label from the
+	// fleet.azure.com/location label, but never overwrites an existing region label.
+	Context("Test membercluster controller with the Azure location label", func() {
+		const (
+			location    = "eastus"
+			adminRegion = "us-east"
+		)
+
+		reconcileAndExpectSuccess := func() {
+			result, err := r.Reconcile(ctx, ctrl.Request{
+				NamespacedName: memberClusterNamespacedName,
+			})
+			Expect(result).Should(Equal(ctrl.Result{}))
+			Expect(err).Should(Succeed())
+		}
+
+		BeforeEach(func() {
+			ctx = context.Background()
+			memberClusterName = utils.RandStr()
+			namespaceName = fmt.Sprintf(utils.NamespaceNameFormat, memberClusterName)
+			memberClusterNamespacedName = types.NamespacedName{
+				Name: memberClusterName,
+			}
+
+			By("create the member cluster reconciler")
+			r = &Reconciler{
+				Client:              k8sClient,
+				ForceDeleteWaitTime: 15 * time.Minute,
+			}
+			Expect(r.SetupWithManager(mgr, memberClusterName+"-controller")).Should(Succeed())
+
+			By("create member cluster with the Azure location label for join")
+			mc := buildMemberCluster(memberClusterName)
+			mc.Labels = map[string]string{
+				labels.AzureLocationLabel: location,
+			}
+			Expect(k8sClient.Create(ctx, &mc)).Should(Succeed())
+
+			By("trigger reconcile to initiate the join workflow")
+			reconcileAndExpectSuccess()
+
+			checkIfMemberClusterResourcesExistsAndUpdateAgentStatusToTrue(ctx, memberClusterName, namespaceName)
+
+			By("trigger reconcile again to update member cluster status to joined")
+			reconcileAndExpectSuccess()
+		})
+
+		AfterEach(func() {
+			var ns corev1.Namespace
+			Expect(k8sClient.Get(ctx, types.NamespacedName{Name: namespaceName}, &ns)).Should(Succeed())
+
+			By("Deleting the namespace")
+			Eventually(func() error {
+				return k8sClient.Delete(ctx, &ns)
+			}, timeout, interval).Should(SatisfyAny(Succeed(), &utils.NotFoundMatcher{}))
+		})
+
+		It("should seed the region label from the location label", func() {
+			Expect(k8sClient.Get(ctx, memberClusterNamespacedName, &mc)).Should(Succeed())
+			wantLabels := map[string]string{
+				placementv1beta1.MemberNameLabel:   memberClusterName,
+				placementv1beta1.ClusterAliasLabel: memberClusterName,
+				labels.AzureLocationLabel:          location,
+				corev1.LabelTopologyRegion:         location,
+			}
+			Expect(cmp.Diff(wantLabels, mc.Labels)).Should(BeEmpty(), "member cluster labels mismatch (-want +got)")
+		})
+
+		It("should not overwrite a region label set by an admin", func() {
+			Expect(k8sClient.Get(ctx, memberClusterNamespacedName, &mc)).Should(Succeed())
+			mc.Labels[corev1.LabelTopologyRegion] = adminRegion
+			Expect(k8sClient.Update(ctx, &mc)).Should(Succeed())
+
+			By("trigger reconcile")
+			reconcileAndExpectSuccess()
+
+			Expect(k8sClient.Get(ctx, memberClusterNamespacedName, &mc)).Should(Succeed())
+			Expect(mc.Labels[corev1.LabelTopologyRegion]).To(Equal(adminRegion))
+			Expect(mc.Labels[labels.AzureLocationLabel]).To(Equal(location))
+		})
+
+		It("should seed the region label again if it is removed", func() {
+			Expect(k8sClient.Get(ctx, memberClusterNamespacedName, &mc)).Should(Succeed())
+			delete(mc.Labels, corev1.LabelTopologyRegion)
+			Expect(k8sClient.Update(ctx, &mc)).Should(Succeed())
+
+			By("trigger reconcile to seed the region label again")
+			reconcileAndExpectSuccess()
+
+			Expect(k8sClient.Get(ctx, memberClusterNamespacedName, &mc)).Should(Succeed())
+			Expect(mc.Labels[corev1.LabelTopologyRegion]).To(Equal(location))
+		})
+
+		It("should not add the region label if the location label is absent", func() {
+			Expect(k8sClient.Get(ctx, memberClusterNamespacedName, &mc)).Should(Succeed())
+			delete(mc.Labels, labels.AzureLocationLabel)
+			delete(mc.Labels, corev1.LabelTopologyRegion)
+			Expect(k8sClient.Update(ctx, &mc)).Should(Succeed())
+
+			By("trigger reconcile")
+			reconcileAndExpectSuccess()
+
+			Expect(k8sClient.Get(ctx, memberClusterNamespacedName, &mc)).Should(Succeed())
+			Expect(mc.Labels).NotTo(HaveKey(corev1.LabelTopologyRegion))
 		})
 	})
 })

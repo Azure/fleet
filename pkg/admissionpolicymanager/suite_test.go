@@ -19,6 +19,7 @@ package admissionpolicymanager
 import (
 	"context"
 	"flag"
+	"path/filepath"
 	"testing"
 	"time"
 
@@ -32,6 +33,8 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/envtest"
 	"sigs.k8s.io/controller-runtime/pkg/log/zap"
 	"sigs.k8s.io/controller-runtime/pkg/metrics/server"
+
+	"go.goms.io/fleet/pkg/utils"
 )
 
 // These tests use Ginkgo (BDD-style Go testing framework). Refer to
@@ -50,6 +53,31 @@ var (
 	eventuallyDuration = time.Second * 10
 	eventuallyInterval = time.Millisecond * 500
 )
+
+// The username and user group that the suite whitelists in the service accounts and token requests
+// admission policy, in addition to the built-in exemptions.
+const (
+	whitelistedUsername  = "whitelisted-user"
+	whitelistedUserGroup = "whitelisted-group"
+)
+
+// suitePolicyGeneratorConfigs returns the configuration that the policy manager runs with in this suite: all the
+// generators in DefaultPolicyGeneratorConfigsForV1APIs, with a whitelisted username and user group added to the
+// service accounts and token requests generator, plus the placement annotation generator, which must be enabled
+// explicitly.
+//
+// The shared default configuration is copied rather than modified.
+func suitePolicyGeneratorConfigs() *PolicyGeneratorConfigs {
+	configs := *DefaultPolicyGeneratorConfigsForV1APIs
+	svcAccountsAndTokenRequestsGen := *configs.SvcAccountsAndTokenRequestsVAPGeneratorConfig
+	svcAccountsAndTokenRequestsGen.WhitelistedUsernames = []string{whitelistedUsername}
+	svcAccountsAndTokenRequestsGen.WhitelistedUserGroups = []string{whitelistedUserGroup}
+	configs.SvcAccountsAndTokenRequestsVAPGeneratorConfig = &svcAccountsAndTokenRequestsGen
+	configs.AnnotatedForPlacementObjectsVAPGeneratorConfig = &AnnotatedForPlacementObjectsValidatingAdmissionPolicyGenerator{
+		ReservedNamespacePrefixes: []string{utils.FleetNSNamePrefix, utils.KubeNSNamePrefix},
+	}
+	return &configs
+}
 
 func TestAPIs(t *testing.T) {
 	RegisterFailHandler(Fail)
@@ -70,7 +98,14 @@ var _ = BeforeSuite(func() {
 	ctrl.SetLogger(logger)
 
 	By("Bootstrapping test environment")
-	testEnv = &envtest.Environment{}
+	testEnv = &envtest.Environment{
+		// The custom resource definition of the test resources, which some test cases use as
+		// namespaced custom resources.
+		CRDInstallOptions: envtest.CRDInstallOptions{
+			Paths: []string{filepath.Join("../../", "test", "manifests", "test_testresources_crd.yaml")},
+		},
+		ErrorIfCRDPathMissing: true,
+	}
 
 	var err error
 	cfg, err = testEnv.Start()
@@ -94,7 +129,7 @@ var _ = BeforeSuite(func() {
 	Expect(hubUncachedClient).ToNot(BeNil())
 
 	By("Setting up the policy manager")
-	policyManager, err := New(hubUncachedClient, DefaultPolicyGeneratorConfigs)
+	policyManager, err := New(hubUncachedClient, suitePolicyGeneratorConfigs())
 	Expect(err).ToNot(HaveOccurred())
 	Expect(policyManager).ToNot(BeNil())
 	Expect(policyManager.Start(ctx)).To(Succeed())

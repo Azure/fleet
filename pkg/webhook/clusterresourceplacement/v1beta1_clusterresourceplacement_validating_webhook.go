@@ -65,5 +65,5 @@ func (v *clusterResourcePlacementValidator) Handle(ctx context.Context, req admi
 		// validateFunc
 		func(obj placementv1beta1.PlacementObj) error {
 			return validator.ValidateClusterResourcePlacement(obj.(*placementv1beta1.ClusterResourcePlacement))
-		})
+		}, nil)
 }

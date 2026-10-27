@@ -42,9 +42,9 @@ import (
 	"go.goms.io/fleet/pkg/controllers/bindingwatcher"
 	"go.goms.io/fleet/pkg/controllers/placementwatcher"
 	"go.goms.io/fleet/pkg/controllers/schedulingpolicysnapshot"
-	"go.goms.io/fleet/pkg/utils"
 	"go.goms.io/fleet/pkg/utils/controller"
 	"go.goms.io/fleet/pkg/utils/informer"
+	"go.goms.io/fleet/pkg/utils/resourceeligibility"
 )
 
 var (
@@ -112,12 +112,9 @@ var _ = BeforeSuite(func() {
 	Expect(err).Should(Succeed(), "failed to create manager")
 
 	resourceSelectorResolver := controller.ResourceSelectorResolver{
-		RestMapper:      mgr.GetRESTMapper(),
-		InformerManager: informer.NewInformerManager(dynamicClient, 5*time.Minute, ctx.Done()),
-		ResourceConfig:  utils.NewResourceConfig(false),
-		SkippedNamespaces: map[string]bool{
-			"default": true,
-		},
+		RestMapper:                 mgr.GetRESTMapper(),
+		InformerManager:            informer.NewInformerManager(dynamicClient, 5*time.Minute, ctx.Done()),
+		ResourceEligibilityChecker: resourceeligibility.DefaultForV0APIs(mgr.GetRESTMapper()),
 	}
 	resourceSnapshotResolver := controller.NewResourceSnapshotResolver(mgr.GetClient(), mgr.GetScheme())
 	reconciler := &Reconciler{

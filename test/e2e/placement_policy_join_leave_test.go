@@ -1,0 +1,483 @@
+/*
+Copyright 2026 The KubeFleet Authors.
+
+Licensed under the Apache License, Version 2.0 (the "License");
+you may not use this file except in compliance with the License.
+You may obtain a copy of the License at
+
+    http://www.apache.org/licenses/LICENSE-2.0
+
+Unless required by applicable law or agreed to in writing, software
+distributed under the License is distributed on an "AS IS" BASIS,
+WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+See the License for the specific language governing permissions and
+limitations under the License.
+*/
+
+package e2e
+
+import (
+	"fmt"
+	"maps"
+	"time"
+
+	. "github.com/onsi/ginkgo/v2"
+	. "github.com/onsi/gomega"
+	appsv1 "k8s.io/api/apps/v1"
+	corev1 "k8s.io/api/core/v1"
+	apierrors "k8s.io/apimachinery/pkg/api/errors"
+	"k8s.io/apimachinery/pkg/api/meta"
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/apimachinery/pkg/types"
+	"k8s.io/apimachinery/pkg/util/intstr"
+	"k8s.io/utils/ptr"
+	"sigs.k8s.io/controller-runtime/pkg/client"
+
+	clusterv1beta1 "go.goms.io/fleet/apis/cluster/v1beta1"
+	kfplacementv1alpha1 "go.goms.io/fleet/apis/kubefleet.dev/placement/v1alpha1"
+	"go.goms.io/fleet/test/e2e/framework"
+)
+
+const (
+	clusterPlacementPolicyNeverJoinedNameTemplate = "cpp-never-joined-%d"
+	neverJoinedMemberClusterNameTemplate          = "pp-never-joined-cluster-%d"
+
+	clusterPlacementPolicyAgentStoppedNameTemplate = "cpp-agent-stopped-%d"
+
+	clusterPlacementPolicyNewClusterNameTemplate = "cpp-new-cluster-%d"
+
+	// memberAgentDeploymentName is the Deployment that runs the member agent on a member cluster, in the fleet-system
+	// namespace.
+	memberAgentDeploymentName = "member-agent"
+	// memberAgentStoppedEventuallyDuration bounds the wait for the placement policy controller to treat a cluster
+	// whose member agent stopped as no longer eligible: the eligibility checker's heartbeat timeout is 5m, and the
+	// controller re-evaluates a fulfilled policy at least every 150s, with a margin on top.
+	memberAgentStoppedEventuallyDuration = 9 * time.Minute
+
+	// neverJoinedLabelName labels the member cluster that the specs register without ever letting it join; no member
+	// cluster of the fleet carries it.
+	neverJoinedLabelName = "fleet-e2e/never-joined"
+	// newClusterLabelName labels a member cluster as it joins the fleet anew; no member cluster of the fleet carries it
+	// otherwise.
+	newClusterLabelName = "fleet-e2e/new-cluster"
+)
+
+// noPlacementBindingTargetsClusterActual checks that no placement binding, in any namespace, and no cluster placement
+// binding targets the member cluster.
+func noPlacementBindingTargetsClusterActual(clusterName string) func() error {
+	return func() error {
+		bindings := &kfplacementv1alpha1.PlacementBindingList{}
+		if err := hubClient.List(ctx, bindings); err != nil {
+			return err
+		}
+		for i := range bindings.Items {
+			if bindings.Items[i].Spec.ClusterName == clusterName {
+				return fmt.Errorf("placement binding %s targets member cluster %s", client.ObjectKeyFromObject(&bindings.Items[i]), clusterName)
+			}
+		}
+		clusterBindings := &kfplacementv1alpha1.ClusterPlacementBindingList{}
+		if err := hubClient.List(ctx, clusterBindings); err != nil {
+			return err
+		}
+		for i := range clusterBindings.Items {
+			if clusterBindings.Items[i].Spec.ClusterName == clusterName {
+				return fmt.Errorf("cluster placement binding %s targets member cluster %s", clusterBindings.Items[i].Name, clusterName)
+			}
+		}
+		return nil
+	}
+}
+
+// placementPolicyClaimUnfulfilledActual checks that the policy's only cluster claim has not been fulfilled: no
+// cluster has been provisioned for it, and it does not report completion.
+func placementPolicyClaimUnfulfilledActual(key types.NamespacedName) func() error {
+	return func() error {
+		claims, err := claimsOfPolicy(key.Name, key.Namespace)
+		if err != nil {
+			return err
+		}
+		if len(claims.Items) != 1 {
+			return fmt.Errorf("placement policy %s has %d cluster claims, want 1", key, len(claims.Items))
+		}
+		claim := &claims.Items[0]
+		if claim.Status.ProvisionedClusterName != nil {
+			return fmt.Errorf("cluster claim %s of placement policy %s names provisioned cluster %s", claim.Name, key, *claim.Status.ProvisionedClusterName)
+		}
+		if cond := meta.FindStatusCondition(claim.Status.Conditions, kfplacementv1alpha1.ClusterClaimCondTypeCompleted); cond != nil {
+			return fmt.Errorf("cluster claim %s of placement policy %s reports a %s condition: %+v", claim.Name, key, kfplacementv1alpha1.ClusterClaimCondTypeCompleted, cond)
+		}
+		return nil
+	}
+}
+
+// rejoinMemberClusterWithExtraLabels lets a member cluster that has left the fleet join it again, carrying its usual
+// labels plus the given ones, and waits until it has joined.
+func rejoinMemberClusterWithExtraLabels(cluster *framework.Cluster, extraLabels map[string]string) {
+	GinkgoHelper()
+
+	labels := maps.Clone(labelsByClusterName[cluster.ClusterName])
+	maps.Copy(labels, extraLabels)
+	createMemberCluster(cluster.ClusterName, cluster.PresentingServiceAccountInHubClusterName, labels, annotationsByClusterName[cluster.ClusterName])
+	checkIfMemberClusterHasJoined(cluster)
+}
+
+// restoreMemberClusterInFleet makes sure that the member cluster is in the fleet again, without the given labels, and
+// waits until it has joined. It lets a member cluster that has left join again with its usual labels, after any
+// leave in progress has completed.
+func restoreMemberClusterInFleet(cluster *framework.Cluster, labelKeysToRemove ...string) {
+	GinkgoHelper()
+
+	var registered bool
+	Eventually(func() error {
+		mc := &clusterv1beta1.MemberCluster{}
+		err := hubClient.Get(ctx, types.NamespacedName{Name: cluster.ClusterName}, mc)
+		switch {
+		case apierrors.IsNotFound(err):
+			registered = false
+			return nil
+		case err != nil:
+			return err
+		case !mc.DeletionTimestamp.IsZero():
+			return fmt.Errorf("member cluster %s is still leaving the fleet", cluster.ClusterName)
+		}
+		registered = true
+		return nil
+	}, longEventuallyDuration, eventuallyInterval).Should(Succeed(), "Failed to wait for member cluster %s to settle", cluster.ClusterName)
+
+	if !registered {
+		createMemberCluster(cluster.ClusterName, cluster.PresentingServiceAccountInHubClusterName,
+			labelsByClusterName[cluster.ClusterName], annotationsByClusterName[cluster.ClusterName])
+	} else {
+		Eventually(func() error {
+			mc := &clusterv1beta1.MemberCluster{}
+			if err := hubClient.Get(ctx, types.NamespacedName{Name: cluster.ClusterName}, mc); err != nil {
+				return err
+			}
+			changed := false
+			for _, key := range labelKeysToRemove {
+				if _, found := mc.Labels[key]; found {
+					delete(mc.Labels, key)
+					changed = true
+				}
+			}
+			if !changed {
+				return nil
+			}
+			return hubClient.Update(ctx, mc)
+		}, eventuallyDuration, eventuallyInterval).Should(Succeed(), "Failed to remove labels %v from member cluster %s", labelKeysToRemove, cluster.ClusterName)
+	}
+	checkIfMemberClusterHasJoined(cluster)
+}
+
+// setMemberAgentReplicas scales the member agent Deployment on the member cluster, retrying on conflicts.
+func setMemberAgentReplicas(cluster *framework.Cluster, replicas int32) {
+	GinkgoHelper()
+
+	Eventually(func() error {
+		deploy := &appsv1.Deployment{}
+		if err := cluster.KubeClient.Get(ctx, types.NamespacedName{Namespace: fleetSystemNS, Name: memberAgentDeploymentName}, deploy); err != nil {
+			return err
+		}
+		deploy.Spec.Replicas = ptr.To(replicas)
+		return cluster.KubeClient.Update(ctx, deploy)
+	}, eventuallyDuration, eventuallyInterval).Should(Succeed(), "Failed to scale the member agent on cluster %s to %d replicas", cluster.ClusterName, replicas)
+}
+
+// stopMemberAgent scales the member agent on the member cluster down, and waits until none of its pods is left, so
+// that the cluster sends no more heartbeats to the hub.
+func stopMemberAgent(cluster *framework.Cluster) {
+	GinkgoHelper()
+
+	setMemberAgentReplicas(cluster, 0)
+	Eventually(func() error {
+		deploy := &appsv1.Deployment{}
+		if err := cluster.KubeClient.Get(ctx, types.NamespacedName{Namespace: fleetSystemNS, Name: memberAgentDeploymentName}, deploy); err != nil {
+			return err
+		}
+		selector, err := metav1.LabelSelectorAsSelector(deploy.Spec.Selector)
+		if err != nil {
+			return err
+		}
+		pods := &corev1.PodList{}
+		if err := cluster.KubeClient.List(ctx, pods, client.InNamespace(fleetSystemNS), client.MatchingLabelsSelector{Selector: selector}); err != nil {
+			return err
+		}
+		if len(pods.Items) > 0 {
+			return fmt.Errorf("cluster %s still runs %d member agent pods", cluster.ClusterName, len(pods.Items))
+		}
+		return nil
+	}, longEventuallyDuration, eventuallyInterval).Should(Succeed(), "Failed to stop the member agent on cluster %s", cluster.ClusterName)
+}
+
+// startMemberAgent scales the member agent on the member cluster back up, and waits until the cluster has sent a
+// heartbeat since and reports itself as joined and healthy again.
+func startMemberAgent(cluster *framework.Cluster) {
+	GinkgoHelper()
+
+	// Heartbeat timestamps have a resolution of one second.
+	startedAt := time.Now().Truncate(time.Second)
+	setMemberAgentReplicas(cluster, 1)
+	Eventually(func() error {
+		mc := &clusterv1beta1.MemberCluster{}
+		if err := hubClient.Get(ctx, types.NamespacedName{Name: cluster.ClusterName}, mc); err != nil {
+			return err
+		}
+		agentStatus := mc.GetAgentStatus(clusterv1beta1.MemberAgent)
+		if agentStatus == nil || agentStatus.LastReceivedHeartbeat.Time.Before(startedAt) {
+			return fmt.Errorf("member cluster %s has received no heartbeat from its member agent since %v (agent status: %+v)", cluster.ClusterName, startedAt, agentStatus)
+		}
+		return nil
+	}, longEventuallyDuration, eventuallyInterval).Should(Succeed(), "Failed to restart the member agent on cluster %s", cluster.ClusterName)
+	checkIfMemberClusterHasJoined(cluster)
+}
+
+// The specs below change the member clusters of the fleet, adding one, stopping the member agent of one, or letting
+// one leave and join again, so they are Serial: they run only after the parallel specs finish, and undo every change
+// they make, so that the fleet is whole for whatever runs next.
+var _ = Describe("placement policy with member clusters joining and leaving the fleet", Label("placementpolicy"), func() {
+	Context("cluster placement policy whose selector a registered member cluster matches without ever joining", Ordered, Serial, func() {
+		policyKey := types.NamespacedName{
+			Name: fmt.Sprintf(clusterPlacementPolicyNeverJoinedNameTemplate, GinkgoParallelProcess()),
+		}
+		memberClusterName := fmt.Sprintf(neverJoinedMemberClusterNameTemplate, GinkgoParallelProcess())
+		neverJoinedLabels := map[string]string{neverJoinedLabelName: "true"}
+		neverJoinedTerms := []kfplacementv1alpha1.ClusterLabelAndPropertySelectorTerm{
+			{MatchLabels: neverJoinedLabels},
+		}
+
+		var claimUID types.UID
+
+		BeforeAll(func() {
+			By("creating the work resources")
+			createWorkResources()
+
+			By("creating a cluster placement policy that selects one cluster carrying a label that no member cluster has")
+			policy := newPlacementPolicyObject(policyKey, kfplacementv1alpha1.PlacementPolicySpec{
+				ClusterSelectors: []kfplacementv1alpha1.ClusterSelector{
+					clusterSelectorWithTerms(neverJoinedTerms, intstr.FromInt32(1)),
+				},
+				ResourceSelectors: placementPolicyResourceSelectors(),
+			})
+			Expect(hubClient.Create(ctx, policy)).To(Succeed(), "Failed to create cluster placement policy %s", policyKey)
+		})
+
+		AfterAll(func() {
+			// The work resources and the registered member cluster must go even if removing the policy fails; otherwise
+			// they leak into later specs. The cleanup strips the member cluster's finalizers, as no agent ever reports
+			// that it has left.
+			defer cleanupWorkResourcesOnHubAndMembers()
+			defer ensureMemberClusterAndRelatedResourcesDeletion(memberClusterName)
+			// Deleting the policy also withdraws its cluster claim.
+			ensurePlacementPolicyRemoved(policyKey)
+		})
+
+		It("should add a cluster claim, binding no cluster", func() {
+			Eventually(placementPolicyClaimActual(policyKey, neverJoinedTerms), eventuallyDuration, eventuallyInterval).
+				Should(Succeed(), "Failed to add the cluster claim")
+			Eventually(placementPolicyStatusActual(policyKey, unfulfilledPlacementPolicyStatus(1, 0, 1)), eventuallyDuration, eventuallyInterval).
+				Should(Succeed(), "Failed to report the expected cluster placement policy status")
+			Expect(noPlacementPolicyBindingsActual(policyKey)()).To(Succeed(), "A cluster was bound")
+
+			claims, err := claimsOfPolicy(policyKey.Name, policyKey.Namespace)
+			Expect(err).NotTo(HaveOccurred(), "Failed to list the cluster claims of cluster placement policy %s", policyKey)
+			Expect(claims.Items).To(HaveLen(1), "Cluster placement policy %s does not have exactly one cluster claim", policyKey)
+			claimUID = claims.Items[0].UID
+		})
+
+		It("can register a member cluster that carries the label, but never let it join", func() {
+			// No member agent runs for the cluster, so it never joins the fleet, and it is never marked as healthy.
+			createMemberCluster(memberClusterName, hubClusterSAName, neverJoinedLabels, nil)
+		})
+
+		It("should observe the registered member cluster when reconciling the cluster claim", func() {
+			// Every policy reconciles on a member cluster creation, and records the newest creation time it has seen on
+			// its outstanding claims; this shows that the policy has evaluated its selector with the cluster in place.
+			mc := &clusterv1beta1.MemberCluster{}
+			Expect(hubClient.Get(ctx, types.NamespacedName{Name: memberClusterName}, mc)).To(Succeed(), "Failed to get member cluster %s", memberClusterName)
+			Eventually(placementPolicyClaimObservedClusterCreationActual(policyKey, mc.CreationTimestamp), eventuallyDuration, eventuallyInterval).
+				Should(Succeed(), "Failed to observe the registered member cluster on the cluster claim")
+		})
+
+		It("should keep the cluster claim outstanding, binding no cluster, as the registered member cluster is not eligible", func() {
+			// A claim is withdrawn only once eligible clusters fulfill its selector, and a cluster that has never joined
+			// is not eligible.
+			claimKeptActual := placementPolicyClaimKeptActual(policyKey, claimUID)
+			claimActual := placementPolicyClaimActual(policyKey, neverJoinedTerms)
+			bindingsActual := noPlacementPolicyBindingsActual(policyKey)
+			statusActual := placementPolicyStatusActual(policyKey, unfulfilledPlacementPolicyStatus(1, 0, 1))
+			Consistently(func() error {
+				for _, actual := range []func() error{claimKeptActual, claimActual, bindingsActual, statusActual} {
+					if err := actual(); err != nil {
+						return err
+					}
+				}
+				return nil
+			}, consistentlyDuration, consistentlyInterval).Should(Succeed(), "The cluster claim was withdrawn or changed, or a cluster was bound")
+		})
+	})
+
+	Context("cluster placement policy whose bound cluster loses its member agent for a while", Ordered, Serial, func() {
+		policyKey := types.NamespacedName{
+			Name: fmt.Sprintf(clusterPlacementPolicyAgentStoppedNameTemplate, GinkgoParallelProcess()),
+		}
+		prodTerms := []kfplacementv1alpha1.ClusterLabelAndPropertySelectorTerm{
+			{MatchLabels: map[string]string{envLabelName: envProd}},
+		}
+
+		// Which prod cluster ranks first depends on live capacity, so the specs learn it rather than assume it.
+		var stoppedClusterName, otherClusterName string
+		var stoppedBindingUID types.UID
+		var agentStopped bool
+
+		BeforeAll(func() {
+			By("creating the work resources")
+			createWorkResources()
+
+			By("creating a cluster placement policy that selects one prod cluster")
+			policy := newPlacementPolicyObject(policyKey, kfplacementv1alpha1.PlacementPolicySpec{
+				ClusterSelectors: []kfplacementv1alpha1.ClusterSelector{
+					clusterSelectorWithTerms(prodTerms, intstr.FromInt32(1)),
+				},
+				ResourceSelectors: placementPolicyResourceSelectors(),
+			})
+			Expect(hubClient.Create(ctx, policy)).To(Succeed(), "Failed to create cluster placement policy %s", policyKey)
+		})
+
+		AfterAll(func() {
+			// The work resources must go even if the cleanup below fails; otherwise they leak into later specs.
+			defer cleanupWorkResourcesOnHubAndMembers()
+			// The member agent must run again before the policy goes, so that it removes the ConfigMap it placed; the
+			// specs that run next need the whole fleet as well.
+			if agentStopped {
+				startMemberAgent(memberClusterNamed(stoppedClusterName))
+			}
+			ensurePlacementPolicyRemoved(policyKey)
+		})
+
+		It("should bind one prod cluster", func() {
+			binding := waitForSinglePlacementPolicyBinding(policyKey)
+			stoppedClusterName, stoppedBindingUID = binding.GetSpec().ClusterName, binding.GetUID()
+			otherClusterName = otherProdClusterName(stoppedClusterName)
+
+			waitForPlacementPolicyPlacedOnlyOn(policyKey, prodTerms, stoppedClusterName)
+		})
+
+		It("can stop the member agent on the bound cluster", func() {
+			agentStopped = true
+			stopMemberAgent(memberClusterNamed(stoppedClusterName))
+		})
+
+		It("should keep the cluster bound, and bind the other prod cluster in its place, once the cluster's heartbeat goes stale", func() {
+			// The cluster keeps its binding and its resources, so it is still a target of the resource status, and its
+			// binding still reports what the member agent last reported; it no longer counts toward the selector,
+			// though, so the other prod cluster fills the gap.
+			Eventually(allSynchronizedPlacementPolicyBindingsActual(policyKey, sameSelectorsForClusters(prodTerms, stoppedClusterName, otherClusterName), 1),
+				memberAgentStoppedEventuallyDuration, eventuallyInterval).Should(Succeed(), "Failed to bind the other prod cluster")
+			Expect(placementPolicyBindingsKeptActual(policyKey, map[string]types.UID{stoppedClusterName: stoppedBindingUID})()).
+				To(Succeed(), "Failed to keep the binding of the cluster whose member agent stopped")
+			Eventually(appConfigMapPlacedOnClustersActual(memberClusterNamed(stoppedClusterName), memberClusterNamed(otherClusterName)),
+				workloadEventuallyDuration, eventuallyInterval).Should(Succeed(), "Failed to place the ConfigMap on both prod clusters")
+
+			wantStatus := allSynchronizedPlacementPolicyStatus(2)
+			wantStatus.DesiredClusters = ptr.To(int32(1))
+			wantStatus.ScheduledClusters = ptr.To(int32(1))
+			Eventually(placementPolicyStatusActual(policyKey, wantStatus), workloadEventuallyDuration, eventuallyInterval).
+				Should(Succeed(), "Failed to report the expected cluster placement policy status")
+		})
+
+		It("can restart the member agent", func() {
+			startMemberAgent(memberClusterNamed(stoppedClusterName))
+			agentStopped = false
+		})
+
+		It("should unbind the other prod cluster, and keep the originally bound one", func() {
+			// Back in the running, the originally bound cluster has the older binding, so the count trims the newer one.
+			waitForPlacementPolicyPlacedOnlyOn(policyKey, prodTerms, stoppedClusterName)
+			Expect(placementPolicyBindingsKeptActual(policyKey, map[string]types.UID{stoppedClusterName: stoppedBindingUID})()).
+				To(Succeed(), "Failed to keep the binding of the originally bound cluster")
+		})
+	})
+
+	Context("cluster placement policy whose selector a member cluster fulfills as it joins the fleet", Ordered, Serial, func() {
+		policyKey := types.NamespacedName{
+			Name: fmt.Sprintf(clusterPlacementPolicyNewClusterNameTemplate, GinkgoParallelProcess()),
+		}
+		newClusterLabels := map[string]string{newClusterLabelName: "true"}
+		newClusterTerms := []kfplacementv1alpha1.ClusterLabelAndPropertySelectorTerm{
+			{MatchLabels: newClusterLabels},
+		}
+
+		var claimUID types.UID
+
+		BeforeAll(func() {
+			By("creating the work resources")
+			createWorkResources()
+		})
+
+		AfterAll(func() {
+			// The work resources must go, and cluster-3 must be back in the fleet with its usual labels, even if the
+			// specs failed midway; otherwise they leak into later specs. The policy goes first, so that it removes the
+			// ConfigMap it placed on cluster-3 while cluster-3 still carries the label.
+			defer cleanupWorkResourcesOnHubAndMembers()
+			defer restoreMemberClusterInFleet(memberCluster3WestProd, newClusterLabelName)
+			ensurePlacementPolicyRemoved(policyKey)
+		})
+
+		It("should have no placement binding targeting cluster-3", func() {
+			// While a known issue stands, the placement policy controller releases the binding of a cluster as soon as it
+			// starts leaving, before it has left; with no binding on cluster-3, the leave below cannot run into it.
+			Eventually(noPlacementBindingTargetsClusterActual(memberCluster3WestProdName), workloadEventuallyDuration, eventuallyInterval).
+				Should(Succeed(), "A placement binding still targets cluster-3")
+		})
+
+		It("can let cluster-3 leave the fleet", func() {
+			setMemberClusterToLeave(memberCluster3WestProd)
+			checkIfMemberClusterHasLeft(memberCluster3WestProd)
+		})
+
+		It("can create a cluster placement policy that selects one cluster carrying a label that no member cluster has", func() {
+			policy := newPlacementPolicyObject(policyKey, kfplacementv1alpha1.PlacementPolicySpec{
+				ClusterSelectors: []kfplacementv1alpha1.ClusterSelector{
+					clusterSelectorWithTerms(newClusterTerms, intstr.FromInt32(1)),
+				},
+				ResourceSelectors: placementPolicyResourceSelectors(),
+			})
+			Expect(hubClient.Create(ctx, policy)).To(Succeed(), "Failed to create cluster placement policy %s", policyKey)
+		})
+
+		It("should add a cluster claim that stays unfulfilled, binding no cluster", func() {
+			Eventually(placementPolicyClaimActual(policyKey, newClusterTerms), eventuallyDuration, eventuallyInterval).
+				Should(Succeed(), "Failed to add the cluster claim")
+			Eventually(placementPolicyStatusActual(policyKey, unfulfilledPlacementPolicyStatus(1, 0, 1)), eventuallyDuration, eventuallyInterval).
+				Should(Succeed(), "Failed to report the expected cluster placement policy status")
+
+			claims, err := claimsOfPolicy(policyKey.Name, policyKey.Namespace)
+			Expect(err).NotTo(HaveOccurred(), "Failed to list the cluster claims of cluster placement policy %s", policyKey)
+			Expect(claims.Items).To(HaveLen(1), "Cluster placement policy %s does not have exactly one cluster claim", policyKey)
+			claimUID = claims.Items[0].UID
+
+			// Nothing in the environment provisions clusters for claims.
+			claimKeptActual := placementPolicyClaimKeptActual(policyKey, claimUID)
+			claimUnfulfilledActual := placementPolicyClaimUnfulfilledActual(policyKey)
+			bindingsActual := noPlacementPolicyBindingsActual(policyKey)
+			Consistently(func() error {
+				for _, actual := range []func() error{claimKeptActual, claimUnfulfilledActual, bindingsActual} {
+					if err := actual(); err != nil {
+						return err
+					}
+				}
+				return nil
+			}, consistentlyDuration, consistentlyInterval).Should(Succeed(), "The cluster claim was withdrawn or fulfilled, or a cluster was bound")
+		})
+
+		It("can let cluster-3 join the fleet again, carrying the label", func() {
+			rejoinMemberClusterWithExtraLabels(memberCluster3WestProd, newClusterLabels)
+		})
+
+		It("should bind cluster-3, place the ConfigMap on it, and withdraw the cluster claim", func() {
+			waitForPlacementPolicyPlacedOnlyOn(policyKey, newClusterTerms, memberCluster3WestProdName)
+			Eventually(noPlacementPolicyClaimsActual(policyKey), eventuallyDuration, eventuallyInterval).
+				Should(Succeed(), "Failed to withdraw the cluster claim")
+		})
+	})
+})

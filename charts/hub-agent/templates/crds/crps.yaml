@@ -1,2 +1,0 @@
-{{- $files := .Files }}
-{{ $files.Get "crdbases/placement.kubernetes-fleet.io_clusterresourceplacements.yaml" }}

@@ -33,10 +33,29 @@ import (
 type PolicyGeneratorConfigs struct {
 	PodsAndReplicaSetsVAPGeneratorConfig          *PodsAndReplicaSetsValidatingAdmissionPolicyGenerator              `json:"denyPodsAndReplicaSetsOutsideReservedNamespaces,omitempty"`
 	SvcAccountsAndTokenRequestsVAPGeneratorConfig *ServiceAccountsAndTokenRequestsValidatingAdmissionPolicyGenerator `json:"denyServiceAccountsAndTokenRequestsInReservedNamespaces,omitempty"`
+	// The generator is not enabled in any of the default configurations and must be enabled explicitly. It should
+	// only be enabled if the workload controllers of kube-controller-manager have been disabled in the hub cluster;
+	// see AnnotatedForPlacementObjectsValidatingAdmissionPolicyGenerator for more information.
+	AnnotatedForPlacementObjectsVAPGeneratorConfig *AnnotatedForPlacementObjectsValidatingAdmissionPolicyGenerator `json:"denyPlacementAnnotationIfNoPlacementPolicyAPIAccess,omitempty"`
 }
 
-// DefaultPolicyGeneratorConfigs is the default configuration for all available admission policy generators.
-var DefaultPolicyGeneratorConfigs = &PolicyGeneratorConfigs{
+// DefaultPolicyGeneratorConfigsForV0APIs is the default configuration of admission policy generators
+// for placement with v0 APIs.
+var DefaultPolicyGeneratorConfigsForV0APIs = &PolicyGeneratorConfigs{
+	PodsAndReplicaSetsVAPGeneratorConfig: &PodsAndReplicaSetsValidatingAdmissionPolicyGenerator{
+		ReservedNamespacePrefixes: []string{utils.FleetNSNamePrefix, utils.KubeNSNamePrefix},
+	},
+	SvcAccountsAndTokenRequestsVAPGeneratorConfig: &ServiceAccountsAndTokenRequestsValidatingAdmissionPolicyGenerator{
+		ReservedNamespacePrefixes: []string{utils.FleetNSNamePrefix, utils.KubeNSNamePrefix},
+		WhitelistedUsernames:      []string{aksSupportUser},
+	},
+}
+
+// DefaultPolicyGeneratorConfigsForV1APIs is the default configuration of admission policy generators
+// for placement with v1 APIs (placement policies). It covers all available admission policy generators
+// except the placement annotation one (DenyPlacementAnnotationIfNoPlacementPolicyAPIAccess), which must be
+// enabled explicitly.
+var DefaultPolicyGeneratorConfigsForV1APIs = &PolicyGeneratorConfigs{
 	PodsAndReplicaSetsVAPGeneratorConfig: &PodsAndReplicaSetsValidatingAdmissionPolicyGenerator{
 		ReservedNamespacePrefixes: []string{utils.FleetNSNamePrefix, utils.KubeNSNamePrefix},
 	},

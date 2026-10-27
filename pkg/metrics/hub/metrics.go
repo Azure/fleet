@@ -40,10 +40,10 @@ const (
 )
 
 var (
-	// FleetPlacementStatusLastTimeStampSeconds is a prometheus metric which keeps track of the last placement status.
+	// FleetPlacementStatusLastTimeStampSeconds is a prometheus metric which keeps track of the last placement status transition.
 	FleetPlacementStatusLastTimeStampSeconds = prometheus.NewGaugeVec(prometheus.GaugeOpts{
 		Name: "fleet_workload_placement_status_last_timestamp_seconds",
-		Help: "Last update timestamp of placement status in seconds",
+		Help: "Last placement status timestamp in seconds; this is the condition transition timestamp when available, or the placement creation timestamp when the selected condition is missing",
 	}, []string{"namespace", "name", "generation", "conditionType", "status", "reason"})
 
 	// FleetEvictionStatus is prometheus metrics which holds the
@@ -53,13 +53,30 @@ var (
 		Help: "Last update timestamp of eviction complete status in seconds",
 	}, []string{"name", "isCompleted", "isValid"})
 
+	// FleetPlacementPolicyStatusLastTimestampSeconds is a prometheus metric which keeps track
+	// of the last scheduling status reported for a placement policy. The namespace label is
+	// empty for cluster-scoped placement policies.
+	FleetPlacementPolicyStatusLastTimestampSeconds = prometheus.NewGaugeVec(prometheus.GaugeOpts{
+		Name: "fleet_workload_placement_policy_status_last_timestamp_seconds",
+		Help: "Last update timestamp of placement policy scheduling status in seconds",
+	}, []string{"namespace", "name", "generation", "conditionType", "status", "reason"})
+
+	// FleetPlacementPolicyActiveClusterClaims is a prometheus metric which holds the number of
+	// cluster claims a placement policy currently has outstanding, including claims that are
+	// being withdrawn and not yet observed gone, held by a provisioner finalizer or not. The
+	// namespace label is empty for cluster-scoped placement policies.
+	FleetPlacementPolicyActiveClusterClaims = prometheus.NewGaugeVec(prometheus.GaugeOpts{
+		Name: "fleet_workload_placement_policy_active_cluster_claims",
+		Help: "Number of cluster claims currently outstanding for a placement policy",
+	}, []string{"namespace", "name"})
+
 	// FleetUpdateRunStatusLastTimestampSeconds is a prometheus metric which holds the
-	// last update timestamp of update run status in seconds.
+	// last condition transition timestamp of update run status in seconds.
 	// The failure_type label indicates whether a failure is a user_error (customer configuration issue),
 	// internal_error (requires investigation), or none (no failure).
 	FleetUpdateRunStatusLastTimestampSeconds = prometheus.NewGaugeVec(prometheus.GaugeOpts{
 		Name: "fleet_workload_update_run_status_last_timestamp_seconds",
-		Help: "Last update timestamp of update run status in seconds",
+		Help: "Last transition timestamp of update run status in seconds",
 	}, []string{"namespace", "name", "state", "condition", "status", "reason", "failureType"})
 
 	// FleetUpdateRunApprovalRequestLatencySeconds tracks how long users take to approve approval requests.
@@ -107,6 +124,8 @@ var (
 func init() {
 	metrics.Registry.MustRegister(
 		FleetPlacementStatusLastTimeStampSeconds,
+		FleetPlacementPolicyStatusLastTimestampSeconds,
+		FleetPlacementPolicyActiveClusterClaims,
 		FleetEvictionStatus,
 		FleetUpdateRunStatusLastTimestampSeconds,
 		FleetUpdateRunApprovalRequestLatencySeconds,

@@ -20,12 +20,14 @@ import (
 	"context"
 	"errors"
 	"reflect"
+	"strings"
 	"testing"
 
 	"github.com/google/go-cmp/cmp"
 	"github.com/google/go-cmp/cmp/cmpopts"
 	appv1 "k8s.io/api/apps/v1"
 	corev1 "k8s.io/api/core/v1"
+	"k8s.io/apimachinery/pkg/api/meta"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
 	"k8s.io/apimachinery/pkg/runtime"
@@ -2586,5 +2588,31 @@ func TestIsSelectNamespaceOnly(t *testing.T) {
 				t.Errorf("isSelectNamespaceOnly() = %v, want %v", got, tt.want)
 			}
 		})
+	}
+}
+
+// TestReconcileEnqueuesPlacementPolicies pins that every resource change is handed to the
+// placement policy hook first, with the key alone, and that a failing hook is only logged: the
+// change still goes on to the placements, here as far as the REST mapping this test leaves empty.
+func TestReconcileEnqueuesPlacementPolicies(t *testing.T) {
+	key := keys.ClusterWideKey{ResourceIdentifier: placementv1beta1.ResourceIdentifier{Version: "v1", Kind: "ConfigMap", Namespace: "team-a", Name: "app"}}
+	hookErr := errors.New("the policy list is unwell")
+	var got []keys.ClusterWideKey
+	r := &Reconciler{
+		RestMapper: meta.NewDefaultRESTMapper(nil),
+		EnqueuePlacementPolicies: func(_ context.Context, k keys.ClusterWideKey) error {
+			got = append(got, k)
+			return hookErr
+		},
+	}
+	_, err := r.Reconcile(context.Background(), key)
+	if errors.Is(err, hookErr) {
+		t.Fatalf("Reconcile() = %v, want the hook error logged, not returned", err)
+	}
+	if err == nil || !strings.Contains(err.Error(), "failed to get GVR") {
+		t.Errorf("Reconcile() = %v, want the REST mapping error from the placement path the change went on to", err)
+	}
+	if diff := cmp.Diff([]keys.ClusterWideKey{key}, got); diff != "" {
+		t.Errorf("Reconcile() handed the hook (-want +got):\n%s", diff)
 	}
 }

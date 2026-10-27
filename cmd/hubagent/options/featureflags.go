@@ -46,6 +46,23 @@ type FeatureFlags struct {
 	// with minimal disruptions.
 	EnableEvictionAPIs bool
 
+	// Enable the experimental FEP-0001 placement policy APIs (placement.kubefleet.dev/v1alpha1) in
+	// the KubeFleet hub agent or not.
+	EnablePlacementPolicyAPIs bool
+
+	// Enable the experimental annotation-based placement experience in the KubeFleet hub agent or not.
+	//
+	// The experience places resources that carry the kubefleet.dev/cluster-selectors annotation through
+	// generated placement policies. It requires the placement policy APIs to be enabled.
+	//
+	// Important: only enable this experience if KubeFleet runs in a fully trusted environment, or if the hub
+	// cluster has the workload controllers of kube-controller-manager (e.g., the Deployment, StatefulSet,
+	// DaemonSet, and CronJob controllers) disabled and the protection validating admission policy
+	// (DenyPlacementAnnotationIfNoPlacementPolicyAPIAccess) installed; otherwise, any user who can write a
+	// resource in the hub cluster can have it placed across the fleet. Note that setting the EnableWorkload
+	// option to false does not disable these controllers.
+	EnableAnnotationBasedPlacement bool
+
 	// Enable the ResourcePlacement API support in the KubeFleet hub agent or not.
 	//
 	// ResourcePlacement APIs are a set of KubeFleet APIs for processing namespace scoped resource placements.
@@ -66,6 +83,22 @@ func (o *FeatureFlags) AddFlags(flags *flag.FlagSet) {
 		"enable-cluster-inventory-apis",
 		true,
 		"Enable the ClusterInventory API support in the KubeFleet hub agent or not.",
+	)
+
+	// Note (chenyu1): backport only: placement policy APIs are disabled by default in the backport for now.
+	flags.BoolVar(
+		&o.EnablePlacementPolicyAPIs,
+		"enable-placement-policy-apis",
+		false,
+		"Enable the experimental FEP-0001 placement policy APIs (placement.kubefleet.dev/v1alpha1) in the KubeFleet hub agent or not.",
+	)
+
+	// Note (chenyu1): backport only: placement policy APIs are disabled by default in the backport for now.
+	flags.BoolVar(
+		&o.EnableAnnotationBasedPlacement,
+		"enable-annotation-based-placement",
+		false,
+		"Enable the experimental annotation-based placement experience in the KubeFleet hub agent or not. The experience places resources that carry the kubefleet.dev/cluster-selectors annotation through generated placement policies, and requires the placement policy APIs to be enabled. Only enable it if KubeFleet runs in a fully trusted environment, or if the hub cluster has the workload controllers of kube-controller-manager (e.g., the Deployment, StatefulSet, DaemonSet, and CronJob controllers) disabled and the protection validating admission policy (DenyPlacementAnnotationIfNoPlacementPolicyAPIAccess) installed; otherwise, any user who can write a resource in the hub cluster can have it placed across the fleet. Note that setting --enable-workload to false does not disable these controllers.",
 	)
 
 	flags.BoolVar(

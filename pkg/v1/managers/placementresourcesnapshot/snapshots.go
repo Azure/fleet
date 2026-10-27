@@ -17,6 +17,7 @@ limitations under the License.
 package placementresourcesnapshot
 
 import (
+	"context"
 	"crypto/sha256"
 	"fmt"
 	"strconv"
@@ -26,6 +27,7 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/klog/v2"
+	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/controller/controllerutil"
 )
 
@@ -53,6 +55,7 @@ func primaryPlacementResourceSnapshot(
 	}
 	annotations := map[string]string{
 		placementv1alpha1.PlacementResourceSnapshotContentsHashAnnotationKey: resourceHash,
+		placementv1alpha1.PlacementResourceSnapshotOwnedByAnnotationKey:      ownerPlacementPolicy.GetName(),
 	}
 
 	var primarySnapshot placementv1alpha1.PlacementResourceSnapshotAccessor
@@ -103,6 +106,7 @@ func secondaryPlacementResourceSnapshot(
 	}
 	annotations := map[string]string{
 		placementv1alpha1.PlacementResourceSnapshotContentsHashAnnotationKey: resourceHash,
+		placementv1alpha1.PlacementResourceSnapshotOwnedByAnnotationKey:      ownerPlacementPolicy.GetName(),
 	}
 
 	var secondarySnapshot placementv1alpha1.PlacementResourceSnapshotAccessor
@@ -151,4 +155,33 @@ func placementPolicyOwnerLabelVal(placementPolicy placementv1alpha1.PlacementPol
 	hash := fmt.Sprintf("%x", sha256.Sum256([]byte(name)))[:placementPolicyOwnerLabelHashLen]
 	prefixLen := placementPolicyOwnerLabelValLenLimit - placementPolicyOwnerLabelHashLen - 1
 	return fmt.Sprintf("%s-%s", name[:prefixLen], hash)
+}
+
+// listPlacementResourceSnapshots lists cluster-scoped or namespace-scoped placement resource snapshots using the
+// given list options, and returns them as accessors.
+//
+// Note that this method reads from the cache; field matchers (custom field indexes) can be used in the list options.
+func (m *Manager) listPlacementResourceSnapshots(ctx context.Context,
+	isClusterScoped bool, listOpts []client.ListOption) ([]placementv1alpha1.PlacementResourceSnapshotAccessor, error) {
+	var snapshots []placementv1alpha1.PlacementResourceSnapshotAccessor
+	if isClusterScoped {
+		snapshotList := &placementv1alpha1.ClusterPlacementResourceSnapshotList{}
+		if err := m.hubClient.List(ctx, snapshotList, listOpts...); err != nil {
+			return nil, errors.NewAPIServerError(err, "failed to list cluster placement resource snapshots", true)
+		}
+		snapshots = make([]placementv1alpha1.PlacementResourceSnapshotAccessor, len(snapshotList.Items))
+		for i := range snapshotList.Items {
+			snapshots[i] = &snapshotList.Items[i]
+		}
+	} else {
+		snapshotList := &placementv1alpha1.PlacementResourceSnapshotList{}
+		if err := m.hubClient.List(ctx, snapshotList, listOpts...); err != nil {
+			return nil, errors.NewAPIServerError(err, "failed to list placement resource snapshots", true)
+		}
+		snapshots = make([]placementv1alpha1.PlacementResourceSnapshotAccessor, len(snapshotList.Items))
+		for i := range snapshotList.Items {
+			snapshots[i] = &snapshotList.Items[i]
+		}
+	}
+	return snapshots, nil
 }

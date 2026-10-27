@@ -1,0 +1,370 @@
+/*
+Copyright 2026 The KubeFleet Authors.
+
+Licensed under the Apache License, Version 2.0 (the "License");
+you may not use this file except in compliance with the License.
+You may obtain a copy of the License at
+
+    http://www.apache.org/licenses/LICENSE-2.0
+
+Unless required by applicable law or agreed to in writing, software
+distributed under the License is distributed on an "AS IS" BASIS,
+WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+See the License for the specific language governing permissions and
+limitations under the License.
+*/
+
+// Package placementpolicy implements the FEP-0001 placement policy controller, which reconciles
+// the PlacementPolicy and ClusterPlacementPolicy API objects (placement.kubefleet.dev API group):
+// it resolves cluster selectors against the current member cluster inventory and reports
+// scheduling status on the policy objects.
+package placementpolicy
+
+import (
+	"context"
+	"time"
+
+	apiequality "k8s.io/apimachinery/pkg/api/equality"
+	"k8s.io/apimachinery/pkg/api/errors"
+	"k8s.io/apimachinery/pkg/api/meta"
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/client-go/util/workqueue"
+	"k8s.io/klog/v2"
+	runtime "sigs.k8s.io/controller-runtime"
+	"sigs.k8s.io/controller-runtime/pkg/builder"
+	"sigs.k8s.io/controller-runtime/pkg/client"
+	"sigs.k8s.io/controller-runtime/pkg/handler"
+
+	clusterv1beta1 "go.goms.io/fleet/apis/cluster/v1beta1"
+	kfplacementv1alpha1 "go.goms.io/fleet/apis/kubefleet.dev/placement/v1alpha1"
+	"go.goms.io/fleet/pkg/scheduler/clustereligibilitychecker"
+	kferrors "go.goms.io/fleet/pkg/utils/errors"
+	"go.goms.io/fleet/pkg/v1/utils/bindingmanager"
+	"go.goms.io/fleet/pkg/v1/utils/sourcequeue"
+)
+
+const (
+	// unfulfilledRequeueAfter is the wait before re-evaluating a policy that has not reached
+	// all of its desired cluster counts; it backstops cluster eligibility transitions that do
+	// not surface as watch events (e.g., a member agent heartbeat going stale).
+	unfulfilledRequeueAfter = 2 * time.Minute
+	// fulfilledRequeueAfter is the wait before re-evaluating a fulfilled policy, for the same
+	// backstop reason: a cluster that silently stops heartbeating emits no event, yet it must
+	// eventually stop counting toward fulfillment. Set to half the eligibility checker's
+	// 5-minute heartbeat timeout so the worst-case detection latency stays near the timeout
+	// itself (timeout + one requeue period, ~7.5 minutes) instead of doubling it.
+	fulfilledRequeueAfter = 150 * time.Second
+	// bindingManagerRetryBase and bindingManagerRetryMax bound the exponential backoff before
+	// retrying a binding change that found the policy's binding manager role held by another
+	// process (e.g., a rollout in progress). The FEP has contenders back off and retry rather
+	// than wait on the role; the backoff keeps a long rollout from being polled at a fixed pace.
+	bindingManagerRetryBase = 5 * time.Second
+	bindingManagerRetryMax  = 5 * time.Minute
+)
+
+// Reconciler reconciles PlacementPolicy and ClusterPlacementPolicy objects.
+//
+// One Reconciler instance serves both APIs: requests for cluster-scoped ClusterPlacementPolicy
+// objects carry no namespace, which is how the two are told apart.
+type Reconciler struct {
+	client.Client
+
+	// uncachedReader reads directly from the API server; it gates the claim cleanup
+	// finalizer release, where a stale cache read could orphan a just-created claim.
+	uncachedReader client.Reader
+
+	eligibility eligibilityChecker
+
+	// snapshots provides the resource snapshot a new binding rolls out.
+	snapshots snapshotter
+
+	// roleBackoff paces the retries of a policy whose binding manager role another process
+	// holds; a round that completes resets the policy's backoff.
+	roleBackoff workqueue.TypedRateLimiter[runtime.Request]
+
+	// policySource and clusterPolicySource carry the re-queues EnqueuePoliciesSelecting makes when
+	// a selected resource changes, one per controller, since each controller has its own queue.
+	policySource        sourcequeue.Queue[runtime.Request]
+	clusterPolicySource sourcequeue.Queue[runtime.Request]
+}
+
+// NewReconciler returns a Reconciler that judges cluster fulfillment with the scheduler's
+// standard cluster eligibility gate and takes resource snapshots through the given manager.
+func NewReconciler(c client.Client, uncachedReader client.Reader, snapshots snapshotter) *Reconciler {
+	return &Reconciler{
+		Client:         c,
+		uncachedReader: uncachedReader,
+		eligibility:    clustereligibilitychecker.New(),
+		snapshots:      snapshots,
+		roleBackoff:    workqueue.NewTypedItemExponentialFailureRateLimiter[runtime.Request](bindingManagerRetryBase, bindingManagerRetryMax),
+	}
+}
+
+// Reconcile runs a single reconciliation round for a PlacementPolicy or ClusterPlacementPolicy object.
+func (r *Reconciler) Reconcile(ctx context.Context, req runtime.Request) (runtime.Result, error) {
+	startTime := time.Now()
+	klog.V(2).InfoS("Placement policy reconciliation starts", "placementPolicy", req.NamespacedName)
+	defer func() {
+		latency := time.Since(startTime).Milliseconds()
+		klog.V(2).InfoS("Placement policy reconciliation ends", "placementPolicy", req.NamespacedName, "latency", latency)
+	}()
+
+	policy, err := r.fetchPolicy(ctx, req)
+	if err != nil {
+		if errors.IsNotFound(err) {
+			klog.V(4).InfoS("Ignoring not-found placement policy", "placementPolicy", req.NamespacedName)
+			// The policy is gone for good; stop reporting metrics for it, and drop its role
+			// backoff so that a policy recreated under the name starts afresh.
+			forgetPolicyMetrics(req.Namespace, req.Name)
+			r.roleBackoff.Forget(req)
+			return runtime.Result{}, nil
+		}
+		klog.ErrorS(err, "Failed to get the placement policy object", append(kferrors.Args(err), "placementPolicy", req.NamespacedName)...)
+		return runtime.Result{}, err
+	}
+	if !policy.GetDeletionTimestamp().IsZero() {
+		// Cluster claims cannot be owner-referenced by the policy (cross-scope), so cleanup
+		// is finalizer-driven.
+		return runtime.Result{}, r.cleanupClaims(ctx, policy)
+	}
+
+	memberClusters := &clusterv1beta1.MemberClusterList{}
+	if err := r.List(ctx, memberClusters); err != nil {
+		wrappedErr := kferrors.NewAPIServerError(err, "failed to list member clusters", true, "placementPolicy", req.NamespacedName)
+		klog.ErrorS(wrappedErr, "Failed to list member clusters", kferrors.Args(wrappedErr)...)
+		return runtime.Result{}, wrappedErr
+	}
+	var mostRecentClusterCreation metav1.Time
+	for i := range memberClusters.Items {
+		if ts := memberClusters.Items[i].CreationTimestamp; ts.After(mostRecentClusterCreation.Time) {
+			mostRecentClusterCreation = ts
+		}
+	}
+
+	existingBindings, err := r.listBindings(ctx, policy)
+	if err != nil {
+		klog.ErrorS(err, "Failed to list the placement bindings", append(kferrors.Args(err), "placementPolicy", req.NamespacedName)...)
+		return runtime.Result{}, err
+	}
+	bound := make(map[string]metav1.Time, len(existingBindings))
+	recorded := make(map[string][]kfplacementv1alpha1.ClusterSelectorWithTermsOnly, len(existingBindings))
+	for _, binding := range existingBindings {
+		bound[binding.GetSpec().ClusterName] = binding.GetCreationTimestamp()
+		recorded[binding.GetSpec().ClusterName] = binding.GetSpec().ClusterSelectors
+	}
+
+	outcomes, err := evaluateSelectors(policy.GetSpec(), memberClusters.Items, r.eligibility, recorded)
+	if err != nil {
+		// Selector evaluation fails only on invalid selector contents (e.g., an operator
+		// applied to a key it does not support); retrying cannot help until the spec changes,
+		// so the error surfaces on the status instead of the reconcile loop. Outstanding
+		// claims are deliberately left untouched: their specs reflect the last valid
+		// selectors.
+		klog.ErrorS(err, "Failed to evaluate the cluster selectors", "placementPolicy", req.NamespacedName)
+		// A role a failed binding write left held is kept for the retry to resume under; with the
+		// selectors invalid no binding change can follow until the spec is fixed, so the role is
+		// released rather than left blocking the policy's rollouts in the meantime.
+		if holdsBindingManagerRole(policy) {
+			if err := bindingmanager.RelinquishRoleFor(ctx, r.Client, policy, controllerName, *policyReference(policy)); err != nil {
+				return runtime.Result{}, err
+			}
+		}
+		return runtime.Result{}, r.updateStatus(ctx, policy, nil, nil, invalidSelectorsCondition(policy.GetGeneration(), err), nil, nil)
+	}
+
+	clustersByName := make(map[string]*clusterv1beta1.MemberCluster, len(memberClusters.Items))
+	for i := range memberClusters.Items {
+		clustersByName[memberClusters.Items[i].Name] = &memberClusters.Items[i]
+	}
+	desiredBindings := chooseClusters(outcomes, bound, clustersByName)
+
+	// The latest resource snapshot is what new bindings roll out and what the status reports the
+	// target clusters against. Per the FEP the first one is taken when the policy is created;
+	// afterwards a resource change alone takes none, it only shows as the snapshot going stale.
+	//
+	// ponytail: every round re-hashes the selected resources from the informer cache and, when
+	// they still match, confirms with one uncached metadata read; cheap per policy, but it runs on
+	// every member cluster event fanned out to every policy. Cache the verdict per resource
+	// version if that shows up in profiles.
+	//
+	// Scheduling changes apply independently of resource changes, per the FEP, so a round that
+	// cannot get the snapshot still unbinds, updates, and refreshes claims and the Scheduled
+	// status; it only holds back new bindings. A transient failure leaves the resource status as it
+	// was, but one that the retries cannot fix on their own, a selected resource that is gone or a
+	// selection the user got wrong, reports the target clusters as not synchronized: the last
+	// round's verdict no longer describes the selected resources. Their availability depends only
+	// on the bindings, so it is still reported.
+	var latestRevision string
+	var resources *resourceStatus
+	snapshots, current, snapshotErr := r.snapshots.SnapshotResourcesIfNoSnapshotExists(ctx, policy)
+	if snapshotErr == nil && len(snapshots) == 0 {
+		snapshotErr = kferrors.NewUnexpectedError(nil, "the snapshot manager returned no placement resource snapshot", "placementPolicy", klog.KObj(policy))
+	}
+	var selectionErr error
+	if kferrors.Category(snapshotErr) == kferrors.ErrCategoryUser || errors.IsNotFound(snapshotErr) {
+		selectionErr = snapshotErr
+	}
+	if snapshotErr == nil {
+		latestRevision = snapshots[0].GetName()
+		// The summary reads the bindings as listed, before reconcileBindings updates them, which is why
+		// it skips a binding whose sync strategy is still the old one: its conditions hold for its
+		// current generation but describe the old strategy.
+		summary := summarizeResourceStatus(latestRevision, current, policy.GetSpec().SyncStrategy, desiredBindings, existingBindings)
+		resources = &summary
+	} else if selectionErr != nil {
+		summary := summarizeAvailability(policy.GetSpec().SyncStrategy, desiredBindings, existingBindings)
+		resources = &summary
+	}
+	roleHeld, bindingErr := r.reconcileBindings(ctx, policy, outcomes, desiredBindings, existingBindings, latestRevision)
+
+	activeClaims, claimErr := r.reconcileClaims(ctx, policy, outcomes, mostRecentClusterCreation)
+	// The scheduling status is written even when claim reconciliation failed partway, but the
+	// claim count is published only from a completed round: a failed round returns whatever it
+	// had counted when it stopped, which would misreport the claims that the rest of the round
+	// never reached. A nil count leaves the last completed round's value standing; the retry
+	// corrects it.
+	reportedClaims := &activeClaims
+	if claimErr != nil {
+		reportedClaims = nil
+	}
+	if err := r.updateStatus(ctx, policy, outcomes, reportedClaims, scheduledCondition(policy.GetGeneration(), outcomes), resources, selectionErr); err != nil {
+		return runtime.Result{}, err
+	}
+	if bindingErr != nil {
+		klog.ErrorS(bindingErr, "Failed to reconcile the placement bindings", append(kferrors.Args(bindingErr), "placementPolicy", req.NamespacedName)...)
+	}
+	if snapshotErr != nil {
+		klog.ErrorS(snapshotErr, "Failed to take the latest resource snapshot", append(kferrors.Args(snapshotErr), "placementPolicy", req.NamespacedName)...)
+		return runtime.Result{}, snapshotErr
+	}
+	if bindingErr != nil {
+		return runtime.Result{}, bindingErr
+	}
+	if claimErr != nil {
+		klog.ErrorS(claimErr, "Failed to reconcile the cluster claims", append(kferrors.Args(claimErr), "placementPolicy", req.NamespacedName)...)
+		return runtime.Result{}, claimErr
+	}
+	if roleHeld {
+		klog.V(2).InfoS("The binding manager role is held by another process; will retry the binding changes", "placementPolicy", req.NamespacedName)
+		return runtime.Result{RequeueAfter: r.roleBackoff.When(req)}, nil
+	}
+	r.roleBackoff.Forget(req)
+
+	requeueAfter := fulfilledRequeueAfter
+	for i := range outcomes {
+		if !outcomes[i].satisfiedInFull() {
+			requeueAfter = unfulfilledRequeueAfter
+			break
+		}
+	}
+	return runtime.Result{RequeueAfter: requeueAfter}, nil
+}
+
+// updateStatus writes the scheduling outcome onto the policy status, skipping the API call when
+// nothing has changed. A nil outcome list clears the cluster counts (used when the selectors
+// cannot be evaluated at all); a nil activeClaims leaves the current claim count untouched, and a
+// nil resources leaves the resource revision, the synchronization and availability counts, and
+// their conditions untouched. A non-nil selectionErr reports the ResourceCollected and
+// Synchronized conditions false and leaves the resource revision as it was, while the counts and
+// the Available condition still come from resources.
+func (r *Reconciler) updateStatus(ctx context.Context, policy kfplacementv1alpha1.PlacementPolicyAccessor, outcomes []selectorOutcome, activeClaims *int32, scheduledCond metav1.Condition, resources *resourceStatus, selectionErr error) error {
+	status := policy.GetStatus()
+	observedStatus := status.DeepCopy()
+
+	if outcomes == nil {
+		status.DesiredClusters = nil
+		status.ScheduledClusters = nil
+	} else {
+		desired, scheduled := aggregateCounts(outcomes)
+		status.DesiredClusters = &desired
+		status.ScheduledClusters = &scheduled
+	}
+	if activeClaims != nil {
+		status.ActiveClusterClaims = activeClaims
+	}
+	meta.SetStatusCondition(&status.Conditions, scheduledCond)
+	if resources != nil {
+		if selectionErr == nil {
+			status.LatestResourceRevisionName = &resources.latestRevision
+			meta.SetStatusCondition(&status.Conditions, resourceCollectedCondition(policy.GetGeneration(), nil))
+			meta.SetStatusCondition(&status.Conditions, resources.synchronizedCondition(policy.GetGeneration()))
+		}
+		status.SynchronizedClusters = &resources.synchronized
+		status.ResourcesAvailableClusters = &resources.available
+		meta.SetStatusCondition(&status.Conditions, resources.availableCondition(policy.GetGeneration()))
+	}
+	if selectionErr != nil {
+		meta.SetStatusCondition(&status.Conditions, resourceCollectedCondition(policy.GetGeneration(), selectionErr))
+		meta.SetStatusCondition(&status.Conditions, selectionFailedCondition(policy.GetGeneration(), selectionErr))
+	}
+
+	reportPolicyMetrics(policy, status, scheduledCond)
+
+	if apiequality.Semantic.DeepEqual(observedStatus, status) {
+		return nil
+	}
+	if err := r.Status().Update(ctx, policy); err != nil {
+		wrappedErr := kferrors.NewAPIServerError(err, "failed to update the placement policy status", false, "placementPolicy", client.ObjectKeyFromObject(policy))
+		klog.ErrorS(wrappedErr, "Failed to update the placement policy status", kferrors.Args(wrappedErr)...)
+		return wrappedErr
+	}
+	return nil
+}
+
+// fetchPolicy retrieves the policy object for the given request; requests without a namespace
+// concern the cluster-scoped ClusterPlacementPolicy API.
+//
+// The read is categorized as an API server error, which stays recognizable to errors.IsNotFound:
+// it resolves through the wrap, so the caller can still tell a deleted policy from a failed read.
+func (r *Reconciler) fetchPolicy(ctx context.Context, req runtime.Request) (kfplacementv1alpha1.PlacementPolicyAccessor, error) {
+	var policy kfplacementv1alpha1.PlacementPolicyAccessor = &kfplacementv1alpha1.PlacementPolicy{}
+	if req.Namespace == "" {
+		policy = &kfplacementv1alpha1.ClusterPlacementPolicy{}
+	}
+	if err := r.Get(ctx, req.NamespacedName, policy); err != nil {
+		return nil, kferrors.NewAPIServerError(err, "failed to get the placement policy", true, "placementPolicy", req.NamespacedName)
+	}
+	return policy, nil
+}
+
+// SetupWithManagerForPlacementPolicy registers the reconciler with the manager for the
+// namespaced PlacementPolicy API. The reconciler lists cluster claims through a cache field index,
+// so fieldindexers.SetupWithHubAgentControllerManager must have run before the manager starts.
+func (r *Reconciler) SetupWithManagerForPlacementPolicy(mgr runtime.Manager) error {
+	return runtime.NewControllerManagedBy(mgr).
+		Named(controllerName).
+		For(&kfplacementv1alpha1.PlacementPolicy{}).
+		Owns(&kfplacementv1alpha1.PlacementBinding{}, builder.WithPredicates(bindingRelevantChanges())).
+		Watches(
+			&clusterv1beta1.MemberCluster{},
+			handler.EnqueueRequestsFromMapFunc(r.mapMemberClusterToPlacementPolicies),
+			builder.WithPredicates(memberClusterSchedulingRelevantChanges()),
+		).
+		Watches(
+			&kfplacementv1alpha1.ClusterClaim{},
+			handler.EnqueueRequestsFromMapFunc(r.mapClaimToPlacementPolicy),
+		).
+		WatchesRawSource(&r.policySource).
+		Complete(r)
+}
+
+// SetupWithManagerForClusterPlacementPolicy registers the reconciler with the manager for the
+// cluster-scoped ClusterPlacementPolicy API. Like SetupWithManagerForPlacementPolicy, it relies on
+// the cache field indexes of fieldindexers.SetupWithHubAgentControllerManager.
+func (r *Reconciler) SetupWithManagerForClusterPlacementPolicy(mgr runtime.Manager) error {
+	return runtime.NewControllerManagedBy(mgr).
+		Named("cluster-placement-policy-controller").
+		For(&kfplacementv1alpha1.ClusterPlacementPolicy{}).
+		Owns(&kfplacementv1alpha1.ClusterPlacementBinding{}, builder.WithPredicates(bindingRelevantChanges())).
+		Watches(
+			&clusterv1beta1.MemberCluster{},
+			handler.EnqueueRequestsFromMapFunc(r.mapMemberClusterToClusterPlacementPolicies),
+			builder.WithPredicates(memberClusterSchedulingRelevantChanges()),
+		).
+		Watches(
+			&kfplacementv1alpha1.ClusterClaim{},
+			handler.EnqueueRequestsFromMapFunc(r.mapClaimToClusterPlacementPolicy),
+		).
+		WatchesRawSource(&r.clusterPolicySource).
+		Complete(r)
+}

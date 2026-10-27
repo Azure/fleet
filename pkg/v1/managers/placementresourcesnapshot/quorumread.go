@@ -25,13 +25,14 @@ import (
 
 	placementv1alpha1 "go.goms.io/fleet/apis/kubefleet.dev/placement/v1alpha1"
 	errors "go.goms.io/fleet/pkg/utils/errors"
+	"go.goms.io/fleet/pkg/v1/managers/placementresourcesnapshot/uniquename"
 )
 
 func (m *Manager) primaryPlacementResourceSnapshotExistsAtIdx(
 	ctx context.Context,
 	placementPolicy placementv1alpha1.PlacementPolicyAccessor,
 	idx int) (bool, error) {
-	name := uniqueNameForPrimaryPlacementResourceSnapshot(placementPolicy.GetName(), idx)
+	name := uniquename.PrimaryPlacementResourceSnapshotName(placementPolicy.GetName(), placementPolicy.GetUID(), idx)
 	namespace := placementPolicy.GetNamespace()
 
 	kind := placementv1alpha1.ClusterPlacementResourceSnapshotKind

@@ -128,6 +128,8 @@ type FakeManager struct {
 	// InformerSynced controls whether IsInformerSynced returns true or false.
 	// If nil, defaults to true. If set, returns the value for all resources.
 	InformerSynced *bool
+	// CreatedInformers records, in order, the resources passed to CreateInformerForResource.
+	CreatedInformers []informer.APIResourceMeta
 }
 
 func (m *FakeManager) AddDynamicResources(_ []informer.APIResourceMeta, _ cache.ResourceEventHandler, _ bool) {
@@ -189,8 +191,8 @@ func (m *FakeManager) AddEventHandlerToInformer(_ schema.GroupVersionResource, _
 	// No-op for testing
 }
 
-func (m *FakeManager) CreateInformerForResource(_ informer.APIResourceMeta) {
-	// No-op for testing
+func (m *FakeManager) CreateInformerForResource(res informer.APIResourceMeta) {
+	m.CreatedInformers = append(m.CreatedInformers, res)
 }
 
 func (m *FakeManager) IsInformerSet(_ schema.GroupVersionKind) bool {

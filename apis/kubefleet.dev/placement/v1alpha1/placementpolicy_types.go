@@ -38,8 +38,10 @@ const (
 	PlacementPolicyScheduledCondReasonFoundAllClusters         = "FoundAllRequiredClusters"
 	PlacementPolicyScheduledCondReasonFailedToFindSomeClusters = "FailedToFindSomeRequiredClusters"
 
-	PlacementPolicySynchronizedCondReasonAllClustersSynchronized         = "AllClustersSynchronized"
-	PlacementPolicySynchronizedCondReasonFailedToSynchronizeSomeClusters = "FailedToSynchronizeSomeClusters"
+	PlacementPolicySynchronizedCondReasonAllClustersSynchronized             = "AllClustersSynchronized"
+	PlacementPolicySynchronizedCondReasonFailedToSynchronizeSomeClusters     = "FailedToSynchronizeSomeClusters"
+	PlacementPolicySynchronizedCondReasonResourcesChangedPendingRollout      = "ResourcesChangedPendingRollout"
+	PlacementPolicySynchronizedCondReasonSomeClustersOnOlderResourceRevision = "SomeClustersOnOlderResourceRevision"
 
 	PlacementPolicyAvailableCondReasonAllClustersAvailable    = "ResourcesAvailableOnAllClusters"
 	PlacementPolicyAvailableCondReasonSomeClustersUnavailable = "ResourcesUnavailableOnSomeClusters"
@@ -121,7 +123,7 @@ type PlacementPolicySpec struct {
 	// failure recovery purposes; one can inspect them to see the past state of the selected resources,
 	// or roll back to a previous revision if the latest revision is not working as expected.
 	//
-	// It is also possible to manually request a new resource revision to be created.
+	// The limit is a soft constraint; KubeFleet may retain more revisions than the specified limit as necessary.
 	//
 	// The default value is 3.
 	//
@@ -144,12 +146,20 @@ type PlacementPolicySpec struct {
 	//
 	// +kubebuilder:validation:Optional
 	// +kubebuilder:validation:MaxItems=10
-	// +kubebuilder:validation:XValidation:rule="self.all(t, t.key != '' || (t.operator == 'Exists' && t.value == ''))",message="operator must be Exists and value must be empty when key is empty"
-	// +kubebuilder:validation:XValidation:rule="self.all(t, t.operator != 'Exists' || t.value == '')",message="value must be empty when operator is Exists"
 	Tolerations []Toleration `json:"tolerations,omitempty"`
 }
 
-// +kubebuilder:validation:XValidation:rule="!has(self.minCount) || !has(self.count) || (type(self.count) == string && self.count == 'All') || (type(self.count) == int && self.minCount <= self.count) || (type(self.count) == string && self.count.matches('^[0-9]+$') && self.minCount <= int(self.count))",message="minCount must be less than or equal to count when count is not All"
+// A string form of count is compared against minCount only when it is a numeric one of at most the
+// three digits that the count field's own pattern permits -- the {1,3} bound below must move with
+// that pattern's ceiling. Any other string ("All", or junk the pattern rejects) passes this rule
+// vacuously, so that the field's own validation reports the real problem alone. The previous,
+// unbounded digit guard let a string longer than an int64 reach int(), turning a plain pattern
+// violation into an opaque evaluation error beside it. The digit class is spelled [0-9]{1,3}
+// rather than mirroring the pattern's [1-9][0-9]{0,2} verbatim because the CEL cost estimator
+// prices a regex by its length against an unbounded string -- an int-or-string is opaque to the
+// sibling MaxLength -- and the longer spelling does not fit the budget.
+
+// +kubebuilder:validation:XValidation:rule="!has(self.minCount) || !has(self.count) || (type(self.count) == int && self.minCount <= self.count) || (type(self.count) == string && (!self.count.matches('^[0-9]{1,3}$') || self.minCount <= int(self.count)))",message="minCount must be less than or equal to count"
 type ClusterSelector struct {
 	// A list of terms that form the selector. The terms are ORed, i.e., a cluster would match the selector
 	// if it matches any of the terms.
@@ -160,6 +170,12 @@ type ClusterSelector struct {
 	// +kubebuilder:validation:MaxItems=5
 	Terms []ClusterLabelAndPropertySelectorTerm `json:"terms,omitempty"`
 
+	// The two validation markers below split the work by form: a pattern constrains only the string
+	// form of an int-or-string ("All", and digits arriving as a quoted string), so the CEL rule is
+	// what bounds the integer form. Without it, an unquoted count outside 1-999 is accepted while
+	// the same number in quotes is rejected. This block is deliberately detached from the field's
+	// doc comment: it is rationale for maintainers, not schema documentation for users.
+
 	// The desired number of clusters that KubeFleet should select based on the given terms.
 	//
 	// The default value is 1. To select all clusters that match the given terms, use the value "All".
@@ -167,7 +183,9 @@ type ClusterSelector struct {
 	// +kubebuilder:validation:Optional
 	// +kubebuilder:default=1
 	// +kubebuilder:validation:XIntOrString
+	// +kubebuilder:validation:MaxLength=3
 	// +kubebuilder:validation:Pattern="^([1-9][0-9]{0,2}|All)$"
+	// +kubebuilder:validation:XValidation:rule="type(self) == int ? self >= 1 && self <= 999 : true",message="count must be between 1 and 999, or \"All\""
 	Count *intstr.IntOrString `json:"count,omitempty"`
 
 	// The minimum number of clusters that KubeFleet should select based on the given terms, when KubeFleet is not able
@@ -486,6 +504,14 @@ const (
 	WhenNamespaceDoesNotExistOptionReportError     WhenNamespaceDoesNotExistOption = "ReportError"
 )
 
+// Key and Value are optional with no defaults, so the rules below must guard them with has(); reading
+// an absent field in CEL is an evaluation error, which the API server reports as a rejection.
+//
+// The rules use size() rather than comparing against an empty string literal: they sit in the doc
+// comment of the type, where gofmt rewrites two consecutive single quotes into a typographic quote.
+
+// +kubebuilder:validation:XValidation:rule="(has(self.key) && size(self.key) > 0) || self.operator == 'Exists'",message="operator must be Exists when key is empty"
+// +kubebuilder:validation:XValidation:rule="self.operator != 'Exists' || !has(self.value) || size(self.value) == 0",message="value must be empty when operator is Exists"
 type Toleration struct {
 	// The key of the taint that the toleration applies to.
 	//
@@ -547,7 +573,10 @@ type PlacementPolicyStatus struct {
 	// The number of clusters that have resources in the available state, as verified by KubeFleet's availability check.
 	ResourcesAvailableClusters *int32 `json:"resourcesAvailableClusters,omitempty"`
 
-	// The number of active cluster claims that have been submitted by this placement.
+	// The number of active cluster claims that have been submitted by this placement. A claim
+	// that is being withdrawn still counts as active until KubeFleet observes it gone --
+	// whether a provisioner finalizer holds it or the withdrawal simply has not been confirmed
+	// yet -- as it continues to occupy the placement's claim budget.
 	ActiveClusterClaims *int32 `json:"activeClusterClaims,omitempty"`
 
 	// The binding manager that is currently managing the bindings for this placement.

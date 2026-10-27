@@ -19,6 +19,7 @@ package v1alpha1
 import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
+	"k8s.io/apimachinery/pkg/types"
 )
 
 const (
@@ -55,6 +56,11 @@ const (
 )
 
 const (
+	LastAppliedConfigAnnotationKey       = "placement.kubefleet.dev/last-applied-configuration"
+	LastAppliedManifestHashAnnotationKey = "placement.kubefleet.dev/manifest-hash"
+)
+
+const (
 	// The condition types for the Work API.
 	WorkCondTypeApplied   = "Applied"
 	WorkCondTypeAvailable = "Available"
@@ -64,13 +70,22 @@ const (
 	ManifestCondTypeAvailable = "Available"
 )
 
+const (
+	WorkAppliedCondAllManifestsAppliedReason    = "AllManifestsApplied"
+	WorkAppliedCondNotAllManifestsAppliedReason = "SomeManifestsAreNotYetApplied"
+
+	WorkAvailableCondAllManifestsAvailableReason    = "AllManifestsAvailable"
+	WorkAvailableCondNotAllManifestsAvailableReason = "SomeManifestsAreNotYetAvailable"
+	WorkAvailableCondNotAllManifestsTrackableReason = "SomeManifestsAreNotTrackable"
+)
+
 // Work is the KubeFleet API used for synchronizing resources to place between
 // the hub cluster and a member cluster in the member cluster reserved namespace.
 //
 // +genclient
 // +kubebuilder:object:root=true
 // +kubebuilder:subresource:status
-// +kubebuilder:resource:scope=Namespaced,categories={kubefleet, kubefleet-placement}
+// +kubebuilder:resource:scope=Namespaced,categories={kubefleet, kubefleet-placement},shortName=kfwork
 // +kubebuilder:storageversion
 // +k8s:deepcopy-gen:interfaces=k8s.io/apimachinery/pkg/runtime.Object
 type Work struct {
@@ -201,21 +216,24 @@ type ManifestIdentifier struct {
 	Namespace string `json:"namespace,omitempty"`
 
 	// The name of the manifest.
-	// +kubebuilder:validation:Required
-	Name string `json:"name"`
+	// +kubebuilder:validation:Optional
+	Name string `json:"name,omitempty"`
 
 	// The API group, version, kind, and resource of the manifest.
+	//
+	// Note that runtime.RawExtension, which is used to store manifests, has additional validation on the manifest
+	// data (e.g., API Group/Version and Kind must be set; they are not guaranteed to be valid though).
 
 	// +kubebuilder:validation:Optional
 	APIGroup string `json:"apiGroup,omitempty"`
 
 	// +kubebuilder:validation:Required
-	APIVersion string `json:"apiVersion,omitempty"`
+	APIVersion string `json:"apiVersion"`
 
 	// +kubebuilder:validation:Required
-	Kind string `json:"kind,omitempty"`
+	Kind string `json:"kind"`
 
-	// +kubebuilder:validation:Required
+	// +kubebuilder:validation:Optional
 	Resource string `json:"resource,omitempty"`
 }
 
@@ -231,7 +249,100 @@ type WorkList struct {
 	Items []Work `json:"items"`
 }
 
+// AppliedWork is the KubeFleet API that serves as owners for manifests applied to a member cluster via
+// a work object.
+//
+// +genclient
+// +kubebuilder:object:root=true
+// +kubebuilder:subresource:status
+// +kubebuilder:resource:scope=Cluster,categories={kubefleet, kubefleet-placement},shortName=kfappliedwork
+// +kubebuilder:storageversion
+// +k8s:deepcopy-gen:interfaces=k8s.io/apimachinery/pkg/runtime.Object
+type AppliedWork struct {
+	metav1.TypeMeta   `json:",inline"`
+	metav1.ObjectMeta `json:"metadata,omitempty"`
+
+	// Spec represents the desired configuration of AppliedWork.
+	// +kubebuilder:validation:Required
+	Spec AppliedWorkSpec `json:"spec"`
+
+	// Status represents the current status of AppliedWork.
+	// +kubebuilder:validation:Optional
+	Status AppliedWorkStatus `json:"status,omitempty"`
+}
+
+type AppliedWorkSpec struct {
+	// The name of the corresponding work object. Note that the object is on the KubeFleet hub cluster.
+	//
+	// +kubebuilder:validation:Required
+	WorkName string `json:"workName"`
+
+	// The namespace of the corresponding work object. Note that the object is on the KubeFleet hub cluster.
+	//
+	// +kubebuilder:validation:Required
+	WorkNamespace string `json:"workNamespace"`
+}
+
+type AppliedWorkStatus struct {
+	// A list of applied manifests. This list is populated for informational purposes only.
+	//
+	// +kubebuilder:validation:Optional
+	AppliedResources []AppliedResource `json:"appliedResources,omitempty"`
+}
+
+type AppliedResource struct {
+	// The ID of the applied manifest.
+	AppliedResourceIdentifier `json:",inline"`
+
+	// The UID of the applied manifest.
+	//
+	// +kubebuilder:validation:Required
+	UID types.UID `json:"uid,omitempty"`
+}
+
+type AppliedResourceIdentifier struct {
+	// The ordinal of the manifest.
+	//
+	// +kubebuilder:validation:Required
+	Ordinal int `json:"ordinal"`
+
+	// The namespace of the manifest.
+	//
+	// +kubebuilder:validation:Optional
+	Namespace string `json:"namespace,omitempty"`
+
+	// The name of the manifest.
+	// +kubebuilder:validation:Required
+	Name string `json:"name"`
+
+	// The API group, version, kind, and resource of the manifest.
+
+	// +kubebuilder:validation:Optional
+	APIGroup string `json:"apiGroup,omitempty"`
+
+	// +kubebuilder:validation:Required
+	APIVersion string `json:"apiVersion"`
+
+	// +kubebuilder:validation:Required
+	Kind string `json:"kind"`
+
+	// +kubebuilder:validation:Required
+	Resource string `json:"resource"`
+}
+
+// AppliedWorkList contains a list of AppliedWork.
+//
+// +kubebuilder:object:root=true
+// +kubebuilder:resource:scope=Cluster
+// +k8s:deepcopy-gen:interfaces=k8s.io/apimachinery/pkg/runtime.Object
+type AppliedWorkList struct {
+	metav1.TypeMeta `json:",inline"`
+	metav1.ListMeta `json:"metadata,omitempty"`
+
+	Items []AppliedWork `json:"items"`
+}
+
 // Set up the API types with the scheme builder.
 func init() {
-	SchemeBuilder.Register(&Work{}, &WorkList{})
+	SchemeBuilder.Register(&Work{}, &WorkList{}, &AppliedWork{}, &AppliedWorkList{})
 }

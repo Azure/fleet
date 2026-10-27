@@ -74,9 +74,36 @@ jobs:
           KUBEFLEET_CI_WORK_APPLIER_RUN_WITH_PRIORITY_QUEUE=true ginkgo -v -p --procs=4 --race --cover -coverprofile=work-applier-it-no-pri-q-coverage.out ./pkg/controllers/workapplier/
         env:
           KUBEFLEET_CI_TEST_RUNNER_NAME: 'ginkgo'
+
+      # The staged update run controller (v1) integration tests also use in-memory Kubernetes environment setup (one
+      # per Ginkgo process), and take too long to run serially (some of them wait for the per-cluster wait time limit
+      # of at least one minute to elapse); run the suite with parallel Ginkgo processes instead.
+      - name: Run staged update run controller (v1) unit and integration tests with Ginkgo CLI & generate coverage
+        run: |
+          ginkgo -v -p --procs=4 --race --cover -coverprofile=staged-update-run-it-coverage.out ./pkg/v1/controllers/stagedupdaterun/
+        env:
+          KUBEFLEET_CI_TEST_RUNNER_NAME: 'ginkgo'
+
+      # The work applier (v1) integration tests also use in-memory Kubernetes environment setup (one per Ginkgo
+      # process), and many of them wait for periodic requeues, cleanup timeouts, or wave delays; run the suite with
+      # parallel Ginkgo processes instead.
+      - name: Run work applier (v1) unit and integration tests with Ginkgo CLI & generate coverage
+        run: |
+          ginkgo -v -p --procs=4 --race --cover -coverprofile=work-applier-v1-it-coverage.out ./pkg/v1/controllers/workapplier/
+        env:
+          KUBEFLEET_CI_TEST_RUNNER_NAME: 'ginkgo'
+
+      # The work generator (v1) integration tests also use in-memory Kubernetes environment setup (one per Ginkgo
+      # process), and many of them wait for retries, requeues, or consistency checks; run the suite with parallel
+      # Ginkgo processes instead.
+      - name: Run work generator (v1) unit and integration tests with Ginkgo CLI & generate coverage
+        run: |
+          ginkgo -v -p --procs=4 --race --cover -coverprofile=work-generator-v1-it-coverage.out ./pkg/v1/controllers/workgenerator/
+        env:
+          KUBEFLEET_CI_TEST_RUNNER_NAME: 'ginkgo'
       
       - name: Upload Codecov report
-        uses: codecov/codecov-action@0b35c9ecc4f0529d0eb674914510c22f85b196b4 # v7.1.0
+        uses: codecov/codecov-action@303a32d7a59b442fa8d48b6a1cc6825c09c847a5 # v7.1.1
         with:
           ## Repository upload token - get it from codecov.io. Required only for private repositories
           token: ${{ secrets.CODECOV_TOKEN }}
@@ -87,7 +114,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        customized-settings: [default, resourceplacement, joinleave, custom]
+        customized-settings: [default, resourceplacement, joinleave, placementpolicy, custom]
         include:
           - customized-settings: default
             # to shorten the test duration, set the resource snapshot creation interval to 0
@@ -98,6 +125,10 @@ jobs:
             resource-snapshot-creation-minimum-interval: 0m
             resource-changes-collection-duration: 0m
           - customized-settings: joinleave
+            # to shorten the test duration, set the resource snapshot creation interval to 0
+            resource-snapshot-creation-minimum-interval: 0m
+            resource-changes-collection-duration: 0m
+          - customized-settings: placementpolicy
             # to shorten the test duration, set the resource snapshot creation interval to 0
             resource-snapshot-creation-minimum-interval: 0m
             resource-changes-collection-duration: 0m
@@ -150,11 +181,13 @@ jobs:
       - name: Run e2e tests
         run: |
           if [ "${{ matrix.customized-settings }}" = "default" ]; then
-            make e2e-tests LABEL_FILTER="!custom && !joinleave && !resourceplacement"
+            make e2e-tests LABEL_FILTER="!custom && !joinleave && !resourceplacement && !placementpolicy"
           elif [ "${{ matrix.customized-settings }}" = "resourceplacement" ]; then
             make e2e-tests LABEL_FILTER="!custom && resourceplacement"
           elif [ "${{ matrix.customized-settings }}" = "joinleave" ]; then
             make e2e-tests LABEL_FILTER="!custom && joinleave"
+          elif [ "${{ matrix.customized-settings }}" = "placementpolicy" ]; then
+            make e2e-tests LABEL_FILTER="!custom && placementpolicy"
           else
             make e2e-tests-custom
           fi
@@ -184,7 +217,7 @@ jobs:
       
       - name: Upload logs
         if: always()
-        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7
         with:
           name: e2e-logs-${{ matrix.customized-settings }}
           path: test/e2e/logs-${{ matrix.customized-settings }}/

@@ -40,6 +40,11 @@ import (
 	placementv1beta1 "go.goms.io/fleet/apis/placement/v1beta1"
 	"go.goms.io/fleet/pkg/utils"
 	"go.goms.io/fleet/pkg/utils/informer"
+	"go.goms.io/fleet/pkg/utils/resourceeligibility"
+)
+
+const (
+	defaultNSName = "default"
 )
 
 var (
@@ -92,11 +97,8 @@ var (
 )
 
 type ResourceSelectorResolver struct {
-	// SkippedNamespaces contains the namespaces that should be skipped when selecting resources.
-	SkippedNamespaces map[string]bool
-
-	// ResourceConfig contains the resource configuration.
-	ResourceConfig *utils.ResourceConfig
+	// ResourceEligibilityChecker determines if a given namespace, GVK (GVR) is eligible for placement.
+	ResourceEligibilityChecker resourceeligibility.Checker
 
 	// InformerManager is the informer manager.
 	InformerManager informer.Manager
@@ -272,8 +274,8 @@ func (rs *ResourceSelectorResolver) gatherSelectedResource(placementKey types.Na
 			Kind:    selector.Kind,
 		}
 
-		if rs.ResourceConfig.IsResourceDisabled(gvk) {
-			klog.V(2).InfoS("Skip select resource", "group version kind", gvk.String())
+		if !rs.ResourceEligibilityChecker.AllowsGVK(gvk) {
+			klog.V(2).InfoS("Skip select resource as it is not eligible for placement", "GVK", gvk.String())
 			continue
 		}
 
@@ -435,8 +437,12 @@ func (rs *ResourceSelectorResolver) fetchNamespaceResources(selector placementv1
 func (rs *ResourceSelectorResolver) fetchAllResourcesInOneNamespace(namespaceName string, placeName string) ([]runtime.Object, error) {
 	var resources []runtime.Object
 
-	if !utils.ShouldPropagateNamespace(namespaceName, rs.SkippedNamespaces) {
-		err := fmt.Errorf("invalid clusterRresourcePlacement %s: namespace %s is not allowed to propagate", placeName, namespaceName)
+	if !rs.ResourceEligibilityChecker.AllowsNamespace(namespaceName) {
+		err := fmt.Errorf("invalid clusterResourcePlacement %s: namespace %s and any resource within it are not allowed for placement", placeName, namespaceName)
+		return nil, NewUserError(err)
+	}
+	if namespaceName == defaultNSName {
+		err := fmt.Errorf("invalid clusterResourcePlacement %s: the default namespace cannot be selected for placement; to place resources within the default namespace, consider using the ResourcePlacement API", placeName)
 		return nil, NewUserError(err)
 	}
 
@@ -458,7 +464,18 @@ func (rs *ResourceSelectorResolver) fetchAllResourcesInOneNamespace(namespaceNam
 
 	trackedResource := rs.InformerManager.GetNameSpaceScopedResources()
 	for _, gvr := range trackedResource {
-		if !utils.ShouldProcessResource(gvr, rs.RestMapper, rs.ResourceConfig) {
+		eligible, err := rs.ResourceEligibilityChecker.AllowsGVR(gvr)
+		switch {
+		case meta.IsNoMatchError(err):
+			// The informer manager never drops a GVR once it has been tracked, so aborting here would
+			// block the placement indefinitely after a CRD is uninstalled.
+			klog.V(2).InfoS("Skip selecting the resource as no kind is registered for its GVR", "GVR", gvr.String())
+			continue
+		case err != nil:
+			klog.ErrorS(err, "failed to check if the GVR is eligible for placement", "GVR", gvr.String())
+			return nil, NewUnexpectedBehaviorError(err)
+		case !eligible:
+			klog.V(2).InfoS("Skip selecting the resource as its GVR is not eligible for placement", "GVR", gvr.String())
 			continue
 		}
 		if !rs.InformerManager.IsInformerSynced(gvr) {
@@ -592,7 +609,8 @@ func (rs *ResourceSelectorResolver) fetchResources(selector placementv1beta1.Res
 
 // fetchSelectedNamespace retrieves the namespace name based on the namespace selector.
 // This function assumes the selector is a name-based selector (not label-based) as guaranteed by CEL validation.
-// Returns the namespace name if found and not skipped, or empty string if not found/skipped.
+// Returns the namespace name if found and not skipped, or empty string if not found/skipped. Selecting a reserved/denied namespace will
+// trigger a user error.
 func (rs *ResourceSelectorResolver) fetchSelectedNamespace(selector placementv1beta1.ResourceSelectorTerm, placementName string) (string, bool, error) {
 	klog.V(2).InfoS("start to fetch selected namespace", "selector", selector, "placement", placementName)
 
@@ -614,12 +632,6 @@ func (rs *ResourceSelectorResolver) fetchSelectedNamespace(selector placementv1b
 		return "", false, NewUnexpectedBehaviorError(fmt.Errorf("failed to access the namespace object: %w", err))
 	}
 
-	// Check if this namespace should be propagated
-	if !utils.ShouldPropagateNamespace(ns.GetName(), rs.SkippedNamespaces) {
-		klog.V(2).InfoS("skip namespace that is not allowed to propagate", "namespace", ns.GetName(), "placement", placementName)
-		return "", false, nil
-	}
-
 	return ns.GetName(), true, nil
 }
 
@@ -630,6 +642,18 @@ func (rs *ResourceSelectorResolver) ShouldPropagateObj(namespace, placementName 
 		// skip a to be deleted resource
 		klog.V(2).InfoS("Skip the deleting resource by the selector", "namespace", namespace, "placement", placementName, "object", uObjKObj)
 		return false, nil
+	}
+
+	// Deny reserved namespaces (themselves, not including resources within them) for placement.
+	if uObj.GroupVersionKind() == utils.NamespaceGVK {
+		if !rs.ResourceEligibilityChecker.AllowsNamespace(uObj.GetName()) {
+			klog.V(2).InfoS("Block reserved/denied namespaces for placement", "namespace", uObj.GetName(), "placement", placementName)
+			return false, NewUserError(fmt.Errorf("namespace %s and any resource within it are not allowed for placement", uObj.GetName()))
+		}
+		if uObj.GetName() == defaultNSName {
+			klog.V(2).InfoS("Block the default namespace for placement", "namespace", uObj.GetName(), "placement", placementName)
+			return false, NewUserError(fmt.Errorf("the default namespace cannot be selected for placement; to place resources within the default namespace, consider using the ResourcePlacement API"))
+		}
 	}
 
 	shouldInclude, err := ShouldPropagateObj(rs.InformerManager, uObj, rs.EnableWorkload)

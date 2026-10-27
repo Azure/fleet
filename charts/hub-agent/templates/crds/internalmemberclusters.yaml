@@ -1,2 +1,0 @@
-{{- $files := .Files }}
-{{ $files.Get "crdbases/cluster.kubernetes-fleet.io_internalmemberclusters.yaml" }}
