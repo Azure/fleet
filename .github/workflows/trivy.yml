@@ -177,7 +177,7 @@ jobs:
 
       - name: Create or update security issue
         if: steps.check-vulns.outputs.has_vulns == 'true' && github.event_name == 'schedule'
-        uses: actions/github-script@v9
+        uses: actions/github-script@3a2844b7e9c422d3c10d287c895573f7108da1b3 # v9.0.0
         with:
           script: |
             // ISO week date (e.g. 2026-W37); the ISO year can differ from the calendar year near year end.
