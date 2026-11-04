@@ -80,7 +80,7 @@ type ResourceSnapshotSpec struct {
 type ResourceContent struct {
 	// +kubebuilder:validation:EmbeddedResource
 	// +kubebuilder:pruning:PreserveUnknownFields
-	runtime.RawExtension `json:"-,inline"`
+	runtime.RawExtension `json:",inline"`
 }
 
 type ResourceSnapshotStatus struct {

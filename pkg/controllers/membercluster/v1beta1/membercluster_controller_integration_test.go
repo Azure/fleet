@@ -209,7 +209,7 @@ var _ = Describe("Test MemberCluster Controller", func() {
 			result, err = r.Reconcile(ctx, ctrl.Request{
 				NamespacedName: memberClusterNamespacedName,
 			})
-			Expect(result).Should(Equal(ctrl.Result{Requeue: true}))
+			Expect(result).Should(Equal(ctrl.Result{RequeueAfter: time.Second}))
 			Expect(err).Should(Succeed())
 
 			By("verify mc joined status is set to be false")
@@ -281,7 +281,7 @@ var _ = Describe("Test MemberCluster Controller", func() {
 			result, err = r.Reconcile(ctx, ctrl.Request{
 				NamespacedName: memberClusterNamespacedName,
 			})
-			Expect(result).Should(Equal(ctrl.Result{Requeue: true}))
+			Expect(result).Should(Equal(ctrl.Result{RequeueAfter: time.Second}))
 			Expect(err).Should(Succeed())
 
 			By("check the workers objects don't have finalizer")
@@ -582,7 +582,7 @@ var _ = Describe("Test MemberCluster Controller", func() {
 			result, err = r.Reconcile(ctx, ctrl.Request{
 				NamespacedName: memberClusterNamespacedName,
 			})
-			Expect(result).Should(Equal(ctrl.Result{Requeue: true}))
+			Expect(result).Should(Equal(ctrl.Result{RequeueAfter: time.Second}))
 			Expect(err).Should(Succeed())
 
 			// check the cluster namespace is being deleted. There is no namespace controller so it won't be removed
@@ -703,7 +703,7 @@ var _ = Describe("Test MemberCluster Controller", func() {
 			result, err = r.Reconcile(ctx, ctrl.Request{
 				NamespacedName: memberClusterNamespacedName,
 			})
-			Expect(result).Should(Equal(ctrl.Result{Requeue: true}))
+			Expect(result).Should(Equal(ctrl.Result{RequeueAfter: time.Second}))
 			Expect(err).Should(Succeed())
 
 			// check the member cluster namespace is being deleted. There is no namespace controller, so it won't be removed

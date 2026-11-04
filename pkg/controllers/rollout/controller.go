@@ -128,7 +128,7 @@ func (r *Reconciler) Reconcile(ctx context.Context, req runtime.Request) (runtim
 		// Note that work generator will skip processing bindings with stale
 		// RolloutStarted conditions.
 		klog.V(2).InfoS("Apply strategy has been updated; requeue the request", "placement", placementObjRef)
-		return reconcile.Result{Requeue: true}, nil
+		return reconcile.Result{RequeueAfter: time.Second}, nil
 	default:
 		klog.V(2).InfoS("Apply strategy is up to date on all bindings; continue with the rollout process", "placement", placementObjRef)
 	}
@@ -223,7 +223,10 @@ func (r *Reconciler) Reconcile(ctx context.Context, req runtime.Request) (runtim
 	// We need to requeue the request regardless if the binding updates succeed or not
 	// to avoid the case that the rollout process stalling because the time based binding readiness does not trigger any event.
 	// Wait the time we need to wait for the first applied but not ready binding to be ready
-	return runtime.Result{Requeue: true, RequeueAfter: waitTime}, r.updateBindings(ctx, toBeUpdatedBindings)
+	if waitTime <= 0 {
+		waitTime = time.Second
+	}
+	return runtime.Result{RequeueAfter: waitTime}, r.updateBindings(ctx, toBeUpdatedBindings)
 }
 
 func (r *Reconciler) checkAndUpdateStaleBindingsStatus(ctx context.Context, bindings []placementv1beta1.BindingObj) error {

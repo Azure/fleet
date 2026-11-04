@@ -17,18 +17,74 @@ limitations under the License.
 package updaterun
 
 import (
+	"errors"
 	"testing"
 	"time"
 
 	"github.com/google/go-cmp/cmp"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/client-go/util/workqueue"
+	"k8s.io/klog/v2"
 	"sigs.k8s.io/controller-runtime/pkg/client"
+	"sigs.k8s.io/controller-runtime/pkg/client/fake"
 	"sigs.k8s.io/controller-runtime/pkg/controller/controllertest"
 	"sigs.k8s.io/controller-runtime/pkg/reconcile"
 
 	placementv1beta1 "github.com/kubefleet-dev/kubefleet/apis/placement/v1beta1"
 )
+
+func TestHandleIncompleteUpdateRun(t *testing.T) {
+	reconcileErr := errors.New("execution failed")
+	tests := []struct {
+		name       string
+		waitTime   time.Duration
+		err        error
+		wantResult reconcile.Result
+	}{
+		{
+			name:       "zero wait time uses fallback",
+			wantResult: reconcile.Result{RequeueAfter: time.Second},
+		},
+		{
+			name:       "negative wait time uses fallback",
+			waitTime:   -time.Second,
+			wantResult: reconcile.Result{RequeueAfter: time.Second},
+		},
+		{
+			name:       "positive wait time is preserved",
+			waitTime:   100 * time.Millisecond,
+			wantResult: reconcile.Result{RequeueAfter: 100 * time.Millisecond},
+		},
+		{
+			name: "execution errors use normal error retries",
+			err:  reconcileErr,
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			scheme := runtime.NewScheme()
+			if err := placementv1beta1.AddToScheme(scheme); err != nil {
+				t.Fatal(err)
+			}
+			updateRun := &placementv1beta1.ClusterStagedUpdateRun{
+				ObjectMeta: metav1.ObjectMeta{Name: "test-update-run"},
+			}
+			r := &Reconciler{
+				Client: fake.NewClientBuilder().WithScheme(scheme).
+					WithStatusSubresource(updateRun).WithObjects(updateRun).Build(),
+			}
+			got, err := r.handleIncompleteUpdateRun(t.Context(), updateRun, tt.waitTime, tt.err,
+				placementv1beta1.StateRun, klog.KObj(updateRun))
+			if !errors.Is(err, tt.err) {
+				t.Fatalf("handleIncompleteUpdateRun() error = %v, want %v", err, tt.err)
+			}
+			if diff := cmp.Diff(tt.wantResult, got); diff != "" {
+				t.Errorf("handleIncompleteUpdateRun() mismatch (-want +got):\n%s", diff)
+			}
+		})
+	}
+}
 
 func TestHandleApprovalRequestUpdate(t *testing.T) {
 	tests := map[string]struct {

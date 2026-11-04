@@ -225,32 +225,22 @@ func (s *Scheduler) scheduleOnce(ctx context.Context, worker int) {
 		return
 	}
 
+	// The scheduling cycle has completed without errors; untrack the key from the rate limiter.
+	s.queue.Forget(placementKey)
+
 	// Requeue if the scheduling cycle suggests so.
-	//nolint:staticcheck
-	//lint:ignore SA1019 we need more time to fully migrate to RequeueAfter as we used these two fields separately.
-	if res.Requeue {
-		if res.RequeueAfter > 0 {
-			s.queue.AddAfter(placementKey, res.RequeueAfter)
-			observeSchedulingCycleMetrics(cycleStartTime, false, true)
-			return
-		}
-		// Untrack the key from the rate limiter.
-		s.queue.Forget(placementKey)
-		// Requeue for later processing.
-		//
-		// Note that the key is added directly to the queue without having to wait for any rate limiter's
-		// approval. This is necessary as requeues, requested by the scheduler, occur when the scheduler
-		// is certain that more scheduling work needs to be done but it cannot be completed in
-		// one cycle (e.g., a plugin sets up a per-cycle batch limit, and consequently the scheduler must
-		// finish the scheduling in multiple cycles); in such cases, rate limiter should not add
-		// any delay to the requeues.
-		s.queue.Add(placementKey)
-		observeSchedulingCycleMetrics(cycleStartTime, false, true)
-	} else {
-		// no more failure, the following queue don't need to be rate limited
-		s.queue.Forget(placementKey)
-		observeSchedulingCycleMetrics(cycleStartTime, false, false)
+	//
+	// Note that the key is added to the queue without having to wait for any rate limiter's approval.
+	// This is necessary as requeues, requested by the scheduler, occur when the scheduler is certain
+	// that more scheduling work needs to be done but it cannot be completed in one cycle (e.g., a plugin
+	// sets up a per-cycle batch limit, and consequently the scheduler must finish the scheduling in
+	// multiple cycles); such requeues are not error retries, and the rate limiter should not add any
+	// backoff to them.
+	requeue := res.RequeueAfter > 0
+	if requeue {
+		s.queue.AddAfter(placementKey, res.RequeueAfter)
 	}
+	observeSchedulingCycleMetrics(cycleStartTime, false, requeue)
 }
 
 // Run starts the scheduler.

@@ -145,8 +145,9 @@ func TestDiscardFieldsIrrelevantInComparisonFrom(t *testing.T) {
 			DeletionGracePeriodSeconds: ptr.To(int64(30)),
 			Generation:                 dummyGeneration,
 			ResourceVersion:            dummyResourceVersion,
-			SelfLink:                   dummySelfLink,
-			UID:                        types.UID(dummyUID),
+			//lint:ignore SA1019 Verify sanitization of the legacy selfLink field.
+			SelfLink: dummySelfLink,
+			UID:      types.UID(dummyUID),
 		},
 		Spec: appsv1.DeploymentSpec{
 			Replicas: ptr.To(int32(1)),

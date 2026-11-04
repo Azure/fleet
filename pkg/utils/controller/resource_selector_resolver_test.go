@@ -62,9 +62,10 @@ func TestGenerateResourceContent(t *testing.T) {
 					APIVersion: "apiextensions.k8s.io/v1",
 				},
 				ObjectMeta: metav1.ObjectMeta{
-					Name:                       "object-name",
-					GenerateName:               "object-generateName",
-					Namespace:                  "object-namespace",
+					Name:         "object-name",
+					GenerateName: "object-generateName",
+					Namespace:    "object-namespace",
+					//lint:ignore SA1019 Verify sanitization of the legacy selfLink field.
 					SelfLink:                   "object-selflink",
 					UID:                        types.UID(utilrand.String(10)),
 					ResourceVersion:            utilrand.String(10),
@@ -125,8 +126,9 @@ func TestGenerateResourceContent(t *testing.T) {
 					Kind:       "Service",
 				},
 				ObjectMeta: metav1.ObjectMeta{
-					Name:              "svc-name",
-					Namespace:         "svc-namespace",
+					Name:      "svc-name",
+					Namespace: "svc-namespace",
+					//lint:ignore SA1019 Verify sanitization of the legacy selfLink field.
 					SelfLink:          utilrand.String(10),
 					DeletionTimestamp: &metav1.Time{Time: time.Date(00002, time.January, 1, 1, 1, 1, 1, time.UTC)},
 					ManagedFields: []metav1.ManagedFieldsEntry{

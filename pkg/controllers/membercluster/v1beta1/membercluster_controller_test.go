@@ -2014,7 +2014,7 @@ func TestHandleDelete(t *testing.T) {
 				recorder: events.NewFakeRecorder(1),
 			},
 			memberCluster: memberClusterWithFinalizer.DeepCopy(),
-			wantResult:    ctrl.Result{Requeue: true},
+			wantResult:    ctrl.Result{RequeueAfter: time.Second},
 			wantErr:       nil,
 		},
 	}
