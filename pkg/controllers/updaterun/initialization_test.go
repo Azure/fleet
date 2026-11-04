@@ -24,12 +24,18 @@ import (
 	"testing"
 	"time"
 
+	"github.com/google/go-cmp/cmp"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
+	"k8s.io/apimachinery/pkg/runtime/schema"
 	"k8s.io/utils/ptr"
+	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/client/fake"
 
+	clusterv1beta1 "github.com/kubefleet-dev/kubefleet/apis/cluster/v1beta1"
 	placementv1beta1 "github.com/kubefleet-dev/kubefleet/apis/placement/v1beta1"
+	testinformer "github.com/kubefleet-dev/kubefleet/test/utils/informer"
+	"github.com/kubefleet-dev/kubefleet/test/utils/resource"
 )
 
 func TestValidateBeforeStageTask(t *testing.T) {
@@ -203,5 +209,116 @@ func TestGenerateStagesByStrategy_InvalidDeleteStageTasks(t *testing.T) {
 	wantErrMsg := fmt.Sprintf("the before stage tasks are invalid, updateStrategy: `/test-strategy`, stage: %s, err: task 0 of type TimedWait is not allowed in beforeStageTasks, allowed type: Approval", placementv1beta1.UpdateRunDeleteStageName)
 	if !strings.Contains(err.Error(), wantErrMsg) {
 		t.Errorf("generateStagesByStrategy() error = %v, want an error containing %q", err, wantErrMsg)
+	}
+}
+
+func TestRecordOverrideSnapshots(t *testing.T) {
+	const (
+		placementName = "test-placement"
+		namespace     = "deployment-namespace"
+		clusterName   = "cluster-1"
+		roName        = "test-ro-0"
+	)
+	scheme := runtime.NewScheme()
+	if err := placementv1beta1.AddToScheme(scheme); err != nil {
+		t.Fatalf("AddToScheme() = %v, want no error", err)
+	}
+	if err := clusterv1beta1.AddToScheme(scheme); err != nil {
+		t.Fatalf("AddToScheme() = %v, want no error", err)
+	}
+	snapshotMeta := func(ns string) metav1.ObjectMeta {
+		return metav1.ObjectMeta{
+			Name:      fmt.Sprintf(placementv1beta1.ResourceSnapshotNameFmt, placementName, 0),
+			Namespace: ns,
+			Labels: map[string]string{
+				placementv1beta1.ResourceIndexLabel:     "0",
+				placementv1beta1.PlacementTrackingLabel: placementName,
+			},
+			Annotations: map[string]string{
+				placementv1beta1.ResourceGroupHashAnnotation:         "abc",
+				placementv1beta1.NumberOfResourceSnapshotsAnnotation: "1",
+			},
+		}
+	}
+	snapshotSpec := placementv1beta1.ResourceSnapshotSpec{
+		SelectedResources: []placementv1beta1.ResourceContent{*resource.DeploymentResourceContentForTest(t)},
+	}
+	roSnapshot := func(scope placementv1beta1.ResourceScope) *placementv1beta1.ResourceOverrideSnapshot {
+		return &placementv1beta1.ResourceOverrideSnapshot{
+			ObjectMeta: metav1.ObjectMeta{
+				Name:      roName,
+				Namespace: namespace,
+				Labels:    map[string]string{placementv1beta1.IsLatestSnapshotLabel: "true"},
+			},
+			Spec: placementv1beta1.ResourceOverrideSnapshotSpec{
+				OverrideSpec: placementv1beta1.ResourceOverrideSpec{
+					Placement: &placementv1beta1.PlacementRef{Name: placementName, Scope: scope},
+					ResourceSelectors: []placementv1beta1.ResourceSelector{
+						{Group: "apps", Version: "v1", Kind: "Deployment", Name: "deployment-name"},
+					},
+					Policy: &placementv1beta1.OverridePolicy{
+						OverrideRules: []placementv1beta1.OverrideRule{
+							{ClusterSelector: &placementv1beta1.ClusterSelector{}},
+						},
+					},
+				},
+			},
+		}
+	}
+	updateRunStatus := placementv1beta1.UpdateRunStatus{
+		StagesStatus: []placementv1beta1.StageUpdatingStatus{
+			{StageName: "stage-1", Clusters: []placementv1beta1.ClusterUpdatingStatus{{ClusterName: clusterName}}},
+		},
+	}
+	updateRunSpec := placementv1beta1.UpdateRunSpec{PlacementName: placementName, ResourceSnapshotIndex: "0"}
+
+	tests := []struct {
+		name      string
+		placement placementv1beta1.PlacementObj
+		snapshot  client.Object
+		ro        *placementv1beta1.ResourceOverrideSnapshot
+		updateRun placementv1beta1.UpdateRunObj
+	}{
+		{
+			name:      "cluster-scoped placement",
+			placement: &placementv1beta1.ClusterResourcePlacement{ObjectMeta: metav1.ObjectMeta{Name: placementName}},
+			snapshot:  &placementv1beta1.ClusterResourceSnapshot{ObjectMeta: snapshotMeta(""), Spec: snapshotSpec},
+			ro:        roSnapshot(placementv1beta1.ClusterScoped),
+			updateRun: &placementv1beta1.ClusterStagedUpdateRun{
+				ObjectMeta: metav1.ObjectMeta{Name: "test-update-run"},
+				Spec:       updateRunSpec,
+				Status:     *updateRunStatus.DeepCopy(),
+			},
+		},
+		{
+			name:      "namespaced placement",
+			placement: &placementv1beta1.ResourcePlacement{ObjectMeta: metav1.ObjectMeta{Name: placementName, Namespace: namespace}},
+			snapshot:  &placementv1beta1.ResourceSnapshot{ObjectMeta: snapshotMeta(namespace), Spec: snapshotSpec},
+			ro:        roSnapshot(placementv1beta1.NamespaceScoped),
+			updateRun: &placementv1beta1.StagedUpdateRun{
+				ObjectMeta: metav1.ObjectMeta{Name: "test-update-run", Namespace: namespace},
+				Spec:       updateRunSpec,
+				Status:     *updateRunStatus.DeepCopy(),
+			},
+		},
+	}
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			cluster := &clusterv1beta1.MemberCluster{ObjectMeta: metav1.ObjectMeta{Name: clusterName}}
+			r := &Reconciler{
+				Client: fake.NewClientBuilder().WithScheme(scheme).WithObjects(tc.snapshot, tc.ro, cluster).Build(),
+				InformerManager: &testinformer.FakeManager{
+					APIResources: map[schema.GroupVersionKind]bool{{Group: "apps", Version: "v1", Kind: "Deployment"}: true},
+				},
+			}
+			if err := r.recordOverrideSnapshots(context.Background(), tc.placement, tc.updateRun); err != nil {
+				t.Fatalf("recordOverrideSnapshots() = %v, want no error", err)
+			}
+			got := tc.updateRun.GetUpdateRunStatus().StagesStatus[0].Clusters[0].ResourceOverrideSnapshots
+			want := []placementv1beta1.NamespacedName{{Name: roName, Namespace: namespace}}
+			if diff := cmp.Diff(want, got); diff != "" {
+				t.Errorf("recordOverrideSnapshots() resourceOverrideSnapshots mismatch (-want +got):\n%s", diff)
+			}
+		})
 	}
 }
