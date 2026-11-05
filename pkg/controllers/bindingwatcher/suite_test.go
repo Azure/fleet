@@ -18,6 +18,7 @@ package bindingwatcher
 import (
 	"context"
 	"flag"
+	"fmt"
 	"path/filepath"
 	"testing"
 	"time"
@@ -37,6 +38,7 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/metrics/server"
 
 	fleetv1beta1 "github.com/kubefleet-dev/kubefleet/apis/placement/v1beta1"
+	utilcontroller "github.com/kubefleet-dev/kubefleet/pkg/utils/controller"
 	"github.com/kubefleet-dev/kubefleet/test/utils/controller"
 )
 
@@ -92,9 +94,6 @@ var _ = BeforeSuite(func() {
 	Expect(k8sClient.Create(ctx, &ns)).Should(Succeed(), "failed to create namespace")
 
 	By("starting the controller manager")
-	klog.InitFlags(flag.CommandLine)
-	flag.Parse()
-
 	mgr, err = ctrl.NewManager(cfg, ctrl.Options{
 		Scheme: scheme.Scheme,
 		Metrics: server.Options{
@@ -120,18 +119,50 @@ var _ = BeforeSuite(func() {
 
 	go func() {
 		defer GinkgoRecover()
-		err = mgr.Start(ctx)
-		Expect(err).Should(Succeed(), "failed to run manager")
+		Expect(mgr.Start(ctx)).Should(Succeed(), "failed to run manager")
 	}()
 
-	// Note (chenyu1): for the binding watcher integration tests, must wait for the cache to sync
-	// before moving onto the test stage, otherwise some Update events might not be caught properly.
-	//
-	// This is wrapped in an Eventually block as the manager might not have started yet.
-	Eventually(func() bool {
-		return mgr.GetCache().WaitForCacheSync(ctx)
-	}, time.Second*10, time.Second*2).To(BeTrue(), "failed to wait for cache to sync")
+	// Waiting for the cache to sync is not enough: the watchers register their event handlers only when their
+	// controllers start, which can be after the specs begin. A status update made before then reaches them as part
+	// of a create event, which they ignore, so wait until both watchers act on a status update.
+	By("waiting for the watchers to handle status updates")
+	crb := clusterResourceBindingForTest()
+	crb.Name = "probe-crb"
+	waitForWatcher(crb, testPlacementName)
+	rb := resourceBindingForTest()
+	rb.Name = "probe-rb"
+	waitForWatcher(rb, utilcontroller.GetObjectKeyFromNamespaceName(testNamespace, testPlacementName))
 })
+
+// waitForWatcher creates the binding and keeps updating its status until the placement controller receives
+// wantKey, then deletes the binding and resets the queue.
+func waitForWatcher(binding fleetv1beta1.BindingObj, wantKey string) {
+	Expect(k8sClient.Create(ctx, binding)).Should(Succeed(), "failed to create the probe binding")
+	attempt := 0
+	Eventually(func() error {
+		// Check before updating again, so that no update is left in flight once the key arrives.
+		if fakePlacementController.Key() == wantKey {
+			return nil
+		}
+		attempt++
+		if err := k8sClient.Get(ctx, client.ObjectKeyFromObject(binding), binding); err != nil {
+			return err
+		}
+		binding.SetConditions(metav1.Condition{
+			Type:               string(fleetv1beta1.ResourceBindingRolloutStarted),
+			Status:             metav1.ConditionTrue,
+			Reason:             fmt.Sprintf("Probe%d", attempt),
+			ObservedGeneration: binding.GetGeneration(),
+			LastTransitionTime: metav1.Now(),
+		})
+		if err := k8sClient.Status().Update(ctx, binding); err != nil {
+			return err
+		}
+		return fmt.Errorf("the watcher has not enqueued %s yet", wantKey)
+	}, time.Second*30, time.Second).Should(Succeed(), "the watcher did not act on a status update for %s", wantKey)
+	Expect(k8sClient.Delete(ctx, binding)).Should(Succeed(), "failed to delete the probe binding")
+	fakePlacementController.ResetQueue()
+}
 
 var _ = AfterSuite(func() {
 	defer klog.Flush()
