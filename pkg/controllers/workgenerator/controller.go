@@ -146,7 +146,7 @@ func (r *Reconciler) Reconcile(ctx context.Context, req controllerruntime.Reques
 			// Note that running this branch would also skip the refreshing of apply strategies;
 			// it will resume once the rollout controller updates the rollout started condition.
 			klog.V(2).InfoS("Requeue the resource binding until the rollout controller finishes updating the status", "binding", bindingRef, "generation", resourceBinding.GetGeneration(), "rolloutStartedCondition", rolloutStartedCondition)
-			return controllerruntime.Result{Requeue: true}, nil
+			return controllerruntime.Result{RequeueAfter: time.Second}, nil
 		}
 	}
 
@@ -265,7 +265,7 @@ func (r *Reconciler) Reconcile(ctx context.Context, req controllerruntime.Reques
 		// However, this error can happen when the resource snapshot exists during the IT test when the client that creates
 		// the resource snapshot is not the same as the controller client so that we need to retry in this case.
 		// This error can also happen if the user uses a customized rollout controller that does not share the same informer cache with this controller.
-		return controllerruntime.Result{Requeue: true}, nil
+		return controllerruntime.Result{RequeueAfter: time.Second}, nil
 	}
 	// requeue if we failed to sync the work
 	// If we update the works, their status will be changed and will be detected by the watch event.

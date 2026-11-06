@@ -15,6 +15,7 @@ metadata:
   labels:
     {{- include "member-agent.labels" . | nindent 4 }}
 spec:
+  replicas: {{ .Values.replicaCount }}
   selector:
     matchLabels:
       {{- include "member-agent.selectorLabels" . | nindent 6 }}

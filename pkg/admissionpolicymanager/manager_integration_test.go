@@ -167,7 +167,7 @@ var _ = Describe("Policies, Policy Bindings and their Effects", Ordered, func() 
 					Validations: []admissionregistrationv1.Validation{
 						{
 							Expression: `(!((request.namespace.startsWith("fleet-")) || (request.namespace.startsWith("kube-")))) || ((request.userInfo.username == "system:kube-scheduler") || (request.userInfo.username == "system:kube-controller-manager") || ("system:nodes" in request.userInfo.groups) || ("system:masters" in request.userInfo.groups) || ("kubeadm:cluster-admins" in request.userInfo.groups) || ("system:serviceaccounts" in request.userInfo.groups) || (request.userInfo.username == "whitelisted-user") || ("whitelisted-group" in request.userInfo.groups))`,
-							Message:    "writing service accounts in reserved namespaces or requesting tokens from such service accounts is disallowed",
+							Message:    wantSvcAccountsAndTokenRequestsDenialMsg,
 							Reason:     ptr.To(metav1.StatusReasonForbidden),
 						},
 					},
