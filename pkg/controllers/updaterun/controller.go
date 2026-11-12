@@ -222,7 +222,10 @@ func (r *Reconciler) handleIncompleteUpdateRun(ctx context.Context, updateRun pl
 	if err != nil {
 		return runtime.Result{}, err
 	}
-	return runtime.Result{Requeue: true, RequeueAfter: waitTime}, nil
+	if waitTime <= 0 {
+		waitTime = time.Second
+	}
+	return runtime.Result{RequeueAfter: waitTime}, nil
 }
 
 // handleDelete handles the deletion of the updateRun object.

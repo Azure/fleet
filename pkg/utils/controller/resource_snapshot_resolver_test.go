@@ -3975,13 +3975,13 @@ func TestShouldCreateNewResourceSnapshotNow(t *testing.T) {
 			nilConfig: true,
 			// Even with a very recent creation time, nil Config must not delay.
 			creationTime: time.Now(),
-			wantRequeue:  ctrl.Result{RequeueAfter: 0, Requeue: false},
+			wantRequeue:  ctrl.Result{},
 		},
 		{
 			name:               "ResourceSnapshotCreationMinimumInterval and ResourceChangesCollectionDuration are 0",
 			creationInterval:   0,
 			collectionDuration: 0,
-			wantRequeue:        ctrl.Result{Requeue: false},
+			wantRequeue:        ctrl.Result{},
 		},
 		{
 			name:               "ResourceSnapshotCreationMinimumInterval is 0",

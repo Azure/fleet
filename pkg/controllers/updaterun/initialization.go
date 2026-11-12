@@ -508,7 +508,6 @@ func validateAfterStageTask(tasks []placementv1beta1.StageTask) error {
 // recordOverrideSnapshots finds all the override snapshots that are associated with each cluster and record them in the UpdateRun status.
 func (r *Reconciler) recordOverrideSnapshots(ctx context.Context, placement placementv1beta1.PlacementObj, updateRun placementv1beta1.UpdateRunObj) error {
 	updateRunRef := klog.KObj(updateRun)
-	updateRunSpec := updateRun.GetUpdateRunSpec()
 	placementKey := types.NamespacedName{Name: placement.GetName(), Namespace: placement.GetNamespace()}
 
 	resourceSnapshotObjs, err := r.getResourceSnapshotObjs(ctx, placement, updateRun)
@@ -543,7 +542,7 @@ func (r *Reconciler) recordOverrideSnapshots(ctx context.Context, placement plac
 
 	resourceSnapshotRef := klog.KObj(masterResourceSnapshot)
 	// Fetch all the matching overrides.
-	matchedCRO, matchedRO, err := overrider.FetchAllMatchingOverridesForResourceSnapshot(ctx, r.Client, r.InformerManager, updateRunSpec.PlacementName, masterResourceSnapshot)
+	matchedCRO, matchedRO, err := overrider.FetchAllMatchingOverridesForResourceSnapshot(ctx, r.Client, r.InformerManager, controller.GetObjectKeyFromNamespaceName(placementKey.Namespace, placementKey.Name), masterResourceSnapshot)
 	if err != nil {
 		klog.ErrorS(err, "Failed to find all matching overrides for the stagedUpdateRun", "resourceSnapshot", resourceSnapshotRef, "updateRun", updateRunRef)
 		// no more retries here.

@@ -297,11 +297,6 @@ func (w *controller) reconcileHandler(ctx context.Context, key interface{}) {
 		w.queue.Forget(key)
 		w.queue.AddAfter(key, result.RequeueAfter)
 		metrics.FleetReconcileTotal.WithLabelValues(w.name, labelRequeueAfter).Inc()
-	//nolint:staticcheck
-	//lint:ignore SA1019 we need more time to fully migrate to RequeueAfter as we used these two fields separately.
-	case result.Requeue:
-		w.queue.AddRateLimited(key)
-		metrics.FleetReconcileTotal.WithLabelValues(w.name, labelRequeue).Inc()
 	default:
 		// Forget indicates that an item is finished being retried.  Doesn't matter whether it's for perm failing
 		// or for success, we'll stop the rate limiter from tracking it.  This only clears the `rateLimiter`, you

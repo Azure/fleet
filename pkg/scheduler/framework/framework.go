@@ -81,6 +81,13 @@ const (
 
 	// maxClusterInfoForDebugging controls the maximum number of cluster information entries to include in the scheduler debugging output
 	maxClusterInfoForDebugging = 32
+
+	// batchedSchedulingRequeueDelay is the delay before a placement is requeued when the scheduler
+	// must finish scheduling in multiple cycles (e.g., a plugin has imposed a per-cycle batch size limit).
+	//
+	// Note that this value must be greater than zero, as the scheduler requeues a placement only when
+	// the scheduling cycle returns a positive RequeueAfter duration.
+	batchedSchedulingRequeueDelay = 100 * time.Millisecond
 )
 
 // Handle is an interface which allows plugins to access some shared structs (e.g., client, manager)
@@ -1016,7 +1023,7 @@ func (f *framework) runSchedulingCycleForPickNPlacementType(
 	// Also note that if a requeue is needed, the scheduling decisions and condition are updated only
 	// when there are no more clusters to pick.
 	if shouldRequeue(state.desiredBatchSize, state.batchSizeLimit, len(toCreate)+len(toPatch)) {
-		return ctrl.Result{Requeue: true}, nil
+		return ctrl.Result{RequeueAfter: batchedSchedulingRequeueDelay}, nil
 	}
 
 	// Extract the patched bindings.
