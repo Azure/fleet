@@ -45,7 +45,7 @@ jobs:
               
       - name: Set up Ginkgo CLI
         run: |
-          go install github.com/onsi/ginkgo/v2/ginkgo@v2.23.4
+          go install github.com/onsi/ginkgo/v2/ginkgo
       
       - name: Prepare necessary environment variables
         run: |
@@ -170,7 +170,10 @@ jobs:
 
       - name: Install Ginkgo CLI
         run: |
-          go install github.com/onsi/ginkgo/v2/ginkgo@v2.23.4
+          go install github.com/onsi/ginkgo/v2/ginkgo
+
+      - name: Increase inotify limits for multi-node Kind clusters
+        run: sudo sysctl -w fs.inotify.max_user_instances=1024 fs.inotify.max_user_watches=1048576
       
       - name: Install Kind
         # Before updating the kind version to use, verify that the current kind image
