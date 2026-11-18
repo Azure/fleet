@@ -50,12 +50,15 @@ const (
 	DecisionAllowed Decision = "Allowed"
 	// DecisionDenied means at least one required permission was not granted.
 	DecisionDenied Decision = "Denied"
+	// DecisionInvalid means the placement input is invalid.
+	DecisionInvalid Decision = "Invalid"
 	// DecisionIndeterminate means authorization could not be completed.
 	DecisionIndeterminate Decision = "Indeterminate"
 )
 
 // Result reports the aggregate outcome of an authorization batch.
 // A denied decision may include Err for additional review failures without changing the decision.
+// An invalid decision must include Err describing the invalid input.
 type Result struct {
 	Decision     Decision
 	DenialReason string

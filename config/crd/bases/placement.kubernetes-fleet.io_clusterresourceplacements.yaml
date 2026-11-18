@@ -988,7 +988,7 @@ spec:
                           We have a built-in resource state detector to determine the availability status of following well-known Kubernetes
                           native resources: Deployment, StatefulSet, DaemonSet, Service, Namespace, ConfigMap, Secret,
                           ClusterRole, ClusterRoleBinding, Role, RoleBinding.
-                          Please see [SafeRollout](https://github.com/Azure/fleet/tree/main/docs/concepts/SafeRollout/README.md) for more details.
+                          Please see [SafeRollout](https://kubefleet.dev/docs/concepts/safe-rollout/) for more details.
                           For other types of resources, we consider them as available after `UnavailablePeriodSeconds` seconds
                           have passed since they were successfully applied to the target cluster.
                           Default is 60.
@@ -2674,7 +2674,7 @@ spec:
                           We have a built-in resource state detector to determine the availability status of following well-known Kubernetes
                           native resources: Deployment, StatefulSet, DaemonSet, Service, Namespace, ConfigMap, Secret,
                           ClusterRole, ClusterRoleBinding, Role, RoleBinding.
-                          Please see [SafeRollout](https://github.com/Azure/fleet/tree/main/docs/concepts/SafeRollout/README.md) for more details.
+                          Please see [SafeRollout](https://kubefleet.dev/docs/concepts/safe-rollout/) for more details.
                           For other types of resources, we consider them as available after `UnavailablePeriodSeconds` seconds
                           have passed since they were successfully applied to the target cluster.
                           Default is 60.

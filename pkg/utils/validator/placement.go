@@ -842,6 +842,11 @@ func HandlePlacementValidation(
 					return admission.Errored(http.StatusInternalServerError, result.Err)
 				}
 				invalidResultErr = fmt.Errorf("selected-resource authorization returned an indeterminate decision without an error")
+			case authorization.DecisionInvalid:
+				if result.Err != nil {
+					return admission.Errored(http.StatusBadRequest, result.Err)
+				}
+				invalidResultErr = fmt.Errorf("selected-resource authorization returned an invalid decision without an error")
 			default:
 				invalidResultErr = fmt.Errorf("selected-resource authorization returned an unknown decision %q", result.Decision)
 			}
