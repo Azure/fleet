@@ -69,9 +69,12 @@ jobs:
           echo "=== Docker moved to /mnt, verifying ==="
           docker info | grep "Docker Root Dir" || true
 
+      - name: Increase inotify limits for Kind clusters
+        run: sudo sysctl -w fs.inotify.max_user_instances=1024 fs.inotify.max_user_watches=1048576
+
       - name: Set up Ginkgo CLI
         run: |
-          go install github.com/onsi/ginkgo/v2/ginkgo@v2.23.4
+          go install github.com/onsi/ginkgo/v2/ginkgo
       
       - name: Travel back in time to the before upgrade version
         run: |
@@ -171,9 +174,12 @@ jobs:
           echo "=== Docker moved to /mnt, verifying ==="
           docker info | grep "Docker Root Dir" || true
 
+      - name: Increase inotify limits for Kind clusters
+        run: sudo sysctl -w fs.inotify.max_user_instances=1024 fs.inotify.max_user_watches=1048576
+
       - name: Set up Ginkgo CLI
         run: |
-          go install github.com/onsi/ginkgo/v2/ginkgo@v2.23.4
+          go install github.com/onsi/ginkgo/v2/ginkgo
       
       - name: Travel back in time to the before upgrade version
         run: |
@@ -273,9 +279,12 @@ jobs:
           echo "=== Docker moved to /mnt, verifying ==="
           docker info | grep "Docker Root Dir" || true
 
+      - name: Increase inotify limits for Kind clusters
+        run: sudo sysctl -w fs.inotify.max_user_instances=1024 fs.inotify.max_user_watches=1048576
+
       - name: Set up Ginkgo CLI
         run: |
-          go install github.com/onsi/ginkgo/v2/ginkgo@v2.23.4
+          go install github.com/onsi/ginkgo/v2/ginkgo
 
       - name: Travel back in time to the before upgrade version
         run: |

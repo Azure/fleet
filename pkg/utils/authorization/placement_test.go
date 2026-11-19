@@ -19,6 +19,7 @@ package authorization
 import (
 	"context"
 	"errors"
+	"fmt"
 	"testing"
 
 	"github.com/google/go-cmp/cmp"
@@ -29,6 +30,8 @@ import (
 	"k8s.io/apimachinery/pkg/api/meta"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime/schema"
+	"sigs.k8s.io/controller-runtime/pkg/client"
+	"sigs.k8s.io/controller-runtime/pkg/client/fake"
 
 	placementv1beta1 "go.goms.io/fleet/apis/placement/v1beta1"
 	"go.goms.io/fleet/pkg/utils"
@@ -48,38 +51,44 @@ func resourcePlacementTestMapper() *meta.DefaultRESTMapper {
 	return mapper
 }
 
-func TestNewResourcePlacementAuthorizer(t *testing.T) {
+func TestNewPlacementAuthorizer(t *testing.T) {
 	mapper := resourcePlacementTestMapper()
 	reviewer := newTestReviewer(t, &fakeSubjectAccessReviewClient{}, 1)
 	checker := resourceeligibility.AllowAll(mapper)
+	reader := fake.NewClientBuilder().Build()
+	inventory := crpResourceInventory{}
 	tests := []struct {
-		name     string
-		mapper   meta.RESTMapper
-		reviewer *Reviewer
-		checker  resourceeligibility.Checker
-		wantErr  string
+		name      string
+		mapper    meta.RESTMapper
+		reviewer  *Reviewer
+		checker   resourceeligibility.Checker
+		reader    client.Reader
+		inventory NamespacedResourceInventory
+		wantErr   string
 	}{
-		{name: "valid", mapper: mapper, reviewer: reviewer, checker: checker},
-		{name: "missing mapper", reviewer: reviewer, checker: checker, wantErr: "REST mapper must not be nil"},
-		{name: "missing reviewer", mapper: mapper, checker: checker, wantErr: "authorization reviewer must not be nil"},
-		{name: "missing checker", mapper: mapper, reviewer: reviewer, wantErr: "resource eligibility checker must not be nil"},
+		{name: "valid", mapper: mapper, reviewer: reviewer, checker: checker, reader: reader, inventory: inventory},
+		{name: "missing mapper", reviewer: reviewer, checker: checker, reader: reader, inventory: inventory, wantErr: "REST mapper must not be nil"},
+		{name: "missing reviewer", mapper: mapper, checker: checker, reader: reader, inventory: inventory, wantErr: "authorization reviewer must not be nil"},
+		{name: "missing checker", mapper: mapper, reviewer: reviewer, reader: reader, inventory: inventory, wantErr: "resource eligibility checker must not be nil"},
+		{name: "missing reader", mapper: mapper, reviewer: reviewer, checker: checker, inventory: inventory, wantErr: "namespace reader must not be nil"},
+		{name: "missing inventory", mapper: mapper, reviewer: reviewer, checker: checker, reader: reader, wantErr: "namespaced resource inventory must not be nil"},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			got, err := NewResourcePlacementAuthorizer(tt.mapper, tt.reviewer, tt.checker)
+			got, err := NewPlacementAuthorizer(tt.mapper, tt.reviewer, tt.checker, tt.reader, tt.inventory)
 			if tt.wantErr != "" {
 				if got != nil || err == nil || err.Error() != tt.wantErr {
-					t.Fatalf("NewResourcePlacementAuthorizer() = (%v, %v), want (nil, %q)", got, err, tt.wantErr)
+					t.Fatalf("NewPlacementAuthorizer() = (%v, %v), want (nil, %q)", got, err, tt.wantErr)
 				}
 			} else if got == nil || err != nil {
-				t.Fatalf("NewResourcePlacementAuthorizer() = (%v, %v), want initialized authorizer and nil error", got, err)
+				t.Fatalf("NewPlacementAuthorizer() = (%v, %v), want initialized authorizer and nil error", got, err)
 			}
 		})
 	}
 }
 
 func TestResourcePlacementAuthorizeUninitialized(t *testing.T) {
-	for name, authorizer := range map[string]*ResourcePlacementAuthorizer{"nil": nil, "zero value": {}} {
+	for name, authorizer := range map[string]*PlacementAuthorizer{"nil": nil, "zero value": {}} {
 		t.Run(name, func(t *testing.T) {
 			result := authorizer.Authorize(context.Background(), authenticationv1.UserInfo{}, &placementv1beta1.ResourcePlacement{})
 			if result.Decision != DecisionIndeterminate || result.Err == nil {
@@ -122,7 +131,7 @@ func TestResourcePlacementAuthorizeSelections(t *testing.T) {
 				review.Status.Allowed = true
 				return nil
 			}}, 1)
-			a, err := NewResourcePlacementAuthorizer(mapper, reviewer, resourceeligibility.AllowAll(mapper))
+			a, err := NewPlacementAuthorizer(mapper, reviewer, resourceeligibility.AllowAll(mapper), fake.NewClientBuilder().Build(), crpResourceInventory{})
 			if err != nil {
 				t.Fatal(err)
 			}
@@ -143,20 +152,18 @@ func TestResourcePlacementAuthorizeSelections(t *testing.T) {
 	}
 }
 
-func TestResourcePlacementAuthorizeRejectsUnsupportedTypes(t *testing.T) {
-	const deferredCRPErr = "cluster resource placement authorization is not implemented"
+func TestPlacementAuthorizeRejectsInvalidInputs(t *testing.T) {
 	for name, tt := range map[string]struct {
 		placement placementv1beta1.PlacementObj
 		wantErr   string
 	}{
 		"nil":           {wantErr: "unsupported placement type <nil>"},
 		"typed nil RP":  {placement: (*placementv1beta1.ResourcePlacement)(nil), wantErr: "resource placement must not be nil"},
-		"CRP":           {placement: &placementv1beta1.ClusterResourcePlacement{}, wantErr: deferredCRPErr},
-		"typed nil CRP": {placement: (*placementv1beta1.ClusterResourcePlacement)(nil), wantErr: deferredCRPErr},
+		"typed nil CRP": {placement: (*placementv1beta1.ClusterResourcePlacement)(nil), wantErr: "cluster resource placement must not be nil"},
 	} {
 		t.Run(name, func(t *testing.T) {
 			mapper := resourcePlacementTestMapper()
-			a, err := NewResourcePlacementAuthorizer(mapper, newTestReviewer(t, &fakeSubjectAccessReviewClient{}, 1), resourceeligibility.AllowAll(mapper))
+			a, err := NewPlacementAuthorizer(mapper, newTestReviewer(t, &fakeSubjectAccessReviewClient{}, 1), resourceeligibility.AllowAll(mapper), fake.NewClientBuilder().Build(), crpResourceInventory{})
 			if err != nil {
 				t.Fatal(err)
 			}
@@ -168,41 +175,62 @@ func TestResourcePlacementAuthorizeRejectsUnsupportedTypes(t *testing.T) {
 	}
 }
 
+func TestPlacementErrorResult(t *testing.T) {
+	tests := []struct {
+		name         string
+		err          error
+		wantDecision Decision
+	}{
+		{name: "invalid input", err: invalidPlacementError("invalid selector"), wantDecision: DecisionInvalid},
+		{name: "wrapped invalid input", err: fmt.Errorf("resolve placement: %w", invalidPlacementError("invalid selector")), wantDecision: DecisionInvalid},
+		{name: "operational error", err: errors.New("API unavailable"), wantDecision: DecisionIndeterminate},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			result := placementErrorResult(tt.err)
+			if result.Decision != tt.wantDecision || result.Err != tt.err {
+				t.Errorf("placementErrorResult(%v) = %+v, want %s with original error", tt.err, result, tt.wantDecision)
+			}
+		})
+	}
+}
+
 func TestResourcePlacementAuthorizeFailures(t *testing.T) {
 	tests := []struct {
-		name   string
-		modify func(*ResourcePlacementAuthorizer, *placementv1beta1.ResourcePlacement)
-		denied bool
+		name    string
+		modify  func(*PlacementAuthorizer, *placementv1beta1.ResourcePlacement)
+		denied  bool
+		invalid bool
 	}{
-		{name: "unknown kind", modify: func(_ *ResourcePlacementAuthorizer, p *placementv1beta1.ResourcePlacement) {
+		{name: "unknown kind", modify: func(_ *PlacementAuthorizer, p *placementv1beta1.ResourcePlacement) {
 			p.Spec.ResourceSelectors[0].Kind = "Unknown"
 		}},
-		{name: "missing namespace", modify: func(_ *ResourcePlacementAuthorizer, p *placementv1beta1.ResourcePlacement) { p.Namespace = "" }},
-		{name: "cluster-scoped selector", modify: func(_ *ResourcePlacementAuthorizer, p *placementv1beta1.ResourcePlacement) {
+		{name: "missing namespace", invalid: true, modify: func(_ *PlacementAuthorizer, p *placementv1beta1.ResourcePlacement) { p.Namespace = "" }},
+		{name: "cluster-scoped selector", modify: func(_ *PlacementAuthorizer, p *placementv1beta1.ResourcePlacement) {
 			p.Spec.ResourceSelectors[0].Kind = utils.NamespaceGVK.Kind
-		}},
-		{name: "name and label selector", modify: func(_ *ResourcePlacementAuthorizer, p *placementv1beta1.ResourcePlacement) {
+		}, invalid: true},
+		{name: "name and label selector", modify: func(_ *PlacementAuthorizer, p *placementv1beta1.ResourcePlacement) {
 			p.Spec.ResourceSelectors[0].LabelSelector = &metav1.LabelSelector{}
-		}},
-		{name: "invalid label selector", modify: func(_ *ResourcePlacementAuthorizer, p *placementv1beta1.ResourcePlacement) {
+		}, invalid: true},
+		{name: "invalid label selector", modify: func(_ *PlacementAuthorizer, p *placementv1beta1.ResourcePlacement) {
 			p.Spec.ResourceSelectors[0].Name = ""
 			p.Spec.ResourceSelectors[0].LabelSelector = &metav1.LabelSelector{MatchExpressions: []metav1.LabelSelectorRequirement{{Key: "app", Operator: "invalid"}}}
-		}},
-		{name: "namespace excluded", modify: func(a *ResourcePlacementAuthorizer, _ *placementv1beta1.ResourcePlacement) {
+		}, invalid: true},
+		{name: "namespace excluded", modify: func(a *PlacementAuthorizer, _ *placementv1beta1.ResourcePlacement) {
 			a.resourceEligibilityChecker.SetNamespaceCheckList(resourceeligibility.NamespaceEligibilityModeDenyList, []string{rpNamespace}, nil)
-		}},
-		{name: "SAR error", modify: func(a *ResourcePlacementAuthorizer, _ *placementv1beta1.ResourcePlacement) {
+		}, invalid: true},
+		{name: "SAR error", modify: func(a *PlacementAuthorizer, _ *placementv1beta1.ResourcePlacement) {
 			a.reviewer.client = &fakeSubjectAccessReviewClient{create: func(context.Context, *authorizationv1.SubjectAccessReview) error {
 				return errors.New("SAR unavailable")
 			}}
 		}},
-		{name: "get denied", denied: true, modify: func(a *ResourcePlacementAuthorizer, _ *placementv1beta1.ResourcePlacement) {
+		{name: "get denied", denied: true, modify: func(a *PlacementAuthorizer, _ *placementv1beta1.ResourcePlacement) {
 			a.reviewer.client = &fakeSubjectAccessReviewClient{create: func(_ context.Context, review *authorizationv1.SubjectAccessReview) error {
 				review.Status.Denied = true
 				return nil
 			}}
 		}},
-		{name: "list denied", denied: true, modify: func(a *ResourcePlacementAuthorizer, p *placementv1beta1.ResourcePlacement) {
+		{name: "list denied", denied: true, modify: func(a *PlacementAuthorizer, p *placementv1beta1.ResourcePlacement) {
 			p.Spec.ResourceSelectors[0].Name = ""
 			a.reviewer.client = &fakeSubjectAccessReviewClient{create: func(_ context.Context, review *authorizationv1.SubjectAccessReview) error {
 				review.Status.Denied = true
@@ -217,7 +245,7 @@ func TestResourcePlacementAuthorizeFailures(t *testing.T) {
 				review.Status.Allowed = true
 				return nil
 			}}, 1)
-			a, err := NewResourcePlacementAuthorizer(mapper, reviewer, resourceeligibility.AllowAll(mapper))
+			a, err := NewPlacementAuthorizer(mapper, reviewer, resourceeligibility.AllowAll(mapper), fake.NewClientBuilder().Build(), crpResourceInventory{})
 			if err != nil {
 				t.Fatal(err)
 			}
@@ -228,6 +256,9 @@ func TestResourcePlacementAuthorizeFailures(t *testing.T) {
 			tt.modify(a, p)
 			result := a.Authorize(context.Background(), authenticationv1.UserInfo{}, p)
 			wantDecision := DecisionIndeterminate
+			if tt.invalid {
+				wantDecision = DecisionInvalid
+			}
 			if tt.denied {
 				wantDecision = DecisionDenied
 			}
@@ -248,7 +279,7 @@ func TestResourcePlacementAuthorizeSkipsIneligibleKinds(t *testing.T) {
 		t.Error("Authorize() submitted a SubjectAccessReview for an ineligible kind")
 		return errors.New("unexpected SubjectAccessReview")
 	}}, 1)
-	a, err := NewResourcePlacementAuthorizer(mapper, reviewer, checker)
+	a, err := NewPlacementAuthorizer(mapper, reviewer, checker, fake.NewClientBuilder().Build(), crpResourceInventory{})
 	if err != nil {
 		t.Fatal(err)
 	}

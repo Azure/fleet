@@ -44,6 +44,7 @@ func (a *stubPlacementAuthorizer) Authorize(context.Context, authenticationv1.Us
 func TestHandlePlacementValidationAuthorizationDecision(t *testing.T) {
 	const denialReason = "requester cannot get selected resources"
 	reviewErr := errors.New("authorization API unavailable")
+	validationErr := errors.New("NamespaceWithResourceSelectors requires a namespace selected by name")
 	type outcome struct {
 		Allowed bool
 		Code    int32
@@ -68,6 +69,16 @@ func TestHandlePlacementValidationAuthorizationDecision(t *testing.T) {
 			name:   "denial takes precedence over additional review errors",
 			result: authorization.Result{Decision: authorization.DecisionDenied, DenialReason: denialReason, Err: reviewErr},
 			want:   outcome{Code: http.StatusForbidden, Message: denialReason},
+		},
+		{
+			name:   "invalid",
+			result: authorization.Result{Decision: authorization.DecisionInvalid, Err: validationErr},
+			want:   outcome{Code: http.StatusBadRequest, Message: validationErr.Error()},
+		},
+		{
+			name:   "invalid without error",
+			result: authorization.Result{Decision: authorization.DecisionInvalid},
+			want:   outcome{Code: http.StatusInternalServerError, Message: "selected-resource authorization returned an invalid decision without an error"},
 		},
 		{
 			name:   "indeterminate",

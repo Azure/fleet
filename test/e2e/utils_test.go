@@ -302,6 +302,8 @@ func checkIfMemberClusterHasJoined(memberCluster *framework.Cluster) {
 // provider, as indicated by the PROPERTY_PROVIDER environment variable; for setup that
 // does not use it, the check will always pass.
 func checkIfAzurePropertyProviderIsWorking() {
+	const costDiffTolerance = 0.003 + 1e-9
+
 	if !isAzurePropertyProviderEnabled {
 		return
 	}
@@ -344,7 +346,7 @@ func checkIfAzurePropertyProviderIsWorking() {
 
 			// Check the cost properties separately.
 			//
-			// The test suite consider cost outputs with a margin of no more than 0.002 to be acceptable.
+			// Allow a cost difference of 0.003 with a small floating-point tolerance.
 			perCPUCoreCostProperty, found := mcObj.Status.Properties[azure.PerCPUCoreCostProperty]
 			wantPerCPUCoreCostProperty, wantFound := wantStatus.Properties[azure.PerCPUCoreCostProperty]
 			if found != wantFound {
@@ -355,7 +357,7 @@ func checkIfAzurePropertyProviderIsWorking() {
 			if err != nil || wantErr != nil {
 				return fmt.Errorf("failed to parse per CPU core cost property: val=%s, err=%w, wantVal=%s, wantErr=%w", perCPUCoreCostProperty.Value, err, wantPerCPUCoreCostProperty.Value, wantErr)
 			}
-			if diff := math.Abs(perCPUCoreCost - wantPerCPUCoreCost); diff > 0.002 {
+			if diff := math.Abs(perCPUCoreCost - wantPerCPUCoreCost); diff > costDiffTolerance {
 				return fmt.Errorf("member cluster per CPU core cost property diff: got=%f, want=%f, diff=%f", perCPUCoreCost, wantPerCPUCoreCost, diff)
 			}
 
@@ -369,7 +371,7 @@ func checkIfAzurePropertyProviderIsWorking() {
 			if err != nil || wantErr != nil {
 				return fmt.Errorf("failed to parse per GB memory cost property: val=%s, err=%w, wantVal=%s, wantErr=%w", perGBMemoryCostProperty.Value, err, wantPerGBMemoryCostProperty.Value, wantErr)
 			}
-			if diff := math.Abs(perGBMemoryCost - wantPerGBMemoryCost); diff > 0.002 {
+			if diff := math.Abs(perGBMemoryCost - wantPerGBMemoryCost); diff > costDiffTolerance {
 				return fmt.Errorf("member cluster per GB memory cost property diff: got=%f, want=%f, diff=%f", perGBMemoryCost, wantPerGBMemoryCost, diff)
 			}
 
@@ -1396,7 +1398,9 @@ func ensureCRPAndRelatedResourcesDeleted(crpName string, memberClusters []*frame
 		memberCluster := memberClusters[idx]
 
 		workResourcesRemovedActual := workNamespaceRemovedFromClusterActual(memberCluster)
-		Eventually(workResourcesRemovedActual, workloadEventuallyDuration, time.Second*5).Should(Succeed(), "Failed to remove work resources from member cluster %s", memberCluster.ClusterName)
+		// Use a longer eventually duration as namespace GC might take additional time, esp. in test environments
+		// with less capacity.
+		Eventually(workResourcesRemovedActual, workloadEventuallyDuration*2, time.Second*5).Should(Succeed(), "Failed to remove work resources from member cluster %s", memberCluster.ClusterName)
 	}
 
 	// Verify that related finalizers have been removed from the CRP.
