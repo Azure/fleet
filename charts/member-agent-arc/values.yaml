@@ -33,6 +33,32 @@ config:
 enableTrafficManagerFeature: false
 enableNetworkingFeatures: false
 
+geneva:
+  mdsd:
+    repository: linuxgeneva-microsoft.azurecr.io/genevamdsd
+    tag: "${GENEVA_MDSD_IMAGE_VERSION}"
+  fluentd:
+    repository: linuxgeneva-microsoft.azurecr.io/genevafluentd_td-agent
+    tag: "${GENEVA_FLUENTD_IMAGE_VERSION}"
+  mdm:
+    repository: linuxgeneva-microsoft.azurecr.io/genevamdm
+    tag: "${GENEVA_MDM_IMAGE_VERSION}"
+    account: ""
+  gcs:
+    environment: ""
+    account: ""
+    region: ""
+    namespace: ""
+    configVersion: ""
+    authIdType: "AuthMSIToken"
+  config:
+    tenant: ""
+    role: ""
+    azureEnvironment: ""
+    enableGigBridgeMode: "1"
+  debugging:
+    dockerLogging: "false"
+
 Azure:
   proxySettings:
     isProxyEnabled: "false"
